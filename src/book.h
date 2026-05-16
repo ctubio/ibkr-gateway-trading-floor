@@ -14,9 +14,11 @@ static HWND hAutoComplete = NULL;
 #define ID_BOOK_ADD_ITEM     2006
 #define ID_BOOK_DEL_ITEM     2007
 #define ID_BOOK_AUTOCOMPLETE 2008
+#define ID_BOOK_ITEM_UP      2009
+#define ID_BOOK_ITEM_DOWN    2010
 #define TIMER_DROPDOWN       99
 
-static HWND hCombo, hListBox, hEdit, hBtnDelList, hLabelNewSymbol;
+static HWND hCombo, hListBox, hEdit, hBtnDelList, hLabelNewSymbol, hBtnUp, hBtnDown;
 static HWND hAutoCompleteOwner = NULL;
 static bool suppressSearch = false;
 static HWND hEditOwner = NULL;
@@ -136,16 +138,17 @@ void Book_UpdateControlStates() {
     std::string book = Book_GetSelectedBook();
     bool hasBook = !book.empty();
     int itemSel = SendMessage(hListBox, LB_GETCURSEL, 0, 0);
+    int itemCount = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
     bool hasItem = itemSel != LB_ERR;
 
-    // Update title
     std::string title = hasBook ? "Book: " + book : "Book";
     SetWindowTextA(GetParent(hBtnDelList), title.c_str());
 
-    EnableWindow(hBtnDelList, hasBook);
-    EnableWindow(hEdit,       hasBook);
+    EnableWindow(hBtnDelList,     hasBook);
+    EnableWindow(hEdit,           hasBook);
     EnableWindow(hLabelNewSymbol, hasBook);
-
+    EnableWindow(hBtnUp,          hasBook && hasItem && itemSel > 0);
+    EnableWindow(hBtnDown,        hasBook && hasItem && itemSel < itemCount - 1);
 }
 
 void Book_SaveList(const char* listName, HWND hLB) {
@@ -264,10 +267,20 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
         hListBox = CreateWindowA("LISTBOX", NULL,
             WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | LBS_NOTIFY,
-            margin, margin + 32, 364 - margin, 130,
+            margin, margin + 32, 316 - margin, 130,
             hWnd, (HMENU)ID_BOOK_LISTBOX, hInst, NULL);
         
         SetWindowSubclass(hListBox, ListBoxSubclassProc, 3, 0);
+        
+        hBtnUp = CreateWindowW(L"BUTTON", L"▲",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            320, margin + 32, 36, 62,
+            hWnd, (HMENU)ID_BOOK_ITEM_UP, hInst, NULL);
+
+        hBtnDown = CreateWindowW(L"BUTTON", L"▼",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            320, margin + 32 + 68, 36, 62,
+            hWnd, (HMENU)ID_BOOK_ITEM_DOWN, hInst, NULL);
 
         hLabelNewSymbol = CreateWindowA("STATIC", "New Symbol:",
             WS_CHILD | WS_VISIBLE,
@@ -317,7 +330,32 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
+            case ID_BOOK_ITEM_UP: {
+                int sel = SendMessage(hListBox, LB_GETCURSEL, 0, 0);
+                if (sel == LB_ERR || sel == 0) break;
+                char item[256] = {};
+                SendMessageA(hListBox, LB_GETTEXT, sel, (LPARAM)item);
+                SendMessage(hListBox, LB_DELETESTRING, sel, 0);
+                SendMessageA(hListBox, LB_INSERTSTRING, sel - 1, (LPARAM)item);
+                SendMessage(hListBox, LB_SETCURSEL, sel - 1, 0);
+                Book_SaveList(Book_GetSelectedBook().c_str(), hListBox);
+                Book_UpdateControlStates();
+                break;
+            }
 
+            case ID_BOOK_ITEM_DOWN: {
+                int sel = SendMessage(hListBox, LB_GETCURSEL, 0, 0);
+                int count = SendMessage(hListBox, LB_GETCOUNT, 0, 0);
+                if (sel == LB_ERR || sel == count - 1) break;
+                char item[256] = {};
+                SendMessageA(hListBox, LB_GETTEXT, sel, (LPARAM)item);
+                SendMessage(hListBox, LB_DELETESTRING, sel, 0);
+                SendMessageA(hListBox, LB_INSERTSTRING, sel + 1, (LPARAM)item);
+                SendMessage(hListBox, LB_SETCURSEL, sel + 1, 0);
+                Book_SaveList(Book_GetSelectedBook().c_str(), hListBox);
+                Book_UpdateControlStates();
+                break;
+            }
         case ID_BOOK_COMBO:
             if (HIWORD(wParam) == CBN_SELCHANGE) {
                 std::string name = Book_GetSelectedBook();
