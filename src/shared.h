@@ -126,12 +126,78 @@ bool IsProcessRunning(const char* processName) {
     return found;
 }
 
-void EnsureGatewayRunning() {
-    if (!IsProcessRunning("ibgateway.exe")) {
-        ShellExecuteA(NULL, "open",
-            "C:\\Program Files\\IBKR\\ibgateway\\1046\\ibgateway.exe",
-            NULL, NULL, SW_SHOW);
+std::string GetGatewayPath() {
+    // 1. Try registry first
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        char path[MAX_PATH] = {};
+        DWORD size = sizeof(path);
+        if (RegQueryValueExA(hKey, "GatewayPath", NULL, NULL,
+            (LPBYTE)path, &size) == ERROR_SUCCESS && strlen(path) > 0) {
+            RegCloseKey(hKey);
+            return std::string(path);
+        }
+        RegCloseKey(hKey);
     }
+    return "";
+}
+
+void SaveGatewayPath(const std::string& path) {
+    HKEY hKey;
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, "GatewayPath", 0, REG_SZ,
+            (const BYTE*)path.c_str(), (DWORD)path.size() + 1);
+        RegCloseKey(hKey);
+    }
+}
+
+std::string AskGatewayPath(HWND hParent) {
+    OPENFILENAMEA ofn = {};
+    char path[MAX_PATH] = "ibgateway.exe";
+
+    ofn.lStructSize     = sizeof(ofn);
+    ofn.hwndOwner       = hParent;
+    ofn.lpstrFilter     = "Executable\0*.exe\0All Files\0*.*\0";
+    ofn.lpstrFile       = path;
+    ofn.nMaxFile        = sizeof(path);
+    ofn.lpstrTitle      = "Locate ibgateway.exe";
+    ofn.lpstrInitialDir = "C:\\Program Files\\IBKR";
+    ofn.Flags           = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+
+    if (GetOpenFileNameA(&ofn))
+        return std::string(path);
+
+    return "";
+}
+
+void EnsureGatewayRunning(HWND hParent) {
+    if (IsProcessRunning("ibgateway.exe")) return;
+
+    // Get path from registry or default
+    std::string path = GetGatewayPath();
+
+    // Check default location if registry is empty
+    if (path.empty()) {
+        const char* defaultPath = "C:\\ibgateway.exe";
+        if (GetFileAttributesA(defaultPath) != INVALID_FILE_ATTRIBUTES) {
+            path = defaultPath;
+            SaveGatewayPath(path);
+        }
+    }
+
+    // If path from registry doesn't exist anymore, ask user
+    if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        MessageBoxA(hParent,
+            "IB Gateway not found. Please locate ibgateway.exe.",
+            "Gateway Not Found", MB_OK | MB_ICONINFORMATION);
+        path = AskGatewayPath(hParent);
+        if (path.empty()) return; // user cancelled
+        SaveGatewayPath(path);
+    }
+
+    ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
 }
 
 #include <initguid.h>

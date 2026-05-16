@@ -20,9 +20,7 @@ Cross-compiled on Linux (Raspberry Pi) targeting Windows x86_64.
     make       # build TNT.exe
 
 ## Usage
-- Run TNT.exe
-- Run manually the IBKR gateway if is not located at C:\Program Files\IBKR\ibgateway\1046\ibgateway.exe
-- To exit TNT.exe, look for it in your system tray icons
+- To exit TNT.exe, look for the Exit menu option in your system tray icon
 
 ## Dependencies
 - IBKR TWS C++ API
