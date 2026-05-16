@@ -180,7 +180,7 @@ void EnsureGatewayRunning(HWND hParent) {
 
     // Check default location if registry is empty
     if (path.empty()) {
-        const char* defaultPath = "C:\\ibgateway.exe";
+        const char* defaultPath = "C:\\whatever\\ibgateway.exe";
         if (GetFileAttributesA(defaultPath) != INVALID_FILE_ATTRIBUTES) {
             path = defaultPath;
             SaveGatewayPath(path);

@@ -47,18 +47,29 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     case WM_CREATE:	{
 		LPCREATESTRUCT pcs = (LPCREATESTRUCT)lParam;
         HINSTANCE hInst = pcs->hInstance;
-		
-		// Create qb button
-        SendMessage(
-            CreateWindow(
-                "BUTTON", "Click Me",
-                WS_VISIBLE | WS_CHILD | BS_ICON,
-                7, 7, 26, 26,
-                hWnd, (HMENU)ID_M_SYMBOLS, hInst, NULL
-            ),
-            BM_SETIMAGE, (WPARAM)IMAGE_ICON,
-            (LPARAM)LoadImage(hInst, MAKEINTRESOURCE(2), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR)
+		// Create the button
+        HWND hBtn = CreateWindow(
+            "BUTTON", "Click Me",
+            WS_VISIBLE | WS_CHILD | BS_ICON,
+            7, 7, 26, 26,
+            hWnd, (HMENU)ID_M_SYMBOLS, hInst, NULL
         );
+        SendMessage(hBtn, BM_SETIMAGE, (WPARAM)IMAGE_ICON,
+            (LPARAM)LoadImage(hInst, MAKEINTRESOURCE(2), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR));
+
+        // Add tooltip
+        HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
+            WS_POPUP | TTS_ALWAYSTIP,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            hWnd, NULL, hInst, NULL);
+
+        TOOLINFOA ti = {};
+        ti.cbSize   = sizeof(ti);
+        ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
+        ti.hwnd     = hWnd;
+        ti.uId      = (UINT_PTR)hBtn;
+        ti.lpszText = (LPSTR)"Symbols Bookshelf";
+        SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
 
         api.setWindowHandle(hWnd);
         
