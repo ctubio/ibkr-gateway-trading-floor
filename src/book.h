@@ -20,6 +20,7 @@ static HWND hCombo, hListBox, hEdit, hBtnDelList, hLabelNewSymbol;
 static HWND hAutoCompleteOwner = NULL;
 static bool suppressSearch = false;
 static HWND hEditOwner = NULL;
+static bool showingOffline = false;
 
 LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam,
                                    UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
@@ -45,6 +46,7 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
             if (sel != LB_ERR) {
                 char sym[64] = {};
                 SendMessageA(hAutoComplete, LB_GETTEXT, sel, (LPARAM)sym);
+                if (strcmp(sym, "[ Offline ]") == 0) return 0;
                 suppressSearch = true;
                 SetWindowTextA(hEdit, sym);
                 suppressSearch = false;
@@ -79,6 +81,7 @@ LRESULT CALLBACK AutoCompleteSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LP
         if (sel != LB_ERR) {
             char sym[64] = {};
             SendMessageA(hWnd, LB_GETTEXT, sel, (LPARAM)sym);
+            if (strcmp(sym, "[ Offline ]") == 0) return 0;
             suppressSearch = true;
             SetWindowTextA(hEdit, sym);
             suppressSearch = false;
@@ -96,6 +99,8 @@ LRESULT CALLBACK AutoCompleteSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LP
 }
 
 void Book_UpdateAutoComplete(HWND hWnd, const std::vector<std::string>& results) {
+    EnableWindow(hAutoComplete, TRUE);
+
     if (results.empty()) {
         ShowWindow(hAutoComplete, SW_HIDE);
         return;
@@ -460,7 +465,21 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     query = query.substr(0, dot);
                 
                 if (query.size() >= 1) {
-                    api.searchSymbols(query);
+                    if (!api.isConnected()) {
+                        showingOffline = true;
+                        SendMessage(hAutoComplete, LB_RESETCONTENT, 0, 0);
+                        SendMessageA(hAutoComplete, LB_ADDSTRING, 0, (LPARAM)"Gateway is disconnected!");
+                        RECT r;
+                        GetWindowRect(hEdit, &r);
+                        int itemHeight = SendMessage(hAutoComplete, LB_GETITEMHEIGHT, 0, 0);
+                        SetWindowPos(hAutoComplete, HWND_TOP,
+                            r.left, r.bottom, r.right - r.left, itemHeight + 4,
+                            SWP_SHOWWINDOW | SWP_NOACTIVATE);
+                        EnableWindow(hAutoComplete, FALSE);
+                    } else {
+                        showingOffline = false;
+                        api.searchSymbols(query);
+                    }
                 } else {
                     ShowWindow(hAutoComplete, SW_HIDE);
                 }
@@ -496,6 +515,20 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         break;
 
     case WM_SYMBOL_RESULTS: {
+        if (showingOffline) break;
+        if (!api.isConnected()) {
+            SendMessage(hAutoComplete, LB_RESETCONTENT, 0, 0);
+            SendMessageA(hAutoComplete, LB_ADDSTRING, 0, (LPARAM)"[ Offline ]");
+            // Position dropdown
+            RECT r;
+            GetWindowRect(hEdit, &r);
+            POINT pt = { r.left, r.bottom };
+            ScreenToClient(hWnd, &pt);
+            int itemHeight = SendMessage(hAutoComplete, LB_GETITEMHEIGHT, 0, 0);
+            SetWindowPos(hAutoComplete, HWND_TOP,
+                pt.x, pt.y, 180, itemHeight + 4, SWP_SHOWWINDOW);
+            break;
+        }
         char text[256] = {};
         GetWindowTextA(hEdit, text, sizeof(text));
         std::string query = text;
