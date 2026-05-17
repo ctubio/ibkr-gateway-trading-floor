@@ -76,17 +76,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         int steps = 1;
         int stepz = 0;
         //charts from tradingview
-        addButtons(hWnd, hInst, "Money Bag",              (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_COINS,     3); // total daily eur usd
-        addButtons(hWnd, hInst, "Orders",                 (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_ORDERS,   10); // open, messages, history
-        addButtons(hWnd, hInst, "Collection of Diamonds", (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_DIAMONDS,  4); // portfolio + watchlist
+        addButtons(hWnd, hInst, "Money Bag",              (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_COINS,     3); // total daily eur usd
+        addButtons(hWnd, hInst, "Orders",                 (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_ORDERS,   10); // open, messages, history
+        addButtons(hWnd, hInst, "Collection of Diamonds", (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_DIAMONDS,  4); // portfolio + watchlist
         
-        addButtons(hWnd, hInst, "Ticker",             6 + (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_TICKER,    9);        
-        addButtons(hWnd, hInst, "Levels",                 (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_LEVELS,    8);
-        addButtons(hWnd, hInst, "Timesales",              (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_TIMESALES, 7);
-        addButtons(hWnd, hInst, "News",                   (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_NEWS,      6);
+        addButtons(hWnd, hInst, "Ticker",             6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TICKER,    9);        
+        addButtons(hWnd, hInst, "Levels",                 (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
+        addButtons(hWnd, hInst, "Timesales",              (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7);
+        addButtons(hWnd, hInst, "News",                   (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
 
-        addButtons(hWnd, hInst, "Symbols Bookshelf",  6 + (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_SYMBOLS,   2);
-        addButtons(hWnd, hInst, "Settings",               (7 * steps++) + (26 * stepz++), 7, (HMENU)ID_M_SETTINGS,  5);
+        addButtons(hWnd, hInst, "Symbols Bookshelf",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
+        addButtons(hWnd, hInst, "Settings",               (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
 
         api.setWindowHandle(hWnd);
         
@@ -217,7 +217,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
 void startDashboard(HINSTANCE hInst) {
     // 2. Create the Dashboard Window
-	int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 400, h = 70;
+	int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 312, h = 70;
 	LoadWinPosition(DASHBOARD_CLASS_NAME, x, y, w, h);
 	
     hDBWnd = CreateWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", 

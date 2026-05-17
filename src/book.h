@@ -266,17 +266,17 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
         hCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-            margin, margin, 170, 200,
+            margin, margin, 170, 193,
             hWnd, (HMENU)ID_BOOK_COMBO, hInst, NULL);
 
         CreateWindowA("BUTTON", "New Book",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            margin + 178, margin, 80, 24,
+            margin + 171, margin, 80, 24,
             hWnd, (HMENU)ID_BOOK_NEW_LIST, hInst, NULL);
 
         hBtnDelList = CreateWindowA("BUTTON", "Delete Book",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            margin + 266, margin, 90, 24,
+            margin + 259, margin, 90, 24,
             hWnd, (HMENU)ID_BOOK_DEL_LIST, hInst, NULL);
 
         hListBox = CreateWindowA("LISTBOX", NULL,
@@ -303,7 +303,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
         hEdit = CreateWindowA("EDIT", NULL,
             WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | ES_UPPERCASE,
-            margin + 95, margin + 170, 261, 24,
+            margin + 95, margin + 170, 254, 24,
             hWnd, (HMENU)ID_BOOK_EDIT, hInst, NULL);
 
         hEditOwner = hWnd;
@@ -609,7 +609,7 @@ void startBook() {
         ShowWindow(hBookWnd, SW_SHOW);
         SetForegroundWindow(hBookWnd);
     } else {
-        int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 380, h = 240;
+        int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 373, h = 240;
         LoadWinPosition(BOOK_CLASS_NAME, x, y, w, h);
 
         hBookWnd = CreateWindowExA(
