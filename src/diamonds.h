@@ -8,6 +8,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
 
     case WM_CREATE: {
+        Session_AddWindow(hWnd);
         break;
     }
 
@@ -21,6 +22,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_DESTROY:
         SaveWinPosition(hWnd, DIAMONDS_CLASS_NAME);
+        Session_RemoveWindow(hWnd);
         hDiamondsWnd = NULL;
         break;
 

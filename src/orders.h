@@ -8,6 +8,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     switch (message) {
 
     case WM_CREATE: {
+        Session_AddWindow(hWnd);
         break;
     }
 
@@ -21,6 +22,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_DESTROY:
         SaveWinPosition(hWnd, ORDERS_CLASS_NAME);
+        Session_RemoveWindow(hWnd);
         hOrdersWnd = NULL;
         break;
 

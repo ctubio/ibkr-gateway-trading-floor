@@ -125,6 +125,127 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     RegisterClass(&wc);
 }
 
+// ─── Window Session ───────────────────────────────────────────────────────────
+
+void Session_AddWindow(HWND hWnd) {
+    
+    char className[256] = {};
+    GetClassNameA(hWnd, className, sizeof(className));
+    // Load existing list
+    HKEY hKey;
+    std::vector<std::string> windows;
+
+    if (RegOpenKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD size = 0;
+        RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
+        if (size > 0) {
+            std::vector<char> buf(size);
+            RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
+            const char* p = buf.data();
+            while (*p) {
+                if (strcmp(p, className) != 0) // avoid duplicates
+                    windows.push_back(p);
+                p += strlen(p) + 1;
+            }
+        }
+        RegCloseKey(hKey);
+    }
+
+    windows.push_back(className);
+
+    // Save back
+    std::string multiStr;
+    for (const auto& w : windows) { multiStr += w; multiStr += '\0'; }
+    multiStr += '\0';
+
+    if (RegCreateKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
+            (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
+        RegCloseKey(hKey);
+    }
+}
+
+void Session_RemoveWindow(HWND hWnd) {
+    char className[256] = {};
+    GetClassNameA(hWnd, className, sizeof(className));
+    
+    HKEY hKey;
+    std::vector<std::string> windows;
+
+    if (RegOpenKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD size = 0;
+        RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
+        if (size > 0) {
+            std::vector<char> buf(size);
+            RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
+            const char* p = buf.data();
+            while (*p) {
+                if (strcmp(p, className) != 0)
+                    windows.push_back(p);
+                p += strlen(p) + 1;
+            }
+        }
+        RegCloseKey(hKey);
+    }
+
+    std::string multiStr;
+    for (const auto& w : windows) { multiStr += w; multiStr += '\0'; }
+    multiStr += '\0';
+
+    if (RegCreateKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
+            (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
+        RegCloseKey(hKey);
+    }
+}
+
+void Session_RestoreWindows(
+    const std::function<void()>& startBook,
+    const std::function<void()>& startCoins,
+    const std::function<void()>& startDiamonds,
+    const std::function<void()>& startNews,
+    const std::function<void()>& startSettings,
+    const std::function<void()>& startTimesales,
+    const std::function<void()>& startLevels,
+    const std::function<void()>& startTicker,
+    const std::function<void()>& startOrders
+) {
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
+
+    DWORD size = 0;
+    RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
+    if (size == 0) { RegCloseKey(hKey); return; }
+
+    std::vector<char> buf(size);
+    RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
+    RegCloseKey(hKey);
+
+    const char* p = buf.data();
+    while (*p) {
+        std::string cls = p;
+        if      (cls == "TNTBookWindowClass")      startBook();
+        else if (cls == "TNTCoinsWindowClass")     startCoins();
+        else if (cls == "TNTDiamondsWindowClass")  startDiamonds();
+        else if (cls == "TNTNewsWindowClass")      startNews();
+        else if (cls == "TNTSettingsWindowClass")  startSettings();
+        else if (cls == "TNTTimesalesWindowClass") startTimesales();
+        else if (cls == "TNTLevelsWindowClass")    startLevels();
+        else if (cls == "TNTTickerWindowClass")    startTicker();
+        else if (cls == "TNTOrdersWindowClass")    startOrders();
+        p += strlen(p) + 1;
+    }
+}
 
 void Settings_Save(const char* key, DWORD value) {
     HKEY hKey;

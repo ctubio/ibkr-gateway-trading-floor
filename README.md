@@ -19,10 +19,13 @@ Cross-compiled on Linux (Raspberry Pi) targeting Windows x86_64.
     make lib   # build dependencies (once)
     make       # build TNT.exe
 
-## Usage
-- To exit TNT.exe, look for the Exit menu option in your system tray icon
-
-## Dependencies
+## Build-in Dependencies
 - IBKR TWS C++ API
 - Protobuf + Abseil (via CMake)
 - Intel Decimal Floating Point Library
+
+## Usage
+- To exit TNT.exe, look for the Exit menu option in your system tray icon
+
+## External Dependency
+- Download and install IBKR Gateway for Windows from https://www.interactivebrokers.com/en/trading/ibgateway-latest.php

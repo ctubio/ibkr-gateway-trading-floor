@@ -13,6 +13,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
 
     case WM_CREATE: {
+        Session_AddWindow(hWnd);
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         int margin = 8;
 
@@ -46,6 +47,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_DESTROY:
         SaveWinPosition(hWnd, SETTINGS_CLASS_NAME);
+        Session_RemoveWindow(hWnd);
         hSettingsWnd = NULL;
         break;
 

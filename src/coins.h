@@ -8,6 +8,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
     switch (message) {
 
     case WM_CREATE: {
+        Session_AddWindow(hWnd);
         break;
     }
 
@@ -21,6 +22,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
     case WM_DESTROY:
         SaveWinPosition(hWnd, COINS_CLASS_NAME);
+        Session_RemoveWindow(hWnd);
         hCoinsWnd = NULL;
         break;
 

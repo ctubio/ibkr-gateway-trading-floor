@@ -30,6 +30,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     registerWindowClass(hInst, WndProcDashboard, DASHBOARD_CLASS_NAME,  1);
     registerSystemIcon(hInst);
 
+    Session_RestoreWindows(startBook, startCoins, startDiamonds, startNews, startSettings, startTimesales, startLevels, startTicker, startOrders);
+
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);

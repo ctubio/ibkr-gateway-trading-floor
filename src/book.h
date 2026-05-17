@@ -261,6 +261,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
     switch (message) {
 
     case WM_CREATE: {
+        Session_AddWindow(hWnd);
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         int margin = 8;
 
@@ -594,6 +595,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_DESTROY:
         SaveWinPosition(hWnd, BOOK_CLASS_NAME);
+        Session_RemoveWindow(hWnd);
         api.setSymbolSearchWindow(NULL);
         hBookWnd = NULL;
         break;
