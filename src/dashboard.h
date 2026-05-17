@@ -159,6 +159,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             case ID_M_EXIT:
                 api.disconnect();
+                if (Settings_KillGatewayOnExit())
+                    KillGateway();
                 Shell_NotifyIcon(NIM_DELETE, &nid); // Remove icon from tray
                 PostQuitMessage(0);
                 break;

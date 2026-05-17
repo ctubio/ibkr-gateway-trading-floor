@@ -125,6 +125,30 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     RegisterClass(&wc);
 }
 
+
+void Settings_Save(const char* key, DWORD value) {
+    HKEY hKey;
+    if (RegCreateKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, key, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
+DWORD Settings_Load(const char* key, DWORD defaultValue) {
+    HKEY hKey;
+    DWORD value = defaultValue;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER,
+        "Software\\ibkr_gateway_trading_floor\\Settings",
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD size = sizeof(DWORD);
+        RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)&value, &size);
+        RegCloseKey(hKey);
+    }
+    return value;
+}
+
 #include <tlhelp32.h>
 
 bool IsProcessRunning(const char* processName) {
@@ -219,6 +243,30 @@ void EnsureGatewayRunning(HWND hParent) {
     }
 
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
+}
+
+void KillGateway() {
+    std::string path = GetGatewayPath();
+    if (path.empty()) {
+        path = "C:\\whatever\\ibgateway.exe";
+    }
+
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return;
+
+    PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
+    if (Process32First(hSnap, &pe)) {
+        do {
+            if (_stricmp(pe.szExeFile, std::filesystem::path(path).filename().string().c_str()) == 0) {
+                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+                if (hProcess) {
+                    TerminateProcess(hProcess, 0);
+                    CloseHandle(hProcess);
+                }
+            }
+        } while (Process32Next(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
 }
 
 #include <initguid.h>
