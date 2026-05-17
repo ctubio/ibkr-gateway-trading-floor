@@ -15,9 +15,10 @@ A Windows tray application for Interactive Brokers Gateway.
 
 ## Build
 Cross-compiled on Linux (Raspberry Pi) targeting Windows x86_64.
-
+```sh
     make lib   # build dependencies (once)
     make       # build TNT.exe
+```
 
 ## Build-in Dependencies
 - IBKR TWS C++ API
@@ -25,7 +26,12 @@ Cross-compiled on Linux (Raspberry Pi) targeting Windows x86_64.
 - Intel Decimal Floating Point Library
 
 ## Usage
-- To exit TNT.exe, look for the Exit menu option in your system tray icon
+- Enjoy!
+- To exit `TNT.exe`, look for the Exit menu option in your system tray icon
+
+## Uninstall
+- Delete `TNT.exe`
+- Open the Registry Editor and delete the folder `Computer\HKEY_CURRENT_USER\Software\ibkr_gateway_trading_floor`.
 
 ## External Dependency
 - Download and install IBKR Gateway for Windows from https://www.interactivebrokers.com/en/trading/ibgateway-latest.php
