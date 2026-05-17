@@ -2,7 +2,7 @@
 
 static const char* DASHBOARD_CLASS_NAME = "TNTDashboardClass";
 
-void startDashboard(HINSTANCE hInst) { startGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", 312, 70, hInst); }
+void startDashboard(HINSTANCE hInst) { startGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", 324, 70, hInst); }
 
 #define WM_TRAYICON (WM_USER + 1)
 NOTIFYICONDATA nid = { 0 };
@@ -82,20 +82,20 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         addButtons(hWnd, hInst, "Collection of Diamonds", (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_DIAMONDS,  4); // portfolio + watchlist
         
         addButtons(hWnd, hInst, "Ticker",             6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TICKER,    9);        
-        addButtons(hWnd, hInst, "Levels",                 (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
-        addButtons(hWnd, hInst, "Timesales",              (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7);
-        addButtons(hWnd, hInst, "News",                   (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
+        addButtons(hWnd, hInst, "Levels",             6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
+        addButtons(hWnd, hInst, "Timesales",          6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7);
+        addButtons(hWnd, hInst, "News",               6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
 
-        addButtons(hWnd, hInst, "Symbols Bookshelf",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
-        addButtons(hWnd, hInst, "Settings",               (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
+        addButtons(hWnd, hInst, "Symbols Bookshelf", 12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
+        addButtons(hWnd, hInst, "Settings",          12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
 
         api.setWindowHandle(hWnd);
-        
+                
         SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
         SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
 		break;
 	}
-
+    
     case WM_API_UPDATE:
         UpdateTrayIcon(hWnd);
         break;
@@ -195,7 +195,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 break;
         }
         break;
-		
+
     case WM_CLOSE:
         ShowWindow(hWnd, SW_HIDE); // "Close" just hides it to tray
         return 0;

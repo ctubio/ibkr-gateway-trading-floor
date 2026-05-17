@@ -48,7 +48,7 @@ build/TNT.exe: lib/build/resources.res src/main.cpp \
 	    -std=c++17 \
 	    -mwindows \
 	    -static -static-libgcc -static-libstdc++ \
-	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 \
+	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
 	    -lshlwapi -lcomctl32 \
 	    -s \

@@ -7,7 +7,7 @@
 #include <iostream>
 #include <chrono>
 
-
+#include <dwmapi.h>
 #include <initguid.h>
 #include <propkey.h>
 #include <propvarutil.h>
@@ -15,6 +15,7 @@
 constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
 std::unordered_map<std::string, HWND> g_AppWindows;
+
 
 void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
     IPropertyStore* pps;
@@ -172,8 +173,42 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
 
 // ─── Window Session ───────────────────────────────────────────────────────────
 
+void Settings_Save(const char* key, DWORD value) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, key, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
+DWORD Settings_Load(const char* key, DWORD defaultValue) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    DWORD value = defaultValue;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD size = sizeof(DWORD);
+        RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)&value, &size);
+        RegCloseKey(hKey);
+    }
+    return value;
+}
+
+bool Settings_DarkMode() {
+    return Settings_Load("DarkMode", 0) != 0;
+}
+
+void ApplyDarkMode(HWND hWnd) {
+    BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
+    DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+}
+
+
 void Session_AddWindow(HWND hWnd) {
-    
+    ApplyDarkMode(hWnd);
+
     char className[256] = {};
     GetClassNameA(hWnd, className, sizeof(className));
     // Load existing list
@@ -288,29 +323,6 @@ void Session_RestoreWindows(
         else if (cls == "TNTOrdersWindowClass")    startOrders();
         p += strlen(p) + 1;
     }
-}
-
-void Settings_Save(const char* key, DWORD value) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, key, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
-        RegCloseKey(hKey);
-    }
-}
-
-DWORD Settings_Load(const char* key, DWORD defaultValue) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    DWORD value = defaultValue;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD size = sizeof(DWORD);
-        RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)&value, &size);
-        RegCloseKey(hKey);
-    }
-    return value;
 }
 
 #include <tlhelp32.h>

@@ -1,5 +1,6 @@
 #include "api.h"
 #include "shared.h"
+#include "settings.h"
 #include "book.h"
 #include "diamonds.h"
 #include "coins.h"
@@ -8,8 +9,15 @@
 #include "levels.h"
 #include "orders.h"
 #include "ticker.h"
-#include "settings.h"
 #include "dashboard.h"
+
+// Global Hotkey Registrations
+// Frameless, Translucent, and Non-Rectangular UI
+// Window "Click-Through" Overlays
+// Modern Window Corner Rounding
+// Immersive Dark Mode
+// Taskbar Extensions
+// Rich Canvas Visualizations & Direct Manipulation
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     HANDLE hMutex = mutex_on();
