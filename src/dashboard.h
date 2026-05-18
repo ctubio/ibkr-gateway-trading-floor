@@ -1,11 +1,8 @@
 #pragma once
 
-static const char* DASHBOARD_CLASS_NAME = "TNTDashboardClass";
-
 void startDashboard(HINSTANCE hInst) { startGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", 324, 70, hInst); }
 
 #define WM_TRAYICON (WM_USER + 1)
-NOTIFYICONDATA nid = { 0 };
 
 void UpdateTrayIcon(HWND hWnd) {
     std::string tooltip;
@@ -214,28 +211,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
             }
             break;
-
-        case WM_CLOSE:
-            ShowWindow(hWnd, SW_HIDE); // "Close" just hides it to tray
-            return 0;
-
-        case WM_MOVE:
-            SaveWinPosition(hWnd);
-            break;
-            
-        case WM_DESTROY:
-            SaveWinPosition(hWnd);
-            Shell_NotifyIcon(NIM_DELETE, &nid);
-            PostQuitMessage(0);
-            break;
-
-        default: {
-            LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);
-            if (res) return res;
-            return DefWindowProc(hWnd, message, wParam, lParam);
-        }
     }
-    return 0;
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
 HANDLE mutex_on() {

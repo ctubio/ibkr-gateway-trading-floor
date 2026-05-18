@@ -1,7 +1,5 @@
 #pragma once
 
-static const char* SETTINGS_CLASS_NAME = "TNTSettingsWindowClass";
-
 void startSettings() { startGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 300, 280); }
 
 #define ID_SETTINGS_KILL_GATEWAY 4001
@@ -44,21 +42,8 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             break;
         }
-        case WM_CLOSE:
-            DestroyWindow(hWnd);
-            break;
-        case WM_DESTROY:
-            hDebugEdit = NULL;
-            hDebugLogWnd = NULL;
-            break;
-        
-        default: {
-            LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);
-            if (res) return res;
-            return DefWindowProc(hWnd, message, wParam, lParam);
-        }
     }
-    return 0;
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
 bool Settings_KillGatewayOnExit() {
@@ -88,7 +73,6 @@ void ApplyDarkModeToAllWindows() {
 LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
-            Session_AddWindow(hWnd);
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
             int margin = 8;
 
@@ -129,6 +113,10 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
         }
 
+        case WM_DESTROY:
+            hDebugEdit = NULL;
+            break;
+
         case WM_COMMAND:
             if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);
@@ -141,34 +129,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 Settings_Save("AutoGateway", checked);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
-                if (!hDebugLogWnd || !IsWindow(hDebugLogWnd)) {
-                    static bool classRegistered = false;
-                    if (!classRegistered) {
-                        WNDCLASSA wc = {};
-                        wc.lpfnWndProc   = WndProcDebugLog;
-                        wc.hInstance     = GetModuleHandle(NULL);
-                        wc.lpszClassName = "DebugMessagesDialog";
-                        wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-                        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-                        RegisterClassA(&wc);
-                        classRegistered = true;
-                    }
-
-                    int dlgW = 600, dlgH = 400;
-                    int dlgX = (GetSystemMetrics(SM_CXSCREEN) - dlgW) / 2;
-                    int dlgY = (GetSystemMetrics(SM_CYSCREEN) - dlgH) / 2;
-
-                    hDebugLogWnd = CreateWindowExA(
-                        WS_EX_TOPMOST,
-                        "DebugMessagesDialog", "Debug Messages",
-                        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                        dlgX, dlgY, dlgW, dlgH,
-                        NULL, NULL, GetModuleHandle(NULL), NULL);
-                } else {
-                    ShowWindow(hDebugLogWnd, SW_SHOW);
-                    SetForegroundWindow(hDebugLogWnd);
-                    FlushDebugBuffer(); // ← refresh in case new messages arrived while hidden
-                }
+                startGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 600, 500);
+                FlushDebugBuffer();
             }
             if (LOWORD(wParam) == ID_SETTINGS_KILL_GATEWAY) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_KILL_GATEWAY);
@@ -186,25 +148,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
             }
             break;
-
-        case WM_CLOSE:
-            DestroyWindow(hWnd);
-            break;
-
-        case WM_MOVE:
-            SaveWinPosition(hWnd);
-            break;
-
-        case WM_DESTROY:
-            SaveWinPosition(hWnd);
-            Session_RemoveWindow(hWnd);
-            break;
-
-        default: {
-            LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);
-            if (res) return res;
-            return DefWindowProc(hWnd, message, wParam, lParam);
-        }
     }
-    return 0;
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
 }

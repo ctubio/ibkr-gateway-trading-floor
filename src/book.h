@@ -1,7 +1,5 @@
 #pragma once
 
-static const char* BOOK_CLASS_NAME = "TNTBookWindowClass";
-
 void startBook() { startGenericWindow(BOOK_CLASS_NAME, "Book", L"IBKRGatewayClient.Book", 373, 240); }
 
 static HWND hAutoComplete = NULL;
@@ -265,7 +263,6 @@ LRESULT CALLBACK AutoCompleteSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LP
 LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
-            Session_AddWindow(hWnd);
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
             int margin = 8;
 
@@ -324,8 +321,6 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             SetWindowSubclass(hAutoComplete, AutoCompleteSubclassProc, 1, 0);
             ShowWindow(hAutoComplete, SW_HIDE);
 
-            api.setSymbolSearchWindow(hWnd);
-
             Book_LoadAllLists(hCombo);
 
             if (SendMessage(hCombo, CB_GETCOUNT, 0, 0) > 0)
@@ -335,8 +330,14 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             if (!first.empty()) Book_LoadList(first.c_str(), hListBox);
 
             Book_UpdateControlStates();
+
+            api.setSymbolSearchWindow(hWnd);
             break;
         }
+
+        case WM_DESTROY:
+            api.setSymbolSearchWindow(NULL);
+            break;
 
         case WM_TIMER:
             if (wParam == TIMER_DROPDOWN) {
@@ -386,38 +387,16 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 break;
 
             case ID_BOOK_NEW_LIST: {
-                static bool dialogClassRegistered = false;
-                if (!dialogClassRegistered) {
-                    WNDCLASSA wc = {};
-                    wc.lpfnWndProc = DefWindowProcA;
-                    wc.hInstance = GetModuleHandle(NULL);
-                    wc.lpszClassName = "BookNewListDialog";
-                    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-                    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-                    RegisterClassA(&wc);
-                    dialogClassRegistered = true;
-                }
-
-                int dlgW = 260, dlgH = 75;
-                int screenW = GetSystemMetrics(SM_CXSCREEN);
-                int screenH = GetSystemMetrics(SM_CYSCREEN);
-                int dlgX = (screenW - dlgW) / 2;
-                int dlgY = (screenH - dlgH) / 2;
-
-                HWND hDlg = CreateWindowExA(
-                    WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-                    "BookNewListDialog", "New Book Name",
-                    WS_POPUP | WS_CAPTION | WS_SYSMENU,
-                    dlgX, dlgY, dlgW, dlgH,
-                    hWnd, NULL, GetModuleHandle(NULL), NULL);
+                int dlgW = 260;
+                startGenericWindow(BOOK_NEW_LIST_CLASS_NAME, "New Book Name", L"IBKRGatewayClient.BookNewList", dlgW, 75);
 
                 HWND hDlgEdit = CreateWindowA("EDIT", "",
                     WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
                     10, 10, dlgW - 28, 24,
-                    hDlg, (HMENU)1, GetModuleHandle(NULL), NULL);
+                    g_AppWindows[BOOK_NEW_LIST_CLASS_NAME], (HMENU)1, GetModuleHandle(NULL), NULL);
 
-                ShowWindow(hDlg, SW_SHOW);
-                UpdateWindow(hDlg);
+                ShowWindow(g_AppWindows[BOOK_NEW_LIST_CLASS_NAME], SW_SHOW);
+                UpdateWindow(g_AppWindows[BOOK_NEW_LIST_CLASS_NAME]);
                 SetFocus(hDlgEdit);
 
                 MSG dlgMsg;
@@ -434,9 +413,9 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                         TranslateMessage(&dlgMsg);
                         DispatchMessage(&dlgMsg);
                     }
-                    if (!IsWindow(hDlg)) dlgDone = true;
+                    if (!IsWindow(g_AppWindows[BOOK_NEW_LIST_CLASS_NAME])) dlgDone = true;
                 }
-                DestroyWindow(hDlg);
+                DestroyWindow(g_AppWindows[BOOK_NEW_LIST_CLASS_NAME]);
 
                 if (strlen(newName) > 0) {
                     HKEY hKey;
@@ -588,26 +567,6 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             }
             break;
         }
-
-        case WM_CLOSE:
-            DestroyWindow(hWnd);
-            break;
-
-        case WM_MOVE:
-            SaveWinPosition(hWnd);
-            break;
-
-        case WM_DESTROY:
-            SaveWinPosition(hWnd);
-            api.setSymbolSearchWindow(NULL);
-            Session_RemoveWindow(hWnd);
-            break;
-
-        default: {
-            LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);
-            if (res) return res;
-            return DefWindowProc(hWnd, message, wParam, lParam);
-        }
     }
-    return 0;
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
 }

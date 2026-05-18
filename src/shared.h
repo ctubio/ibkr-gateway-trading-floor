@@ -37,9 +37,21 @@ std::unordered_map<std::string, HWND> g_AppWindows;
 HBRUSH hDarkBrush = NULL;
 HBRUSH hDarkBrush2 = NULL;
 
-static HWND hDebugLogWnd = NULL;
 static HWND hDebugEdit = NULL;
 static std::vector<std::string> debugBuffer; // stores messages when window is closed
+
+static const char* SETTINGS_CLASS_NAME      = "TNTSettingsWindowClass";
+static const char* DEBUGLOG_CLASS_NAME      = "TNTSettingsDebugLogWindowClass";
+static const char* BOOK_CLASS_NAME          = "TNTBookWindowClass";
+static const char* BOOK_NEW_LIST_CLASS_NAME = "TNTBookNewListWindowClass";
+static const char* COINS_CLASS_NAME         = "TNTCoinsWindowClass";
+static const char* DASHBOARD_CLASS_NAME     = "TNTDashboardClass";
+static const char* ORDERS_CLASS_NAME        = "TNTOrdersWindowClass";
+static const char* LEVELS_CLASS_NAME        = "TNTLevelsWindowClass";
+static const char* NEWS_CLASS_NAME          = "TNTNewsWindowClass";
+static const char* DIAMONDS_CLASS_NAME     = "TNTDiamondsWindowClass";
+
+NOTIFYICONDATA nid = { 0 };
 
 void LogDebug(const std::string& msg) {
     time_t now = time(0);
@@ -137,17 +149,37 @@ void startGenericWindow(const char* className, const char* title, const wchar_t*
         return;
     }
 
-    int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = defaultW, h = defaultH;
+    int w = defaultW, h = defaultH;
+    int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
+    int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
     LoadWinPosition(className, x, y, w, h);
+    
     if (hInst) {
         hWnd = CreateWindow(className, title, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, x, y, w, h, NULL, NULL, hInst, NULL);
         ShowWindow(hWnd, SW_SHOW);
         UpdateWindow(hWnd);
     } else {
-        hWnd = CreateWindowExA(WS_EX_APPWINDOW, className, title, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE, x, y, w, h, NULL, NULL, GetModuleHandle(NULL), NULL);   
+        DWORD dwExStyle = WS_EX_APPWINDOW;
+        if (className == DEBUGLOG_CLASS_NAME) {
+             dwExStyle = WS_EX_TOPMOST;
+        }
+        if (className == BOOK_NEW_LIST_CLASS_NAME) {
+             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
+        }
+        DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
+        if (className == DEBUGLOG_CLASS_NAME) {
+            dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+        }
+        HWND hWndParent = NULL;
+        if (className == BOOK_NEW_LIST_CLASS_NAME) {
+            dwStyle = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
+            hWndParent = g_AppWindows[BOOK_CLASS_NAME];;
+        }
+        hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), NULL);   
     }
-
-    SetWindowTaskbarId(hWnd, taskbarId);
+    
+    if (className != BOOK_NEW_LIST_CLASS_NAME)
+        SetWindowTaskbarId(hWnd, taskbarId);
 }
 
 HICON CreateGrayIcon(HICON hOriginal) {
@@ -210,15 +242,21 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
         hIconOffline   = CreateGrayIcon(hIconConnected);
     }
     WNDCLASS wc = { 0 };
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInst;
+    wc.lpfnWndProc   = WndProc;
+    wc.hInstance     = hInst;
     wc.lpszClassName = className;
+    wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+    if (className == DEBUGLOG_CLASS_NAME || className == BOOK_NEW_LIST_CLASS_NAME) {
+        wc.hInstance = GetModuleHandle(NULL);
+    } else {
+        wc.hInstance = hInst;
+    }
     if (iconId == 1) {
         wc.hIcon = hIconOffline;
     } else {
         wc.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(iconId));
     }
-    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     RegisterClass(&wc);
 }
 
@@ -337,67 +375,6 @@ void PlaySound_Async(int resourceId) {
         sq.queue.push(resourceId);
     }
     sq.cv.notify_one();
-}
-
-LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    switch (message) {
-        case WM_ERASEBKGND: {
-            HDC hdc = (HDC)wParam;
-            RECT rc;
-            GetClientRect(hWnd, &rc);
-            FillRect(hdc, &rc, Settings_DarkMode() ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
-            return 1;
-        }
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORLISTBOX: {
-            if (!Settings_DarkMode()) return 0;
-            SetTextColor((HDC)wParam, DM_TEXT);
-            SetBkColor((HDC)wParam, DM_BG2);
-            return (LRESULT)hDarkBrush2;
-        }
-        case WM_CTLCOLORSTATIC: {
-            if (!Settings_DarkMode()) return 0;
-            SetTextColor((HDC)wParam, DM_TEXT);
-            SetBkColor((HDC)wParam, DM_BG);
-            return (LRESULT)hDarkBrush;
-        }
-        case WM_CTLCOLORBTN: {
-            if (!Settings_DarkMode()) return 0;
-            SetTextColor((HDC)wParam, DM_TEXT);
-            SetBkColor((HDC)wParam, DM_BG);
-            return (LRESULT)hDarkBrush;
-        }
-        case WM_DRAWITEM: {
-            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)lParam;
-            if (dis->CtlType != ODT_BUTTON) return 0;
-            bool dark = Settings_DarkMode();
-            bool pressed  = (dis->itemState & ODS_SELECTED);
-            bool disabled = (dis->itemState & ODS_DISABLED);
-            COLORREF bgColor     = dark ? (pressed ? RGB(60,60,60) : RGB(50,50,50))
-                                        : (pressed ? RGB(180,180,180) : RGB(225,225,225));
-            COLORREF textColor   = disabled ? RGB(120,120,120) : (dark ? DM_TEXT : LM_TEXT);
-            COLORREF borderColor = dark ? DM_BORDER : RGB(170,170,170);
-            HBRUSH hBg = CreateSolidBrush(bgColor);
-            FillRect(dis->hDC, &dis->rcItem, hBg);
-            DeleteObject(hBg);
-            HPEN hPen = CreatePen(PS_SOLID, 1, borderColor);
-            HPEN hOld = (HPEN)SelectObject(dis->hDC, hPen);
-            SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
-            Rectangle(dis->hDC, dis->rcItem.left, dis->rcItem.top,
-                    dis->rcItem.right, dis->rcItem.bottom);
-            SelectObject(dis->hDC, hOld);
-            DeleteObject(hPen);
-            char text[128] = {};
-            GetWindowTextA(dis->hwndItem, text, sizeof(text));
-            SetTextColor(dis->hDC, textColor);
-            SetBkMode(dis->hDC, TRANSPARENT);
-            DrawTextA(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            if (dis->itemState & ODS_FOCUS)
-                DrawFocusRect(dis->hDC, &dis->rcItem);
-            return TRUE;
-        }
-    }
-    return 0;
 }
 
 void Session_AddWindow(HWND hWnd) {
@@ -519,6 +496,104 @@ void Session_RestoreWindows(
     }
 }
 
+LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+        case WM_ERASEBKGND: {
+            HDC hdc = (HDC)wParam;
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+            FillRect(hdc, &rc, Settings_DarkMode() ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
+            return 1;
+        }
+        case WM_CTLCOLOREDIT:
+        case WM_CTLCOLORLISTBOX: {
+            if (!Settings_DarkMode()) return 0;
+            SetTextColor((HDC)wParam, DM_TEXT);
+            SetBkColor((HDC)wParam, DM_BG2);
+            return (LRESULT)hDarkBrush2;
+        }
+        case WM_CTLCOLORSTATIC: {
+            if (!Settings_DarkMode()) return 0;
+            SetTextColor((HDC)wParam, DM_TEXT);
+            SetBkColor((HDC)wParam, DM_BG);
+            return (LRESULT)hDarkBrush;
+        }
+        case WM_CTLCOLORBTN: {
+            if (!Settings_DarkMode()) return 0;
+            SetTextColor((HDC)wParam, DM_TEXT);
+            SetBkColor((HDC)wParam, DM_BG);
+            return (LRESULT)hDarkBrush;
+        }
+        case WM_DRAWITEM: {
+            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)lParam;
+            if (dis->CtlType != ODT_BUTTON) return 0;
+            bool dark = Settings_DarkMode();
+            bool pressed  = (dis->itemState & ODS_SELECTED);
+            bool disabled = (dis->itemState & ODS_DISABLED);
+            COLORREF bgColor     = dark ? (pressed ? RGB(60,60,60) : RGB(50,50,50))
+                                        : (pressed ? RGB(180,180,180) : RGB(225,225,225));
+            COLORREF textColor   = disabled ? RGB(120,120,120) : (dark ? DM_TEXT : LM_TEXT);
+            COLORREF borderColor = dark ? DM_BORDER : RGB(170,170,170);
+            HBRUSH hBg = CreateSolidBrush(bgColor);
+            FillRect(dis->hDC, &dis->rcItem, hBg);
+            DeleteObject(hBg);
+            HPEN hPen = CreatePen(PS_SOLID, 1, borderColor);
+            HPEN hOld = (HPEN)SelectObject(dis->hDC, hPen);
+            SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
+            Rectangle(dis->hDC, dis->rcItem.left, dis->rcItem.top,
+                    dis->rcItem.right, dis->rcItem.bottom);
+            SelectObject(dis->hDC, hOld);
+            DeleteObject(hPen);
+            char text[128] = {};
+            GetWindowTextA(dis->hwndItem, text, sizeof(text));
+            SetTextColor(dis->hDC, textColor);
+            SetBkMode(dis->hDC, TRANSPARENT);
+            DrawTextA(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            if (dis->itemState & ODS_FOCUS)
+                DrawFocusRect(dis->hDC, &dis->rcItem);
+            return TRUE;
+        }
+    }
+    return 0;
+}
+
+
+LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    char className[256] = {};
+    GetClassNameA(hWnd, className, sizeof(className));
+
+    switch (message) {
+        case WM_CREATE:
+            if (className != DASHBOARD_CLASS_NAME) 
+                Session_AddWindow(hWnd);
+            return 0;
+        case WM_CLOSE:
+            if (className == DASHBOARD_CLASS_NAME) 
+                ShowWindow(hWnd, SW_HIDE);
+            else
+                DestroyWindow(hWnd);
+            return 0;
+        case WM_MOVE:
+            SaveWinPosition(hWnd);
+            return 0;
+        case WM_DESTROY:
+            SaveWinPosition(hWnd);
+            if (className == DASHBOARD_CLASS_NAME) {
+                Shell_NotifyIcon(NIM_DELETE, &nid);
+                PostQuitMessage(0);
+            } else {
+                Session_RemoveWindow(hWnd);
+            }
+            return 0;
+        default: {
+            LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);
+            if (res) return res;
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+    }
+    return 0;
+}
+
 #include <tlhelp32.h>
 
 bool IsProcessRunning(const char* processName) {
@@ -616,7 +691,8 @@ void EnsureGatewayRunning(HWND hParent) {
     }
 
     alreadyEnsureGatewayRunning = false;
-
+    
+    LogDebug("Running IBKR Gateway, please login..");
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
 }
 
