@@ -129,7 +129,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 Settings_Save("AutoGateway", checked);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
-                startGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 600, 500);
+                startGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 600, 300);
                 FlushDebugBuffer();
             }
             if (LOWORD(wParam) == ID_SETTINGS_KILL_GATEWAY) {

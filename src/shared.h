@@ -544,11 +544,11 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     dis->rcItem.right, dis->rcItem.bottom);
             SelectObject(dis->hDC, hOld);
             DeleteObject(hPen);
-            char text[128] = {};
-            GetWindowTextA(dis->hwndItem, text, sizeof(text));
+            wchar_t text[128] = {};
+            GetWindowTextW(dis->hwndItem, text, sizeof(text)/sizeof(wchar_t));
             SetTextColor(dis->hDC, textColor);
             SetBkMode(dis->hDC, TRANSPARENT);
-            DrawTextA(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DrawTextW(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             if (dis->itemState & ODS_FOCUS)
                 DrawFocusRect(dis->hDC, &dis->rcItem);
             return TRUE;
@@ -691,7 +691,7 @@ void EnsureGatewayRunning(HWND hParent) {
     }
 
     alreadyEnsureGatewayRunning = false;
-    
+
     LogDebug("Running IBKR Gateway, please login..");
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
 }
