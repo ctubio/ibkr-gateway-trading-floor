@@ -3,6 +3,9 @@
 #define WM_API_UPDATE     (WM_USER + 2)
 #define WM_SYMBOL_RESULTS (WM_USER + 3)
 #define WM_API_ERROR      (WM_USER + 4)
+#define WM_ACCOUNT_SUMMARY (WM_USER + 5)
+#define WM_PNL_UPDATE      (WM_USER + 6)
+
 #define TIMER_WATCHDOG 1
 
 #define ID_M_SYMBOLS    1001
@@ -39,6 +42,10 @@ private:
     std::atomic<bool> tradingConnected{false};
     std::atomic<bool> marketDataSoundPlayed{false}; // prevent duplicate sounds
 
+    HWND hCoinWnd = nullptr;
+    std::mutex summaryMutex;
+    std::map<std::string, std::string> summaryData; // tag -> value
+    double dailyPnL = 0, unrealizedPnL = 0, realizedPnL = 0;
 
     HWND hSymbolSearchWnd = nullptr; // separate target for symbol results
     std::mutex symbolMutex;
@@ -163,6 +170,76 @@ public:
         }
     }
 
+    void setCoinWindow(HWND hWnd) {
+        hCoinWnd = hWnd;
+        if (!hWnd || !client->isConnected()) return;
+        
+        LogDebug("Requesting account summary...");
+        client->reqAccountSummary(9010, "All",
+            "NetLiquidation,TotalCashValue,BuyingPower,"
+            "AvailableFunds,ExcessLiquidity,GrossPositionValue,"
+            "MaintMarginReq,InitMarginReq");
+        client->reqAccountSummary(9011, "All", "$LEDGER:ALL");
+        
+        std::string acc;
+        {
+            std::lock_guard<std::mutex> lock(dataMutex);
+            acc = accountId;
+        }
+        if (!acc.empty()) {
+            LogDebug("Requesting PnL for: " + acc);
+            client->reqPnL(9013, acc, "");
+        } else {
+            LogDebug("setCoinWindow: accountId empty, PnL not requested");
+        }
+    }
+
+    void unsetCoinWindow() {
+        hCoinWnd = nullptr;
+        if (!client->isConnected()) return; // ← guard
+        client->cancelAccountSummary(9010);
+        client->cancelAccountSummary(9011);
+        client->cancelAccountSummary(9012);
+        client->cancelPnL(9013);
+    }
+
+    std::map<std::string, std::string> getAccountSummary() {
+        std::lock_guard<std::mutex> lock(summaryMutex);
+        return summaryData;
+    }
+
+    double getDailyPnL()      const { return dailyPnL; }
+    double getUnrealizedPnL() const { return unrealizedPnL; }
+    double getRealizedPnL()   const { return realizedPnL; }
+
+    void accountSummary(int reqId, const std::string& account,
+                    const std::string& tag, const std::string& value,
+                    const std::string& currency) override {
+        std::lock_guard<std::mutex> lock(summaryMutex);
+        std::string key = tag;
+        if (!currency.empty()) {
+            key = currency + "_" + tag;
+        }
+        summaryData[key] = value;
+        
+        // Also store the base currency version if it's not already there
+        // This helps if the UI expects just "NetLiquidation" but the API returns "EUR_NetLiquidation"
+        if (!currency.empty()) {
+            summaryData[tag] = value; 
+        }
+
+        if (hCoinWnd) PostMessage(hCoinWnd, WM_ACCOUNT_SUMMARY, 0, 0);
+    }
+
+    void accountSummaryEnd(int reqId) override {}
+
+    void pnl(int reqId, double daily, double unrealized, double realized) override {
+        dailyPnL      = daily;
+        unrealizedPnL = unrealized;
+        realizedPnL   = realized;
+        if (hCoinWnd) PostMessage(hCoinWnd, WM_PNL_UPDATE, 0, 0);
+    }
+
     std::string getAccountNumber() {
         std::lock_guard<std::mutex> lock(dataMutex);
         return accountId;
@@ -219,6 +296,9 @@ public:
     #define connectAck connectAck_ignored
     #define connectionClosed connectionClosed_ignored
     #define nextValidId nextValidId_ignored
+    #define accountSummary accountSummary_ignored
+    #define accountSummaryEnd accountSummaryEnd_ignored
+    #define pnl pnl_ignored
 
     #define EWRAPPER_VIRTUAL_IMPL {}
     #include "EWrapper_prototypes.h"
@@ -230,4 +310,7 @@ public:
     #undef connectAck_ignored
     #undef connectionClosed_ignored
     #undef nextValidId_ignored 
+    #undef accountSummary_ignored
+    #undef accountSummaryEnd_ignored
+    #undef pnl_ignored
 } api;

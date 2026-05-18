@@ -77,17 +77,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int steps = 1;
             int stepz = 0;
             //charts from tradingview
-            addButtons(hWnd, hInst, "Bag",              (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_COINS,     3); // total daily eur usd
-            addButtons(hWnd, hInst, "Orders",                 (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_ORDERS,   10); // open, messages, history
-            addButtons(hWnd, hInst, "Diamonds", (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_DIAMONDS,  4); // portfolio + watchlist
+            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_COINS,     3); // total daily eur usd
+            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_ORDERS,   10); // open, messages, history
+            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_DIAMONDS,  4); // portfolio + watchlist
             
-            addButtons(hWnd, hInst, "Ticker",             6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TICKER,    9);        
-            addButtons(hWnd, hInst, "Levels",             6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
-            addButtons(hWnd, hInst, "Timesales",          6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7);
-            addButtons(hWnd, hInst, "News",               6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
+            addButtons(hWnd, hInst, "Ticker",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TICKER,    9);        
+            addButtons(hWnd, hInst, "Levels",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
+            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7);
+            addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
 
-            addButtons(hWnd, hInst, "Symbols", 12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
-            addButtons(hWnd, hInst, "Settings",          12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
+            addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
+            addButtons(hWnd, hInst, "Settings",  12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
 
             api.setWindowHandle(hWnd);
                     
@@ -143,7 +143,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 }
                 
                 AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-                AppendMenu(hMenu, MF_STRING, ID_M_COINS, "Bag");
+                AppendMenu(hMenu, MF_STRING, ID_M_COINS, "Coins");
                 AppendMenu(hMenu, MF_STRING, ID_M_DIAMONDS, "Diamonds");
                 AppendMenu(hMenu, MF_STRING, ID_M_ORDERS, "Orders");
                 AppendMenu(hMenu, MF_STRING, ID_M_TICKER, "Ticker");

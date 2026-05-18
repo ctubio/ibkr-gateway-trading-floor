@@ -104,7 +104,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (Settings_Load("PlaySounds", 0))
                 SendMessage(hChkSounds, BM_SETCHECK, BST_CHECKED, 0);
 
-            HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Messages",
+            HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                 margin, margin + 128, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
