@@ -7,35 +7,38 @@ void startDashboard(HINSTANCE hInst) { startGenericWindow(DASHBOARD_CLASS_NAME, 
 void UpdateTrayIcon(HWND hWnd) {
     std::string tooltip;
     std::string title = "IBKR Gateway: ";
-    HICON hIcon;
+    bool connected = false;
 
     if (!api.isConnected()) {
         tooltip = "Offline";
         title  += tooltip;
-        hIcon   = hIconOffline;
     } else {
         std::string acc = api.getAccountNumber();
         if (acc.empty()) {
             tooltip = "Connecting...";
             title  += tooltip;
-            hIcon   = hIconOffline;
         } else {
+            connected = api.isMarketDataConnected() && api.isTradingConnected();
             std::string md = api.isMarketDataConnected() ? "MD✓" : "MD✗";
             std::string tr = api.isTradingConnected()    ? "TR✓" : "TR✗";
             tooltip = acc + " | " + md + " " + tr;
             title   = "Account: " + acc;
-            hIcon   = api.isMarketDataConnected() && api.isTradingConnected()
-                    ? hIconConnected : hIconOffline;
         }
     }
 
     strncpy(nid.szTip, tooltip.c_str(), sizeof(nid.szTip) - 1);
     nid.szTip[sizeof(nid.szTip) - 1] = '\0';
     nid.uFlags = NIF_TIP | NIF_ICON;
-    nid.hIcon  = hIcon;
+    nid.hIcon  = connected ? onlineIcons[DASHBOARD_CLASS_NAME] : offlineIcons[DASHBOARD_CLASS_NAME];
     Shell_NotifyIcon(NIM_MODIFY, &nid);
-    SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-    SendMessage(hWnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
+    for (const auto& pair : g_AppWindows) {
+        const std::string& key = pair.first;
+        const HWND& hwnd = pair.second;
+        HICON hIcon = connected ? onlineIcons[key] : offlineIcons[key];
+        SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+        SendMessage(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
+    }
+            
     SetWindowTextA(hWnd, title.c_str());
 }
 

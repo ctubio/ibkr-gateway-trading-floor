@@ -39,7 +39,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = hIconOffline;
+    nid.hIcon = offlineIcons[DASHBOARD_CLASS_NAME];
     lstrcpy(nid.szTip, "Offline");
     Shell_NotifyIcon(NIM_ADD, &nid);
 

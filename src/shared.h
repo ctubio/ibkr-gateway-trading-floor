@@ -233,14 +233,14 @@ HICON CreateGrayIcon(HICON hOriginal) {
     return hGray;
 }
 
-HICON hIconConnected;
-HICON hIconOffline;
+std::unordered_map<std::string, HICON> offlineIcons;
+std::unordered_map<std::string, HICON> onlineIcons;
 
 void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className, int iconId) {
-    if (iconId == 1) {
-        hIconConnected = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
-        hIconOffline   = CreateGrayIcon(hIconConnected);
-    }
+    HICON& offlineIcon = offlineIcons[className];
+    HICON& onlineIcon  = onlineIcons[className];
+    onlineIcon  = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
+    offlineIcon = CreateGrayIcon(onlineIcon);
     WNDCLASS wc = { 0 };
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInst;
@@ -252,11 +252,7 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     } else {
         wc.hInstance = hInst;
     }
-    if (iconId == 1) {
-        wc.hIcon = hIconOffline;
-    } else {
-        wc.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(iconId));
-    }
+    wc.hIcon = offlineIcon;
     RegisterClass(&wc);
 }
 
