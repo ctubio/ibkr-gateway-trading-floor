@@ -109,7 +109,6 @@ LRESULT CALLBACK NewsEditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 // ─── News request helper ──────────────────────────────────────────────────────
 
 void News_RequestForSymbol(const std::string& fullEntry) {
-    // Extract conId and symbol from fullEntry (format: conId.symbol.exchange)
     auto firstDot = fullEntry.find('.');
     if (firstDot == std::string::npos) return;
     std::string conIdStr = fullEntry.substr(0, firstDot);
@@ -117,18 +116,14 @@ void News_RequestForSymbol(const std::string& fullEntry) {
     auto secondDot       = rest.find('.');
     std::string symbol   = (secondDot != std::string::npos) ? rest.substr(0, secondDot) : rest;
 
+    Settings_SaveString("LastNewsSymbol", fullEntry); // ← save full entry
+
     LogDebug("News request for: " + symbol + " conId: " + conIdStr);
 
-    // Update window title
-    HWND newsWnd = FindWindow(NEWS_CLASS_NAME, NULL);
-    if (newsWnd) {
-        std::string title = "News: " + symbol;
-        SetWindowTextA(newsWnd, title.c_str());
-    }
+    HWND newsWnd = g_AppWindows[NEWS_CLASS_NAME];
+    if (newsWnd) SetWindowTextA(newsWnd, ("News: " + symbol).c_str());
 
-    // Clear existing news
     if (hNewsList) SendMessage(hNewsList, LB_RESETCONTENT, 0, 0);
-
     api.reqNewsForSymbol(std::stoi(conIdStr), symbol);
 }
 
@@ -170,6 +165,17 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         SetWindowSubclass(hNewsEdit, NewsEditSubclassProc, 2, 0);
         api.setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News: empty");
+
+        std::string lastEntry = Settings_LoadString("LastNewsSymbol");
+        if (!lastEntry.empty()) {
+            std::string label = Book_DisplayLabel(lastEntry);
+            suppressNewsSearch = true;
+            SetWindowTextA(hNewsEdit, label.c_str());
+            suppressNewsSearch = false;
+            newsPendingFullEntry = lastEntry;
+            News_RequestForSymbol(lastEntry);
+            newsPendingFullEntry = "";
+        }
         break;
     }
 

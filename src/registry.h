@@ -17,6 +17,33 @@ static const char* DIAMONDS_CLASS_NAME      = "TNTDiamondsWindowClass";
 static const char* TICKER_CLASS_NAME        = "TNTTickerWindowClass";
 static const char* TIMESALES_CLASS_NAME     = "TNTTimesalesWindowClass";
 
+void Settings_SaveString(const char* key, const std::string& value) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, key, 0, REG_SZ,
+            (const BYTE*)value.c_str(), (DWORD)value.size() + 1);
+        RegCloseKey(hKey);
+    }
+}
+
+std::string Settings_LoadString(const char* key, const std::string& defaultValue = "") {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        char buf[512] = {};
+        DWORD size = sizeof(buf);
+        if (RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)buf, &size) == ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            return std::string(buf);
+        }
+        RegCloseKey(hKey);
+    }
+    return defaultValue;
+}
+
 void Settings_Save(const char* key, DWORD value) {
     HKEY hKey;
     char fullPath[256];
