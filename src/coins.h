@@ -117,9 +117,16 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                 hWnd, (HMENU)(UINT_PTR)(ID_COINS_LABEL_BASE + i), hInst, NULL);
         }
 
+        api.addApiUpdateWindow(hWnd);
         api.setCoinWindow(hWnd);
         break;
     }
+
+    case WM_API_UPDATE:
+        if (api.isConnected()) {
+            api.setCoinWindow(hWnd);
+        }
+        break;
 
     case WM_ACCOUNT_SUMMARY:
     case WM_PNL_UPDATE:
@@ -128,6 +135,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
     case WM_DESTROY:
         api.unsetCoinWindow();
+        api.removeApiUpdateWindow(hWnd);
         break;
     }
 

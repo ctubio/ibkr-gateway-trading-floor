@@ -18,8 +18,6 @@ static HWND hAutoComplete = NULL;
 #define TIMER_DROPDOWN       99
 
 static HWND hCombo, hListBox, hEdit, hBtnDelList, hLabelNewSymbol, hBtnUp, hBtnDown;
-static HWND hAutoCompleteOwner = NULL;
-static HWND hEditOwner = NULL;
 static bool suppressSearch = false;
 static bool showingOffline = false;
 static std::vector<std::string> currentResults;  // full conId.symbol.exchange
@@ -217,12 +215,12 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
                 suppressSearch = false;
                 ShowWindow(hAutoComplete, SW_HIDE);
                 SendMessage(hEdit, EM_SETSEL, label.size(), label.size());
-                SendMessage(hEditOwner, WM_COMMAND, MAKEWPARAM(ID_BOOK_ADD_ITEM, 0), 0);
+                SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(ID_BOOK_ADD_ITEM, 0), 0);
             }
             return 0;
         }
         if (wParam == VK_RETURN && !acVisible) {
-            SendMessage(hEditOwner, WM_COMMAND, MAKEWPARAM(ID_BOOK_ADD_ITEM, 0), 0);
+            SendMessage(GetParent(hWnd), WM_COMMAND, MAKEWPARAM(ID_BOOK_ADD_ITEM, 0), 0);
             return 0;
         }
         if (wParam == VK_ESCAPE && acVisible) {
@@ -246,10 +244,10 @@ LRESULT CALLBACK AutoCompleteSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LP
             SetWindowTextA(hEdit, label.c_str());
             suppressSearch = false;
             ShowWindow(hWnd, SW_HIDE);
-            KillTimer(hAutoCompleteOwner, TIMER_DROPDOWN);
+            KillTimer(GetParent(hWnd), TIMER_DROPDOWN);
             SetFocus(hEdit);
             SendMessage(hEdit, EM_SETSEL, label.size(), label.size());
-            SendMessage(hAutoCompleteOwner, WM_COMMAND,
+            SendMessage(GetParent(hWnd), WM_COMMAND,
                 MAKEWPARAM(ID_BOOK_AUTOCOMPLETE, LBN_DBLCLK), (LPARAM)hWnd);
         }
     }
@@ -308,10 +306,8 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 margin + 95, margin + 170, 254, 24,
                 hWnd, (HMENU)ID_BOOK_EDIT, hInst, NULL);
 
-            hEditOwner = hWnd;
             SetWindowSubclass(hEdit, EditSubclassProc, 2, 0);
 
-            hAutoCompleteOwner = hWnd;
             hAutoComplete = CreateWindowExA(
                 WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
                 "LISTBOX", NULL,
@@ -330,14 +326,8 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             if (!first.empty()) Book_LoadList(first.c_str(), hListBox);
 
             Book_UpdateControlStates();
-
-            api.setSymbolSearchWindow(hWnd);
             break;
         }
-
-        case WM_DESTROY:
-            api.setSymbolSearchWindow(NULL);
-            break;
 
         case WM_TIMER:
             if (wParam == TIMER_DROPDOWN) {

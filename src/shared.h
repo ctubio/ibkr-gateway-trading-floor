@@ -1,28 +1,6 @@
 #pragma once
 
-#include <thread>
-#include <mutex>
-#include <iostream>
-#include <chrono>
-
-#include "EWrapper.h"
-#include "EClientSocket.h"
-#include "EReaderOSSignal.h"
-#include "EReader.h"
-
-#include <windows.h>
-#include <shellapi.h>
-#include <shobjidl.h>
-
-#include <dwmapi.h>
-#include <initguid.h>
-#include <propkey.h>
-#include <propvarutil.h>
-#include <mmsystem.h>
-
-constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
-
-std::unordered_map<std::string, HWND> g_AppWindows;
+#include <cstring>
 
 // Dark mode colors
 #define DM_BG        RGB(32,  32,  32)
@@ -37,42 +15,7 @@ std::unordered_map<std::string, HWND> g_AppWindows;
 HBRUSH hDarkBrush = NULL;
 HBRUSH hDarkBrush2 = NULL;
 
-static HWND hDebugEdit = NULL;
-static std::vector<std::string> debugBuffer; // stores messages when window is closed
-
-static const char* SETTINGS_CLASS_NAME      = "TNTSettingsWindowClass";
-static const char* DEBUGLOG_CLASS_NAME      = "TNTSettingsDebugLogWindowClass";
-static const char* BOOK_CLASS_NAME          = "TNTBookWindowClass";
-static const char* BOOK_NEW_LIST_CLASS_NAME = "TNTBookNewListWindowClass";
-static const char* COINS_CLASS_NAME         = "TNTCoinsWindowClass";
-static const char* DASHBOARD_CLASS_NAME     = "TNTDashboardClass";
-static const char* ORDERS_CLASS_NAME        = "TNTOrdersWindowClass";
-static const char* LEVELS_CLASS_NAME        = "TNTLevelsWindowClass";
-static const char* NEWS_CLASS_NAME          = "TNTNewsWindowClass";
-static const char* DIAMONDS_CLASS_NAME      = "TNTDiamondsWindowClass";
-static const char* TICKER_CLASS_NAME        = "TNTTickerWindowClass";
-
 NOTIFYICONDATA nid = { 0 };
-
-void LogDebug(const std::string& msg) {
-    time_t now = time(0);
-    char tstr[26] = {};
-    ctime_s(tstr, sizeof(tstr), &now);
-    std::string timestamp = tstr;
-    if (!timestamp.empty()) timestamp.pop_back(); // remove newline
-
-    std::string fullMsg = "[" + timestamp + "] " + msg + "\r\n";
-    debugBuffer.push_back(fullMsg);
-
-    if (hDebugEdit && IsWindow(hDebugEdit)) {
-        // Append to edit control
-        int len = GetWindowTextLength(hDebugEdit);
-        SendMessage(hDebugEdit, EM_SETSEL, len, len);
-        SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)fullMsg.c_str());
-        // Auto-scroll to bottom
-        SendMessage(hDebugEdit, EM_SCROLLCARET, 0, 0);
-    }
-}
 
 void InitDarkBrushes() {
     if (hDarkBrush)  DeleteObject(hDarkBrush);
@@ -91,54 +34,6 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
         PropVariantClear(&pv);
         pps->Release();
     }
-}
-
-void SaveWinPosition(HWND hWnd) {
-    WINDOWPLACEMENT wp;
-    wp.length = sizeof(WINDOWPLACEMENT);
-    GetWindowPlacement(hWnd, &wp);
-
-    // wp.rcNormalPosition is the coordinates when NOT minimized/maximized
-    DWORD x = (DWORD)wp.rcNormalPosition.left;
-    DWORD y = (DWORD)wp.rcNormalPosition.top;
-    DWORD w = (DWORD)(wp.rcNormalPosition.right - wp.rcNormalPosition.left);
-    DWORD h = (DWORD)(wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
-
-    // If the window is currently minimized, we want to save the 'normal' coords
-    // instead of the -32000 values.
-    
-    HKEY hKey;
-    char className[256] = {};
-    GetClassNameA(hWnd, className, sizeof(className));
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\WindowSettings\\%s", APP_REG_ROOT, className);
-
-    if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath, 0, NULL, 
-        REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) 
-    {
-        RegSetValueEx(hKey, "X", 0, REG_DWORD, (const BYTE*)&x, sizeof(DWORD));
-        RegSetValueEx(hKey, "Y", 0, REG_DWORD, (const BYTE*)&y, sizeof(DWORD));
-        RegSetValueEx(hKey, "W", 0, REG_DWORD, (const BYTE*)&w, sizeof(DWORD));
-        RegSetValueEx(hKey, "H", 0, REG_DWORD, (const BYTE*)&h, sizeof(DWORD));
-        RegCloseKey(hKey);
-    }
-}
-
-bool LoadWinPosition(const char* subKeyName, int &x, int &y, int &w, int &h) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\WindowSettings\\%s", APP_REG_ROOT, subKeyName);
-
-    if (RegOpenKeyEx(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD dwSize = sizeof(DWORD);
-        RegQueryValueEx(hKey, "X", NULL, NULL, (LPBYTE)&x, &dwSize);
-        RegQueryValueEx(hKey, "Y", NULL, NULL, (LPBYTE)&y, &dwSize);
-        RegQueryValueEx(hKey, "W", NULL, NULL, (LPBYTE)&w, &dwSize);
-        RegQueryValueEx(hKey, "H", NULL, NULL, (LPBYTE)&h, &dwSize);
-        RegCloseKey(hKey);
-        return true;
-    }
-    return false;
 }
 
 void startGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL) {
@@ -160,26 +55,25 @@ void startGenericWindow(const char* className, const char* title, const wchar_t*
         ShowWindow(hWnd, SW_SHOW);
         UpdateWindow(hWnd);
     } else {
+        HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
-        if (className == DEBUGLOG_CLASS_NAME) {
-             dwExStyle = WS_EX_TOPMOST;
-        }
-        if (className == BOOK_NEW_LIST_CLASS_NAME) {
-             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
-        }
         DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
-        if (className == DEBUGLOG_CLASS_NAME) {
+        if (strcmp(className, NEWS_CLASS_NAME) == 0) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
-        HWND hWndParent = NULL;
-        if (className == BOOK_NEW_LIST_CLASS_NAME) {
+        if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0) {
+            dwExStyle = WS_EX_TOPMOST;
+            dwStyle   = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+        }
+        if (strcmp(className, BOOK_NEW_LIST_CLASS_NAME) == 0) {
+            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = g_AppWindows[BOOK_CLASS_NAME];;
         }
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), NULL);   
     }
     
-    if (className != BOOK_NEW_LIST_CLASS_NAME)
+    if (strcmp(className, BOOK_NEW_LIST_CLASS_NAME) != 0)
         SetWindowTaskbarId(hWnd, taskbarId);
 }
 
@@ -248,7 +142,7 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     wc.lpszClassName = className;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    if (className == DEBUGLOG_CLASS_NAME || className == BOOK_NEW_LIST_CLASS_NAME) {
+    if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0 || strcmp(className, BOOK_NEW_LIST_CLASS_NAME) == 0) {
         wc.hInstance = GetModuleHandle(NULL);
     } else {
         wc.hInstance = hInst;
@@ -257,241 +151,19 @@ void registerWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     RegisterClass(&wc);
 }
 
+void UpdateSymbolSearchSubscriber(const char* className) {
+    if (!className) {
+        api.setSymbolSearchWindow(NULL);
+        return;
+    }
+    if (strcmp(className, NEWS_CLASS_NAME) == 0)
+        api.setSymbolSearchWindow(g_AppWindows[NEWS_CLASS_NAME]);
+    else if (strcmp(className, BOOK_CLASS_NAME) == 0)
+        api.setSymbolSearchWindow(g_AppWindows[BOOK_CLASS_NAME]);
+    else
+        api.setSymbolSearchWindow(NULL);
+}
 // ─── Window Session ───────────────────────────────────────────────────────────
-
-void Settings_Save(const char* key, DWORD value) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, key, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
-        RegCloseKey(hKey);
-    }
-}
-
-DWORD Settings_Load(const char* key, DWORD defaultValue) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    DWORD value = defaultValue;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD size = sizeof(DWORD);
-        RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)&value, &size);
-        RegCloseKey(hKey);
-    }
-    return value;
-}
-
-bool Settings_DarkMode() {
-    return Settings_Load("DarkMode", 0) != 0;
-}
-
-void ApplyDarkMode(HWND hWnd) {
-    BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
-    DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-}
-
-#include <atomic>
-#include <string>
-#include <queue>
-#include <condition_variable>
-
-void PlaySound_Async(int resourceId) {
-    if (!Settings_Load("PlaySounds", 0)) return;
-
-    // We use a static worker thread and a queue to ensure sounds play sequentially
-    struct SoundQueue {
-        std::queue<int> queue;
-        std::mutex mutex;
-        std::condition_variable cv;
-        std::atomic<bool> running{true};
-        std::thread worker;
-
-        SoundQueue() {
-            worker = std::thread([this]() {
-                while (running) {
-                    int resId = 0;
-                    {
-                        std::unique_lock<std::mutex> lock(mutex);
-                        cv.wait(lock, [this] { return !queue.empty() || !running; });
-                        if (!running) break;
-                        resId = queue.front();
-                        queue.pop();
-                    }
-
-                    // Actual playback logic
-                    HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(resId), RT_RCDATA);
-                    if (hRes) {
-                        HGLOBAL hMem = LoadResource(NULL, hRes);
-                        if (hMem) {
-                            void* pData = LockResource(hMem);
-                            DWORD size = SizeofResource(NULL, hRes);
-                            if (pData && size) {
-                                static std::atomic<int> soundSequence(0);
-                                int currentSeq = ++soundSequence;
-
-                                char tempPath[MAX_PATH];
-                                GetTempPathA(MAX_PATH, tempPath);
-                                std::string mp3File = std::string(tempPath) + "ib_snd_" + std::to_string(currentSeq) + ".mp3";
-                                std::string alias = "mci_snd_" + std::to_string(currentSeq);
-
-                                FILE* f = fopen(mp3File.c_str(), "wb");
-                                if (f) {
-                                    fwrite(pData, 1, size, f);
-                                    fclose(f);
-
-                                    std::string openCmd = "open \"" + mp3File + "\" type mpegvideo alias " + alias;
-                                    std::string playCmd = "play " + alias + " from 0";
-                                    mciSendStringA(openCmd.c_str(), NULL, 0, NULL);
-                                    mciSendStringA(playCmd.c_str(), NULL, 0, NULL);
-
-                                    // Wait for sound to finish (approximate) or use a fixed delay
-                                    // Since we are in a dedicated worker thread, we can afford to sleep
-                                    std::this_thread::sleep_for(std::chrono::seconds(3));
-                                    
-                                    std::string closeCmd = "close " + alias;
-                                    mciSendStringA(closeCmd.c_str(), NULL, 0, NULL);
-                                    DeleteFileA(mp3File.c_str());
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        ~SoundQueue() {
-            running = false;
-            cv.notify_all();
-            if (worker.joinable()) worker.join();
-        }
-    };
-
-    static SoundQueue sq;
-    {
-        std::lock_guard<std::mutex> lock(sq.mutex);
-        sq.queue.push(resourceId);
-    }
-    sq.cv.notify_one();
-}
-
-void Session_AddWindow(HWND hWnd) {
-    ApplyDarkMode(hWnd);
-
-    char className[256] = {};
-    GetClassNameA(hWnd, className, sizeof(className));
-    // Load existing list
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    std::vector<std::string> windows;
-
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD size = 0;
-        RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
-        if (size > 0) {
-            std::vector<char> buf(size);
-            RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
-            const char* p = buf.data();
-            while (*p) {
-                if (strcmp(p, className) != 0) // avoid duplicates
-                    windows.push_back(p);
-                p += strlen(p) + 1;
-            }
-        }
-        RegCloseKey(hKey);
-    }
-
-    windows.push_back(className);
-
-    // Save back
-    std::string multiStr;
-    for (const auto& w : windows) { multiStr += w; multiStr += '\0'; }
-    multiStr += '\0';
-
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
-            (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
-        RegCloseKey(hKey);
-    }
-}
-
-void Session_RemoveWindow(HWND hWnd) {
-    char className[256] = {};
-    GetClassNameA(hWnd, className, sizeof(className));
-    
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    std::vector<std::string> windows;
-
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD size = 0;
-        RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
-        if (size > 0) {
-            std::vector<char> buf(size);
-            RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
-            const char* p = buf.data();
-            while (*p) {
-                if (strcmp(p, className) != 0)
-                    windows.push_back(p);
-                p += strlen(p) + 1;
-            }
-        }
-        RegCloseKey(hKey);
-    }
-
-    std::string multiStr;
-    for (const auto& w : windows) { multiStr += w; multiStr += '\0'; }
-    multiStr += '\0';
-
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
-            (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
-        RegCloseKey(hKey);
-    }
-
-    g_AppWindows[className] = NULL;
-}
-
-void Session_RestoreWindows(
-    const std::function<void()>& startBook,
-    const std::function<void()>& startCoins,
-    const std::function<void()>& startDiamonds,
-    const std::function<void()>& startNews,
-    const std::function<void()>& startSettings,
-    const std::function<void()>& startTimesales,
-    const std::function<void()>& startLevels,
-    const std::function<void()>& startTicker,
-    const std::function<void()>& startOrders
-) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
-
-    DWORD size = 0;
-    RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
-    if (size == 0) { RegCloseKey(hKey); return; }
-
-    std::vector<char> buf(size);
-    RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
-    RegCloseKey(hKey);
-
-    const char* p = buf.data();
-    while (*p) {
-        std::string cls = p;
-        if      (cls == "TNTBookWindowClass")      startBook();
-        else if (cls == "TNTCoinsWindowClass")     startCoins();
-        else if (cls == "TNTDiamondsWindowClass")  startDiamonds();
-        else if (cls == "TNTNewsWindowClass")      startNews();
-        else if (cls == "TNTSettingsWindowClass")  startSettings();
-        else if (cls == "TNTTimesalesWindowClass") startTimesales();
-        else if (cls == "TNTLevelsWindowClass")    startLevels();
-        else if (cls == "TNTTickerWindowClass")    startTicker();
-        else if (cls == "TNTOrdersWindowClass")    startOrders();
-        p += strlen(p) + 1;
-    }
-}
 
 LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
@@ -561,11 +233,12 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     switch (message) {
         case WM_CREATE:
-            if (className != DASHBOARD_CLASS_NAME) 
+            if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) 
                 Session_AddWindow(hWnd);
+            UpdateSymbolSearchSubscriber(className);
             return 0;
         case WM_CLOSE:
-            if (className == DASHBOARD_CLASS_NAME) 
+            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) 
                 ShowWindow(hWnd, SW_HIDE);
             else
                 DestroyWindow(hWnd);
@@ -575,12 +248,18 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             return 0;
         case WM_DESTROY:
             SaveWinPosition(hWnd);
-            if (className == DASHBOARD_CLASS_NAME) {
+            UpdateSymbolSearchSubscriber(className);
+            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
+                api.removeApiUpdateWindow(hWnd);
+                api.clearApiErrorWindow(hWnd);
                 Shell_NotifyIcon(NIM_DELETE, &nid);
                 PostQuitMessage(0);
             } else {
                 Session_RemoveWindow(hWnd);
             }
+            return 0;
+        case WM_SETFOCUS:
+            UpdateSymbolSearchSubscriber(className);
             return 0;
         default: {
             LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);

@@ -1,6 +1,30 @@
+
+#include <thread>
+#include <mutex>
+#include <iostream>
+#include <chrono>
+
+#include "EWrapper.h"
+#include "EClientSocket.h"
+#include "EReaderOSSignal.h"
+#include "EReader.h"
+
+#include <windows.h>
+#include <shellapi.h>
+#include <shobjidl.h>
+
+#include <dwmapi.h>
+#include <initguid.h>
+#include <propkey.h>
+#include <propvarutil.h>
+#include <mmsystem.h>
+
+#include "registry.h"
+#include "debug.h"
+#include "sound.h"
+#include "api.h"
 #include "shared.h"
 #include "settings.h"
-#include "api.h"
 #include "book.h"
 #include "diamonds.h"
 #include "coins.h"
@@ -12,11 +36,7 @@
 #include "dashboard.h"
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
-    HANDLE hMutex = mutex_on();
-	if (!hMutex) {
-        MessageBoxA(NULL, "Application already running!", "Exception", MB_OK);
-        return 0;
-    } 
+    mutex_instance();
 
     InitDarkBrushes();
     
@@ -43,7 +63,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     lstrcpy(nid.szTip, "Offline");
     Shell_NotifyIcon(NIM_ADD, &nid);
 
-    Session_RestoreWindows(startBook, startCoins, startDiamonds, startNews, startSettings, startTimesales, startLevels, startTicker, startOrders);
+    Session_RestoreWindows(startBook, startCoins, startDiamonds, startNews, startSettings, startTimesales, startLevels, startTicker, startOrders, startDebugLog);
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
@@ -51,7 +71,5 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
         DispatchMessage(&msg);
     }
 	
-    mutex_off(hMutex);
-    
     return (int)msg.wParam;
 }

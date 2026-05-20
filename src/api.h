@@ -1,10 +1,18 @@
 #pragma once
 
-#define WM_API_UPDATE     (WM_USER + 2)
-#define WM_SYMBOL_RESULTS (WM_USER + 3)
-#define WM_API_ERROR      (WM_USER + 4)
+#define WM_API_UPDATE      (WM_USER + 2)
+#define WM_SYMBOL_RESULTS  (WM_USER + 3)
+#define WM_API_ERROR       (WM_USER + 4)
 #define WM_ACCOUNT_SUMMARY (WM_USER + 5)
 #define WM_PNL_UPDATE      (WM_USER + 6)
+#define WM_ORDERS_UPDATE   (WM_USER + 7)
+#define WM_DIAMONDS_UPDATE (WM_USER + 8)
+#define WM_NEWS_RESULTS    (WM_USER + 9)
+
+#include <algorithm>
+#include "Contract.h"
+#include "Order.h"
+#include "OrderState.h"
 
 #define TIMER_WATCHDOG 1
 
@@ -26,8 +34,6 @@ bool shouldBeConnected = true;
 
 class TradingAPI : public EWrapper {
 private:
-    HWND hTargetWnd = nullptr;
-    
     EClientSocket* client;
     EReaderOSSignal signal;
     std::unique_ptr<EReader> reader;
@@ -43,13 +49,63 @@ private:
     std::atomic<bool> marketDataSoundPlayed{false}; // prevent duplicate sounds
 
     HWND hCoinWnd = nullptr;
+    HWND hOrdersWnd = nullptr;
+    HWND hDiamondsWnd = nullptr;
     std::mutex summaryMutex;
     std::map<std::string, std::string> summaryData; // tag -> value
     double dailyPnL = 0, unrealizedPnL = 0, realizedPnL = 0;
 
     HWND hSymbolSearchWnd = nullptr; // separate target for symbol results
+    HWND hNewsWnd = nullptr; // separate target for news headlines
     std::mutex symbolMutex;
     std::vector<std::string> symbolResults;
+    std::mutex newsMutex;
+    std::vector<std::string> newsResults;
+    std::atomic<bool> newsRequestActive{false};
+
+    std::mutex apiUpdateMutex;
+    std::vector<HWND> apiUpdateWindows;
+    HWND hErrorWnd = nullptr;
+
+public:
+    struct OrderInfo {
+        int orderId;
+        std::string symbol;
+        std::string exchange;
+        double price;
+        double totalAmount;
+        std::string status;
+        std::string time;
+        long long timestamp; // for sorting
+    };
+
+    struct PositionInfo {
+        std::string symbol;
+        Decimal shares;
+        double avgCost;
+        double dailyPnL;
+        double marketValue;
+        double fiftyTwoWeekChange;
+        double marketCap;
+    };
+
+    struct WatchlistInfo {
+        std::string symbol;
+        double price;
+        double change;
+        double percentChange;
+        double marketCap;
+    };
+
+private:
+    std::mutex ordersMutex;
+    std::map<int, OrderInfo> ordersMap;
+    
+    std::mutex portfolioMutex;
+    std::map<std::string, PositionInfo> portfolioMap;
+
+    std::mutex watchlistMutex;
+    std::map<std::string, WatchlistInfo> watchlistMap;
 
     void processMessages() {
         while (isThreadRunning && client->isConnected()) {
@@ -68,7 +124,60 @@ public:
         delete client;
     }
     
-    void setWindowHandle(HWND hWnd) { hTargetWnd = hWnd; }
+    void addApiUpdateWindow(HWND hWnd) {
+        if (!hWnd || !IsWindow(hWnd)) return;
+        std::lock_guard<std::mutex> lock(apiUpdateMutex);
+        if (std::find(apiUpdateWindows.begin(), apiUpdateWindows.end(), hWnd) == apiUpdateWindows.end())
+            apiUpdateWindows.push_back(hWnd);
+    }
+
+    void removeApiUpdateWindow(HWND hWnd) {
+        std::lock_guard<std::mutex> lock(apiUpdateMutex);
+        apiUpdateWindows.erase(std::remove(apiUpdateWindows.begin(), apiUpdateWindows.end(), hWnd), apiUpdateWindows.end());
+    }
+
+    void notifyApiUpdate() {
+        std::vector<HWND> validWindows;
+        {
+            std::lock_guard<std::mutex> lock(apiUpdateMutex);
+            for (HWND hWnd : apiUpdateWindows) {
+                if (hWnd && IsWindow(hWnd)) {
+                    validWindows.push_back(hWnd);
+                }
+            }
+            if (validWindows.size() != apiUpdateWindows.size()) {
+                apiUpdateWindows.swap(validWindows);
+                validWindows.clear();
+                for (HWND hWnd : apiUpdateWindows) {
+                    if (hWnd && IsWindow(hWnd))
+                        validWindows.push_back(hWnd);
+                }
+            }
+        }
+
+        for (HWND hWnd : validWindows) {
+            PostMessage(hWnd, WM_API_UPDATE, 0, 0);
+        }
+    }
+
+    void setApiErrorWindow(HWND hWnd) {
+        hErrorWnd = hWnd;
+    }
+
+    void clearApiErrorWindow(HWND hWnd) {
+        if (hErrorWnd == hWnd) {
+            hErrorWnd = nullptr;
+        }
+    }
+
+    void notifyApiError(const std::string& errorString) {
+        if (!hErrorWnd || !IsWindow(hErrorWnd)) {
+            hErrorWnd = nullptr;
+            return;
+        }
+        std::string* msg = new std::string(errorString);
+        PostMessage(hErrorWnd, WM_API_ERROR, 0, (LPARAM)msg);
+    }
 
     bool connect() {
         if (client->eConnect("127.0.0.1", 4001, 0)) {
@@ -107,9 +216,7 @@ public:
     // ── Callbacks you actually care about ────────────────────────────────────
     void connectAck() override {
         // Safe empty implementation override, but triggers a UI refresh notice
-        if (hTargetWnd) {
-            PostMessage(hTargetWnd, WM_API_UPDATE, 0, 0);
-        }
+        notifyApiUpdate();
     }
 
     void connectionClosed() override {
@@ -119,7 +226,7 @@ public:
         }
         marketDataConnected = false;
         marketDataSoundPlayed = false;
-        if (hTargetWnd) PostMessage(hTargetWnd, WM_API_UPDATE, 0, 0);
+        notifyApiUpdate();
     }
     bool isMarketDataConnected() const { return marketDataConnected; }
     bool isTradingConnected()    const { return tradingConnected; }
@@ -138,7 +245,7 @@ public:
                     PlaySound_Async(202); // md_connection_reestablished
                     LogDebug("Market data connected: " + errorString);
                 }
-                if (hTargetWnd) PostMessage(hTargetWnd, WM_API_UPDATE, 0, 0);
+                notifyApiUpdate();
                 break;
             }
 
@@ -150,7 +257,7 @@ public:
                     PlaySound_Async(201); // md_connection_lost
                     LogDebug("Market data lost: " + errorString);
                 }
-                if (hTargetWnd) PostMessage(hTargetWnd, WM_API_UPDATE, 0, 0);
+                notifyApiUpdate();
                 break;
             }
 
@@ -160,12 +267,7 @@ public:
 
             default:
                 LogDebug("API Error [" + std::to_string(errorCode) + "]: " + errorString);
-                if (hTargetWnd) {
-                    std::string* msg = new std::string(
-                        "API Error [" + std::to_string(errorCode) + "]: " + errorString
-                    );
-                    PostMessage(hTargetWnd, WM_API_ERROR, 0, (LPARAM)msg);
-                }
+                notifyApiError("API Error [" + std::to_string(errorCode) + "]: " + errorString);
                 break;
         }
     }
@@ -193,6 +295,33 @@ public:
             LogDebug("setCoinWindow: accountId empty, PnL not requested");
         }
     }
+
+    void setOrdersWindow(HWND hWnd) {
+        hOrdersWnd = hWnd;
+    }
+
+    void setDiamondsWindow(HWND hWnd) {
+        hDiamondsWnd = hWnd;
+    }
+
+    void requestWatchlistData(const std::string& bookName) {
+        if (!client->isConnected()) return;
+        // We need to request market data for each symbol in the book
+        // This is a simplified version; in a real app we'd load the book from registry first
+        LogDebug("Requesting watchlist data for book: " + bookName);
+        // The actual implementation of loading the book and requesting data 
+        // will be handled in the UI or via a helper.
+    }
+
+public:
+    std::mutex& getOrdersMutex() { return ordersMutex; }
+    std::map<int, OrderInfo>& getOrdersMap() { return ordersMap; }
+
+    std::mutex& getPortfolioMutex() { return portfolioMutex; }
+    std::map<std::string, TradingAPI::PositionInfo>& getPortfolioMap() { return portfolioMap; }
+
+    std::mutex& getWatchlistMutex() { return watchlistMutex; }
+    std::map<std::string, TradingAPI::WatchlistInfo>& getWatchlistMap() { return watchlistMap; }
 
     void unsetCoinWindow() {
         hCoinWnd = nullptr;
@@ -250,7 +379,7 @@ public:
         auto comma = accountsList.find(',');
         accountId = (comma != std::string::npos) ? accountsList.substr(0, comma) : accountsList;
         // don't play sound here — wait for nextValidId
-        if (hTargetWnd) PostMessage(hTargetWnd, WM_API_UPDATE, 0, 0);
+        notifyApiUpdate();
     }
 
     void nextValidId(int orderId) override {
@@ -259,11 +388,64 @@ public:
             PlaySound_Async(204); // trading_connection_reestablished
             LogDebug("Trading connected, next order ID: " + std::to_string(orderId));
         }
-        if (hTargetWnd) PostMessage(hTargetWnd, WM_API_UPDATE, 0, 0);
+        notifyApiUpdate();
     }
 
+    void position(const std::string& account, const Contract& contract, Decimal shares, double avgCost) {
+        std::lock_guard<std::mutex> lock(portfolioMutex);
+        
+        PositionInfo& info = portfolioMap[contract.symbol];
+        info.symbol = contract.symbol;
+        info.shares = shares;
+        info.avgCost = avgCost;
+        
+        if (hDiamondsWnd) PostMessage(hDiamondsWnd, WM_DIAMONDS_UPDATE, 0, 0);
+    }
+
+    void positionEnd() {
+        LogDebug("Position update ended");
+    }
+
+    void openOrder(int orderId, const Contract& contract, const Order& order, const OrderState& orderState) override {
+        std::lock_guard<std::mutex> lock(ordersMutex);
+        
+        OrderInfo& info = ordersMap[orderId];
+        info.orderId = orderId;
+        info.symbol = contract.symbol;
+        info.exchange = contract.primaryExchange;
+        info.totalAmount = (double)order.totalQuantity;
+        info.price = order.lmtPrice;
+        info.status = orderState.status;
+        
+        time_t now = time(0);
+        char buf[32];
+        strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&now));
+        info.time = buf;
+        info.timestamp = (long long)now;
+
+        if (hOrdersWnd) PostMessage(hOrdersWnd, WM_ORDERS_UPDATE, 0, 0);
+    }
+
+    void orderStatus(int orderId, const std::string& status, Decimal filled, 
+                     Decimal remaining, double avgFillPrice, long long permId, int parentId,
+                     double lastFillPrice, int clientId, const std::string& whyHeld, double mktCapPrice) override {
+        std::lock_guard<std::mutex> lock(ordersMutex);
+        
+        if (ordersMap.count(orderId)) {
+            ordersMap[orderId].status = status;
+            
+            time_t now = time(0);
+            char buf[32];
+            strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&now));
+            ordersMap[orderId].time = buf;
+            ordersMap[orderId].timestamp = (long long)now;
+        }
+        
+        if (hOrdersWnd) PostMessage(hOrdersWnd, WM_ORDERS_UPDATE, 0, 0);
+    }
 
     void setSymbolSearchWindow(HWND hWnd) { hSymbolSearchWnd = hWnd; }
+    void setNewsWindow(HWND hWnd) { hNewsWnd = hWnd; }
 
     void searchSymbols(const std::string& pattern) {
         if (!client->isConnected()) return;
@@ -273,6 +455,11 @@ public:
     std::vector<std::string> getSymbolResults() {
         std::lock_guard<std::mutex> lock(symbolMutex);
         return symbolResults;
+    }
+
+    std::vector<std::string> getNewsResults() {
+        std::lock_guard<std::mutex> lock(newsMutex);
+        return newsResults;
     }
 
     void symbolSamples(int reqId, const std::vector<ContractDescription>& contractDescriptions) override {
@@ -289,6 +476,48 @@ public:
         if (hSymbolSearchWnd)
             PostMessage(hSymbolSearchWnd, WM_SYMBOL_RESULTS, 0, 0);
     }
+
+    void reqNewsForSymbol(int conId, const std::string& symbol) {
+        if (!client->isConnected()) return;
+
+        {
+            std::lock_guard<std::mutex> lock(newsMutex);
+            newsResults.clear();
+        }
+
+        Contract contract;
+        contract.conId = conId;
+        contract.symbol = symbol;
+        contract.secType = "STK";
+        contract.exchange = "SMART";
+        contract.currency = "USD";
+
+        if (newsRequestActive.exchange(true)) {
+            client->cancelMktData(9002);
+        }
+
+        // Generic tick 292 is for news.
+        // We use "mdoff" to disable standard market data and only get news.
+        client->reqMktData(9002, contract, "mdoff,292", false, false, {});
+    }
+
+    void tickNews(int reqId, time_t timeStamp, const std::string& providerCode,
+                  const std::string& articleId, const std::string& headline,
+                  const std::string& extraData) override {
+        std::string newsLine = "[" + providerCode + "] " + headline;
+        if (!extraData.empty()) {
+            newsLine += " - ";
+            newsLine += extraData;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(newsMutex);
+            newsResults.push_back(newsLine);
+        }
+
+        if (hNewsWnd)
+            PostMessage(hNewsWnd, WM_NEWS_RESULTS, 0, 0);
+    }
     
     #define managedAccounts managedAccounts_ignored
     #define error error_ignored
@@ -299,6 +528,11 @@ public:
     #define accountSummary accountSummary_ignored
     #define accountSummaryEnd accountSummaryEnd_ignored
     #define pnl pnl_ignored
+    #define openOrder openOrder_ignored
+    #define orderStatus orderStatus_ignored
+    #define position position_ignored
+    #define positionEnd positionEnd_ignored
+    #define tickNews tickNews_ignored
 
     #define EWRAPPER_VIRTUAL_IMPL {}
     #include "EWrapper_prototypes.h"
@@ -313,4 +547,9 @@ public:
     #undef accountSummary_ignored
     #undef accountSummaryEnd_ignored
     #undef pnl_ignored
+    #undef openOrder_ignored
+    #undef orderStatus_ignored
+    #undef position_ignored
+    #undef positionEnd_ignored
+    #undef tickNews_ignored
 } api;

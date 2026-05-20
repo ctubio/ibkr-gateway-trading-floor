@@ -31,9 +31,18 @@ void UpdateTrayIcon(HWND hWnd) {
     nid.uFlags = NIF_TIP | NIF_ICON;
     nid.hIcon  = connected ? onlineIcons[DASHBOARD_CLASS_NAME] : offlineIcons[DASHBOARD_CLASS_NAME];
     Shell_NotifyIcon(NIM_MODIFY, &nid);
+    
     for (const auto& pair : g_AppWindows) {
         const std::string& key = pair.first;
         const HWND& hwnd = pair.second;
+        
+        // Validate window is still alive
+        if (!hwnd || !IsWindow(hwnd)) continue;
+        
+        // Check icons exist before using them
+        if (onlineIcons.find(key) == onlineIcons.end() || 
+            offlineIcons.find(key) == offlineIcons.end()) continue;
+        
         HICON hIcon = connected ? onlineIcons[key] : offlineIcons[key];
         SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
         SendMessage(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
@@ -83,13 +92,14 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             
             addButtons(hWnd, hInst, "Ticker",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TICKER,    9);        
             addButtons(hWnd, hInst, "Levels",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
-            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7);
+            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7); // 3: 0, 100, 1000
             addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
 
             addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
             addButtons(hWnd, hInst, "Settings",  12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
 
-            api.setWindowHandle(hWnd);
+            api.addApiUpdateWindow(hWnd);
+            api.setApiErrorWindow(hWnd);
                     
             SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
             SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
@@ -218,28 +228,23 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
-HANDLE mutex_on() {
-	// 1. Create a unique name for your Mutex (use a GUID or a unique string)
+void mutex_instance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\IBKRGatewayClientMutex_17072025");
 
-    // 2. Check if the Mutex already exists
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        // If it exists, another instance is running. 
-        // We find the existing window and bring it to the front before exiting.
         HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
         if (existingWnd) {
-            ShowWindow(existingWnd, SW_SHOW);
-            SetForegroundWindow(existingWnd);
+            DWORD processId;
+            GetWindowThreadProcessId(existingWnd, &processId);
+            HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processId);
+            if (hProcess) {
+                TerminateProcess(hProcess, 0);
+                CloseHandle(hProcess);
+            }
         }
         
         if (hMutex) CloseHandle(hMutex);
-        return 0; // Exit this instance
+        // Re-create to own the mutex for this instance
+        CreateMutex(NULL, TRUE, "Global\\IBKRGatewayClientMutex_17072025");
     }
-
-    return hMutex;
-}
-
-void mutex_off(HANDLE hMutex) {
-    ReleaseMutex(hMutex);
-    CloseHandle(hMutex);
 }

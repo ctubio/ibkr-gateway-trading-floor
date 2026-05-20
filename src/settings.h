@@ -2,6 +2,8 @@
 
 void startSettings() { startGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 300, 280); }
 
+void startDebugLog() { startGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 600, 300); }
+
 #define ID_SETTINGS_KILL_GATEWAY 4001
 #define ID_SETTINGS_DARK_MODE    4002
 #define ID_SETTINGS_PLAY_SOUNDS  4003
@@ -129,7 +131,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 Settings_Save("AutoGateway", checked);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
-                startGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 600, 300);
+                startDebugLog();
                 FlushDebugBuffer();
             }
             if (LOWORD(wParam) == ID_SETTINGS_KILL_GATEWAY) {
