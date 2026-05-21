@@ -1,8 +1,10 @@
 
 #include <thread>
 #include <mutex>
+#include <queue>
 #include <iostream>
 #include <chrono>
+#include <condition_variable>
 
 #include "EWrapper.h"
 #include "EClientSocket.h"
@@ -10,17 +12,11 @@
 #include "EReader.h"
 
 #include <windows.h>
-#include <mmsystem.h>
-#include <shellapi.h>
 #include <shobjidl.h>
-
-#include <commctrl.h>
-
 #include <dwmapi.h>
 #include <initguid.h>
 #include <propkey.h>
 #include <propvarutil.h>
-#include <mmsystem.h>
 
 #include "registry.h"
 #include "debug.h"

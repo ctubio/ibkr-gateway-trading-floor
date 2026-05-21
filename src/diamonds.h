@@ -126,7 +126,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (hTabCtrl) SetWindowPos(hTabCtrl, NULL, 0, 0, w, 28, SWP_NOZORDER);
         if (hPortfolioList) SetWindowPos(hPortfolioList, NULL, 8, 36, (w/2) - 16, h - 44, SWP_NOZORDER);
         if (hWatchlistList) SetWindowPos(hWatchlistList, NULL, (w/2) + 8, 36, (w/2) - 16, h - 44, SWP_NOZORDER);
-        return 0;
+        break;
     }
 
     case WM_DIAMONDS_UPDATE:

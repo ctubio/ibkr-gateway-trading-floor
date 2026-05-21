@@ -33,6 +33,43 @@
 bool shouldBeConnected = true;
 
 class TradingAPI : public EWrapper {
+public:
+    // ── Public data types (declared first so private members can reference them) ──
+
+    struct OrderInfo {
+        int         orderId     = 0;
+        std::string symbol;
+        std::string exchange;
+        std::string action;      // BUY / SELL
+        std::string orderType;   // LMT / MKT / STP …
+        double      price       = 0.0;   // limit price (0 for MKT)
+        double      auxPrice    = 0.0;   // stop price when relevant
+        double      totalQty    = 0.0;   // original quantity
+        double      filledQty   = 0.0;   // cumulative filled
+        double      avgFillPx   = 0.0;   // average fill price
+        std::string status;
+        std::string time;        // display string
+        long long   timestamp   = 0;     // unix seconds, for sorting
+    };
+
+    struct PositionInfo {
+        std::string symbol;
+        Decimal     shares;
+        double      avgCost            = 0.0;
+        double      dailyPnL           = 0.0;
+        double      marketValue        = 0.0;
+        double      fiftyTwoWeekChange = 0.0;
+        double      marketCap          = 0.0;
+    };
+
+    struct WatchlistInfo {
+        std::string symbol;
+        double price         = 0.0;
+        double change        = 0.0;
+        double percentChange = 0.0;
+        double marketCap     = 0.0;
+    };
+
 private:
     EClientSocket* client;
     EReaderOSSignal signal;
@@ -46,17 +83,18 @@ private:
     
     std::atomic<bool> marketDataConnected{false};
     std::atomic<bool> tradingConnected{false};
-    std::atomic<bool> marketDataSoundPlayed{false}; // prevent duplicate sounds
+    std::atomic<bool> marketDataSoundPlayed{false};
 
-    HWND hCoinWnd = nullptr;
-    HWND hOrdersWnd = nullptr;
+    HWND hCoinWnd     = nullptr;
+    HWND hOrdersWnd   = nullptr;
     HWND hDiamondsWnd = nullptr;
+
     std::mutex summaryMutex;
-    std::map<std::string, std::string> summaryData; // tag -> value
+    std::map<std::string, std::string> summaryData;
     double dailyPnL = 0, unrealizedPnL = 0, realizedPnL = 0;
 
-    HWND hSymbolSearchWnd = nullptr; // separate target for symbol results
-    HWND hNewsWnd = nullptr; // separate target for news headlines
+    HWND hSymbolSearchWnd = nullptr;
+    HWND hNewsWnd         = nullptr;
     std::mutex symbolMutex;
     std::vector<std::string> symbolResults;
     std::mutex newsMutex;
@@ -67,47 +105,20 @@ private:
     std::vector<HWND> apiUpdateWindows;
     HWND hErrorWnd = nullptr;
 
-public:
-    struct OrderInfo {
-        int orderId;
-        std::string symbol;
-        std::string exchange;
-        double price;
-        double totalAmount;
-        std::string status;
-        std::string time;
-        long long timestamp; // for sorting
-    };
+    bool notifyConnected = false;
 
-    struct PositionInfo {
-        std::string symbol;
-        Decimal shares;
-        double avgCost;
-        double dailyPnL;
-        double marketValue;
-        double fiftyTwoWeekChange;
-        double marketCap;
-    };
-
-    struct WatchlistInfo {
-        std::string symbol;
-        double price;
-        double change;
-        double percentChange;
-        double marketCap;
-    };
-
-private:
+    // ── Orders ────────────────────────────────────────────────────────────────
     std::mutex ordersMutex;
     std::map<int, OrderInfo> ordersMap;
-    
+
+    // ── Portfolio / Watchlist ─────────────────────────────────────────────────
     std::mutex portfolioMutex;
     std::map<std::string, PositionInfo> portfolioMap;
 
     std::mutex watchlistMutex;
     std::map<std::string, WatchlistInfo> watchlistMap;
 
-    bool notifyConnected = false;
+    // ─────────────────────────────────────────────────────────────────────────
 
     void processMessages() {
         while (isThreadRunning && client->isConnected()) {
@@ -115,6 +126,18 @@ private:
             reader->processMsgs();
         }
         isThreadRunning = false;
+    }
+
+    // Build a human-readable time string from a time_t.
+    static std::string FormatTime(time_t t) {
+        char buf[32] = {};
+        strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&t));
+        return buf;
+    }
+
+    void postOrdersUpdate() {
+        if (hOrdersWnd && IsWindow(hOrdersWnd))
+            PostMessage(hOrdersWnd, WM_ORDERS_UPDATE, 0, 0);
     }
 
 public:
@@ -126,7 +149,9 @@ public:
         disconnect();
         delete client;
     }
-    
+
+    // ── API update broadcast ──────────────────────────────────────────────────
+
     void addApiUpdateWindow(HWND hWnd) {
         if (!hWnd || !IsWindow(hWnd)) return;
         std::lock_guard<std::mutex> lock(apiUpdateMutex);
@@ -136,54 +161,34 @@ public:
 
     void removeApiUpdateWindow(HWND hWnd) {
         std::lock_guard<std::mutex> lock(apiUpdateMutex);
-        apiUpdateWindows.erase(std::remove(apiUpdateWindows.begin(), apiUpdateWindows.end(), hWnd), apiUpdateWindows.end());
+        apiUpdateWindows.erase(
+            std::remove(apiUpdateWindows.begin(), apiUpdateWindows.end(), hWnd),
+            apiUpdateWindows.end());
     }
 
     void notifyApiUpdate() {
         if (notifyConnected == (isMarketDataConnected() && isTradingConnected())) return;
         notifyConnected = !notifyConnected;
-        std::vector<HWND> validWindows;
+        std::vector<HWND> windows;
         {
             std::lock_guard<std::mutex> lock(apiUpdateMutex);
-             // avoid flooding on unchanged state
-            for (HWND hWnd : apiUpdateWindows) {
-                if (hWnd && IsWindow(hWnd)) {
-                    validWindows.push_back(hWnd);
-                }
-            }
-            if (validWindows.size() != apiUpdateWindows.size()) {
-                apiUpdateWindows.swap(validWindows);
-                validWindows.clear();
-                for (HWND hWnd : apiUpdateWindows) {
-                    if (hWnd && IsWindow(hWnd))
-                        validWindows.push_back(hWnd);
-                }
-            }
+            for (HWND h : apiUpdateWindows)
+                if (h && IsWindow(h)) windows.push_back(h);
+            apiUpdateWindows = windows;
         }
-
-        for (HWND hWnd : validWindows) {
-            PostMessage(hWnd, WM_API_UPDATE, 0, 0);
-        }
+        for (HWND h : windows)
+            PostMessage(h, WM_API_UPDATE, 0, 0);
     }
 
-    void setApiErrorWindow(HWND hWnd) {
-        hErrorWnd = hWnd;
-    }
-
-    void clearApiErrorWindow(HWND hWnd) {
-        if (hErrorWnd == hWnd) {
-            hErrorWnd = nullptr;
-        }
-    }
+    void setApiErrorWindow(HWND hWnd)   { hErrorWnd = hWnd; }
+    void clearApiErrorWindow(HWND hWnd) { if (hErrorWnd == hWnd) hErrorWnd = nullptr; }
 
     void notifyApiError(const std::string& errorString) {
-        if (!hErrorWnd || !IsWindow(hErrorWnd)) {
-            hErrorWnd = nullptr;
-            return;
-        }
-        std::string* msg = new std::string(errorString);
-        PostMessage(hErrorWnd, WM_API_ERROR, 0, (LPARAM)msg);
+        if (!hErrorWnd || !IsWindow(hErrorWnd)) { hErrorWnd = nullptr; return; }
+        PostMessage(hErrorWnd, WM_API_ERROR, 0, (LPARAM)(new std::string(errorString)));
     }
+
+    // ── Connection ────────────────────────────────────────────────────────────
 
     bool connect() {
         if (apiThread.joinable()) {
@@ -192,10 +197,8 @@ public:
             apiThread.join();
             reader.reset();
         }
-
-        if (client->isConnected()) {
+        if (client->isConnected())
             client->eDisconnect();
-        }
 
         if (client->eConnect("127.0.0.1", 4001, 0)) {
             reader = std::make_unique<EReader>(client, &signal);
@@ -216,19 +219,22 @@ public:
             apiThread.join();
         }
         reader.reset();
-        
         if (tradingConnected.exchange(false)) {
-            PlaySound_Async(203); // trading_connection_lost
+            PlaySound_Async(203);
             LogDebug("Trading disconnected by user");
         }
         if (marketDataConnected.exchange(false)) {
-            PlaySound_Async(201); // md_connection_lost
+            PlaySound_Async(201);
             LogDebug("Market data disconnected by user");
         }
         marketDataSoundPlayed = false;
     }
 
-    bool isConnected() const { return client && client->isConnected(); }
+    bool isConnected()           const { return client && client->isConnected(); }
+    bool isMarketDataConnected() const { return marketDataConnected; }
+    bool isTradingConnected()    const { return tradingConnected; }
+
+    // ── EWrapper: connection events ───────────────────────────────────────────
 
     void connectAck() override {
         notifyApiUpdate();
@@ -239,46 +245,63 @@ public:
             PlaySound_Async(203);
             LogDebug("Trading connection closed");
         }
-        marketDataConnected = false;
+        marketDataConnected  = false;
         marketDataSoundPlayed = false;
         notifyApiUpdate();
     }
-    bool isMarketDataConnected() const { return marketDataConnected; }
-    bool isTradingConnected()    const { return tradingConnected; }
+
+    void managedAccounts(const std::string& accountsList) override {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        auto comma = accountsList.find(',');
+        accountId = (comma != std::string::npos) ? accountsList.substr(0, comma) : accountsList;
+        notifyApiUpdate();
+    }
+
+    void nextValidId(int orderId) override {
+        bool wasDisconnected = !tradingConnected.exchange(true);
+        if (wasDisconnected) {
+            PlaySound_Async(204);
+            LogDebug("Trading connected, next order ID: " + std::to_string(orderId));
+
+            // Clear stale orders and re-fetch on every fresh connection.
+            {
+                std::lock_guard<std::mutex> lock(ordersMutex);
+                ordersMap.clear();
+            }
+            // reqAllOpenOrders returns orders placed by any client, not just this session.
+            client->reqAllOpenOrders();
+        }
+        notifyApiUpdate();
+    }
+
+    // ── EWrapper: errors ──────────────────────────────────────────────────────
 
     void error(int id, time_t errorTime, int errorCode,
-            const std::string& errorString,
-            const std::string& advancedOrderRejectJson) override {
+               const std::string& errorString,
+               const std::string& advancedOrderRejectJson) override {
         switch (errorCode) {
-            case 502: // Cannot connect
-                break;
+            case 502: break; // Cannot connect — expected noise
 
-            // ── Market data OK ────────────────────────────────────────────────
             case 2104: case 2106: case 2107: case 2158: {
                 bool wasDisconnected = !marketDataConnected.exchange(true);
                 if (wasDisconnected && !marketDataSoundPlayed.exchange(true)) {
-                    PlaySound_Async(202); // md_connection_reestablished
+                    PlaySound_Async(202);
                     LogDebug("Market data connected: " + errorString);
                 }
                 notifyApiUpdate();
                 break;
             }
-
-            // ── Market data broken ────────────────────────────────────────────
             case 2103: case 2105: case 2157: {
                 bool wasConnected = marketDataConnected.exchange(false);
-                marketDataSoundPlayed = false; // reset so next reconnect plays sound
+                marketDataSoundPlayed = false;
                 if (wasConnected) {
-                    PlaySound_Async(201); // md_connection_lost
+                    PlaySound_Async(201);
                     LogDebug("Market data lost: " + errorString);
                 }
                 notifyApiUpdate();
                 break;
             }
-
-            // ── Suppress known noise ──────────────────────────────────────────
-            case 2108: case 2119: case 2100:
-                break;
+            case 2108: case 2119: case 2100: break; // known noise
 
             default:
                 LogDebug("API Error [" + std::to_string(errorCode) + "]: " + errorString);
@@ -287,88 +310,158 @@ public:
         }
     }
 
+    // ── Orders ────────────────────────────────────────────────────────────────
+
+    // Register the orders window. Triggers a fresh fetch if already connected.
+    void setOrdersWindow(HWND hWnd) {
+        hOrdersWnd = hWnd;
+        if (!hWnd || !client->isConnected()) return;
+        {
+            std::lock_guard<std::mutex> lock(ordersMutex);
+            ordersMap.clear();
+        }
+        client->reqAllOpenOrders();
+    }
+
+    void unsetOrdersWindow() {
+        hOrdersWnd = nullptr;
+    }
+
+    // Returns a sorted snapshot safe to read from the UI thread.
+    // Sort: Submitted/Pending → Partially Filled → Filled/Cancelled; newest first within group.
+    std::vector<OrderInfo> getOrdersSorted() {
+        std::vector<OrderInfo> out;
+        {
+            std::lock_guard<std::mutex> lock(ordersMutex);
+            out.reserve(ordersMap.size());
+            for (auto const& [id, info] : ordersMap)
+                out.push_back(info);
+        }
+
+        auto priority = [](const std::string& s) -> int {
+            if (s == "Submitted" || s == "PreSubmitted" || s == "Pending")  return 0;
+            if (s == "Filled")                                               return 2;
+            if (s == "Cancelled" || s == "Inactive")                        return 3;
+            return 1; // Partially Filled and everything else
+        };
+
+        std::sort(out.begin(), out.end(), [&](const OrderInfo& a, const OrderInfo& b) {
+            int pa = priority(a.status), pb = priority(b.status);
+            if (pa != pb) return pa < pb;
+            return a.timestamp > b.timestamp; // newest first within group
+        });
+        return out;
+    }
+
+    // ── EWrapper: order callbacks ─────────────────────────────────────────────
+
+    void openOrder(int orderId, const Contract& contract,
+                   const Order& order, const OrderState& orderState) override {
+        time_t now = time(nullptr);
+        std::lock_guard<std::mutex> lock(ordersMutex);
+
+        OrderInfo& info   = ordersMap[orderId];
+        info.orderId      = orderId;
+        info.symbol       = contract.symbol;
+        info.exchange     = contract.primaryExchange.empty()
+                                ? contract.exchange
+                                : contract.primaryExchange;
+        info.action       = order.action;
+        info.orderType    = order.orderType;
+        info.price        = order.lmtPrice;
+        info.auxPrice     = order.auxPrice;
+        info.totalQty     = DecimalFunctions::decimalToDouble(order.totalQuantity);
+        info.status       = orderState.status;
+
+        // Use completedTime when available (filled/cancelled orders coming from history),
+        // otherwise keep the existing timestamp if we already have one, else use now.
+        if (!orderState.completedTime.empty()) {
+            // completedTime is "YYYYMMDD HH:MM:SS"
+            struct tm t = {};
+            sscanf(orderState.completedTime.c_str(),
+                   "%4d%2d%2d %2d:%2d:%2d",
+                   &t.tm_year, &t.tm_mon, &t.tm_mday,
+                   &t.tm_hour, &t.tm_min, &t.tm_sec);
+            t.tm_year -= 1900;
+            t.tm_mon  -= 1;
+            time_t ct = mktime(&t);
+            if (ct > 0) { info.timestamp = (long long)ct; info.time = FormatTime(ct); }
+        }
+        if (info.timestamp == 0) {
+            info.timestamp = (long long)now;
+            info.time      = FormatTime(now);
+        }
+        // Note: do NOT post here — wait for openOrderEnd to do a single bulk update.
+    }
+
+    void openOrderEnd() override {
+        // All open orders have been delivered — do one update.
+        postOrdersUpdate();
+    }
+
+    void orderStatus(int orderId, const std::string& status,
+                     Decimal filled, Decimal remaining,
+                     double avgFillPrice, long long permId, int parentId,
+                     double lastFillPrice, int clientId,
+                     const std::string& whyHeld, double mktCapPrice) override {
+        time_t now = time(nullptr);
+        {
+            std::lock_guard<std::mutex> lock(ordersMutex);
+
+            // Create a stub if openOrder hasn't arrived yet (can happen on reconnect).
+            OrderInfo& info = ordersMap[orderId];
+            if (info.orderId == 0) {
+                info.orderId   = orderId;
+                info.timestamp = (long long)now;
+                info.time      = FormatTime(now);
+            }
+            info.status     = status;
+            info.filledQty  = DecimalFunctions::decimalToDouble(filled);
+            info.avgFillPx  = avgFillPrice;
+
+            // Refresh timestamp on meaningful state changes.
+            if (status == "Filled" || status == "Cancelled" ||
+                status == "Submitted" || status == "PreSubmitted") {
+                info.timestamp = (long long)now;
+                info.time      = FormatTime(now);
+            }
+        }
+        postOrdersUpdate();
+    }
+
+    // ── Account / PnL ─────────────────────────────────────────────────────────
+
     void setCoinWindow(HWND hWnd) {
         hCoinWnd = hWnd;
         if (!hWnd || !client->isConnected()) return;
-        
         client->reqAccountSummary(9010, "All",
             "NetLiquidation,TotalCashValue,BuyingPower,"
             "AvailableFunds,ExcessLiquidity,GrossPositionValue,"
             "MaintMarginReq,InitMarginReq");
         client->reqAccountSummary(9011, "All", "$LEDGER:ALL");
-        
         std::string acc;
-        {
-            std::lock_guard<std::mutex> lock(dataMutex);
-            acc = accountId;
-        }
+        { std::lock_guard<std::mutex> lock(dataMutex); acc = accountId; }
         if (!acc.empty()) {
             LogDebug("Requesting account summary and PnL for: " + acc);
             client->reqPnL(9013, acc, "");
         }
     }
 
-    void setOrdersWindow(HWND hWnd) {
-        hOrdersWnd = hWnd;
-    }
-
-    void setDiamondsWindow(HWND hWnd) {
-        hDiamondsWnd = hWnd;
-    }
-
-    void requestWatchlistData(const std::string& bookName) {
-        if (!client->isConnected()) return;
-        // We need to request market data for each symbol in the book
-        // This is a simplified version; in a real app we'd load the book from registry first
-        LogDebug("Requesting watchlist data for book: " + bookName);
-        // The actual implementation of loading the book and requesting data 
-        // will be handled in the UI or via a helper.
-    }
-
-public:
-    std::mutex& getOrdersMutex() { return ordersMutex; }
-    std::map<int, OrderInfo>& getOrdersMap() { return ordersMap; }
-
-    std::mutex& getPortfolioMutex() { return portfolioMutex; }
-    std::map<std::string, TradingAPI::PositionInfo>& getPortfolioMap() { return portfolioMap; }
-
-    std::mutex& getWatchlistMutex() { return watchlistMutex; }
-    std::map<std::string, TradingAPI::WatchlistInfo>& getWatchlistMap() { return watchlistMap; }
-
     void unsetCoinWindow() {
         hCoinWnd = nullptr;
-        if (!client->isConnected()) return; // ← guard
+        if (!client->isConnected()) return;
         client->cancelAccountSummary(9010);
         client->cancelAccountSummary(9011);
         client->cancelAccountSummary(9012);
         client->cancelPnL(9013);
     }
 
-    std::map<std::string, std::string> getAccountSummary() {
-        std::lock_guard<std::mutex> lock(summaryMutex);
-        return summaryData;
-    }
-
-    double getDailyPnL()      const { return dailyPnL; }
-    double getUnrealizedPnL() const { return unrealizedPnL; }
-    double getRealizedPnL()   const { return realizedPnL; }
-
     void accountSummary(int reqId, const std::string& account,
-                    const std::string& tag, const std::string& value,
-                    const std::string& currency) override {
+                        const std::string& tag, const std::string& value,
+                        const std::string& currency) override {
         std::lock_guard<std::mutex> lock(summaryMutex);
-        std::string key = tag;
-        if (!currency.empty()) {
-            key = currency + "_" + tag;
-        }
-        summaryData[key] = value;
-        
-        // Also store the base currency version if it's not already there
-        // This helps if the UI expects just "NetLiquidation" but the API returns "EUR_NetLiquidation"
-        if (!currency.empty()) {
-            summaryData[tag] = value; 
-        }
-
+        if (!currency.empty()) summaryData[currency + "_" + tag] = value;
+        summaryData[tag] = value;
         if (hCoinWnd) PostMessage(hCoinWnd, WM_ACCOUNT_SUMMARY, 0, 0);
     }
 
@@ -381,83 +474,50 @@ public:
         if (hCoinWnd) PostMessage(hCoinWnd, WM_PNL_UPDATE, 0, 0);
     }
 
+    std::map<std::string, std::string> getAccountSummary() {
+        std::lock_guard<std::mutex> lock(summaryMutex);
+        return summaryData;
+    }
+
+    double getDailyPnL()      const { return dailyPnL; }
+    double getUnrealizedPnL() const { return unrealizedPnL; }
+    double getRealizedPnL()   const { return realizedPnL; }
+
     std::string getAccountNumber() {
         std::lock_guard<std::mutex> lock(dataMutex);
         return accountId;
     }
 
-    void managedAccounts(const std::string& accountsList) override {
-        std::lock_guard<std::mutex> lock(dataMutex);
-        auto comma = accountsList.find(',');
-        accountId = (comma != std::string::npos) ? accountsList.substr(0, comma) : accountsList;
-        // don't play sound here — wait for nextValidId
-        notifyApiUpdate();
-    }
+    // ── Portfolio ─────────────────────────────────────────────────────────────
 
-    void nextValidId(int orderId) override {
-        bool wasDisconnected = !tradingConnected.exchange(true);
-        if (wasDisconnected) {
-            PlaySound_Async(204); // trading_connection_reestablished
-            LogDebug("Trading connected, next order ID: " + std::to_string(orderId));
-        }
-        notifyApiUpdate();
-    }
+    void setDiamondsWindow(HWND hWnd) { hDiamondsWnd = hWnd; }
 
-    void position(const std::string& account, const Contract& contract, Decimal shares, double avgCost) {
+    void position(const std::string& account, const Contract& contract,
+                  Decimal shares, double avgCost) {
         std::lock_guard<std::mutex> lock(portfolioMutex);
-        
         PositionInfo& info = portfolioMap[contract.symbol];
-        info.symbol = contract.symbol;
-        info.shares = shares;
+        info.symbol  = contract.symbol;
+        info.shares  = shares;
         info.avgCost = avgCost;
-        
         if (hDiamondsWnd) PostMessage(hDiamondsWnd, WM_DIAMONDS_UPDATE, 0, 0);
     }
 
-    void positionEnd() {
-        LogDebug("Position update ended");
+    void positionEnd() { LogDebug("Position update ended"); }
+
+    std::mutex& getPortfolioMutex() { return portfolioMutex; }
+    std::map<std::string, TradingAPI::PositionInfo>& getPortfolioMap() { return portfolioMap; }
+
+    std::mutex& getWatchlistMutex() { return watchlistMutex; }
+    std::map<std::string, TradingAPI::WatchlistInfo>& getWatchlistMap() { return watchlistMap; }
+
+    void requestWatchlistData(const std::string& bookName) {
+        if (!client->isConnected()) return;
+        LogDebug("Requesting watchlist data for book: " + bookName);
     }
 
-    void openOrder(int orderId, const Contract& contract, const Order& order, const OrderState& orderState) override {
-        std::lock_guard<std::mutex> lock(ordersMutex);
-        
-        OrderInfo& info = ordersMap[orderId];
-        info.orderId = orderId;
-        info.symbol = contract.symbol;
-        info.exchange = contract.primaryExchange;
-        info.totalAmount = (double)order.totalQuantity;
-        info.price = order.lmtPrice;
-        info.status = orderState.status;
-        
-        time_t now = time(0);
-        char buf[32];
-        strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&now));
-        info.time = buf;
-        info.timestamp = (long long)now;
-
-        if (hOrdersWnd) PostMessage(hOrdersWnd, WM_ORDERS_UPDATE, 0, 0);
-    }
-
-    void orderStatus(int orderId, const std::string& status, Decimal filled, 
-                     Decimal remaining, double avgFillPrice, long long permId, int parentId,
-                     double lastFillPrice, int clientId, const std::string& whyHeld, double mktCapPrice) override {
-        std::lock_guard<std::mutex> lock(ordersMutex);
-        
-        if (ordersMap.count(orderId)) {
-            ordersMap[orderId].status = status;
-            
-            time_t now = time(0);
-            char buf[32];
-            strftime(buf, sizeof(buf), "%H:%M:%S", localtime(&now));
-            ordersMap[orderId].time = buf;
-            ordersMap[orderId].timestamp = (long long)now;
-        }
-        
-        if (hOrdersWnd) PostMessage(hOrdersWnd, WM_ORDERS_UPDATE, 0, 0);
-    }
+    // ── Symbol search ─────────────────────────────────────────────────────────
 
     void setSymbolSearchWindow(HWND hWnd) { hSymbolSearchWnd = hWnd; }
-    void setNewsWindow(HWND hWnd) { hNewsWnd = hWnd; }
 
     void searchSymbols(const std::string& pattern) {
         if (!client->isConnected()) return;
@@ -469,17 +529,14 @@ public:
         return symbolResults;
     }
 
-    std::vector<std::string> getNewsResults() {
-        std::lock_guard<std::mutex> lock(newsMutex);
-        return newsResults;
-    }
-
-    void symbolSamples(int reqId, const std::vector<ContractDescription>& contractDescriptions) override {
+    void symbolSamples(int reqId,
+                       const std::vector<ContractDescription>& contractDescriptions) override {
         std::lock_guard<std::mutex> lock(symbolMutex);
         symbolResults.clear();
         for (const auto& cd : contractDescriptions) {
             if (cd.contract.secType == "STK" || cd.contract.secType == "ETF") {
-                std::string entry = std::to_string(cd.contract.conId) + "." + cd.contract.symbol;
+                std::string entry = std::to_string(cd.contract.conId)
+                                  + "." + cd.contract.symbol;
                 if (!cd.contract.primaryExchange.empty())
                     entry += "." + cd.contract.primaryExchange;
                 symbolResults.push_back(entry);
@@ -489,79 +546,77 @@ public:
             PostMessage(hSymbolSearchWnd, WM_SYMBOL_RESULTS, 0, 0);
     }
 
+    // ── News ──────────────────────────────────────────────────────────────────
+
+    void setNewsWindow(HWND hWnd) { hNewsWnd = hWnd; }
+
     void reqNewsForSymbol(int conId, const std::string& symbol) {
         if (!client->isConnected()) return;
-
-        {
-            std::lock_guard<std::mutex> lock(newsMutex);
-            newsResults.clear();
-        }
+        { std::lock_guard<std::mutex> lock(newsMutex); newsResults.clear(); }
 
         Contract contract;
-        contract.conId = conId;
-        contract.symbol = symbol;
-        contract.secType = "STK";
+        contract.conId    = conId;
+        contract.symbol   = symbol;
+        contract.secType  = "STK";
         contract.exchange = "SMART";
         contract.currency = "USD";
 
-        if (newsRequestActive.exchange(true)) {
+        if (newsRequestActive.exchange(true))
             client->cancelMktData(9002);
-        }
 
-        // Generic tick 292 is for news.
-        // We use "mdoff" to disable standard market data and only get news.
         client->reqMktData(9002, contract, "mdoff,292", false, false, {});
+    }
+
+    std::vector<std::string> getNewsResults() {
+        std::lock_guard<std::mutex> lock(newsMutex);
+        return newsResults;
     }
 
     void tickNews(int reqId, time_t timeStamp, const std::string& providerCode,
                   const std::string& articleId, const std::string& headline,
                   const std::string& extraData) override {
-        std::string newsLine = "[" + providerCode + "] " + headline;
-        if (!extraData.empty()) {
-            newsLine += " - ";
-            newsLine += extraData;
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(newsMutex);
-            newsResults.push_back(newsLine);
-        }
-
-        if (hNewsWnd)
-            PostMessage(hNewsWnd, WM_NEWS_RESULTS, 0, 0);
+        std::string line = "[" + providerCode + "] " + headline;
+        if (!extraData.empty()) line += " - " + extraData;
+        { std::lock_guard<std::mutex> lock(newsMutex); newsResults.push_back(line); }
+        if (hNewsWnd) PostMessage(hNewsWnd, WM_NEWS_RESULTS, 0, 0);
     }
-    
-    #define managedAccounts managedAccounts_ignored
-    #define error error_ignored
-    #define symbolSamples symbolSamples_ignored
-    #define connectAck connectAck_ignored
-    #define connectionClosed connectionClosed_ignored
-    #define nextValidId nextValidId_ignored
-    #define accountSummary accountSummary_ignored
+
+    // ── EWrapper stubs (all unimplemented callbacks) ──────────────────────────
+
+    #define managedAccounts   managedAccounts_ignored
+    #define error             error_ignored
+    #define symbolSamples     symbolSamples_ignored
+    #define connectAck        connectAck_ignored
+    #define connectionClosed  connectionClosed_ignored
+    #define nextValidId       nextValidId_ignored
+    #define accountSummary    accountSummary_ignored
     #define accountSummaryEnd accountSummaryEnd_ignored
-    #define pnl pnl_ignored
-    #define openOrder openOrder_ignored
-    #define orderStatus orderStatus_ignored
-    #define position position_ignored
-    #define positionEnd positionEnd_ignored
-    #define tickNews tickNews_ignored
+    #define pnl               pnl_ignored
+    #define openOrder         openOrder_ignored
+    #define openOrderEnd      openOrderEnd_ignored
+    #define orderStatus       orderStatus_ignored
+    #define position          position_ignored
+    #define positionEnd       positionEnd_ignored
+    #define tickNews          tickNews_ignored
 
     #define EWRAPPER_VIRTUAL_IMPL {}
     #include "EWrapper_prototypes.h"
     #undef EWRAPPER_VIRTUAL_IMPL
 
-    #undef managedAccounts_ignored
-    #undef error_ignored
-    #undef symbolSamples_ignored
-    #undef connectAck_ignored
-    #undef connectionClosed_ignored
-    #undef nextValidId_ignored 
-    #undef accountSummary_ignored
-    #undef accountSummaryEnd_ignored
-    #undef pnl_ignored
-    #undef openOrder_ignored
-    #undef orderStatus_ignored
-    #undef position_ignored
-    #undef positionEnd_ignored
-    #undef tickNews_ignored
+    #undef managedAccounts
+    #undef error
+    #undef symbolSamples
+    #undef connectAck
+    #undef connectionClosed
+    #undef nextValidId
+    #undef accountSummary
+    #undef accountSummaryEnd
+    #undef pnl
+    #undef openOrder
+    #undef openOrderEnd
+    #undef orderStatus
+    #undef position
+    #undef positionEnd
+    #undef tickNews
+
 } api;

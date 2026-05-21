@@ -172,7 +172,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                  SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(hNewsSymCombo,  NULL, margin + eachW + comboGap, margin, eachW, 200,
                  SWP_NOZORDER | SWP_NOACTIVATE);
-        return 0;
+        break;
     }
 
     case WM_ACTIVATE: {
