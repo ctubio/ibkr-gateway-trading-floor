@@ -78,16 +78,55 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-        
+        // Create a simple layout: two listviews (Portfolio, Watchlist)
         hTabCtrl = CreateWindowA("SysTabControl32", "", 
             WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 
-            0, 0, 800, 500, 
+            0, 0, 800, 28, 
             hWnd, (HMENU)1, hInst, NULL);
-        
-        // Simplified Tab implementation: we'll use a simple toggle or just the list for now
-        // to avoid the complex TCFIELD/TCM_SETITEM setup which is causing errors.
-        // We will implement the actual tab switching logic in a subsequent step.
+
+        // Portfolio list (left)
+        hPortfolioList = CreateWindowExA(WS_EX_CLIENTEDGE, "SysListView32", NULL,
+            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER,
+            8, 36, 380, 420,
+            hWnd, (HMENU)1001, hInst, NULL);
+
+        // Watchlist list (right)
+        hWatchlistList = CreateWindowExA(WS_EX_CLIENTEDGE, "SysListView32", NULL,
+            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER,
+            400, 36, 380, 420,
+            hWnd, (HMENU)1002, hInst, NULL);
+
+        // Ensure common control styles are set
+        ListView_SetExtendedListViewStyle(hPortfolioList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+        ListView_SetExtendedListViewStyle(hWatchlistList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+
+        // Add columns to both lists
+        for (int col = 0; col < DIAMOND_COL_COUNT; ++col) {
+            LVCOLUMN lvc = { 0 };
+            lvc.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
+            lvc.pszText = const_cast<char*>(diamondCols[col].header);
+            lvc.cx = diamondCols[col].width;
+            lvc.iSubItem = col;
+            ListView_InsertColumn(hPortfolioList, col, &lvc);
+            // Watchlist has fewer columns; insert up to DIAMOND_COL_COUNT as well
+            ListView_InsertColumn(hWatchlistList, col, &lvc);
+        }
+
+        // Initial population
+        UpdateDiamondTable(hPortfolioList, true);
+        UpdateDiamondTable(hWatchlistList, false);
         break;
+    }
+
+    case WM_SIZE: {
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+        int w = rc.right - rc.left;
+        int h = rc.bottom - rc.top;
+        if (hTabCtrl) SetWindowPos(hTabCtrl, NULL, 0, 0, w, 28, SWP_NOZORDER);
+        if (hPortfolioList) SetWindowPos(hPortfolioList, NULL, 8, 36, (w/2) - 16, h - 44, SWP_NOZORDER);
+        if (hWatchlistList) SetWindowPos(hWatchlistList, NULL, (w/2) + 8, 36, (w/2) - 16, h - 44, SWP_NOZORDER);
+        return 0;
     }
 
     case WM_DIAMONDS_UPDATE:

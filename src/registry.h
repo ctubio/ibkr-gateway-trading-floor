@@ -67,6 +67,13 @@ DWORD Settings_Load(const char* key, DWORD defaultValue) {
     return value;
 }
 
+bool Settings_KillGatewayOnExit() {
+    return Settings_Load("KillGatewayOnExit", 0) != 0;
+}
+
+bool Settings_AutoGateway() {
+    return Settings_Load("AutoGateway", 0) != 0;
+}
 
 bool Settings_DarkMode() {
     return Settings_Load("DarkMode", 0) != 0;

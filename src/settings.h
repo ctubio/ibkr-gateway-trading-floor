@@ -9,6 +9,7 @@ void startDebugLog() { startGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IB
 #define ID_SETTINGS_PLAY_SOUNDS  4003
 #define ID_SETTINGS_AUTO_GATEWAY 4004
 #define ID_SETTINGS_DEBUG_LOG    4005
+
 // ─── Debug Log ────────────────────────────────────────────────────────────────
 void FlushDebugBuffer() {
     if (!hDebugEdit || !IsWindow(hDebugEdit)) return;
@@ -46,14 +47,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
-}
-
-bool Settings_KillGatewayOnExit() {
-    return Settings_Load("KillGatewayOnExit", 0) != 0;
-}
-
-bool Settings_AutoGateway() {
-    return Settings_Load("AutoGateway", 0) != 0;
 }
 
 // Call this on every window after creating it

@@ -33,8 +33,8 @@ build/TNT.exe: lib/build/resources.res src/main.cpp \
 	@$(CXX) \
 	    src/main.cpp \
 	    lib/build/resources.res \
-	    -I$(IBKR_CLIENT) \
 	    -I$(IBKR_CLIENT)/protobuf \
+		-I$(IBKR_CLIENT) \
 	    -I$(PROTO_INSTALL)/include \
 	    -Llib/build \
 	    -L$(PROTO_INSTALL)/lib \
@@ -51,8 +51,7 @@ build/TNT.exe: lib/build/resources.res src/main.cpp \
 	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
 	    -lshlwapi -lcomctl32 \
-	    -s \
-	    -o build/TNT.exe
+		-s -o build/TNT.exe
 	@rm -f lib/build/resources.res
 	@echo "Build Complete!"
 	@ls -la build/TNT.exe

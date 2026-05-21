@@ -325,7 +325,7 @@ std::string AskGatewayPath(HWND hParent) {
 }
 bool alreadyEnsureGatewayRunning = false;
 void EnsureGatewayRunning(HWND hParent) {
-    if (alreadyEnsureGatewayRunning ||IsProcessRunning("ibgateway.exe")) return;
+    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe")) return;
     alreadyEnsureGatewayRunning = true;
 
     // Get path from registry or default

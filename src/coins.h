@@ -118,13 +118,21 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         }
 
         api.addApiUpdateWindow(hWnd);
+        LogDebug("Coins window created, requesting initial account summary and PnL");
         api.setCoinWindow(hWnd);
         break;
     }
 
     case WM_API_UPDATE:
         if (api.isConnected()) {
+            LogDebug("Coins window received API update, refreshing account summary and PnL");
             api.setCoinWindow(hWnd);
+        } else {
+            for (int i = 0; i < COIN_ROW_COUNT; i++) {
+                if (hCoinValues[i]) {
+                    SetWindowTextA(hCoinValues[i], "--");
+                }
+            }
         }
         break;
 

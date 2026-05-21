@@ -10,8 +10,11 @@
 #include "EReader.h"
 
 #include <windows.h>
+#include <mmsystem.h>
 #include <shellapi.h>
 #include <shobjidl.h>
+
+#include <commctrl.h>
 
 #include <dwmapi.h>
 #include <initguid.h>
@@ -53,6 +56,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     registerWindowClass(hInst, WndProcOrders,        ORDERS_CLASS_NAME,        10);
     registerWindowClass(hInst, WndProcDashboard,     DASHBOARD_CLASS_NAME,      1);
 	startDashboard(hInst);
+
+    // Initialize common controls (ListView, Tab, etc.)
+    INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES };
+    InitCommonControlsEx(&icex);
 
     nid.cbSize = sizeof(NOTIFYICONDATA);
     nid.hWnd = g_AppWindows[DASHBOARD_CLASS_NAME];

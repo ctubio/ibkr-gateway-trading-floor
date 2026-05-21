@@ -107,11 +107,14 @@ private:
     std::mutex watchlistMutex;
     std::map<std::string, WatchlistInfo> watchlistMap;
 
+    bool notifyConnected = false;
+
     void processMessages() {
         while (isThreadRunning && client->isConnected()) {
             signal.waitForSignal();
             reader->processMsgs();
         }
+        isThreadRunning = false;
     }
 
 public:
@@ -137,9 +140,12 @@ public:
     }
 
     void notifyApiUpdate() {
+        if (notifyConnected == (isMarketDataConnected() && isTradingConnected())) return;
+        notifyConnected = !notifyConnected;
         std::vector<HWND> validWindows;
         {
             std::lock_guard<std::mutex> lock(apiUpdateMutex);
+             // avoid flooding on unchanged state
             for (HWND hWnd : apiUpdateWindows) {
                 if (hWnd && IsWindow(hWnd)) {
                     validWindows.push_back(hWnd);
@@ -180,6 +186,17 @@ public:
     }
 
     bool connect() {
+        if (apiThread.joinable()) {
+            isThreadRunning = false;
+            signal.issueSignal();
+            apiThread.join();
+            reader.reset();
+        }
+
+        if (client->isConnected()) {
+            client->eDisconnect();
+        }
+
         if (client->eConnect("127.0.0.1", 4001, 0)) {
             reader = std::make_unique<EReader>(client, &signal);
             reader->start();
@@ -213,15 +230,13 @@ public:
 
     bool isConnected() const { return client && client->isConnected(); }
 
-    // ── Callbacks you actually care about ────────────────────────────────────
     void connectAck() override {
-        // Safe empty implementation override, but triggers a UI refresh notice
         notifyApiUpdate();
     }
 
     void connectionClosed() override {
         if (tradingConnected.exchange(false)) {
-            PlaySound_Async(203); // trading_connection_lost
+            PlaySound_Async(203);
             LogDebug("Trading connection closed");
         }
         marketDataConnected = false;
@@ -276,7 +291,6 @@ public:
         hCoinWnd = hWnd;
         if (!hWnd || !client->isConnected()) return;
         
-        LogDebug("Requesting account summary...");
         client->reqAccountSummary(9010, "All",
             "NetLiquidation,TotalCashValue,BuyingPower,"
             "AvailableFunds,ExcessLiquidity,GrossPositionValue,"
@@ -289,10 +303,8 @@ public:
             acc = accountId;
         }
         if (!acc.empty()) {
-            LogDebug("Requesting PnL for: " + acc);
+            LogDebug("Requesting account summary and PnL for: " + acc);
             client->reqPnL(9013, acc, "");
-        } else {
-            LogDebug("setCoinWindow: accountId empty, PnL not requested");
         }
     }
 

@@ -66,29 +66,33 @@ void Book_SaveFullList(const char* listName, const std::vector<std::string>& ite
 
 static std::vector<std::string> bookItems; // full conId.symbol.exchange mirroring listbox
 
+std::vector<std::string> Book_ReadListEntries(const char* listName) {
+    std::vector<std::string> entries;
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\Book", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return entries;
+    DWORD type, size = 0;
+    RegQueryValueExA(hKey, listName, NULL, &type, NULL, &size);
+    if (size > 0) {
+        std::vector<char> buf(size);
+        RegQueryValueExA(hKey, listName, NULL, &type, (LPBYTE)buf.data(), &size);
+        const char* p = buf.data();
+        while (*p) { entries.push_back(p); p += strlen(p) + 1; }
+    }
+    RegCloseKey(hKey);
+    return entries;
+}
+
 void Book_LoadList(const char* listName, HWND hLB) {
     SendMessage(hLB, LB_RESETCONTENT, 0, 0);
     bookItems.clear();
 
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Book", APP_REG_ROOT);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
-
-    DWORD type, size = 0;
-    RegQueryValueExA(hKey, listName, NULL, &type, NULL, &size);
-    if (size == 0) { RegCloseKey(hKey); return; }
-
-    std::vector<char> buf(size);
-    RegQueryValueExA(hKey, listName, NULL, &type, (LPBYTE)buf.data(), &size);
-    RegCloseKey(hKey);
-
-    const char* p = buf.data();
-    while (*p) {
-        std::string full = p;
+    auto entries = Book_ReadListEntries(listName);
+    for (const auto& full : entries) {
         bookItems.push_back(full);
         SendMessageA(hLB, LB_ADDSTRING, 0, (LPARAM)Book_DisplayLabel(full).c_str());
-        p += strlen(p) + 1;
     }
 }
 

@@ -11,7 +11,7 @@
  9 ICON "resources/ico/msgs.ico"
 10 ICON "resources/ico/orders.ico"
 
-201 RCDATA "resources/mp3/md_connection_lost.mp3"
-202 RCDATA "resources/mp3/md_connection_reestablished.mp3"
-203 RCDATA "resources/mp3/trading_connection_lost.mp3"
-204 RCDATA "resources/mp3/trading_connection_reestablished.mp3"
+201 RCDATA "resources/wav/md_connection_lost.wav"
+202 RCDATA "resources/wav/md_connection_reestablished.wav"
+203 RCDATA "resources/wav/trading_connection_lost.wav"
+204 RCDATA "resources/wav/trading_connection_reestablished.wav"

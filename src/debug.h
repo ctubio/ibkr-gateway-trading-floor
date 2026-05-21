@@ -8,7 +8,7 @@ void LogDebug(const std::string& msg) {
     char tstr[26] = {};
     ctime_s(tstr, sizeof(tstr), &now);
     std::string timestamp = tstr;
-    if (!timestamp.empty()) timestamp.pop_back(); // remove newline
+    if (!timestamp.empty()) timestamp.pop_back();
 
     std::string fullMsg = "[" + timestamp + "] " + msg + "\r\n";
     debugBuffer.push_back(fullMsg);

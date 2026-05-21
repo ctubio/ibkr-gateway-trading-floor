@@ -124,9 +124,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
             if (wParam == TIMER_WATCHDOG) {
                 if (shouldBeConnected && !api.isConnected()) {
-                    if (Settings_AutoGateway()) {
-                        EnsureGatewayRunning(hWnd);
-                    }
+                    EnsureGatewayRunning(hWnd);
                     api.connect();
                     UpdateTrayIcon(hWnd);
                 } else if (!shouldBeConnected && api.isConnected()) {
