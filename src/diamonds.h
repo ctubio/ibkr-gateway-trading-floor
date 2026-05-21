@@ -1,141 +1,163 @@
 #pragma once
 
-void startDiamonds() { startGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBKRGatewayClient.Diamonds", 800, 500); }
+void startDiamonds() { startGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBKRGatewayClient.Diamonds", 700, 400); }
 
-// Table Columns
-struct DiamondCol { const char* header; int width; };
-static DiamondCol diamondCols[] = {
-    { "Symbol", 100 },
-    { "Shares", 80 },
-    { "Avg Cost", 100 },
-    { "Daily PnL", 100 },
-    { "52W %", 80 },
-    { "Mkt Value", 100 },
-    { "Mkt Cap", 120 },
+// ── Column definitions ────────────────────────────────────────────────────────
+
+struct DiamondCol { const char* header; int width; int fmt; };
+static const DiamondCol diamondCols[] = {
+    { "Symbol",   100, LVCFMT_LEFT  },
+    { "Shares",    80, LVCFMT_RIGHT },
+    { "Avg Cost",  90, LVCFMT_RIGHT },
+    { "Daily PnL", 90, LVCFMT_RIGHT },
+    { "52W %",     75, LVCFMT_RIGHT },
+    { "Mkt Value", 90, LVCFMT_RIGHT },
+    { "Mkt Cap",  110, LVCFMT_RIGHT },
 };
-static const int DIAMOND_COL_COUNT = sizeof(diamondCols) / sizeof(diamondCols[0]);
+static const int DIAMOND_COL_COUNT = (int)(sizeof(diamondCols) / sizeof(diamondCols[0]));
 
-static HWND hTabCtrl = NULL;
-static HWND hPortfolioList = NULL;
-static HWND hWatchlistList = NULL;
-static HWND hBookCombo = NULL;
+// ── Repopulate ────────────────────────────────────────────────────────────────
 
-void UpdateDiamondTable(HWND hList, bool isPortfolio) {
+static void Diamonds_Repopulate(HWND hList) {
+    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
 
-    if (isPortfolio) {
+    std::vector<TradingAPI::PositionInfo> rows;
+    {
         std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
-        int i = 0;
-        for (auto const& [sym, info] : api.getPortfolioMap()) {
-            LVITEM lvi = { 0 };
-            lvi.mask = LVIF_TEXT;
-            lvi.iItem = i;
-            lvi.iSubItem = 0;
-            lvi.pszText = (LPSTR)info.symbol.c_str();
-            ListView_InsertItem(hList, &lvi);
-
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%.2f", (double)info.shares);
-            ListView_SetItemText(hList, i, 1, buf);
-            snprintf(buf, sizeof(buf), "%.2f", info.avgCost);
-            ListView_SetItemText(hList, i, 2, buf);
-            snprintf(buf, sizeof(buf), "%.2f", info.dailyPnL);
-            ListView_SetItemText(hList, i, 3, buf);
-            snprintf(buf, sizeof(buf), "%.2f%%", info.fiftyTwoWeekChange);
-            ListView_SetItemText(hList, i, 4, buf);
-            snprintf(buf, sizeof(buf), "%.2f", info.marketValue);
-            ListView_SetItemText(hList, i, 5, buf);
-            snprintf(buf, sizeof(buf), "%.2f", info.marketCap);
-            ListView_SetItemText(hList, i, 6, buf);
-            i++;
-        }
-    } else {
-        std::lock_guard<std::mutex> lock(api.getWatchlistMutex());
-        int i = 0;
-        for (auto const& [sym, info] : api.getWatchlistMap()) {
-            LVITEM lvi = { 0 };
-            lvi.mask = LVIF_TEXT;
-            lvi.iItem = i;
-            lvi.iSubItem = 0;
-            lvi.pszText = (LPSTR)info.symbol.c_str();
-            ListView_InsertItem(hList, &lvi);
-
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%.2f", info.price);
-            ListView_SetItemText(hList, i, 1, buf);
-            snprintf(buf, sizeof(buf), "%.2f", info.change);
-            ListView_SetItemText(hList, i, 2, buf);
-            snprintf(buf, sizeof(buf), "%.2f%%", info.percentChange);
-            ListView_SetItemText(hList, i, 3, buf);
-            snprintf(buf, sizeof(buf), "%.2f", info.marketCap);
-            ListView_SetItemText(hList, i, 4, buf);
-            i++;
-        }
+        for (auto const& [sym, info] : api.getPortfolioMap())
+            rows.push_back(info);
     }
+
+    // Sort alphabetically by symbol
+    std::sort(rows.begin(), rows.end(),
+              [](const TradingAPI::PositionInfo& a, const TradingAPI::PositionInfo& b) {
+                  return a.symbol < b.symbol;
+              });
+
+    char buf[64];
+    for (int i = 0; i < (int)rows.size(); ++i) {
+        const auto& info = rows[i];
+
+        LVITEMA lvi = {};
+        lvi.mask     = LVIF_TEXT;
+        lvi.iItem    = i;
+        lvi.iSubItem = 0;
+        lvi.pszText  = (LPSTR)info.symbol.c_str();
+        ListView_InsertItem(hList, &lvi);
+
+        snprintf(buf, sizeof(buf), "%.2f", DecimalFunctions::decimalToDouble(info.shares));
+        ListView_SetItemText(hList, i, 1, buf);
+
+        snprintf(buf, sizeof(buf), "%.2f", info.avgCost);
+        ListView_SetItemText(hList, i, 2, buf);
+
+        snprintf(buf, sizeof(buf), "%.2f", info.dailyPnL);
+        ListView_SetItemText(hList, i, 3, buf);
+
+        snprintf(buf, sizeof(buf), "%.2f%%", info.fiftyTwoWeekChange);
+        ListView_SetItemText(hList, i, 4, buf);
+
+        snprintf(buf, sizeof(buf), "%.2f", info.marketValue);
+        ListView_SetItemText(hList, i, 5, buf);
+
+        snprintf(buf, sizeof(buf), "%.2f", info.marketCap);
+        ListView_SetItemText(hList, i, 6, buf);
+    }
+
+    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+    RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 }
+
+// ── Window procedure ──────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
+
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-        // Create a simple layout: two listviews (Portfolio, Watchlist)
-        hTabCtrl = CreateWindowA("SysTabControl32", "", 
-            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 
-            0, 0, 800, 28, 
+
+        HWND hList = CreateWindowExA(
+            WS_EX_CLIENTEDGE, "SysListView32", "",
+            WS_CHILD | WS_VISIBLE | WS_BORDER |
+            LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+            0, 0, 700, 400,
             hWnd, (HMENU)1, hInst, NULL);
 
-        // Portfolio list (left)
-        hPortfolioList = CreateWindowExA(WS_EX_CLIENTEDGE, "SysListView32", NULL,
-            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER,
-            8, 36, 380, 420,
-            hWnd, (HMENU)1001, hInst, NULL);
+        DWORD exStyle = LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER;
+        if (Settings_DarkMode()) exStyle |= LVS_EX_GRIDLINES;
+        ListView_SetExtendedListViewStyle(hList, exStyle);
 
-        // Watchlist list (right)
-        hWatchlistList = CreateWindowExA(WS_EX_CLIENTEDGE, "SysListView32", NULL,
-            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER,
-            400, 36, 380, 420,
-            hWnd, (HMENU)1002, hInst, NULL);
-
-        // Ensure common control styles are set
-        ListView_SetExtendedListViewStyle(hPortfolioList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-        ListView_SetExtendedListViewStyle(hWatchlistList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-
-        // Add columns to both lists
-        for (int col = 0; col < DIAMOND_COL_COUNT; ++col) {
-            LVCOLUMN lvc = { 0 };
-            lvc.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-            lvc.pszText = const_cast<char*>(diamondCols[col].header);
-            lvc.cx = diamondCols[col].width;
-            lvc.iSubItem = col;
-            ListView_InsertColumn(hPortfolioList, col, &lvc);
-            // Watchlist has fewer columns; insert up to DIAMOND_COL_COUNT as well
-            ListView_InsertColumn(hWatchlistList, col, &lvc);
+        LVCOLUMNA lvc = {};
+        lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
+        for (int i = 0; i < DIAMOND_COL_COUNT; ++i) {
+            lvc.cx      = diamondCols[i].width;
+            lvc.pszText = (LPSTR)diamondCols[i].header;
+            lvc.fmt     = diamondCols[i].fmt;
+            ListView_InsertColumn(hList, i, &lvc);
         }
 
-        // Initial population
-        UpdateDiamondTable(hPortfolioList, true);
-        UpdateDiamondTable(hWatchlistList, false);
+        api.setDiamondsWindow(hWnd);
         break;
     }
 
     case WM_SIZE: {
+        HWND hList = GetDlgItem(hWnd, 1);
+        if (!hList) return 0;
         RECT rc;
         GetClientRect(hWnd, &rc);
-        int w = rc.right - rc.left;
-        int h = rc.bottom - rc.top;
-        if (hTabCtrl) SetWindowPos(hTabCtrl, NULL, 0, 0, w, 28, SWP_NOZORDER);
-        if (hPortfolioList) SetWindowPos(hPortfolioList, NULL, 8, 36, (w/2) - 16, h - 44, SWP_NOZORDER);
-        if (hWatchlistList) SetWindowPos(hWatchlistList, NULL, (w/2) + 8, 36, (w/2) - 16, h - 44, SWP_NOZORDER);
+        MoveWindow(hList, 0, 0, rc.right, rc.bottom, TRUE);
         break;
     }
 
-    case WM_DIAMONDS_UPDATE:
-        UpdateDiamondTable(hPortfolioList, true);
-        UpdateDiamondTable(hWatchlistList, false);
+    case WM_DIAMONDS_UPDATE: {
+        HWND hList = GetDlgItem(hWnd, 1);
+        if (hList) Diamonds_Repopulate(hList);
         break;
+    }
+
+    // ── Dark mode ─────────────────────────────────────────────────────────────
+    case WM_NOTIFY: {
+        NMHDR* hdr = (NMHDR*)lParam;
+        if (hdr->idFrom != 1) break;
+
+        if (hdr->code == NM_CUSTOMDRAW) {
+            NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
+            bool dark = Settings_DarkMode();
+
+            switch (cd->nmcd.dwDrawStage) {
+                case CDDS_PREPAINT:
+                    return CDRF_NOTIFYITEMDRAW;
+
+                case CDDS_ITEMPREPAINT:
+                    if (dark) {
+                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        cd->clrText   = DM_TEXT;
+                    }
+                    return CDRF_NOTIFYSUBITEMDRAW;
+
+                case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    if (cd->iSubItem == 3) { // Daily PnL — green/red
+                        char buf[32] = {};
+                        HWND hList = GetDlgItem(hWnd, 1);
+                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 3, buf, sizeof(buf));
+                        double val = atof(buf);
+                        if (val > 0) cd->clrText = RGB(80, 200, 120);
+                        else if (val < 0) cd->clrText = RGB(220, 80, 80);
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    return CDRF_DODEFAULT;
+                }
+            }
+        }
+        break;
+    }
 
     case WM_DESTROY:
+        api.setDiamondsWindow(NULL);
         break;
-}
+    }
+
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }

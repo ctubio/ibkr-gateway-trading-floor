@@ -60,14 +60,10 @@ public:
         double      marketValue        = 0.0;
         double      fiftyTwoWeekChange = 0.0;
         double      marketCap          = 0.0;
-    };
-
-    struct WatchlistInfo {
-        std::string symbol;
-        double price         = 0.0;
-        double change        = 0.0;
-        double percentChange = 0.0;
-        double marketCap     = 0.0;
+        
+        //double price         = 0.0;
+        //double change        = 0.0;
+        //double percentChange = 0.0;
     };
 
 private:
@@ -111,12 +107,10 @@ private:
     std::mutex ordersMutex;
     std::map<int, OrderInfo> ordersMap;
 
-    // ── Portfolio / Watchlist ─────────────────────────────────────────────────
+    // ── Portfolio  ─────────────────────────────────────────────────
     std::mutex portfolioMutex;
     std::map<std::string, PositionInfo> portfolioMap;
 
-    std::mutex watchlistMutex;
-    std::map<std::string, WatchlistInfo> watchlistMap;
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -268,8 +262,8 @@ public:
                 std::lock_guard<std::mutex> lock(ordersMutex);
                 ordersMap.clear();
             }
-            // reqAllOpenOrders returns orders placed by any client, not just this session.
-            client->reqAllOpenOrders();
+            client->reqOpenOrders();
+            client->reqCompletedOrders(false);
         }
         notifyApiUpdate();
     }
@@ -320,7 +314,9 @@ public:
             std::lock_guard<std::mutex> lock(ordersMutex);
             ordersMap.clear();
         }
-        client->reqAllOpenOrders();
+        // Snapshot of all currently open orders (any client session).
+        client->reqOpenOrders();
+        client->reqCompletedOrders(false);
     }
 
     void unsetOrdersWindow() {
@@ -340,9 +336,9 @@ public:
 
         auto priority = [](const std::string& s) -> int {
             if (s == "Submitted" || s == "PreSubmitted" || s == "Pending")  return 0;
-            if (s == "Filled")                                               return 2;
-            if (s == "Cancelled" || s == "Inactive")                        return 3;
-            return 1; // Partially Filled and everything else
+            if (s == "Partially Filled")                                     return 1;
+            if (s == "Filled" || s == "Cancelled" || s == "Inactive")       return 2;
+            return 3;
         };
 
         std::sort(out.begin(), out.end(), [&](const OrderInfo& a, const OrderInfo& b) {
@@ -396,6 +392,52 @@ public:
 
     void openOrderEnd() override {
         // All open orders have been delivered — do one update.
+        postOrdersUpdate();
+    }
+
+    void completedOrder(const Contract& contract, const Order& order,
+                        const OrderState& orderState) override {
+        time_t now = time(nullptr);
+        std::lock_guard<std::mutex> lock(ordersMutex);
+
+        // Skip if we already have a live entry for this order (open orders take priority).
+        auto it = ordersMap.find(order.orderId);
+        if (it != ordersMap.end() && !it->second.status.empty())
+            return;
+
+        OrderInfo& info = ordersMap[order.orderId];
+        info.orderId   = order.orderId;
+        info.symbol    = contract.symbol;
+        info.exchange  = contract.primaryExchange.empty()
+                             ? contract.exchange
+                             : contract.primaryExchange;
+        info.action    = order.action;
+        info.orderType = order.orderType;
+        info.price     = order.lmtPrice;
+        info.auxPrice  = order.auxPrice;
+        info.totalQty  = DecimalFunctions::decimalToDouble(order.totalQuantity);
+        info.status    = orderState.status;
+
+        // completedTime is reliably populated for completed orders: "YYYYMMDD HH:MM:SS"
+        if (!orderState.completedTime.empty()) {
+            struct tm t = {};
+            sscanf(orderState.completedTime.c_str(),
+                   "%4d%2d%2d %2d:%2d:%2d",
+                   &t.tm_year, &t.tm_mon, &t.tm_mday,
+                   &t.tm_hour, &t.tm_min, &t.tm_sec);
+            t.tm_year -= 1900;
+            t.tm_mon  -= 1;
+            time_t ct = mktime(&t);
+            if (ct > 0) { info.timestamp = (long long)ct; info.time = FormatTime(ct); }
+        }
+        if (info.timestamp == 0) {
+            info.timestamp = (long long)now;
+            info.time      = FormatTime(now);
+        }
+        // Wait for completedOrdersEnd for the bulk UI update.
+    }
+
+    void completedOrdersEnd() override {
         postOrdersUpdate();
     }
 
@@ -507,14 +549,6 @@ public:
     std::mutex& getPortfolioMutex() { return portfolioMutex; }
     std::map<std::string, TradingAPI::PositionInfo>& getPortfolioMap() { return portfolioMap; }
 
-    std::mutex& getWatchlistMutex() { return watchlistMutex; }
-    std::map<std::string, TradingAPI::WatchlistInfo>& getWatchlistMap() { return watchlistMap; }
-
-    void requestWatchlistData(const std::string& bookName) {
-        if (!client->isConnected()) return;
-        LogDebug("Requesting watchlist data for book: " + bookName);
-    }
-
     // ── Symbol search ─────────────────────────────────────────────────────────
 
     void setSymbolSearchWindow(HWND hWnd) { hSymbolSearchWnd = hWnd; }
@@ -594,6 +628,8 @@ public:
     #define pnl               pnl_ignored
     #define openOrder         openOrder_ignored
     #define openOrderEnd      openOrderEnd_ignored
+    #define completedOrder    completedOrder_ignored
+    #define completedOrdersEnd completedOrdersEnd_ignored
     #define orderStatus       orderStatus_ignored
     #define position          position_ignored
     #define positionEnd       positionEnd_ignored
@@ -614,6 +650,8 @@ public:
     #undef pnl
     #undef openOrder
     #undef openOrderEnd
+    #undef completedOrder
+    #undef completedOrdersEnd
     #undef orderStatus
     #undef position
     #undef positionEnd
