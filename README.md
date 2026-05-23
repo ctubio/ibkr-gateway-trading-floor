@@ -96,9 +96,9 @@ Internal diagnostics and API event logging (for troubleshooting)
 
 ## Installation
 
-1. Download the latest `TNT.exe` release
+1. Download the latest `Trading-Floor.exe` release
 2. Place it anywhere on your system (e.g., `C:\Program Files\TNT\`)
-3. Run `TNT.exe` — it will appear in your system tray
+3. Run `Trading-Floor.exe` — it will appear in your system tray
 4. Launch IBKR Gateway and authenticate
 5. TNT will auto-connect within seconds
 
@@ -131,7 +131,7 @@ make lib
 # Build the TNT executable
 make
 
-# Output: build/TNT.exe
+# Output: build/Trading-Floor.exe
 ```
 
 ### Build-in Dependencies
@@ -179,15 +179,15 @@ lib/
 └── IntelRDFPMathLib20U4/  # Decimal arithmetic library
 
 build/
-└── TNT.exe                # Final executable
+└── Trading-Floor.exe      # Final executable
 ```
 
 ## Usage
  - Enjoy!
- - To exit `TNT.exe`, look for the Exit menu option in your system tray icon
+ - To exit `Trading-Floor.exe`, look for the Exit menu option in your system tray icon
 
 ## Uninstall
-- Delete `TNT.exe`
+- Delete `Trading-Floor.exe`
 - Open **Registry Editor** (`regedit.exe`) and delete the folder `Computer\HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor`
 
 ## Performance Notes

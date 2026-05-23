@@ -22,14 +22,14 @@ WINDRES := x86_64-w64-mingw32-windres
 
 .PHONY: all lib clean
 
-all: build/TNT.exe
+all: build/Trading-Floor.exe
 
 # ─── BUILD EXE ───────────────────────────────────────────────────────────────
 
-build/TNT.exe: lib/build/resources.res src/main.cpp \
-               lib/build/libibkr.a lib/build/libbid.a
-	@echo "please wait, building TNT.exe.."
-	@rm -f build/TNT.exe
+build/Trading-Floor.exe: lib/build/resources.res src/main.cpp \
+                          lib/build/libibkr.a lib/build/libbid.a
+	@echo "please wait, building Trading-Floor.exe.."
+	@rm -f build/Trading-Floor.exe
 	@$(CXX) \
 	    src/main.cpp \
 	    lib/build/resources.res \
@@ -51,10 +51,10 @@ build/TNT.exe: lib/build/resources.res src/main.cpp \
 	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
 	    -lshlwapi -lcomctl32 \
-		-s -o build/TNT.exe
+		-s -o build/Trading-Floor.exe
 	@rm -f lib/build/resources.res
 	@echo "Build Complete!"
-	@ls -la build/TNT.exe
+	@ls -la build/Trading-Floor.exe
 
 lib/build/resources.res: resources/resources.rc
 	@$(WINDRES) resources/resources.rc -O coff -o lib/build/resources.res
@@ -158,7 +158,7 @@ lib/build/libibkr.a: $(PROTO_INSTALL)/lib/libprotobuf.a
 # ─── CLEAN ───────────────────────────────────────────────────────────────────
 
 clean:
-	@rm -f build/TNT.exe lib/build/resources.res
+	@rm -f build/Trading-Floor.exe lib/build/resources.res
 	@echo "Cleaned"
 
 clean_lib:
