@@ -22,12 +22,28 @@ std::string articleBuffer;
 
 // Convert basic HTML to RTF for RichEdit display
 static std::string ConvertHtmlToRtf(const std::string& html) {
-    std::string result = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Segoe UI;}}{\\colortbl;\\red0\\green0\\blue0;}\n\\viewkind4\\uc1\\pard\\f0\\fs20 ";
-    
     std::string text = html;
-    
-    // Decode HTML entities
     std::string::size_type pos = 0;
+
+    // 1. ESCAPE RTF CHARACTERS FIRST (Crucial Fix)
+    // We must escape literal \, {, and } in the raw text BEFORE adding RTF tags.
+    pos = 0;
+    while ((pos = text.find("\\", pos)) != std::string::npos)
+        text.replace(pos, 1, "\\\\"), pos += 2;
+    pos = 0;
+    while ((pos = text.find("{", pos)) != std::string::npos)
+        text.replace(pos, 1, "\\{"), pos += 2;
+    pos = 0;
+    while ((pos = text.find("}", pos)) != std::string::npos)
+        text.replace(pos, 1, "\\}"), pos += 2;
+
+    // 2. Normalize manual text newlines so they don't break RTF layout
+    pos = 0;
+    while ((pos = text.find("\n", pos)) != std::string::npos)
+        text.replace(pos, 1, " "), pos += 1;
+
+    // 3. Decode HTML entities
+    pos = 0;
     while ((pos = text.find("&apos;", pos)) != std::string::npos)
         text.replace(pos, 6, "'"), pos += 1;
     pos = 0;
@@ -42,16 +58,25 @@ static std::string ConvertHtmlToRtf(const std::string& html) {
     pos = 0;
     while ((pos = text.find("&gt;", pos)) != std::string::npos)
         text.replace(pos, 4, ">"), pos += 1;
-    
-    // Replace <p> tags with paragraph breaks
+
+    // 4. Convert structural HTML breaks to genuine RTF paragraphs/lines
+    // Handle line breaks
+    pos = 0;
+    while ((pos = text.find("<br>", pos)) != std::string::npos)
+        text.replace(pos, 4, "\\line "), pos += 6;
+    pos = 0;
+    while ((pos = text.find("<br/>", pos)) != std::string::npos)
+        text.replace(pos, 5, "\\line "), pos += 6;
+
+    // Handle paragraphs
     pos = 0;
     while ((pos = text.find("<p>", pos)) != std::string::npos)
         text.replace(pos, 3, ""), pos += 0;
     pos = 0;
     while ((pos = text.find("</p>", pos)) != std::string::npos)
-        text.replace(pos, 4, "\\par "), pos += 5;
-    
-    // Remove other tags
+        text.replace(pos, 4, "\\par\\par "), pos += 9; // Two breaks look cleaner for paragraphs
+
+    // 5. Clean up any remaining/unsupported HTML tags
     pos = 0;
     while ((pos = text.find("<", pos)) != std::string::npos) {
         size_t end = text.find(">", pos);
@@ -60,20 +85,12 @@ static std::string ConvertHtmlToRtf(const std::string& html) {
         else
             break;
     }
-    
-    // Escape special RTF characters
-    pos = 0;
-    while ((pos = text.find("\\", pos)) != std::string::npos)
-        text.replace(pos, 1, "\\\\"), pos += 2;
-    pos = 0;
-    while ((pos = text.find("{", pos)) != std::string::npos)
-        text.replace(pos, 1, "\\{"), pos += 2;
-    pos = 0;
-    while ((pos = text.find("}", pos)) != std::string::npos)
-        text.replace(pos, 1, "\\}"), pos += 2;
-    
+
+    // 6. Wrap everything cleanly inside the RTF payload header
+    std::string result = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Segoe UI;}}{\\colortbl;\\red0\\green0\\blue0;}\n\\viewkind4\\uc1\\pard\\f0\\fs20 ";
     result += text;
-    result += "\\par }";
+    result += "}";
+    
     return result;
 }
 

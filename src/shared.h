@@ -73,7 +73,12 @@ void startGenericWindow(const char* className, const char* title, const wchar_t*
         if (strcmp(className, BOOK_NEW_LIST_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
-            hWndParent = g_AppWindows[BOOK_CLASS_NAME];;
+            hWndParent = g_AppWindows[BOOK_CLASS_NAME];
+        }
+        if (strcmp(className, NEWS_ARTICLE_CLASS_NAME) == 0) {
+            dwExStyle = WS_EX_DLGMODALFRAME;
+            dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+            hWndParent = g_AppWindows[NEWS_CLASS_NAME];
         }
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), NULL);   
     }
