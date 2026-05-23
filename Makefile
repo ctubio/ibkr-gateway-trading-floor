@@ -8,11 +8,11 @@ WINDRES := x86_64-w64-mingw32-windres
 
 .PHONY: all clean push MAJOR MINOR PATCH BUILD release 
 
-all: build/Trading-Floor.exe
+all: bin/Trading-Floor.exe
 
-build/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
+bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	@echo "please wait, building Trading-Floor.exe.."
-	@rm -f build/Trading-Floor.exe
+	@rm -f bin/Trading-Floor.exe
 	@$(CXX) \
 	    src/main.cpp \
 	    lib/Trading-Floor-Assets.res \
@@ -23,15 +23,15 @@ build/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
 	    -lshlwapi -lcomctl32 \
-		-s -o build/Trading-Floor.exe
-	@echo "Build Complete!"
-	@ls -la build/Trading-Floor.exe
+		-s -o bin/Trading-Floor.exe
+	@echo "Build Complete!" && echo
+	@ls -la bin/Trading-Floor.exe
 
-lib/Trading-Floor-Assets.res: resources/resources.rc
-	@$(WINDRES) resources/resources.rc -O coff -o lib/Trading-Floor-Assets.res
+lib/Trading-Floor-Assets.res: res/resources.rc
+	@$(WINDRES) res/resources.rc -O coff -o lib/Trading-Floor-Assets.res
 
 clean:
-	@rm -f build/Trading-Floor.exe lib/Trading-Floor-Assets.res
+	@rm -f bin/Trading-Floor.exe lib/Trading-Floor-Assets.res
 	@echo "Cleaned"
 
 push:
@@ -66,7 +66,7 @@ release:
 ifndef TARGZ
 	@$(MAKE) TARGZ="Trading-Floor-$(MAJOR).$(MINOR).$(PATCH).$(BUILD)-win32.tar.gz" $@
 else
-	tar -cvzf $(TARGZ) build lib resources src README.md Makefile                  \
+	tar -cvzf $(TARGZ) bin lib res src README.md Makefile                  \
 	&& curl -s -n -H "Content-Type:application/octet-stream" -H "Authorization: token ${TRADINGFLOOR}"                                \
 	--data-binary "@$(PWD)/$(TARGZ)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/$(shell curl -s        \
 	https://api.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/latest | grep id | head -n1 | cut -d ' ' -f4 | cut -d ',' -f1 \
