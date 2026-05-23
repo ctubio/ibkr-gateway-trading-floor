@@ -4,6 +4,24 @@ void startDashboard(HINSTANCE hInst) { startGenericWindow(DASHBOARD_CLASS_NAME, 
 
 #define WM_TRAYICON (WM_USER + 1)
 
+#define TIMER_WATCHDOG 1
+
+#define ID_M_SYMBOLS    1001
+#define ID_M_COINS      1002
+#define ID_M_DIAMONDS   1003
+#define ID_M_SETTINGS   1004
+#define ID_M_NEWS       1005
+#define ID_M_TICKER     1006
+#define ID_M_TIMESALES  1007
+#define ID_M_LEVELS     1008
+#define ID_M_ORDERS     1009
+
+#define ID_M_CONNECT    3001
+#define ID_M_DISCONNECT 3002
+#define ID_M_EXIT       3003
+
+bool shouldBeConnected = true;
+
 void UpdateTrayIcon(HWND hWnd) {
     std::string tooltip;
     std::string title = "IBKR Gateway: ";

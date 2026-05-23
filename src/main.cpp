@@ -1,29 +1,10 @@
+#include "gateway.h"
 
-#include <thread>
-#include <mutex>
-#include <queue>
-#include <iostream>
-#include <chrono>
-#include <condition_variable>
-
-#include "EWrapper.h"
-#include "EClientSocket.h"
-#include "EReaderOSSignal.h"
-#include "EReader.h"
-
-#include <windows.h>
-#include <shobjidl.h>
-#include <dwmapi.h>
-#include <initguid.h>
-#include <propkey.h>
-#include <propvarutil.h>
-#include <richedit.h>
-
-#include "registry.h"
 #include "debug.h"
+#include "registry.h"
 #include "sound.h"
-#include "api.h"
 #include "shared.h"
+
 #include "settings.h"
 #include "book.h"
 #include "diamonds.h"

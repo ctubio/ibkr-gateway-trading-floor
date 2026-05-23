@@ -1,8 +1,9 @@
 #pragma once
 
-constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
+#include <dwmapi.h>
+#include <functional>
 
-std::unordered_map<std::string, HWND> g_AppWindows;
+constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
 static const char* SETTINGS_CLASS_NAME      = "TNTSettingsWindowClass";
 static const char* DEBUGLOG_CLASS_NAME      = "TNTSettingsDebugLogWindowClass";
@@ -208,8 +209,6 @@ void Session_RemoveWindow(HWND hWnd) {
             (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
         RegCloseKey(hKey);
     }
-
-    g_AppWindows[className] = NULL;
 }
 
 void Session_RestoreWindows(

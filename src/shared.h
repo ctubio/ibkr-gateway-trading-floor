@@ -1,6 +1,10 @@
 #pragma once
 
 #include <cstring>
+#include <unordered_map>
+#include <algorithm>
+
+std::unordered_map<std::string, HWND> g_AppWindows;
 
 // Dark mode colors
 #define DM_BG        RGB(32,  32,  32)
@@ -257,6 +261,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 PostQuitMessage(0);
             } else {
                 Session_RemoveWindow(hWnd);
+                g_AppWindows[className] = NULL;
             }
             return 0;
         default: {
@@ -370,6 +375,7 @@ void EnsureGatewayRunning(HWND hParent) {
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
 }
 
+#include <filesystem>
 void KillGateway() {
     std::string path = GetGatewayPath();
     if (path.empty()) {

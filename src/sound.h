@@ -1,11 +1,19 @@
 #pragma once
 
+#include <mutex>
+#include <atomic>
+#include <thread>
+#include <queue>
+#include <condition_variable>
+
+DWORD Settings_Load(const char* key, DWORD defaultValue);
+
 struct SoundQueue {
     std::mutex mutex;
-    std::condition_variable cv;
-    std::queue<int> queue;
     std::atomic<bool> running{true};
     std::thread worker;
+    std::queue<int> queue;
+    std::condition_variable cv;
 
     SoundQueue() {
         worker = std::thread([this]() { run(); });

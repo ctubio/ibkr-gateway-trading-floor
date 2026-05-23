@@ -46,7 +46,7 @@ static void Diamonds_Repopulate(HWND hList) {
         lvi.pszText  = (LPSTR)info.symbol.c_str();
         ListView_InsertItem(hList, &lvi);
 
-        snprintf(buf, sizeof(buf), "%.2f", DecimalFunctions::decimalToDouble(info.shares));
+        snprintf(buf, sizeof(buf), "%.2f", info.shares);
         ListView_SetItemText(hList, i, 1, buf);
 
         snprintf(buf, sizeof(buf), "%.2f", info.avgCost);
