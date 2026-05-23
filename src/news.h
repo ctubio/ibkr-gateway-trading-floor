@@ -2,10 +2,13 @@
 
 void startNews() { startGenericWindow(NEWS_CLASS_NAME, "News", L"IBKRGatewayClient.News", 420, 500); }
 
+void startNewsArticle() { startGenericWindow(NEWS_ARTICLE_CLASS_NAME, "News Article", L"IBKRGatewayClient.NewsArticle", 600, 500); }
+
 #define ID_NEWS_LIST_COMBO   6001
 #define ID_NEWS_SYM_COMBO    6002
 #define ID_NEWS_RESULTS_LIST 6003
 
+static HWND hNewsArticleEdit = NULL;
 static HWND hNewsListCombo = NULL;
 static HWND hNewsSymCombo  = NULL;
 static HWND hNewsResults   = NULL;
@@ -15,6 +18,107 @@ static const int NEWS_COMBO_H   = 24;
 static const int NEWS_COMBO_GAP = 8;
 static const int NEWS_SELECTOR_H = 8 + NEWS_COMBO_H + 8;
 
+std::string articleBuffer;
+
+// Convert basic HTML to RTF for RichEdit display
+static std::string ConvertHtmlToRtf(const std::string& html) {
+    std::string result = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Segoe UI;}}{\\colortbl;\\red0\\green0\\blue0;}\n\\viewkind4\\uc1\\pard\\f0\\fs20 ";
+    
+    std::string text = html;
+    
+    // Decode HTML entities
+    std::string::size_type pos = 0;
+    while ((pos = text.find("&apos;", pos)) != std::string::npos)
+        text.replace(pos, 6, "'"), pos += 1;
+    pos = 0;
+    while ((pos = text.find("&quot;", pos)) != std::string::npos)
+        text.replace(pos, 6, "\""), pos += 1;
+    pos = 0;
+    while ((pos = text.find("&amp;", pos)) != std::string::npos)
+        text.replace(pos, 5, "&"), pos += 1;
+    pos = 0;
+    while ((pos = text.find("&lt;", pos)) != std::string::npos)
+        text.replace(pos, 4, "<"), pos += 1;
+    pos = 0;
+    while ((pos = text.find("&gt;", pos)) != std::string::npos)
+        text.replace(pos, 4, ">"), pos += 1;
+    
+    // Replace <p> tags with paragraph breaks
+    pos = 0;
+    while ((pos = text.find("<p>", pos)) != std::string::npos)
+        text.replace(pos, 3, ""), pos += 0;
+    pos = 0;
+    while ((pos = text.find("</p>", pos)) != std::string::npos)
+        text.replace(pos, 4, "\\par "), pos += 5;
+    
+    // Remove other tags
+    pos = 0;
+    while ((pos = text.find("<", pos)) != std::string::npos) {
+        size_t end = text.find(">", pos);
+        if (end != std::string::npos)
+            text.erase(pos, end - pos + 1);
+        else
+            break;
+    }
+    
+    // Escape special RTF characters
+    pos = 0;
+    while ((pos = text.find("\\", pos)) != std::string::npos)
+        text.replace(pos, 1, "\\\\"), pos += 2;
+    pos = 0;
+    while ((pos = text.find("{", pos)) != std::string::npos)
+        text.replace(pos, 1, "\\{"), pos += 2;
+    pos = 0;
+    while ((pos = text.find("}", pos)) != std::string::npos)
+        text.replace(pos, 1, "\\}"), pos += 2;
+    
+    result += text;
+    result += "\\par }";
+    return result;
+}
+
+void FlushArticleBuffer() {
+    LogDebug("Flushing article buffer. Length: " + std::to_string(articleBuffer.size()));
+    LogDebug(!hNewsArticleEdit ? "hNewsArticleEdit is null" : (!IsWindow(hNewsArticleEdit) ? "hNewsArticleEdit is not a valid window" : "hNewsArticleEdit is valid"));
+    if (!hNewsArticleEdit || !IsWindow(hNewsArticleEdit)) return;
+    
+    // Convert HTML to RTF
+    std::string rtf = ConvertHtmlToRtf(articleBuffer);
+    LogDebug("Flushing article buffer to edit control. Original length: " + std::to_string(articleBuffer.size()) +
+             ", RTF length: " + std::to_string(rtf.size()));
+    // Use SETTEXTEX to load RTF
+    SETTEXTEX st = { ST_DEFAULT, CP_UTF8 };
+    SendMessageA(hNewsArticleEdit, EM_SETTEXTEX, (WPARAM)&st, (LPARAM)rtf.c_str());
+}
+
+LRESULT CALLBACK WndProcNewsArticle(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+        case WM_CREATE: {
+            // RICHEDIT20A lives in riched20.dll — must be loaded before CreateWindowExA.
+            LoadLibraryA("riched20.dll");
+
+            hNewsArticleEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "RICHEDIT20A", "",
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL |
+                ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
+                0, 0, 0, 0, hWnd, NULL, GetModuleHandle(NULL), NULL);
+            SendMessage(hNewsArticleEdit, EM_SETTARGETDEVICE, 0, 0);
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+            SetWindowPos(hNewsArticleEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
+            FlushArticleBuffer(); // ← show all buffered messages
+            break;
+        }
+        case WM_SIZE: {
+            if (hNewsArticleEdit && IsWindow(hNewsArticleEdit)) {
+                RECT rc;
+                GetClientRect(hWnd, &rc);
+                SetWindowPos(hNewsArticleEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
+            }
+            break;
+        }
+    }
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
+}
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 static std::string News_GetSelectedList() {
@@ -68,11 +172,16 @@ static void News_Layout(HWND hWnd) {
     if (combosVisible) {
         int availW = rc.right - m * 2 - NEWS_COMBO_GAP;
         int eachW  = availW / 2;
-        SetWindowPos(hNewsListCombo, NULL, m,                           m, eachW, 200,
+        int comboY = rc.bottom - NEWS_COMBO_H - m;
+        
+        // Position ListView at top, taking up most of the space
+        MoveWindow(hNewsResults, 0, 0, rc.right, comboY - m, TRUE);
+        
+        // Position combos at bottom
+        SetWindowPos(hNewsListCombo, NULL, m, comboY, eachW, NEWS_COMBO_H,
                      SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hNewsSymCombo,  NULL, m + eachW + NEWS_COMBO_GAP, m, eachW, 200,
+        SetWindowPos(hNewsSymCombo,  NULL, m + eachW + NEWS_COMBO_GAP, comboY, eachW, NEWS_COMBO_H,
                      SWP_NOZORDER | SWP_NOACTIVATE);
-        MoveWindow(hNewsResults, 0, NEWS_SELECTOR_H, rc.right, rc.bottom - NEWS_SELECTOR_H, TRUE);
     } else {
         MoveWindow(hNewsResults, 0, 0, rc.right, rc.bottom, TRUE);
     }
@@ -94,7 +203,17 @@ void News_RequestForSymbol(const std::string& fullEntry) {
     HWND newsWnd = g_AppWindows[NEWS_CLASS_NAME];
     if (newsWnd) SetWindowTextA(newsWnd, ("News: " + symbol).c_str());
 
-    if (hNewsResults) ListView_DeleteAllItems(hNewsResults);
+    if (hNewsResults) {
+        int count = ListView_GetItemCount(hNewsResults);
+        for (int i = 0; i < count; ++i) {
+            LVITEMA lvi = {};
+            lvi.mask  = LVIF_PARAM;
+            lvi.iItem = i;
+            SendMessageA(hNewsResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+            delete reinterpret_cast<std::string*>(lvi.lParam);
+        }
+        ListView_DeleteAllItems(hNewsResults);
+    }
     api.reqNewsForSymbol(std::stoi(conIdStr), symbol);
 }
 
@@ -107,24 +226,24 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         const int m = 8;
 
-        // Combos side by side — hidden until focused
-        hNewsListCombo = CreateWindowA("COMBOBOX", NULL,
-            WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
-            m, m, 180, 200,
-            hWnd, (HMENU)ID_NEWS_LIST_COMBO, hInst, NULL);
-
-        hNewsSymCombo = CreateWindowA("COMBOBOX", NULL,
-            WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
-            m + 180 + NEWS_COMBO_GAP, m, 180, 200,
-            hWnd, (HMENU)ID_NEWS_SYM_COMBO, hInst, NULL);
-
-        // Results ListView — single "Headline" column, full width
+        // Results ListView — takes up most of the space initially
         hNewsResults = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
             WS_CHILD | WS_VISIBLE | WS_BORDER |
             LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
-            0, 0, 400, 500,
+            0, 0, 400, 450,
             hWnd, (HMENU)ID_NEWS_RESULTS_LIST, hInst, NULL);
+
+        // Combos at the bottom — initially hidden until focused
+        hNewsListCombo = CreateWindowA("COMBOBOX", NULL,
+            WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
+            m, 460, 180, 200,
+            hWnd, (HMENU)ID_NEWS_LIST_COMBO, hInst, NULL);
+
+        hNewsSymCombo = CreateWindowA("COMBOBOX", NULL,
+            WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
+            m + 180 + NEWS_COMBO_GAP, 460, 180, 200,
+            hWnd, (HMENU)ID_NEWS_SYM_COMBO, hInst, NULL);
 
         DWORD exStyle = LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER;
         if (Settings_DarkMode()) exStyle |= LVS_EX_GRIDLINES;
@@ -146,10 +265,6 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         lvc.cx = 350;
         lvc.pszText = (LPSTR)"Headline";
         ListView_InsertColumn(hNewsResults, 2, &lvc);
-
-        lvc.cx = 150;
-        lvc.pszText = (LPSTR)"Extra Data";
-        ListView_InsertColumn(hNewsResults, 3, &lvc);
 
         api.setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News");
@@ -198,53 +313,94 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         if (!news) break;
         if (!hNewsResults) { delete news; break; }
 
-        LogDebug("[" + news->providerCode + "] " + news->headline);
+        // Store "providerCode|articleId" as the item's lParam for double-click retrieval.
+        // We heap-allocate it; it lives as long as the row does.
+        auto* rowId = new std::string(news->providerCode + "|" + news->articleId);
 
-        // Insert new item at top (newest first)
-        LVITEMA lvi = {};
-        lvi.mask  = LVIF_TEXT;
-        lvi.iItem = 0;
-        lvi.pszText = (LPSTR)news->timeStamp.c_str();
-        int itemIdx = (int)SendMessageA(hNewsResults, LVM_INSERTITEMA, 0, (LPARAM)&lvi);
+        LVITEMA lvi  = {};
+        lvi.mask     = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem    = 0;
+        lvi.lParam   = (LPARAM)rowId;
+        lvi.pszText  = (LPSTR)news->timeStamp.c_str();
+        int idx = (int)SendMessageA(hNewsResults, LVM_INSERTITEMA, 0, (LPARAM)&lvi);
 
-        // Set subitems for remaining columns
-        LVITEMA lvi2 = {};
-        lvi2.iItem = itemIdx;
-        lvi2.mask = LVIF_TEXT;
-
-        lvi2.iSubItem = 1;
-        lvi2.pszText = (LPSTR)news->providerCode.c_str();
-        SendMessageA(hNewsResults, LVM_SETITEMA, 0, (LPARAM)&lvi2);
-
-        lvi2.iSubItem = 2;
-        lvi2.pszText = (LPSTR)news->headline.c_str();
-        SendMessageA(hNewsResults, LVM_SETITEMA, 0, (LPARAM)&lvi2);
-
-        lvi2.iSubItem = 3;
-        lvi2.pszText = (LPSTR)news->extraData.c_str();
-        SendMessageA(hNewsResults, LVM_SETITEMA, 0, (LPARAM)&lvi2);
+        ListView_SetItemText(hNewsResults, idx, 1, (LPSTR)news->providerCode.c_str());
+        ListView_SetItemText(hNewsResults, idx, 2, (LPSTR)news->headline.c_str());
 
         delete news;
         break;
     }
 
-    // ── Dark mode ─────────────────────────────────────────────────────────────
+    case WM_NEWS_ARTICLE: {
+        auto* body = reinterpret_cast<std::string*>(lParam);
+        if (!body) break;
+        int articleType = (int)wParam; // 0 = text, 1 = binary/PDF
+
+        if (articleType == 1) {
+            MessageBoxA(hWnd, "This article is in binary/PDF format and cannot be displayed inline.",
+                        "Article", MB_OK | MB_ICONINFORMATION);
+        } else if (body->empty()) {
+            MessageBoxA(hWnd, "No article body returned (provider may require a separate subscription).",
+                        "Article", MB_OK | MB_ICONINFORMATION);
+        } else {
+            // Simple popup edit box — read-only, scrollable, word-wrapped.
+            // Use WS_OVERLAPPEDWINDOW for full window capabilities (draggable, resizable, closable)
+            articleBuffer = std::string(*body);
+            startNewsArticle();
+        }
+        delete body;
+        break;
+    }
+
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
-        if (hdr->idFrom != ID_NEWS_RESULTS_LIST || hdr->code != NM_CUSTOMDRAW) break;
-        NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
-        if (!Settings_DarkMode()) break;
-        switch (cd->nmcd.dwDrawStage) {
-            case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
-            case CDDS_ITEMPREPAINT:
-                cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                cd->clrText   = DM_TEXT;
-                return CDRF_DODEFAULT;
+        if (hdr->idFrom == ID_NEWS_RESULTS_LIST) {
+            if (hdr->code == NM_DBLCLK) {
+                NMITEMACTIVATE* nm = (NMITEMACTIVATE*)lParam;
+                if (nm->iItem >= 0) {
+                    LVITEMA lvi = {};
+                    lvi.mask   = LVIF_PARAM;
+                    lvi.iItem  = nm->iItem;
+                    SendMessageA(hNewsResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+                    auto* rowId = reinterpret_cast<std::string*>(lvi.lParam);
+                    if (rowId) {
+                        auto sep = rowId->find('|');
+                        if (sep != std::string::npos) {
+                            std::string provider  = rowId->substr(0, sep);
+                            std::string articleId = rowId->substr(sep + 1);
+                            api.reqNewsArticle(provider, articleId);
+                        }
+                    }
+                }
+                return 0;
+            }
+            if (hdr->code == NM_CUSTOMDRAW) {
+                NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
+                if (!Settings_DarkMode()) break;
+                switch (cd->nmcd.dwDrawStage) {
+                    case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
+                    case CDDS_ITEMPREPAINT:
+                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        cd->clrText   = DM_TEXT;
+                        return CDRF_DODEFAULT;
+                }
+            }
         }
         break;
     }
 
     case WM_DESTROY:
+        // Free the heap-allocated rowId strings stored as item lParams.
+        if (hNewsResults) {
+            int count = ListView_GetItemCount(hNewsResults);
+            for (int i = 0; i < count; ++i) {
+                LVITEMA lvi = {};
+                lvi.mask  = LVIF_PARAM;
+                lvi.iItem = i;
+                SendMessageA(hNewsResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+                delete reinterpret_cast<std::string*>(lvi.lParam);
+            }
+        }
         api.setNewsWindow(NULL);
         hNewsListCombo = NULL;
         hNewsSymCombo  = NULL;

@@ -17,6 +17,7 @@
 #include <initguid.h>
 #include <propkey.h>
 #include <propvarutil.h>
+#include <richedit.h>
 
 #include "registry.h"
 #include "debug.h"
@@ -46,6 +47,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     registerWindowClass(hInst, WndProcDiamonds,      DIAMONDS_CLASS_NAME,       4);
     registerWindowClass(hInst, WndProcSettings,      SETTINGS_CLASS_NAME,       5);
     registerWindowClass(hInst, WndProcNews,          NEWS_CLASS_NAME,           6);
+    registerWindowClass(hInst, WndProcNewsArticle,   NEWS_ARTICLE_CLASS_NAME,   6);
     registerWindowClass(hInst, WndProcTicker,        TICKER_CLASS_NAME,         9);
     registerWindowClass(hInst, WndProcTimesales,     TIMESALES_CLASS_NAME,      7);
     registerWindowClass(hInst, WndProcLevels,        LEVELS_CLASS_NAME,         8);

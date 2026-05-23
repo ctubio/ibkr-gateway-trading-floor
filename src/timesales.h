@@ -129,45 +129,45 @@ static void Ts_Layout(HWND hWnd) {
     RECT rc; GetClientRect(hWnd, &rc);
     const int m = 8;
 
-    // ── Selector row ──
-    if (tsSelectorsVisible) {
-        // Combos share the width, leaving room for the checkbox on the right
-        int totalComboW = rc.right - m * 2 - TS_COMBO_GAP - TS_CHECK_GAP - TS_CHECK_W;
-        int eachW = totalComboW / 2;
-
-        SetWindowPos(hTsListCombo,   NULL, m,                          m,
-                     eachW, 200, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hTsSymCombo,    NULL, m + eachW + TS_COMBO_GAP,  m,
-                     eachW, 200, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hTsFilterCheck, NULL,
-                     rc.right - m - TS_CHECK_W,
-                     m + (TS_COMBO_H - TS_CHECK_W) / 2,   // vertically centred in combo row
-                     TS_CHECK_W, TS_CHECK_W,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    int top = tsSelectorsVisible ? TS_SELECTOR_H : 0;
-    int availH = rc.bottom - top;
+    int availH = tsSelectorsVisible ? rc.bottom - TS_SELECTOR_H : rc.bottom;
     int availW = rc.right;
+    int selectorY = rc.bottom - TS_SELECTOR_H;
 
+    // ── Lists fill from top down ──
     if (tsFilteredView) {
-        // Left column: main list (full height)
         int leftW  = availW / 2;
         int rightW = availW - leftW;
         int halfH  = availH / 2;
 
-        ShowWindow(hTsList,     SW_SHOW);
+        ShowWindow(hTsList,      SW_SHOW);
         ShowWindow(hTsListF100,  SW_SHOW);
         ShowWindow(hTsListF1000, SW_SHOW);
 
-        MoveWindow(hTsList,      0,     top,          leftW,  availH,       TRUE);
-        MoveWindow(hTsListF100,  leftW, top,          rightW, halfH,        TRUE);
-        MoveWindow(hTsListF1000, leftW, top + halfH,  rightW, availH - halfH, TRUE);
+        MoveWindow(hTsList,      0,     0,         leftW,  availH,         TRUE);
+        MoveWindow(hTsListF100,  leftW, 0,         rightW, halfH,          TRUE);
+        MoveWindow(hTsListF1000, leftW, halfH,     rightW, availH - halfH, TRUE);
     } else {
         ShowWindow(hTsListF100,  SW_HIDE);
         ShowWindow(hTsListF1000, SW_HIDE);
         ShowWindow(hTsList,      SW_SHOW);
-        MoveWindow(hTsList, 0, top, availW, availH, TRUE);
+        MoveWindow(hTsList, 0, 0, availW, availH, TRUE);
+    }
+
+    // ── Selector row sits at the bottom ──
+    if (tsSelectorsVisible) {
+        int totalComboW = rc.right - m * 2 - TS_COMBO_GAP - TS_CHECK_GAP - TS_CHECK_W;
+        int eachW = totalComboW / 2;
+        int comboY = selectorY + (TS_SELECTOR_H - TS_COMBO_H) / 2;
+
+        SetWindowPos(hTsListCombo,   NULL, m,                         comboY,
+                     eachW, 200, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hTsSymCombo,    NULL, m + eachW + TS_COMBO_GAP, comboY,
+                     eachW, 200, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hTsFilterCheck, NULL,
+                     rc.right - m - TS_CHECK_W,
+                     selectorY + (TS_SELECTOR_H - TS_CHECK_W) / 2,
+                     TS_CHECK_W, TS_CHECK_W,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
     }
 }
 
@@ -211,6 +211,13 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         const int m = 8;
 
+        // Lists created FIRST so they sit behind the selectors in Z-order.
+        hTsList      = Ts_CreateListView(hWnd, ID_TS_LIST,      hInst);
+        hTsListF100  = Ts_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
+        hTsListF1000 = Ts_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
+        ShowWindow(hTsList, SW_SHOW);
+
+        // Selectors created AFTER lists — higher Z-order, rendered on top.
         hTsListCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
             m, m, 180, 200,
@@ -221,34 +228,10 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             m + 180 + TS_COMBO_GAP, m, 180, 200,
             hWnd, (HMENU)ID_TS_SYM_COMBO, hInst, NULL);
 
-        // Checkbox — no label, tooltip set below
         hTsFilterCheck = CreateWindowA("BUTTON", "",
             WS_CHILD | BS_AUTOCHECKBOX,
             0, 0, TS_CHECK_W, TS_CHECK_W,
             hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
-
-        // Restore checkbox state from registry
-        tsFilteredView = Settings_Load("TsFilteredView", 0) != 0;
-        SendMessage(hTsFilterCheck, BM_SETCHECK, tsFilteredView ? BST_CHECKED : BST_UNCHECKED, 0);
-
-        // Tooltip for the checkbox
-        HWND hTip = CreateWindowExA(0, TOOLTIPS_CLASS, NULL,
-            WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-            hWnd, NULL, hInst, NULL);
-        TOOLINFOA ti = {};
-        ti.cbSize   = sizeof(ti);
-        ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
-        ti.hwnd     = hWnd;
-        ti.uId      = (UINT_PTR)hTsFilterCheck;
-        ti.lpszText = (LPSTR)"Filtered View";
-        SendMessageA(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
-
-        hTsList      = Ts_CreateListView(hWnd, ID_TS_LIST,     hInst);
-        hTsListF100  = Ts_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
-        hTsListF1000 = Ts_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
-        ShowWindow(hTsList, SW_SHOW);
-        // filtered lists shown/hidden by Ts_Layout
 
         // Restore last session
         std::string lastList  = Settings_LoadString("LastTsList");

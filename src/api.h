@@ -8,6 +8,7 @@
 #define WM_ORDERS_UPDATE   (WM_USER + 7)
 #define WM_DIAMONDS_UPDATE (WM_USER + 8)
 #define WM_NEWS_RESULTS    (WM_USER + 9)
+#define WM_NEWS_ARTICLE    (WM_USER + 11)
 #define WM_TIMESALES_TICK  (WM_USER + 10)
 
 #include <algorithm>
@@ -76,8 +77,9 @@ public:
 
     struct NewsTickEntry {
         std::string providerCode;
+        std::string articleId;   // needed for reqNewsArticle on double-click
         std::string headline;
-        std::string timeStamp;  // timestamp string
+        std::string timeStamp;
         std::string extraData;
     };
 
@@ -667,10 +669,31 @@ public:
 
     // ── News ──────────────────────────────────────────────────────────────────
 
-    void setNewsWindow(HWND hWnd) { hNewsWnd = hWnd; }
+    void setNewsWindow(HWND hWnd) {
+        hNewsWnd = hWnd;
+        if (!hWnd || !client->isConnected()) return;
+        // Fetch available news providers so they appear in the debug log.
+        client->reqNewsProviders();
+    }
 
+    // Fires after setNewsWindow — lists available news providers in the debug log.
+    void newsProviders(const std::vector<NewsProvider>& newsProviders) override {
+        if (newsProviders.empty()) {
+            LogDebug("News: no providers available (check TWS news subscriptions)");
+            return;
+        }
+        std::string providers = "News providers available: ";
+        for (const auto& p : newsProviders)
+            providers += p.providerCode + "(" + p.providerName + ") ";
+        LogDebug(providers);
+    }
+ 
     void reqNewsForSymbol(int conId, const std::string& symbol) {
         if (!client->isConnected()) return;
+
+        // Cancel previous real-time news subscription if any
+        if (newsRequestActive.exchange(true))
+            client->cancelMktData(9002);
 
         Contract contract;
         contract.conId    = conId;
@@ -678,10 +701,6 @@ public:
         contract.secType  = "STK";
         contract.exchange = "SMART";
         contract.currency = "USD";
-
-        // Cancel previous real-time news subscription if any
-        if (newsRequestActive.exchange(true))
-            client->cancelMktData(9002);
 
         // 1. Historical headlines — last 7 days, up to 300 results, all providers
         client->reqHistoricalNews(9003, conId, "", "", "", 300, {});
@@ -694,35 +713,106 @@ public:
                         const std::string& providerCode,
                         const std::string& articleId,
                         const std::string& headline) override {
+        // 'time' is only populated by some premium providers.
+        // For most providers the timestamp is encoded in articleId: BRFG$20240115093045.0_xxx
+        std::string displayTime = time;
+        if (displayTime.empty()) {
+            auto dollar = articleId.find('$');
+            if (dollar != std::string::npos) {
+                std::string ts = articleId.substr(dollar + 1);
+                // Keep only the digits before the first non-digit (dot or underscore)
+                std::string digits;
+                for (char c : ts) {
+                    if (!isdigit(c)) break;
+                    digits += c;
+                }
+                // digits is YYYYMMDDHHMMSS (14 chars)
+                if (digits.size() >= 14) {
+                    displayTime = digits.substr(0,  4) + "-"   // YYYY
+                                + digits.substr(4,  2) + "-"   // MM
+                                + digits.substr(6,  2) + " "   // DD
+                                + digits.substr(8,  2) + ":"   // HH
+                                + digits.substr(10, 2) + ":"   // MM
+                                + digits.substr(12, 2);        // SS
+                } else if (digits.size() >= 8) {
+                    displayTime = digits.substr(0, 4) + "-"
+                                + digits.substr(4, 2) + "-"
+                                + digits.substr(6, 2);
+                }
+            }
+        }
         std::string line = "[" + providerCode + "] " + headline;
-        LogDebug("Received historical news: " + line);
+        LogDebug("Received historical news at " + displayTime + ": " + line);
         if (hNewsWnd) {
             auto* news = new NewsTickEntry();
             news->providerCode = providerCode;
-            news->headline = headline;
-            news->timeStamp = time;
-            news->extraData = "";
+            news->articleId    = articleId;
+            news->headline     = headline;
+            news->timeStamp    = displayTime;
+            news->extraData    = "";
             PostMessage(hNewsWnd, WM_NEWS_RESULTS, 0, (LPARAM)news);
         }
     }
 
     void historicalNewsEnd(int reqId, bool hasMore) override {
-        // Nothing extra needed — headlines were posted one by one as they arrived.
+        LogDebug("News [historical end] hasMore=" + std::to_string(hasMore));
+    }
+
+    void reqNewsArticle(const std::string& providerCode, const std::string& articleId) {
+        if (!client->isConnected()) return;
+        LogDebug("Requesting article body: [" + providerCode + "] " + articleId);
+        client->reqNewsArticle(9004, providerCode, articleId, {});
+    }
+
+    // Article body delivered here — type 0 = plain text, type 1 = binary/PDF.
+    void newsArticle(int reqId, int articleType, const std::string& articleText) override {
+        if (!hNewsWnd) return;
+        auto* body = new std::string(articleText);
+        PostMessage(hNewsWnd, WM_NEWS_ARTICLE, (WPARAM)articleType, (LPARAM)body);
     }
 
     void tickNews(int reqId, time_t timeStamp, const std::string& providerCode,
                   const std::string& articleId, const std::string& headline,
                   const std::string& extraData) override {
+        // 'time' is only populated by some premium providers.
+        // For most providers the timestamp is encoded in articleId: BRFG$20240115093045.0_xxx
+        std::string displayTime;
+        if (displayTime.empty()) {
+            auto dollar = articleId.find('$');
+            if (dollar != std::string::npos) {
+                std::string ts = articleId.substr(dollar + 1);
+                // Keep only the digits before the first non-digit (dot or underscore)
+                std::string digits;
+                for (char c : ts) {
+                    if (!isdigit(c)) break;
+                    digits += c;
+                }
+                // digits is YYYYMMDDHHMMSS (14 chars)
+                if (digits.size() >= 14) {
+                    displayTime = digits.substr(0,  4) + "-"   // YYYY
+                                + digits.substr(4,  2) + "-"   // MM
+                                + digits.substr(6,  2) + " "   // DD
+                                + digits.substr(8,  2) + ":"   // HH
+                                + digits.substr(10, 2) + ":"   // MM
+                                + digits.substr(12, 2);        // SS
+                } else if (digits.size() >= 8) {
+                    displayTime = digits.substr(0, 4) + "-"
+                                + digits.substr(4, 2) + "-"
+                                + digits.substr(6, 2);
+                }
+            }
+        }
         std::string line = "[" + providerCode + "] " + headline;
-        LogDebug("Received real-time news: " + line);
+        LogDebug("Received real-time news at " + displayTime + ": " + line);
         if (!extraData.empty()) line += "  " + extraData;
         // Heap-allocate — WM_NEWS_RESULTS handler owns and deletes it.
         if (hNewsWnd) {
             auto* news = new NewsTickEntry();
             news->providerCode = providerCode;
-            news->headline = headline;
-            news->timeStamp = FormatTime(timeStamp);
-            news->extraData = extraData;
+            news->articleId    = articleId;
+            news->headline     = headline;
+            news->timeStamp    = displayTime;
+            news->extraData    = extraData;
             PostMessage(hNewsWnd, WM_NEWS_RESULTS, 0, (LPARAM)news);
         }
     }
@@ -746,8 +836,10 @@ public:
     #define position          position_ignored
     #define positionEnd       positionEnd_ignored
     #define tickNews          tickNews_ignored
+    #define newsProviders     newsProviders_ignored
     #define historicalNews    historicalNews_ignored
     #define historicalNewsEnd historicalNewsEnd_ignored
+    #define newsArticle       newsArticle_ignored
     #define tickByTickAllLast tickByTickAllLast_ignored
 
     #define EWRAPPER_VIRTUAL_IMPL {}
@@ -771,8 +863,10 @@ public:
     #undef position
     #undef positionEnd
     #undef tickNews
+    #undef newsProviders
     #undef historicalNews
     #undef historicalNewsEnd
+    #undef newsArticle
     #undef tickByTickAllLast
 
 } api;

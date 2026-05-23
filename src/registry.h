@@ -13,6 +13,7 @@ static const char* DASHBOARD_CLASS_NAME     = "TNTDashboardClass";
 static const char* ORDERS_CLASS_NAME        = "TNTOrdersWindowClass";
 static const char* LEVELS_CLASS_NAME        = "TNTLevelsWindowClass";
 static const char* NEWS_CLASS_NAME          = "TNTNewsWindowClass";
+static const char* NEWS_ARTICLE_CLASS_NAME  = "TNTNewsArticleWindowClass";
 static const char* DIAMONDS_CLASS_NAME      = "TNTDiamondsWindowClass";
 static const char* TICKER_CLASS_NAME        = "TNTTickerWindowClass";
 static const char* TIMESALES_CLASS_NAME     = "TNTTimesalesWindowClass";

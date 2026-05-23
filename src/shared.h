@@ -62,6 +62,7 @@ void startGenericWindow(const char* className, const char* title, const wchar_t*
          || strcmp(className, ORDERS_CLASS_NAME)    == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
          || strcmp(className, TIMESALES_CLASS_NAME) == 0
+         || strcmp(className, NEWS_ARTICLE_CLASS_NAME) == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
