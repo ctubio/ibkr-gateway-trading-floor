@@ -1,7 +1,12 @@
+MAJOR      = 0
+MINOR      = 0
+PATCH      = 0
+BUILD      = 1
+
 CXX     := x86_64-w64-mingw32-g++
 WINDRES := x86_64-w64-mingw32-windres
 
-.PHONY: all clean
+.PHONY: all clean push MAJOR MINOR PATCH BUILD release 
 
 all: build/Trading-Floor.exe
 
@@ -28,3 +33,42 @@ lib/Trading-Floor-Assets.res: resources/resources.rc
 clean:
 	@rm -f build/Trading-Floor.exe lib/Trading-Floor-Assets.res
 	@echo "Cleaned"
+
+push:
+	@date=`date` && (git diff || :) && git status && read -p "MOD: " MOD \
+	&& git add . && git commit -S -m "$${MOD}"                           \
+	&& (($(MAKE) all release && git push) || git reset HEAD^1)           \
+	&& echo "\007" && echo $${date} && date
+
+MAJOR:
+	@sed -i "s/^\(MAJOR *=\).*$$/\1 $(shell expr $(MAJOR) + 1)/" Makefile
+	@sed -i "s/^\(MINOR *=\).*$$/\1 0/"                          Makefile
+	@sed -i "s/^\(PATCH *=\).*$$/\1 0/"                          Makefile
+	@sed -i "s/^\(BUILD *=\).*$$/\1 0/"                          Makefile
+	@$(MAKE) push
+
+MINOR:
+	@sed -i "s/^\(MINOR *=\).*$$/\1 $(shell expr $(MINOR) + 1)/" Makefile
+	@sed -i "s/^\(PATCH *=\).*$$/\1 0/"                          Makefile
+	@sed -i "s/^\(BUILD *=\).*$$/\1 0/"                          Makefile
+	@$(MAKE) push
+
+PATCH:
+	@sed -i "s/^\(PATCH *=\).*$$/\1 $(shell expr $(PATCH) + 1)/" Makefile
+	@sed -i "s/^\(BUILD *=\).*$$/\1 0/"                          Makefile
+	@$(MAKE) push
+
+BUILD:
+	@sed -i "s/^\(BUILD *=\).*$$/\1 $(shell expr $(BUILD) + 1)/" Makefile
+	@$(MAKE) push
+
+release:
+ifndef TARGZ
+	@$(MAKE) TARGZ="Trading-Floor-$(MAJOR).$(MINOR).$(PATCH).$(BUILD)-win32.tar.gz" $@
+else
+	tar -cvzf $(TARGZ) build lib resources src README.md Makefile                  \
+	&& curl -s -n -H "Content-Type:application/octet-stream" -H "Authorization: token ${TRADINGFLOOR}"                                \
+	--data-binary "@$(PWD)/$(TARGZ)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/$(shell curl -s        \
+	https://api.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/latest | grep id | head -n1 | cut -d ' ' -f4 | cut -d ',' -f1 \
+	)/assets?name=$(TARGZ)" && rm -v $(TARGZ)
+endif
