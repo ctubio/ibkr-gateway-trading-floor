@@ -44,8 +44,15 @@ void startGenericWindow(const char* className, const char* title, const wchar_t*
     HWND& hWnd = g_AppWindows[className];
     
     if (hWnd && IsWindow(hWnd)) {
-        ShowWindow(hWnd, SW_SHOW);
+        if (IsIconic(hWnd)) { 
+            ShowWindow(hWnd, SW_RESTORE);
+        } else {
+            ShowWindow(hWnd, SW_SHOW);
+        }
+        
         SetForegroundWindow(hWnd);
+        SetActiveWindow(hWnd);
+        SetFocus(hWnd);
         return;
     }
 
@@ -62,11 +69,11 @@ void startGenericWindow(const char* className, const char* title, const wchar_t*
         HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
         DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
-        if (strcmp(className, NEWS_CLASS_NAME)      == 0
-         || strcmp(className, ORDERS_CLASS_NAME)    == 0
-         || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
-         || strcmp(className, TIMESALES_CLASS_NAME) == 0
-         || strcmp(className, TICKER_CLASS_NAME) == 0
+        if (strcmp(className, NEWS_CLASS_NAME)         == 0
+         || strcmp(className, ORDERS_CLASS_NAME)       == 0
+         || strcmp(className, DIAMONDS_CLASS_NAME)     == 0
+         || strcmp(className, TIMESALES_CLASS_NAME)    == 0
+         || strcmp(className, TICKER_CLASS_NAME)       == 0
          || strcmp(className, NEWS_ARTICLE_CLASS_NAME) == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
