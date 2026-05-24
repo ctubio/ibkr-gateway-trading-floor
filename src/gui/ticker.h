@@ -42,15 +42,10 @@ static std::string Ticker_GetSelectedList() {
     return name;
 }
 
-// Per-row data stored as lParam — holds both symbol and conId so double-click
-// can show either, and so the same symbol on different exchanges is unambiguous.
-struct TickerRowData {
-    std::string symbol;
-    int         conId = 0;
-};
-
-// Find a ListView row by symbol. Returns row index or -1.
-static int Ticker_FindRow(const std::string& symbol) {
+struct TickerRowData { std::string symbol; int conId = 0; };
+// Find a ListView row by its lParam (which stores symbol as std::string*).
+// Returns the row index, or -1 if not found.
+static int Ticker_FindRow(const std::string& symbol, int conId) {
     int count = ListView_GetItemCount(hTickerList);
     for (int i = 0; i < count; ++i) {
         LVITEMA lvi = {};
@@ -58,10 +53,11 @@ static int Ticker_FindRow(const std::string& symbol) {
         lvi.iItem = i;
         SendMessageA(hTickerList, LVM_GETITEMA, 0, (LPARAM)&lvi);
         auto* rd = reinterpret_cast<TickerRowData*>(lvi.lParam);
-        if (rd && rd->symbol == symbol) return i;
+        if (rd && rd->symbol == symbol && rd->conId == conId) return i;
     }
     return -1;
 }
+
 
 // Free all lParam TickerRowData structs and delete all rows.
 static void Ticker_ClearList() {
@@ -77,7 +73,7 @@ static void Ticker_ClearList() {
     ListView_DeleteAllItems(hTickerList);
 }
 
-// Insert a placeholder row for a symbol+conId pair.
+// Insert a placeholder row for symbol+conId.
 static void Ticker_InsertRow(const std::string& symbol, int conId) {
     auto* rd    = new TickerRowData{symbol, conId};
     LVITEMA lvi = {};
@@ -157,6 +153,7 @@ static void Ticker_Subscribe(HWND hWnd, const std::string& listName) {
         auto d2 = rest.find('.');
         std::string symbol = (d2 != std::string::npos) ? rest.substr(0, d2) : rest;
         int conId = std::stoi(entry.substr(0, d1));
+        LogDebug("Symbol is: " + symbol + ", conId: " + std::to_string(conId));
         Ticker_InsertRow(symbol, conId);
     }
 
@@ -230,16 +227,23 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
 
     case WM_TICKER_UPDATE: {
-        auto* sym = reinterpret_cast<std::string*>(lParam);
-        if (!sym) break;
-        TradingAPI::TickerInfo info;
-        if (api.getTickerData(*sym, info)) {
-            int row = Ticker_FindRow(*sym);
-            if (row >= 0) Ticker_UpdateRow(row, info);
+        auto* key = reinterpret_cast<std::string*>(lParam);
+        if (!key) break;
+        // key format: "conId.symbol"
+        auto dot = key->find('.');
+        if (dot != std::string::npos) {
+            int conId          = std::stoi(key->substr(0, dot));
+            std::string symbol = key->substr(dot + 1);
+            TradingAPI::TickerInfo info;
+            if (api.getTickerData(conId, symbol, info)) {
+                int row = Ticker_FindRow(symbol, conId);
+                if (row >= 0) Ticker_UpdateRow(row, info);
+            }
         }
-        delete sym;
+        delete key;
         break;
     }
+
     case WM_API_UPDATE:
         if (api.isMarketDataConnected() && api.isTradingConnected()) {
             // Re-subscribe after reconnect with the same entries.
@@ -267,7 +271,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 auto* rd = reinterpret_cast<TickerRowData*>(lvi.lParam);
                 if (rd) {
                     char msg[256];
-                    snprintf(msg, sizeof(msg), "Symbol: %s\nconId: %d", rd->symbol.c_str(), rd->conId);
+                    snprintf(msg, sizeof(msg), "conId: %d\nSymbol: %s", rd->conId, rd->symbol.c_str());
                     MessageBoxA(hWnd, msg, "NM_DBLCLK", MB_OK);
                 }
             }
@@ -304,7 +308,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_DESTROY:
         api.unsetTickerWindow();
         api.removeApiUpdateWindow(hWnd);
-        Ticker_ClearList(); // frees lParam symbol strings
+        Ticker_ClearList(); // frees lParam TickerRowData structs
         hTickerListCombo = NULL;
         hTickerList      = NULL;
         tickerCurrentEntries.clear();

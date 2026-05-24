@@ -153,7 +153,7 @@ public:
     void setTickerWindow(HWND hWnd, const std::vector<std::string>& entries);
     void unsetTickerWindow();
     void reqWatchlist();
-    bool getTickerData(const std::string& symbol, TickerInfo& out);
+    bool getTickerData(int conId, const std::string& symbol, TickerInfo& out);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 
