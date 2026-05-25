@@ -30,7 +30,7 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
     }
 }
 
-void StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
+HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
     // Multi-instance windows (windowKey differs from className, e.g. timesales per-symbol)
     // are distinguished by title - each has a unique one. Single-instance windows match
     // on class alone. Either way no map needed: FindWindowA does the work.
@@ -46,7 +46,7 @@ void StartGenericWindow(const char* className, const char* title, const wchar_t*
         SetForegroundWindow(hWnd);
         SetActiveWindow(hWnd);
         SetFocus(hWnd);
-        return;
+        return hWnd;
     }
 
     int w = defaultW, h = defaultH;
@@ -91,6 +91,8 @@ void StartGenericWindow(const char* className, const char* title, const wchar_t*
 
     if (strcmp(className, BOOK_NEW_LIST_CLASS_NAME) != 0)
         SetWindowTaskbarId(hWnd, taskbarId);
+
+    return hWnd;
 }
 
 HICON CreateGrayIcon(HICON hOriginal) {
@@ -163,6 +165,32 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     }
     wc.hIcon = onlineIcon;
     RegisterClass(&wc);
+}
+
+void ClearAlwaysOnTopSetting(HWND hWnd) {
+    char className[256] = {};
+    GetClassNameA(hWnd, className, sizeof(className));
+
+    char key[256] = {};
+    if (strcmp(className, TIMESALES_CLASS_NAME) == 0) {
+        char title[256] = {};
+        GetWindowTextA(hWnd, title, sizeof(title));
+        const std::string titleStr = title;
+        const std::string prefix = "Time & Sales: ";
+        size_t pos = titleStr.find(prefix);
+        if (pos == std::string::npos) {
+            return;
+        }
+        std::string symbol = titleStr.substr(pos + prefix.length());
+        if (symbol.empty()) {
+            return;
+        }
+        sprintf(key, "AlwaysOnTop_%s_%s", className, symbol.c_str());
+    } else if (className == "ImpossibleToFindClass") {
+        sprintf(key, "AlwaysOnTop_%s", className);
+    }
+
+    Settings_Delete(key);
 }
 
 LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -249,6 +277,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             return 0;
         case WM_DESTROY:
             SaveWinPosition(hWnd);
+            ClearAlwaysOnTopSetting(hWnd);
             if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
                 api.removeApiUpdateWindow(hWnd);
                 api.clearApiErrorWindow(hWnd);

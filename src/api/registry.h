@@ -9,7 +9,7 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
 static const char* DASHBOARD_CLASS_NAME        = "TNTDashboardClass";
 static const char* SETTINGS_CLASS_NAME         = "TNTSettingsWindowClass";
-static const char* DEBUGLOG_CLASS_NAME         = "TNTSettingsDebugLogWindowClass";
+static const char* DEBUGLOG_CLASS_NAME         = "TNTDebugLogWindowClass";
 static const char* BOOK_CLASS_NAME             = "TNTBookWindowClass";
 static const char* BOOK_NEW_LIST_CLASS_NAME    = "TNTBookNewListWindowClass";
 static const char* COINS_CLASS_NAME            = "TNTCoinsWindowClass";
@@ -103,6 +103,16 @@ void Settings_Save(const char* key, DWORD value) {
     wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
     if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, key, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
+void Settings_Delete(const char* key) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
+        RegDeleteValueA(hKey, key);
         RegCloseKey(hKey);
     }
 }
@@ -389,8 +399,13 @@ void Session_RemoveWindow(HWND hWnd) {
 }
 
 // Check if a window is currently set to Always On Top
-HWND IsWindowAlwaysOnTop(const char* windowClassName) {
-    HWND hWnd = FindWindowA(windowClassName, NULL);
+// For single-instance windows (classNameOnly = true), checks the first window of that class
+// For multi-instance windows (classNameOnly = false), checks the window with the specific title/identifier
+HWND IsWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
+    HWND hWnd = windowIdentifier ? 
+        FindWindowA(windowClassName, windowIdentifier) : 
+        FindWindowA(windowClassName, NULL);
+    
     if (!hWnd) {
         return NULL; // Window not found
     }
@@ -404,8 +419,13 @@ HWND IsWindowAlwaysOnTop(const char* windowClassName) {
 }
 
 // Toggle Always On Top state for a window and save the preference
-void ToggleWindowAlwaysOnTop(const char* windowClassName) {
-    HWND hWnd = FindWindowA(windowClassName, NULL);
+// For single-instance windows: className only
+// For Timesales windows: className and symbol (e.g., "MSFT")
+void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
+    HWND hWnd = windowIdentifier ? 
+        FindWindowA(windowClassName, windowIdentifier) : 
+        FindWindowA(windowClassName, NULL);
+    
     if (!hWnd) {
         return; // Window not found
     }
@@ -418,16 +438,96 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName) {
         SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         // Save state: not on top
         char key[256];
-        sprintf(key, "AlwaysOnTop_%s", windowClassName);
+        if (windowIdentifier && strlen(windowIdentifier) > 0) {
+            sprintf(key, "AlwaysOnTop_%s_%s", windowClassName, windowIdentifier);
+        } else {
+            sprintf(key, "AlwaysOnTop_%s", windowClassName);
+        }
         Settings_Save(key, 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         // Save state: on top
         char key[256];
-        sprintf(key, "AlwaysOnTop_%s", windowClassName);
+        if (windowIdentifier && strlen(windowIdentifier) > 0) {
+            sprintf(key, "AlwaysOnTop_%s_%s", windowClassName, windowIdentifier);
+        } else {
+            sprintf(key, "AlwaysOnTop_%s", windowClassName);
+        }
         Settings_Save(key, 1);
     }
+}
+
+// Enumerate all open Timesales windows and extract their symbols
+struct TimesalesWindowInfo {
+    HWND hWnd;
+    std::string symbol;
+};
+
+static std::vector<TimesalesWindowInfo> EnumerateTimesalesWindows() {
+    std::vector<TimesalesWindowInfo> result;
+    
+    HWND hWnd = FindWindowA(TIMESALES_CLASS_NAME, NULL);
+    while (hWnd) {
+        // Get the window title
+        char title[256] = {};
+        GetWindowTextA(hWnd, title, sizeof(title));
+        
+        // Extract symbol from title (format: "Time & Sales: SYMBOL")
+        std::string titleStr = title;
+        size_t pos = titleStr.find("Time & Sales: ");
+        if (pos != std::string::npos) {
+            std::string symbol = titleStr.substr(pos + 14); // 14 = strlen("Time & Sales: ")
+            result.push_back({hWnd, symbol});
+        }
+        
+        // Find next window of the same class with a different title
+        hWnd = FindWindowExA(NULL, hWnd, TIMESALES_CLASS_NAME, NULL);
+    }
+    
+    return result;
+}
+
+// Check if a specific Timesales window is set to Always On Top
+bool IsTimesalesAlwaysOnTop(const std::string& symbol) {
+    char key[256];
+    sprintf(key, "AlwaysOnTop_%s_%s", TIMESALES_CLASS_NAME, symbol.c_str());
+    return Settings_Load(key, 0) != 0;
+}
+
+// Toggle Always On Top for a specific Timesales window by symbol
+// Uses consistent registry key format based on symbol only
+void ToggleTimesalesAlwaysOnTop(const std::string& symbol) {
+    std::string fullTitle = "Time & Sales: " + symbol;
+    HWND hWnd = FindWindowA(TIMESALES_CLASS_NAME, fullTitle.c_str());
+    
+    if (!hWnd) {
+        return; // Window not found
+    }
+    
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
+    
+    char key[256];
+    sprintf(key, "AlwaysOnTop_%s_%s", TIMESALES_CLASS_NAME, symbol.c_str());
+    
+    if (isCurrentlyOnTop) {
+        // Currently always on top, remove it
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        Settings_Save(key, 0);
+    } else {
+        // Not always on top, make it so
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        Settings_Save(key, 1);
+    }
+}
+
+// Set Always On Top state for a Timesales window using its HWND directly.
+// Called at restore time — avoids a FindWindowA-by-title race where the window
+// title may not yet be set when StartTimesales() returns.
+void SetTimesalesAlwaysOnTop(HWND hWnd, bool onTop) {
+    if (!hWnd) return;
+    SetWindowPos(hWnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
 void Session_RestoreWindows(
@@ -436,7 +536,7 @@ void Session_RestoreWindows(
     const std::function<void()>& StartDiamonds,
     const std::function<void()>& StartNews,
     const std::function<void()>& StartSettings,
-    const std::function<void(const std::string&, int)>& StartTimesales,
+    const std::function<HWND(const std::string&, int)>& StartTimesales,
     const std::function<void()>& StartLevels,
     const std::function<void()>& StartTicker,
     const std::function<void()>& StartOrders,
@@ -541,15 +641,19 @@ void Session_RestoreWindows(
                     if (dot != std::string::npos) {
                         int cid = std::stoi(token.substr(0, dot));
                         std::string sym = token.substr(dot + 1);
-                        StartTimesales(sym, cid);
+                        HWND tsHwnd = StartTimesales(sym, cid);
+
+                        // Restore AlwaysOnTop using the HWND we just got — avoids a
+                        // FindWindowA-by-title race where the title may not be set yet.
+                        char key[256];
+                        sprintf(key, "AlwaysOnTop_%s_%s", TIMESALES_CLASS_NAME, sym.c_str());
+                        if (Settings_Load(key, 0)) {
+                            SetTimesalesAlwaysOnTop(tsHwnd, true);
+                        }
                     }
                     start = end + 1;
                 }
             }
-            char key[256];
-            sprintf(key, "AlwaysOnTop_%s", TIMESALES_CLASS_NAME);
-            if (Settings_Load(key, 0))
-                ToggleWindowAlwaysOnTop(TIMESALES_CLASS_NAME);
         }
         p += strlen(p) + 1;
     }

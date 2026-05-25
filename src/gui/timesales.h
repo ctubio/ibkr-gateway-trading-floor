@@ -8,7 +8,7 @@
 struct TsInitData { std::string symbol; int conId; };
 
 void StartTimesalesSearch(); // Forward declaration
-void StartTimesales(const std::string& symbol = "", int conId = 0);
+HWND StartTimesales(const std::string& symbol = "", int conId = 0);
 
 #define ID_TS_LIST          6003
 #define ID_TS_FILTER_CHECK  6004
@@ -216,14 +216,14 @@ void StartTimesalesSearch() {
     ApplyDarkMode(hWnd);
 }
 
-void StartTimesales(const std::string& symbol, int conId) {
+HWND StartTimesales(const std::string& symbol, int conId) {
     if (symbol.empty() || conId == 0) {
         StartTimesalesSearch();
-        return;
+        return NULL;
     }
     std::string key = TIMESALES_CLASS_NAME + std::string("_") + std::to_string(conId);
     TsInitData* data = new TsInitData{symbol, conId};
-    StartGenericWindow(TIMESALES_CLASS_NAME, ("Time & Sales: " + symbol).c_str(), L"IBKRGatewayClient.Timesales", 380, 500, NULL, key, data);
+    return StartGenericWindow(TIMESALES_CLASS_NAME, ("Time & Sales: " + symbol).c_str(), L"IBKRGatewayClient.Timesales", 380, 500, NULL, key, data);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────

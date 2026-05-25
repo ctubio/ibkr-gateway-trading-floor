@@ -31,6 +31,9 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_DISCONNECT 1101
 #define ID_M_EXIT       1102
 
+#define ID_M_TIMESALES_BASE 1500
+#define ID_M_TIMESALES_MAX   100
+
 bool shouldBeConnected = true;
 
 struct IconUpdateContext {
@@ -38,10 +41,6 @@ struct IconUpdateContext {
     const std::unordered_map<std::string, HICON>& onlineIcons;
     const std::unordered_map<std::string, HICON>& offlineIcons;
 };
-
-// Toggle Always On Top state for a window by its class name
-// (Function definition is in registry.h to be accessible from Session_RestoreWindows)
-void ToggleWindowAlwaysOnTop(const char* windowClassName);
 
 BOOL CALLBACK IconsEnumWindowsProc(HWND hwnd, LPARAM lParam) {
     IconUpdateContext* ctx = (IconUpdateContext*)lParam;
@@ -253,7 +252,19 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders");
                     if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME)    ? L"[ ★ ] Ticker"    : L"[  ] Ticker");
                     if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME)    ? L"[ ★ ] Levels"    : L"[  ] Levels");
-                    if (FindWindowA(TIMESALES_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_TIMESALES, IsWindowAlwaysOnTop(TIMESALES_CLASS_NAME) ? L"[ ★ ] Timesales" : L"[  ] Timesales");
+                    
+                    auto tsWindows = EnumerateTimesalesWindows();
+                    std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
+                        return a.symbol < b.symbol;
+                    });
+                    for (size_t i = 0; i < tsWindows.size() && i < ID_M_TIMESALES_MAX; ++i) {
+                        std::wstring label = IsTimesalesAlwaysOnTop(tsWindows[i].symbol) ? 
+                            L"[ ★ ] Timesales: " + StringToWide(tsWindows[i].symbol) : 
+                            L"[  ] Timesales: " + StringToWide(tsWindows[i].symbol);
+                            
+                        AppendMenuW(hMenu, MF_STRING, ID_M_TIMESALES_BASE + (int)i, label.c_str());
+                    }
+                    
                     if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenuW(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME)      ? L"[ ★ ] News"      : L"[  ] News");
                     if (FindWindowA(BOOK_CLASS_NAME, NULL))      AppendMenuW(hMenu, MF_STRING, ID_M_SYMBOLS,   IsWindowAlwaysOnTop(BOOK_CLASS_NAME)      ? L"[ ★ ] Symbols"   : L"[  ] Symbols");
                     if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME)  ? L"[ ★ ] Settings"  : L"[  ] Settings");
@@ -281,7 +292,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_ORDERS:
                         case ID_M_TICKER:
                         case ID_M_LEVELS:
-                        case ID_M_TIMESALES:
                         case ID_M_NEWS:
                         case ID_M_SYMBOLS:
                         case ID_M_SETTINGS:
@@ -293,11 +303,21 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_CONNECT:
                         case ID_M_DISCONNECT:
                         case ID_M_EXIT:
-                        default:
                             if (selectedCmd != 0) {
                                 PostMessage(hWnd, WM_COMMAND, selectedCmd, 0);
                             }
                             bKeepMenuAlive = false;
+                            break;
+                        
+                        // Handle dynamically generated Timesales menu items
+                        default:
+                            if (selectedCmd >= ID_M_TIMESALES_BASE && selectedCmd < ID_M_TIMESALES_BASE + ID_M_TIMESALES_MAX) {
+                                SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
+                                // Menu stays open
+                            } else if (selectedCmd != 0) {
+                                PostMessage(hWnd, WM_COMMAND, selectedCmd, 0);
+                                bKeepMenuAlive = false;
+                            }
                             break;
                     }
 
@@ -370,9 +390,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_M_NEWS:
                     ToggleWindowAlwaysOnTop(NEWS_CLASS_NAME);
                     break;
-                case ID_M_TIMESALES:
-                    ToggleWindowAlwaysOnTop(TIMESALES_CLASS_NAME);
-                    break;
                 case ID_M_LEVELS:
                     ToggleWindowAlwaysOnTop(LEVELS_CLASS_NAME);
                     break;
@@ -387,6 +404,20 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_M_ORDERS:
                     ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
+                    break;
+                
+                // Handle dynamically generated Timesales menu items
+                default:
+                    if (LOWORD(wParam) >= ID_M_TIMESALES_BASE && LOWORD(wParam) < ID_M_TIMESALES_BASE + ID_M_TIMESALES_MAX) {
+                        auto tsWindows = EnumerateTimesalesWindows();
+                         std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
+                            return a.symbol < b.symbol;
+                        });
+                         int index = LOWORD(wParam) - ID_M_TIMESALES_BASE;
+                        if (index >= 0 && index < (int)tsWindows.size()) {
+                            ToggleTimesalesAlwaysOnTop(tsWindows[index].symbol);
+                        }
+                    }
                     break;
             }
             break;
