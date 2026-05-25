@@ -18,19 +18,6 @@ This application is a modern desktop trading companion built on the Interactive 
 - flexible multi-window layout with persistent state
 - dark mode, sound alerts, and debug logging
 
-## What’s new in the sources
-
-This README now reflects the latest source behavior and UI features, including:
-
-- automatic IBKR Gateway startup support when enabled
-- watchdog auto-connect and reconnect logic
-- registry-backed persistence for window positions, watchlists, settings, and Time & Sales sessions
-- live news subscription with article download and inline preview
-- ticker watchlists that request fundamental ratios, dividend data, and halted status
-- Time & Sales filtered views for large trades (100+ and 1000+ size)
-- symbol search popups and custom book watchlist management
-- debug log window for runtime diagnostics
-
 ## Key Highlights
 
 - **Tray-icon**: runs from the system tray with a connected/disconnected icon and always-on-top menu options for each window.
