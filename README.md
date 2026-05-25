@@ -204,7 +204,7 @@ The build process bundles several internal components:
 The executable is assembled from:
 
 ```
-src/main.cpp          # app entry point and window initialization
+src/main.cpp         # app entry point and window initialization
 src/api/gateway.h    # TradingAPI interface, IBKR connection logic
 src/gui/*.h          # window modules and UI handling
 src/api/shared.h     # shared helpers, registry, dark mode, process helpers
