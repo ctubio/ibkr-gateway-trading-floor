@@ -322,7 +322,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_MB_ORDERS:
                     StartOrders();
-                    break;                    
+                    break;        
+                case ID_M_DASHBOARD:
+                    ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME);
+                    break;
                 case ID_M_SYMBOLS:
                     ToggleWindowAlwaysOnTop(BOOK_CLASS_NAME);
                     break;
