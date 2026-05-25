@@ -6,19 +6,29 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 
 #define TIMER_WATCHDOG 1
 
-#define ID_M_SYMBOLS    1001
-#define ID_M_COINS      1002
-#define ID_M_DIAMONDS   1003
-#define ID_M_SETTINGS   1004
-#define ID_M_NEWS       1005
-#define ID_M_TICKER     1006
-#define ID_M_TIMESALES  1007
-#define ID_M_LEVELS     1008
-#define ID_M_ORDERS     1009
+#define ID_MB_SYMBOLS    1001
+#define ID_MB_COINS      1002
+#define ID_MB_DIAMONDS   1003
+#define ID_MB_SETTINGS   1004
+#define ID_MB_NEWS       1005
+#define ID_MB_TICKER     1006
+#define ID_MB_TIMESALES  1007
+#define ID_MB_LEVELS     1008
+#define ID_MB_ORDERS     1009
+#define ID_M_SYMBOLS     1010
+#define ID_M_COINS       1011
+#define ID_M_DIAMONDS    1012
+#define ID_M_SETTINGS    1013
+#define ID_M_NEWS        1014
+#define ID_M_TICKER      1015
+#define ID_M_TIMESALES   1016
+#define ID_M_LEVELS      1017
+#define ID_M_ORDERS      1018
+#define ID_M_DASHBOARD   1019
 
-#define ID_M_CONNECT    1010
-#define ID_M_DISCONNECT 1011
-#define ID_M_EXIT       1012
+#define ID_M_CONNECT    1100
+#define ID_M_DISCONNECT 1101
+#define ID_M_EXIT       1102
 
 bool shouldBeConnected = true;
 
@@ -27,6 +37,39 @@ struct IconUpdateContext {
     const std::unordered_map<std::string, HICON>& onlineIcons;
     const std::unordered_map<std::string, HICON>& offlineIcons;
 };
+
+// Toggle Always On Top state for a window by its class name
+
+HWND IsWindowAlwaysOnTop(const char* windowClassName) {
+    HWND hWnd = FindWindowA(windowClassName, NULL);
+    if (!hWnd) {
+        return NULL; // Window not found
+    }
+
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    
+    if (exStyle & WS_EX_TOPMOST) {
+        return hWnd;
+    }
+    return NULL;
+}
+
+void ToggleWindowAlwaysOnTop(const char* windowClassName) {
+    HWND hWnd = FindWindowA(windowClassName, NULL);
+    if (!hWnd) {
+        return; // Window not found
+    }
+    
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    
+    if (exStyle & WS_EX_TOPMOST) {
+        // Currently always on top, remove it
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    } else {
+        // Not always on top, make it so
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    }
+}
 
 BOOL CALLBACK IconsEnumWindowsProc(HWND hwnd, LPARAM lParam) {IconUpdateContext* ctx = (IconUpdateContext*)lParam;
 
@@ -133,17 +176,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int steps = 1;
             int stepz = 0;
             //charts from tradingview
-            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_COINS,     3); // total daily eur usd
-            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_ORDERS,   10); // open, messages, history
-            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_DIAMONDS,  4); // portfolio + watchlist
+            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     3); // total daily eur usd
+            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_ORDERS,   10); // open, messages, history
+            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_DIAMONDS,  4); // portfolio + watchlist
             
-            addButtons(hWnd, hInst, "Ticker",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TICKER,    9);        
-            addButtons(hWnd, hInst, "Levels",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_LEVELS,    8);
-            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_TIMESALES, 7); // 3: 0, 100, 1000
-            addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_NEWS,      6);
+            addButtons(hWnd, hInst, "Ticker",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TICKER,    9);        
+            addButtons(hWnd, hInst, "Levels",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_LEVELS,    8);
+            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TIMESALES, 7); // 3: 0, 100, 1000
+            addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_NEWS,      6);
 
-            addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SYMBOLS,   2);
-            addButtons(hWnd, hInst, "Settings",  12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_M_SETTINGS,  5);
+            addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SYMBOLS,   2);
+            addButtons(hWnd, hInst, "Settings",  12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SETTINGS,  5);
 
             api.addApiUpdateWindow(hWnd);
             api.setApiErrorWindow(hWnd);
@@ -208,15 +251,18 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 }
                 
                 AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-                AppendMenu(hMenu, MF_STRING, ID_M_COINS, "Coins");
-                AppendMenu(hMenu, MF_STRING, ID_M_DIAMONDS, "Diamonds");
-                AppendMenu(hMenu, MF_STRING, ID_M_ORDERS, "Orders");
-                AppendMenu(hMenu, MF_STRING, ID_M_TICKER, "Ticker");
-                AppendMenu(hMenu, MF_STRING, ID_M_LEVELS, "Levels");
-                AppendMenu(hMenu, MF_STRING, ID_M_TIMESALES, "Timesales");
-                AppendMenu(hMenu, MF_STRING, ID_M_NEWS, "News");
-                AppendMenu(hMenu, MF_STRING, ID_M_SYMBOLS, "Symbols");
-                AppendMenu(hMenu, MF_STRING, ID_M_SETTINGS, "Settings");
+
+                if (FindWindowA(DASHBOARD_CLASS_NAME, NULL)) AppendMenu(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? "[*] Dashboard" : "[ ] Dashboard");
+                if (FindWindowA(COINS_CLASS_NAME, NULL))     AppendMenu(hMenu, MF_STRING, ID_M_COINS,     IsWindowAlwaysOnTop(COINS_CLASS_NAME) ? "[*] Coins" : "[ ] Coins");
+                if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenu(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME) ? "[*] Diamonds" : "[ ] Diamonds");
+                if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenu(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME) ? "[*] Orders" : "[ ] Orders");
+                if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenu(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME) ? "[*] Ticker" : "[ ] Ticker");
+                if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenu(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME) ? "[*] Levels" : "[ ] Levels");
+                if (FindWindowA(TIMESALES_CLASS_NAME, NULL)) AppendMenu(hMenu, MF_STRING, ID_M_TIMESALES, IsWindowAlwaysOnTop(TIMESALES_CLASS_NAME) ? "[*] Timesales" : "[ ] Timesales");
+                if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenu(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME) ? "[*] News" : "[ ] News");
+                if (FindWindowA(BOOK_CLASS_NAME, NULL))      AppendMenu(hMenu, MF_STRING, ID_M_SYMBOLS,   IsWindowAlwaysOnTop(BOOK_CLASS_NAME) ? "[*] Symbols" : "[ ] Symbols");
+                if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenu(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME) ? "[*] Settings" : "[ ] Settings");
+
                 AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
                 AppendMenu(hMenu, MF_STRING, ID_M_EXIT, "Exit");
 
@@ -250,32 +296,59 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     PostQuitMessage(0);
                     break;
                     
-                case ID_M_SYMBOLS:
+                case ID_MB_SYMBOLS:
                     StartBook();
                     break;
-                case ID_M_COINS:
+                case ID_MB_COINS:
                     StartCoins();
                     break;
-                case ID_M_DIAMONDS:
+                case ID_MB_DIAMONDS:
                     StartDiamonds();
                     break;
-                case ID_M_NEWS:
+                case ID_MB_NEWS:
                     StartNews();
                     break;
-                case ID_M_TIMESALES:
+                case ID_MB_TIMESALES:
                     StartTimesales();
                     break;
-                case ID_M_LEVELS:
+                case ID_MB_LEVELS:
                     StartLevels();
                     break;
-                case ID_M_TICKER:
+                case ID_MB_TICKER:
                     StartTicker();
                     break;
-                case ID_M_SETTINGS:
+                case ID_MB_SETTINGS:
                     StartSettings();
                     break;
-                case ID_M_ORDERS:
+                case ID_MB_ORDERS:
                     StartOrders();
+                    break;                    
+                case ID_M_SYMBOLS:
+                    ToggleWindowAlwaysOnTop(BOOK_CLASS_NAME);
+                    break;
+                case ID_M_COINS:
+                    ToggleWindowAlwaysOnTop(COINS_CLASS_NAME);
+                    break;
+                case ID_M_DIAMONDS:
+                    ToggleWindowAlwaysOnTop(DIAMONDS_CLASS_NAME);
+                    break;
+                case ID_M_NEWS:
+                    ToggleWindowAlwaysOnTop(NEWS_CLASS_NAME);
+                    break;
+                case ID_M_TIMESALES:
+                    ToggleWindowAlwaysOnTop(TIMESALES_CLASS_NAME);
+                    break;
+                case ID_M_LEVELS:
+                    ToggleWindowAlwaysOnTop(LEVELS_CLASS_NAME);
+                    break;
+                case ID_M_TICKER:
+                    ToggleWindowAlwaysOnTop(TICKER_CLASS_NAME);
+                    break;
+                case ID_M_SETTINGS:
+                    ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME);
+                    break;
+                case ID_M_ORDERS:
+                    ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
                     break;
             }
             break;
