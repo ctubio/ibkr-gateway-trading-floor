@@ -171,7 +171,6 @@ static void Ticker_Subscribe(HWND hWnd, const std::string& listName) {
         auto d2 = rest.find('.');
         std::string symbol = (d2 != std::string::npos) ? rest.substr(0, d2) : rest;
         int conId = std::stoi(entry.substr(0, d1));
-        LogDebug("Symbol is: " + symbol + ", conId: " + std::to_string(conId));
         Ticker_InsertRow(hWnd, symbol, conId);
     }
 
