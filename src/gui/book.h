@@ -17,7 +17,7 @@ void StartBook() { StartGenericWindow(BOOK_CLASS_NAME, "Book", L"IBKRGatewayClie
 #define ID_BOOK_NEW_SYMBOL_INPUT 2012
 #define TIMER_DROPDOWN             99
 
-#define WM_BOOK_NEW_LIST_START (WM_APP + 100)
+#define WM_BOOK_NEW_LIST_START (WM_APP + 200)
 
 static bool suppressSearch = false;
 static bool showingOffline = false;

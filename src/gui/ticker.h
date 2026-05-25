@@ -43,6 +43,9 @@ static const TickerCol tickerCols[] = {
     { "Annual Div",   80, LVCFMT_RIGHT },
 };
 
+// Sentinel string displayed whenever a value cannot be computed (e.g. market closed, last == 0).
+static const char* TICKER_NO_DATA = "--";
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 static std::string Ticker_GetSelectedList(HWND hWnd) {
@@ -58,7 +61,8 @@ static std::string Ticker_GetSelectedList(HWND hWnd) {
 }
 
 struct TickerRowData { std::string symbol; int conId = 0; };
-// Find a ListView row by its lParam (which stores symbol as std::string*).
+
+// Find a ListView row by its lParam (which stores symbol+conId as TickerRowData*).
 // Returns the row index, or -1 if not found.
 static int Ticker_FindRow(HWND hWnd, const std::string& symbol, int conId) {
     HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
@@ -73,7 +77,6 @@ static int Ticker_FindRow(HWND hWnd, const std::string& symbol, int conId) {
     }
     return -1;
 }
-
 
 // Free all lParam TickerRowData structs and delete all rows.
 static void Ticker_ClearList(HWND hWnd) {
@@ -103,25 +106,53 @@ static void Ticker_InsertRow(HWND hWnd, const std::string& symbol, int conId) {
 }
 
 // Update a row with the latest TickerInfo data.
+// All cells derived from Last price show "--" when Last == 0 (market closed),
+// preventing bogus -100% change readings and misleading empty-string cells.
 static void Ticker_UpdateRow(HWND hWnd, int row, const TradingAPI::TickerInfo& info) {
+    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
     char buf[32];
 
+    // Helper: format a non-zero double into buf and return buf; otherwise blank.
     auto fmt = [&](double v, const char* fmt_str) -> const char* {
-        if (v == 0.0) { buf[0] = '\0'; } else { snprintf(buf, sizeof(buf), fmt_str, v); }
+        if (v == 0.0) { buf[0] = '\0'; }
+        else          { snprintf(buf, sizeof(buf), fmt_str, v); }
         return buf;
     };
-    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
 
-    ListView_SetItemText(hTickerList, row, TCOL_LAST,       (LPSTR)fmt(info.last,      "%.2f"));
-    ListView_SetItemText(hTickerList, row, TCOL_CHGPCT,     (LPSTR)fmt(info.changePct(),"%.2f%%"));
-    ListView_SetItemText(hTickerList, row, TCOL_BID,        (LPSTR)fmt(info.bid,  "%.2f"));
+    // ── Columns independent of Last ───────────────────────────────────────────
+    ListView_SetItemText(hTickerList, row, TCOL_BID,        (LPSTR)fmt(info.bid,     "%.2f"));
     ListView_SetItemText(hTickerList, row, TCOL_BIDSIZE,    (LPSTR)fmt(info.bidSize, "%.0f"));
-    ListView_SetItemText(hTickerList, row, TCOL_ASK,        (LPSTR)fmt(info.ask,  "%.2f"));
+    ListView_SetItemText(hTickerList, row, TCOL_ASK,        (LPSTR)fmt(info.ask,     "%.2f"));
     ListView_SetItemText(hTickerList, row, TCOL_ASKSIZE,    (LPSTR)fmt(info.askSize, "%.0f"));
+
+    // Dividend yield requires Last to be > 0, but the function itself guards
+    // for that internally (returns 0 when last <= 0); show blank rather than "--".
     ListView_SetItemText(hTickerList, row, TCOL_DIV_YIELD,  (LPSTR)fmt(info.dividendYield(), "%.2f%%"));
     ListView_SetItemText(hTickerList, row, TCOL_DIV_DATE,   (LPSTR)info.dividendDate.c_str());
-    ListView_SetItemText(hTickerList, row, TCOL_DIV_AMT,    (LPSTR)fmt(info.dividendAmount, "%.3f"));
+    ListView_SetItemText(hTickerList, row, TCOL_DIV_AMT,    (LPSTR)fmt(info.dividendAmount,  "%.3f"));
     ListView_SetItemText(hTickerList, row, TCOL_ANNUAL_DIV, (LPSTR)fmt(info.annualDividends, "%.3f"));
+
+    // ── Columns that require Last > 0 ────────────────────────────────────────
+    // When the market is closed, reqMktData returns Last == 0.
+    // Display "--" for Last and all derived columns so the user sees clearly
+    // that no live price is available, and so the custom-draw colour logic
+    // does not attempt to parse a numeric value from an empty or zero string.
+    if (info.last <= 0.0) {
+        ListView_SetItemText(hTickerList, row, TCOL_LAST,   (LPSTR)TICKER_NO_DATA);
+        ListView_SetItemText(hTickerList, row, TCOL_CHGPCT, (LPSTR)TICKER_NO_DATA);
+        return;
+    }
+
+    // Last is valid — compute derived values normally.
+    ListView_SetItemText(hTickerList, row, TCOL_LAST, (LPSTR)fmt(info.last, "%.2f"));
+
+    // Change % is only meaningful when prevClose is available.
+    if (info.prevClose > 0.0) {
+        ListView_SetItemText(hTickerList, row, TCOL_CHGPCT,
+                             (LPSTR)fmt(info.changePct(), "%+.2f%%"));
+    } else {
+        ListView_SetItemText(hTickerList, row, TCOL_CHGPCT, (LPSTR)TICKER_NO_DATA);
+    }
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -243,6 +274,8 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             Ticker_Subscribe(hWnd, Ticker_GetSelectedList(hWnd));
         break;
 
+    // ── Live or historical market data update for one symbol ──────────────────
+    // lParam = new std::string("conId.symbol") — we own it and must delete.
     case WM_TICKER_UPDATE: {
         auto* key = reinterpret_cast<std::string*>(lParam);
         if (!key) break;
@@ -305,12 +338,19 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     if (cd->iSubItem == TCOL_CHGPCT) {
-                        // Change / %Change — colour green or red
                         char buf[32] = {};
-                        ListView_GetItemText(GetDlgItem(hWnd, ID_TICKER_LIST), (int)cd->nmcd.dwItemSpec, TCOL_CHGPCT, buf, sizeof(buf));
-                        double v = atof(buf);
-                        if (v > 0)      cd->clrText = RGB(80, 200, 120);
-                        else if (v < 0) cd->clrText = RGB(220, 80, 80);
+                        ListView_GetItemText(GetDlgItem(hWnd, ID_TICKER_LIST),
+                                            (int)cd->nmcd.dwItemSpec, TCOL_CHGPCT,
+                                            buf, sizeof(buf));
+
+                        // Guard: only colour numeric cells — skip "--" sentinel
+                        // and empty strings to avoid atof("--") == 0.0 masking
+                        // a missing-data cell as a neutral (uncoloured) number.
+                        if (strcmp(buf, TICKER_NO_DATA) != 0 && buf[0] != '\0') {
+                            double v = atof(buf);
+                            if      (v > 0.0) cd->clrText = RGB(80, 200, 120);
+                            else if (v < 0.0) cd->clrText = RGB(220, 80, 80);
+                        }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;
                     }

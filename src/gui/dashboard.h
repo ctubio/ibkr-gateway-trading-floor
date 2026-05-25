@@ -2,7 +2,7 @@
 
 void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", 324, 70, hInst); }
 
-#define WM_TRAYICON (WM_USER + 1)
+#define WM_TRAYICON (WM_APP + 100)
 
 #define TIMER_WATCHDOG 1
 
@@ -42,7 +42,8 @@ struct IconUpdateContext {
 // (Function definition is in registry.h to be accessible from Session_RestoreWindows)
 void ToggleWindowAlwaysOnTop(const char* windowClassName);
 
-BOOL CALLBACK IconsEnumWindowsProc(HWND hwnd, LPARAM lParam) {IconUpdateContext* ctx = (IconUpdateContext*)lParam;
+BOOL CALLBACK IconsEnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    IconUpdateContext* ctx = (IconUpdateContext*)lParam;
 
     char className[256];
     if (GetClassNameA(hwnd, className, sizeof(className)) > 0) {
@@ -65,17 +66,25 @@ BOOL CALLBACK IconsEnumWindowsProc(HWND hwnd, LPARAM lParam) {IconUpdateContext*
 }
 
 void BindTrayIcon(HWND hWnd) {
-    char className[256];
-    GetClassNameA(hWnd, className, sizeof(className));
+    char classNameA[256];
+    GetClassNameA(hWnd, classNameA, sizeof(classNameA));
 
-    nid.cbSize = sizeof(NOTIFYICONDATA);
+    ZeroMemory(&nid, sizeof(NOTIFYICONDATAW));
+
+    nid.cbSize = sizeof(NOTIFYICONDATAW);
     nid.hWnd = hWnd;
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = offlineIcons[className];
-    lstrcpy(nid.szTip, "Offline");
-    Shell_NotifyIcon(NIM_ADD, &nid);
+    
+    nid.hIcon = offlineIcons[std::string(classNameA)]; 
+
+    wcscpy_s(nid.szTip, sizeof(nid.szTip) / sizeof(wchar_t), L"Offline");
+
+    Shell_NotifyIconW(NIM_ADD, &nid);
+    
+    nid.uVersion = NOTIFYICON_VERSION_4;
+    Shell_NotifyIconW(NIM_SETVERSION, &nid);
 }
 
 void UpdateTrayIcon(HWND hWnd) {
@@ -99,12 +108,14 @@ void UpdateTrayIcon(HWND hWnd) {
             title   = "Account: " + acc;
         }
     }
+    std::wstring wTooltip(tooltip.begin(), tooltip.end());
+    wcsncpy(nid.szTip, wTooltip.c_str(), _countof(nid.szTip) - 1);
+    nid.szTip[_countof(nid.szTip) - 1] = L'\0'; // Note the L prefix for wide null terminator
 
-    strncpy(nid.szTip, tooltip.c_str(), sizeof(nid.szTip) - 1);
-    nid.szTip[sizeof(nid.szTip) - 1] = '\0';
     nid.uFlags = NIF_TIP | NIF_ICON;
-    nid.hIcon  = connected ? onlineIcons[DASHBOARD_CLASS_NAME] : offlineIcons[DASHBOARD_CLASS_NAME];
-    Shell_NotifyIcon(NIM_MODIFY, &nid);
+    nid.hIcon  = connected ? onlineIcons[std::string(DASHBOARD_CLASS_NAME)] : offlineIcons[std::string(DASHBOARD_CLASS_NAME)];
+
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
 
     IconUpdateContext ctx = { connected, onlineIcons, offlineIcons };
     EnumWindows(IconsEnumWindowsProc, (LPARAM)&ctx);
@@ -193,8 +204,12 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
             break;
 
-        case WM_TRAYICON:
-            if (lParam == WM_LBUTTONUP) {
+        case WM_TRAYICON: {
+            // FIX: In NOTIFYICON_VERSION_4, the mouse event is packed into the LOWORD of lParam.
+            // Additionally, Right-Clicks send WM_CONTEXTMENU and Left-Clicks send NIN_SELECT.
+            WORD trayEvent = LOWORD(lParam);
+
+            if (trayEvent == WM_LBUTTONUP || trayEvent == NIN_SELECT) {
                 if (IsWindowVisible(hWnd) && !IsIconic(hWnd)) { 
                     ShowWindow(hWnd, SW_HIDE);
                 } else {
@@ -209,43 +224,86 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     SetFocus(hWnd);
                 }
             }
-            else if (lParam == WM_RBUTTONUP) {
-                HMENU hMenu = CreatePopupMenu();
-                // Determine flags based on current API state
-
-                if (api.isConnected()) {
-                    std::string accText = std::string("Account: ") + api.getAccountNumber();
-                    AppendMenu(hMenu, (MF_STRING | MF_GRAYED), 0, accText.c_str());
-                    AppendMenu(hMenu, MF_STRING, ID_M_DISCONNECT, "Disconnect");
-                } else {
-                    AppendMenu(hMenu, MF_STRING, ID_M_CONNECT, "Connect");
-                }
-                
-                AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-
-                if (FindWindowA(DASHBOARD_CLASS_NAME, NULL)) AppendMenu(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? "[*] Dashboard" : "[ ] Dashboard");
-                if (FindWindowA(COINS_CLASS_NAME, NULL))     AppendMenu(hMenu, MF_STRING, ID_M_COINS,     IsWindowAlwaysOnTop(COINS_CLASS_NAME) ? "[*] Coins" : "[ ] Coins");
-                if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenu(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME) ? "[*] Diamonds" : "[ ] Diamonds");
-                if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenu(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME) ? "[*] Orders" : "[ ] Orders");
-                if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenu(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME) ? "[*] Ticker" : "[ ] Ticker");
-                if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenu(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME) ? "[*] Levels" : "[ ] Levels");
-                if (FindWindowA(TIMESALES_CLASS_NAME, NULL)) AppendMenu(hMenu, MF_STRING, ID_M_TIMESALES, IsWindowAlwaysOnTop(TIMESALES_CLASS_NAME) ? "[*] Timesales" : "[ ] Timesales");
-                if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenu(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME) ? "[*] News" : "[ ] News");
-                if (FindWindowA(BOOK_CLASS_NAME, NULL))      AppendMenu(hMenu, MF_STRING, ID_M_SYMBOLS,   IsWindowAlwaysOnTop(BOOK_CLASS_NAME) ? "[*] Symbols" : "[ ] Symbols");
-                if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenu(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME) ? "[*] Settings" : "[ ] Settings");
-
-                AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-                AppendMenu(hMenu, MF_STRING, ID_M_EXIT, "Exit");
-
-                // Track where the mouse is to pop up the menu right above the tray
+            else if (trayEvent == WM_RBUTTONUP || trayEvent == WM_CONTEXTMENU) {
                 POINT pt;
                 GetCursorPos(&pt);
-                SetForegroundWindow(hWnd); // Fixes a notorious Win32 menu-focus bug
+                SetForegroundWindow(hWnd);
                 
-                TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
-                DestroyMenu(hMenu);
+                bool bKeepMenuAlive = true;
+                
+                while (bKeepMenuAlive) {
+                    HMENU hMenu = CreatePopupMenu();
+                    
+                    // Determine flags based on current API state
+                    if (api.isConnected()) {
+                        std::string accText = std::string("Account: ") + api.getAccountNumber();
+                        AppendMenuA(hMenu, (MF_STRING | MF_GRAYED), 0, accText.c_str());
+                        AppendMenuA(hMenu, MF_STRING, ID_M_DISCONNECT, "Disconnect");
+                    } else {
+                        AppendMenuA(hMenu, MF_STRING, ID_M_CONNECT, "Connect");
+                    }
+                    
+                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+
+                    // Re-evaluate window states on every loop iteration
+                    if (FindWindowA(DASHBOARD_CLASS_NAME, NULL)) AppendMenuA(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? "[X] Dashboard" : "[  ] Dashboard");
+                    if (FindWindowA(COINS_CLASS_NAME, NULL))     AppendMenuA(hMenu, MF_STRING, ID_M_COINS,     IsWindowAlwaysOnTop(COINS_CLASS_NAME)     ? "[X] Coins"     : "[  ] Coins");
+                    if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenuA(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? "[X] Diamonds"  : "[  ] Diamonds");
+                    if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuA(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? "[X] Orders"    : "[  ] Orders");
+                    if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenuA(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME)    ? "[X] Ticker"    : "[  ] Ticker");
+                    if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenuA(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME)    ? "[X] Levels"    : "[  ] Levels");
+                    if (FindWindowA(TIMESALES_CLASS_NAME, NULL)) AppendMenuA(hMenu, MF_STRING, ID_M_TIMESALES, IsWindowAlwaysOnTop(TIMESALES_CLASS_NAME) ? "[X] Timesales" : "[  ] Timesales");
+                    if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenuA(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME)      ? "[X] News"      : "[  ] News");
+                    if (FindWindowA(BOOK_CLASS_NAME, NULL))      AppendMenuA(hMenu, MF_STRING, ID_M_SYMBOLS,   IsWindowAlwaysOnTop(BOOK_CLASS_NAME)      ? "[X] Symbols"   : "[  ] Symbols");
+                    if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenuA(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME)  ? "[X] Settings"  : "[  ] Settings");
+
+                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+                    AppendMenuA(hMenu, MF_STRING, ID_M_EXIT, "Exit");
+
+                    // 3. TrackPopupMenu with TPM_RETURNCMD
+                    int selectedCmd = TrackPopupMenu(hMenu, 
+                        TPM_BOTTOMALIGN | TPM_LEFTALIGN | TPM_RETURNCMD | TPM_NONOTIFY, 
+                        pt.x, pt.y, 0, hWnd, NULL);
+
+                    // 4. Route the command
+                    switch (selectedCmd) {
+                        case 0:
+                            // User clicked completely outside the menu
+                            bKeepMenuAlive = false;
+                            break;
+
+                        // GROUP A: The Toggle Items (Menu stays open)
+                        case ID_M_DASHBOARD:
+                        case ID_M_COINS:
+                        case ID_M_DIAMONDS:
+                        case ID_M_ORDERS:
+                        case ID_M_TICKER:
+                        case ID_M_LEVELS:
+                        case ID_M_TIMESALES:
+                        case ID_M_NEWS:
+                        case ID_M_SYMBOLS:
+                        case ID_M_SETTINGS:
+                            SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
+                            break; // Do NOT set bKeepMenuAlive to false
+
+                        // GROUP B: Action Items (Menu closes)
+                        case ID_M_CONNECT:
+                        case ID_M_DISCONNECT:
+                        case ID_M_EXIT:
+                        default:
+                            if (selectedCmd != 0) {
+                                PostMessage(hWnd, WM_COMMAND, selectedCmd, 0);
+                            }
+                            bKeepMenuAlive = false;
+                            break;
+                    }
+
+                    // 5. Destroy the menu at the end of every loop so it can be rebuilt clean
+                    DestroyMenu(hMenu);
+                }
             }
             break;
+        }
 
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
@@ -263,7 +321,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     api.disconnect();
                     if (Settings_KillGatewayOnExit())
                         KillGateway();
-                    Shell_NotifyIcon(NIM_DELETE, &nid); // Remove icon from tray
+                    Shell_NotifyIconW(NIM_DELETE, &nid); // Remove icon from tray
                     PostQuitMessage(0);
                     break;
                     

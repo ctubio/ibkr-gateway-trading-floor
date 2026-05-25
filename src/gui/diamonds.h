@@ -55,6 +55,9 @@ static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Sentinel string displayed whenever a value cannot be computed (e.g. market closed, last == 0).
+static const char* DIAMONDS_NO_DATA = "--";
+
 // Find a row in the Diamonds list by conId (stored in lParam).
 static int Diamonds_FindRow(HWND hList, int conId) {
     int count = ListView_GetItemCount(hList);
@@ -69,18 +72,60 @@ static int Diamonds_FindRow(HWND hList, int conId) {
 }
 
 // Update the market-data columns of one row from a TickerInfo snapshot.
+// All columns that depend on a valid Last price display "--" when Last == 0,
+// preventing bogus P&L calculations (e.g. -100%) during market-closed hours.
 static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::TickerInfo& t) {
     char buf[64];
 
+    // Helper: format a non-zero double, or blank the cell.
     auto setNum = [&](int col, double val, const char* fmt) {
         if (val != 0.0) snprintf(buf, sizeof(buf), fmt, val);
         else            buf[0] = '\0';
         ListView_SetItemText(hList, row, col, buf);
     };
+
+    // Helper: set a cell to the "--" sentinel.
+    auto setNA = [&](int col) {
+        ListView_SetItemText(hList, row, col, (LPSTR)DIAMONDS_NO_DATA);
+    };
+
     auto setStr = [&](int col, const std::string& val) {
         ListView_SetItemText(hList, row, col, (LPSTR)val.c_str());
     };
 
+    // ── Columns that do NOT require a valid Last ──────────────────────────────
+    setNum(DCOL_ASKSIZE, t.askSize, "%.0f");
+    setNum(DCOL_ASK,     t.ask,     "%.2f");
+    setNum(DCOL_BID,     t.bid,     "%.2f");
+    setNum(DCOL_BIDSIZE, t.bidSize, "%.0f");
+
+    // ── Dividend columns — independent of Last being live ────────────────────
+    setNum(DCOL_DIV_YIELD,  t.dividendYield(),   "%.2f%%");
+    setStr(DCOL_DIV_DATE,   t.dividendDate);
+    setNum(DCOL_DIV_AMT,    t.dividendAmount,    "%.3f");
+    setNum(DCOL_ANNUAL_DIV, t.annualDividends,   "%.3f");
+
+    // ── Columns that require Last > 0 ─────────────────────────────────────────
+    // When the market is closed, reqMktData may return Last == 0.
+    // In that case the gateway falls back to reqHistoricalData to populate
+    // prevClose (and Last itself if still 0 after the live subscription).
+    // Until a valid Last is available we show "--" to avoid misleading values.
+    if (t.last <= 0.0) {
+        setNA(DCOL_LAST);
+        setNA(DCOL_DAILYPNL);
+        setNA(DCOL_CHGPCT);
+        setNA(DCOL_UNREALIZED_PL);
+        setNA(DCOL_UNREALIZED_PL_PCT);
+        setNA(DCOL_MKTVAL);
+        setNA(DCOL_PCT_NETLIQ);
+        return;
+    }
+
+    // Last is valid — proceed with normal calculations.
+    snprintf(buf, sizeof(buf), "%.2f", t.last);
+    ListView_SetItemText(hList, row, DCOL_LAST, buf);
+
+    // Retrieve portfolio data under the portfolio mutex.
     char symBuf[64];
     ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
     std::string symbol = symBuf;
@@ -90,36 +135,38 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Tic
         std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
         auto& pmap = api.getPortfolioMap();
         if (pmap.count(symbol)) {
-            shares = pmap[symbol].shares;
+            shares  = pmap[symbol].shares;
             avgCost = pmap[symbol].avgCost;
         }
     }
 
     double netLiq = 0.0;
     auto summary = api.getAccountSummary();
-    if (summary.count("NetLiquidation")) netLiq = std::stod(summary["NetLiquidation"]);
+    if (summary.count("NetLiquidation")) {
+        try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
+    }
 
+    // Only compute daily P&L when we have a valid prevClose to diff against.
     double mktVal     = shares * t.last;
-    double unrlPnL    = shares * (t.last - avgCost);
-    double unrlPnLPct = (avgCost != 0.0 && t.last != 0.0) ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-    double dailyPnL   = shares * t.change();
-    double pctNetLiq  = (netLiq != 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
+    double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
+    double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
+                        ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
+    double pctNetLiq  = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
 
-    setNum(DCOL_ASKSIZE,           t.askSize,          "%.0f");
-    setNum(DCOL_ASK,               t.ask,              "%.2f");
-    setNum(DCOL_LAST,              t.last,             "%.2f");
-    setNum(DCOL_BID,               t.bid,              "%.2f");
-    setNum(DCOL_BIDSIZE,           t.bidSize,          "%.0f");
-    setNum(DCOL_DAILYPNL,          dailyPnL,           "%+.2f");
-    setNum(DCOL_CHGPCT,            t.changePct(),      "%+.2f%%");
-    setNum(DCOL_UNREALIZED_PL,     unrlPnL,            "%+.2f");
-    setNum(DCOL_UNREALIZED_PL_PCT, unrlPnLPct,         "%+.2f%%");
-    setNum(DCOL_MKTVAL,            mktVal,             "%.2f");
-    setNum(DCOL_PCT_NETLIQ,        pctNetLiq,          "%.2f%%");
-    setNum(DCOL_DIV_YIELD,         t.dividendYield(),  "%.2f%%");
-    setStr(DCOL_DIV_DATE,          t.dividendDate);
-    setNum(DCOL_DIV_AMT,           t.dividendAmount,   "%.3f");
-    setNum(DCOL_ANNUAL_DIV,        t.annualDividends,  "%.3f");
+    // Daily P&L: only meaningful when prevClose is available.
+    if (t.prevClose > 0.0) {
+        double dailyPnL = shares * t.change();
+        setNum(DCOL_DAILYPNL, dailyPnL, "%+.2f");
+        setNum(DCOL_CHGPCT,   t.changePct(), "%+.2f%%");
+    } else {
+        setNA(DCOL_DAILYPNL);
+        setNA(DCOL_CHGPCT);
+    }
+
+    setNum(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
+    setNum(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
+    setNum(DCOL_MKTVAL,            mktVal,     "%.2f");
+    setNum(DCOL_PCT_NETLIQ,        pctNetLiq,  "%.2f%%");
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
@@ -295,14 +342,26 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     return CDRF_NOTIFYSUBITEMDRAW;
 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
-                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL ||
-                        cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT) {
+                    // Only colour P&L / change columns — and only when the
+                    // cell holds a real numeric value (not the "--" sentinel).
+                    if (cd->iSubItem == DCOL_CHGPCT    ||
+                        cd->iSubItem == DCOL_DAILYPNL  ||
+                        cd->iSubItem == DCOL_UNREALIZED_PL ||
+                        cd->iSubItem == DCOL_UNREALIZED_PL_PCT)
+                    {
                         HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                         char buf[32] = {};
-                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, cd->iSubItem, buf, sizeof(buf));
-                        double val = atof(buf);
-                        if      (val > 0) cd->clrText = RGB(80, 200, 120);
-                        else if (val < 0) cd->clrText = RGB(220, 80, 80);
+                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec,
+                                            cd->iSubItem, buf, sizeof(buf));
+
+                        // Guard: skip colouring the "--" sentinel — atof("--") == 0
+                        // which would leave the cell uncoloured anyway, but being
+                        // explicit avoids any locale-specific atof surprises.
+                        if (strcmp(buf, DIAMONDS_NO_DATA) != 0 && buf[0] != '\0') {
+                            double val = atof(buf);
+                            if      (val > 0.0) cd->clrText = RGB(80, 200, 120);
+                            else if (val < 0.0) cd->clrText = RGB(220, 80, 80);
+                        }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;
                     }

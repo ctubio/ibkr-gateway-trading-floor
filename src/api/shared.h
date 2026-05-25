@@ -9,7 +9,7 @@
 #include <uxtheme.h>
 #include <commctrl.h>
 
-NOTIFYICONDATA nid = { 0 };
+NOTIFYICONDATAW nid = { 0 };
 
 void InitDarkBrushes() {
     if (hDarkBrush)  DeleteObject(hDarkBrush);
@@ -146,8 +146,8 @@ std::unordered_map<std::string, HICON> offlineIcons;
 std::unordered_map<std::string, HICON> onlineIcons;
 
 void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className, int iconId) {
-    HICON& offlineIcon = offlineIcons[className];
-    HICON& onlineIcon  = onlineIcons[className];
+    HICON& offlineIcon = offlineIcons[std::string(className)];
+    HICON& onlineIcon  = onlineIcons[std::string(className)];
     onlineIcon  = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
     offlineIcon = CreateGrayIcon(onlineIcon);
     WNDCLASS wc = { 0 };
@@ -230,7 +230,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     switch (message) {
         case WM_CREATE: {
-            HICON hIcon = api.isConnected() ? onlineIcons[className] : offlineIcons[className];
+            HICON hIcon = api.isConnected() ? onlineIcons[std::string(className)] : offlineIcons[std::string(className)];
             SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             SendMessage(hWnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
             if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) 
@@ -252,7 +252,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
                 api.removeApiUpdateWindow(hWnd);
                 api.clearApiErrorWindow(hWnd);
-                Shell_NotifyIcon(NIM_DELETE, &nid);
+                Shell_NotifyIconW(NIM_DELETE, &nid);
                 PostQuitMessage(0);
             } else {
                 Session_RemoveWindow(hWnd);

@@ -63,12 +63,12 @@ BUILD:
 	@$(MAKE) push
 
 release:
-ifndef TARGZ
-	@$(MAKE) TARGZ="Trading-Floor-$(MAJOR).$(MINOR).$(PATCH).$(BUILD)-win32.tar.gz" $@
+ifndef ZIPFILE
+	@$(MAKE) ZIPFILE="Trading-Floor-$(MAJOR).$(MINOR).$(PATCH).$(BUILD)-win32.zip" $@
 else
-	tar -cvzf $(TARGZ) bin lib res src README.md Makefile                  \
-	&& curl -s -n -H "Content-Type:application/octet-stream" -H "Authorization: token ${TRADINGFLOOR}"                                \
-	--data-binary "@$(PWD)/$(TARGZ)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/$(shell curl -s        \
+	zip -r $(ZIPFILE) bin lib res src README.md Makefile                \
+	&& curl -s -n -H "Content-Type:application/zip" -H "Authorization: token ${TRADINGFLOOR}" \
+	--data-binary "@$(PWD)/$(ZIPFILE)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/$(shell curl -s        \
 	https://api.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/latest | grep id | head -n1 | cut -d ' ' -f4 | cut -d ',' -f1 \
-	)/assets?name=$(TARGZ)" && rm -v $(TARGZ)
+	)/assets?name=$(ZIPFILE)" && rm -v $(ZIPFILE)
 endif
