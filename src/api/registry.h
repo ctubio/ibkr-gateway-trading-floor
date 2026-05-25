@@ -514,6 +514,12 @@ void Session_RestoreWindows(
             if(Settings_Load(key, 0)) 
                 ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME); 
         }
+        else if (cls == DASHBOARD_CLASS_NAME)    { 
+            char key[256];
+            sprintf(key, "AlwaysOnTop_%s", DASHBOARD_CLASS_NAME);
+            if(Settings_Load(key, 0)) 
+                ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
+        }
         else if (cls == DEBUGLOG_CLASS_NAME)  { 
             StartDebugLog(); 
             char key[256];

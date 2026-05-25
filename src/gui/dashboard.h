@@ -25,6 +25,7 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_LEVELS      1017
 #define ID_M_ORDERS      1018
 #define ID_M_DASHBOARD   1019
+#define ID_M_DEBUGLOG    1020
 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
@@ -236,29 +237,30 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     
                     // Determine flags based on current API state
                     if (api.isConnected()) {
-                        std::string accText = std::string("Account: ") + api.getAccountNumber();
-                        AppendMenuA(hMenu, (MF_STRING | MF_GRAYED), 0, accText.c_str());
-                        AppendMenuA(hMenu, MF_STRING, ID_M_DISCONNECT, "Disconnect");
+                        std::wstring accText = std::wstring(L"Account: ") + StringToWide(api.getAccountNumber()); 
+                        AppendMenuW(hMenu, (MF_STRING | MF_GRAYED), 0, accText.c_str());
+                        AppendMenuW(hMenu, MF_STRING, ID_M_DISCONNECT, L"Disconnect");
                     } else {
-                        AppendMenuA(hMenu, MF_STRING, ID_M_CONNECT, "Connect");
+                        AppendMenuW(hMenu, MF_STRING, ID_M_CONNECT, L"Connect");
                     }
                     
-                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+                    AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
 
                     // Re-evaluate window states on every loop iteration
-                    if (FindWindowA(DASHBOARD_CLASS_NAME, NULL)) AppendMenuA(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? "[X] Dashboard" : "[  ] Dashboard");
-                    if (FindWindowA(COINS_CLASS_NAME, NULL))     AppendMenuA(hMenu, MF_STRING, ID_M_COINS,     IsWindowAlwaysOnTop(COINS_CLASS_NAME)     ? "[X] Coins"     : "[  ] Coins");
-                    if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenuA(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? "[X] Diamonds"  : "[  ] Diamonds");
-                    if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuA(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? "[X] Orders"    : "[  ] Orders");
-                    if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenuA(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME)    ? "[X] Ticker"    : "[  ] Ticker");
-                    if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenuA(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME)    ? "[X] Levels"    : "[  ] Levels");
-                    if (FindWindowA(TIMESALES_CLASS_NAME, NULL)) AppendMenuA(hMenu, MF_STRING, ID_M_TIMESALES, IsWindowAlwaysOnTop(TIMESALES_CLASS_NAME) ? "[X] Timesales" : "[  ] Timesales");
-                    if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenuA(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME)      ? "[X] News"      : "[  ] News");
-                    if (FindWindowA(BOOK_CLASS_NAME, NULL))      AppendMenuA(hMenu, MF_STRING, ID_M_SYMBOLS,   IsWindowAlwaysOnTop(BOOK_CLASS_NAME)      ? "[X] Symbols"   : "[  ] Symbols");
-                    if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenuA(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME)  ? "[X] Settings"  : "[  ] Settings");
+                    if (FindWindowA(DASHBOARD_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? L"[ ★ ] Dashboard" : L"[  ] Dashboard");
+                    if (FindWindowA(COINS_CLASS_NAME, NULL))     AppendMenuW(hMenu, MF_STRING, ID_M_COINS,     IsWindowAlwaysOnTop(COINS_CLASS_NAME)     ? L"[ ★ ] Coins"     : L"[  ] Coins");
+                    if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds");
+                    if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders");
+                    if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME)    ? L"[ ★ ] Ticker"    : L"[  ] Ticker");
+                    if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME)    ? L"[ ★ ] Levels"    : L"[  ] Levels");
+                    if (FindWindowA(TIMESALES_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_TIMESALES, IsWindowAlwaysOnTop(TIMESALES_CLASS_NAME) ? L"[ ★ ] Timesales" : L"[  ] Timesales");
+                    if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenuW(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME)      ? L"[ ★ ] News"      : L"[  ] News");
+                    if (FindWindowA(BOOK_CLASS_NAME, NULL))      AppendMenuW(hMenu, MF_STRING, ID_M_SYMBOLS,   IsWindowAlwaysOnTop(BOOK_CLASS_NAME)      ? L"[ ★ ] Symbols"   : L"[  ] Symbols");
+                    if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME)  ? L"[ ★ ] Settings"  : L"[  ] Settings");
+                    if (FindWindowA(DEBUGLOG_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DEBUGLOG,  IsWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME)  ? L"[ ★ ] Debug Log" : L"[  ] Debug Log");
 
-                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
-                    AppendMenuA(hMenu, MF_STRING, ID_M_EXIT, "Exit");
+                    AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+                    AppendMenuW(hMenu, MF_STRING, ID_M_EXIT, L"Exit");
 
                     // 3. TrackPopupMenu with TPM_RETURNCMD
                     int selectedCmd = TrackPopupMenu(hMenu, 
@@ -283,6 +285,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_NEWS:
                         case ID_M_SYMBOLS:
                         case ID_M_SETTINGS:
+                        case ID_M_DEBUGLOG:
                             SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
                             break; // Do NOT set bKeepMenuAlive to false
 
@@ -378,6 +381,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_M_SETTINGS:
                     ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME);
+                    break;
+                case ID_M_DEBUGLOG:
+                    ToggleWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME);
                     break;
                 case ID_M_ORDERS:
                     ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
