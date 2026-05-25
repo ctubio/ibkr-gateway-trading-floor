@@ -10,6 +10,8 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IB
 #define ID_SETTINGS_AUTO_GATEWAY 4004
 #define ID_SETTINGS_DEBUG_LOG    4005
 
+static HWND hDebugEdit = NULL;
+
 // ─── Debug Log ────────────────────────────────────────────────────────────────
 void FlushDebugBuffer() {
     if (!hDebugEdit || !IsWindow(hDebugEdit)) return;
@@ -31,12 +33,16 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
                 0, 0, 0, 0, hWnd, NULL, GetModuleHandle(NULL), NULL);
+            SetPropA(hWnd, "hDebugEdit", hDebugEdit);
             RECT rc;
             GetClientRect(hWnd, &rc);
             SetWindowPos(hDebugEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
             FlushDebugBuffer(); // ← show all buffered messages
             break;
         }
+        case WM_DESTROY:
+            RemovePropA(hWnd, "hDebugEdit");
+            break;
         case WM_SIZE: {
             if (hDebugEdit) {
                 RECT rc;

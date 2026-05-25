@@ -5,8 +5,6 @@ void StartTicker() { StartGenericWindow(TICKER_CLASS_NAME, "Ticker", L"IBKRGatew
 #define ID_TICKER_LIST_COMBO  8001
 #define ID_TICKER_LIST        8002
 
-static HWND hTickerListCombo = NULL;
-static HWND hTickerList      = NULL;
 static bool tickerSelectorsVisible = false;
 static std::vector<std::string> tickerCurrentEntries; // entries currently subscribed
 
@@ -31,7 +29,8 @@ static const int TICKER_COL_COUNT = (int)(sizeof(tickerCols) / sizeof(tickerCols
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-static std::string Ticker_GetSelectedList() {
+static std::string Ticker_GetSelectedList(HWND hWnd) {
+    HWND hTickerListCombo = GetDlgItem(hWnd, ID_TICKER_LIST_COMBO);
     int sel = (int)SendMessage(hTickerListCombo, CB_GETCURSEL, 0, 0);
     if (sel == CB_ERR) return "";
     int len = (int)SendMessage(hTickerListCombo, CB_GETLBTEXTLEN, sel, 0);
@@ -45,7 +44,8 @@ static std::string Ticker_GetSelectedList() {
 struct TickerRowData { std::string symbol; int conId = 0; };
 // Find a ListView row by its lParam (which stores symbol as std::string*).
 // Returns the row index, or -1 if not found.
-static int Ticker_FindRow(const std::string& symbol, int conId) {
+static int Ticker_FindRow(HWND hWnd, const std::string& symbol, int conId) {
+    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
     int count = ListView_GetItemCount(hTickerList);
     for (int i = 0; i < count; ++i) {
         LVITEMA lvi = {};
@@ -60,7 +60,8 @@ static int Ticker_FindRow(const std::string& symbol, int conId) {
 
 
 // Free all lParam TickerRowData structs and delete all rows.
-static void Ticker_ClearList() {
+static void Ticker_ClearList(HWND hWnd) {
+    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
     if (!hTickerList) return;
     int count = ListView_GetItemCount(hTickerList);
     for (int i = 0; i < count; ++i) {
@@ -74,7 +75,8 @@ static void Ticker_ClearList() {
 }
 
 // Insert a placeholder row for symbol+conId.
-static void Ticker_InsertRow(const std::string& symbol, int conId) {
+static void Ticker_InsertRow(HWND hWnd, const std::string& symbol, int conId) {
+    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
     auto* rd    = new TickerRowData{symbol, conId};
     LVITEMA lvi = {};
     lvi.mask    = LVIF_TEXT | LVIF_PARAM;
@@ -85,13 +87,14 @@ static void Ticker_InsertRow(const std::string& symbol, int conId) {
 }
 
 // Update a row with the latest TickerInfo data.
-static void Ticker_UpdateRow(int row, const TradingAPI::TickerInfo& info) {
+static void Ticker_UpdateRow(HWND hWnd, int row, const TradingAPI::TickerInfo& info) {
     char buf[32];
 
     auto fmt = [&](double v, const char* fmt_str) -> const char* {
         if (v == 0.0) { buf[0] = '\0'; } else { snprintf(buf, sizeof(buf), fmt_str, v); }
         return buf;
     };
+    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
 
     ListView_SetItemText(hTickerList, row, 1, (LPSTR)fmt(info.last,      "%.2f"));
     ListView_SetItemText(hTickerList, row, 2, (LPSTR)fmt(info.change(),  "%.2f"));
@@ -110,6 +113,7 @@ static void Ticker_UpdateRow(int row, const TradingAPI::TickerInfo& info) {
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 static void Ticker_Layout(HWND hWnd) {
+    HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
     if (!hTickerList) return;
     RECT rc; GetClientRect(hWnd, &rc);
     const int m = 8;
@@ -122,7 +126,7 @@ static void Ticker_Layout(HWND hWnd) {
     if (tickerSelectorsVisible) {
         int comboW = rc.right - m * 2;
         int comboY = selectorY + (TICKER_SELECTOR_H - TICKER_COMBO_H) / 2;
-        SetWindowPos(hTickerListCombo, NULL, m, comboY, comboW, 200,
+        SetWindowPos(GetDlgItem(hWnd, ID_TICKER_LIST_COMBO), NULL, m, comboY, comboW, 200,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
 }
@@ -130,7 +134,7 @@ static void Ticker_Layout(HWND hWnd) {
 static void Ticker_ShowSelectors(HWND hWnd, bool show) {
     if (tickerSelectorsVisible == show) return;
     tickerSelectorsVisible = show;
-    ShowWindow(hTickerListCombo, show ? SW_SHOW : SW_HIDE);
+    ShowWindow(GetDlgItem(hWnd, ID_TICKER_LIST_COMBO), show ? SW_SHOW : SW_HIDE);
     Ticker_Layout(hWnd);
 }
 
@@ -143,7 +147,7 @@ static void Ticker_Subscribe(HWND hWnd, const std::string& listName) {
     auto entries = Book_ReadListEntries(listName.c_str());
     tickerCurrentEntries = entries;
 
-    Ticker_ClearList();
+    Ticker_ClearList(hWnd);
 
     // Insert placeholder rows immediately so the user sees the symbols.
     for (const auto& entry : entries) {
@@ -154,7 +158,7 @@ static void Ticker_Subscribe(HWND hWnd, const std::string& listName) {
         std::string symbol = (d2 != std::string::npos) ? rest.substr(0, d2) : rest;
         int conId = std::stoi(entry.substr(0, d1));
         LogDebug("Symbol is: " + symbol + ", conId: " + std::to_string(conId));
-        Ticker_InsertRow(symbol, conId);
+        Ticker_InsertRow(hWnd, symbol, conId);
     }
 
     SetWindowTextA(hWnd, ("Ticker: " + listName).c_str());
@@ -171,7 +175,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         const int m = 8;
 
         // List first — lower Z-order, behind the combo.
-        hTickerList = CreateWindowExA(
+        HWND hTickerList = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
             WS_CHILD | WS_VISIBLE | WS_BORDER |
             LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
@@ -192,7 +196,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         // Combo on top (higher Z-order), hidden until focused.
-        hTickerListCombo = CreateWindowA("COMBOBOX", NULL,
+        HWND hTickerListCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
             m, m, 200, 200,
             hWnd, (HMENU)ID_TICKER_LIST_COMBO, hInst, NULL);
@@ -223,7 +227,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_TICKER_LIST_COMBO && HIWORD(wParam) == CBN_SELCHANGE)
-            Ticker_Subscribe(hWnd, Ticker_GetSelectedList());
+            Ticker_Subscribe(hWnd, Ticker_GetSelectedList(hWnd));
         break;
 
     case WM_TICKER_UPDATE: {
@@ -236,8 +240,8 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             std::string symbol = key->substr(dot + 1);
             TradingAPI::TickerInfo info;
             if (api.getTickerData(conId, symbol, info)) {
-                int row = Ticker_FindRow(symbol, conId);
-                if (row >= 0) Ticker_UpdateRow(row, info);
+                int row = Ticker_FindRow(hWnd, symbol, conId);
+                if (row >= 0) Ticker_UpdateRow(hWnd, row, info);
             }
         }
         delete key;
@@ -250,6 +254,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             api.reqWatchlist();
         } else {
             // Clear data but keep the symbol rows visible (just blank the values).
+            HWND hTickerList = GetDlgItem(hWnd, ID_TICKER_LIST);
             int count = ListView_GetItemCount(hTickerList);
             for (int i = 0; i < count; ++i)
                 for (int col = 1; col < TICKER_COL_COUNT; ++col)
@@ -267,7 +272,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 LVITEMA lvi = {};
                 lvi.mask  = LVIF_PARAM;
                 lvi.iItem = row;
-                SendMessageA(hTickerList, LVM_GETITEMA, 0, (LPARAM)&lvi);
+                SendMessageA(GetDlgItem(hWnd, ID_TICKER_LIST), LVM_GETITEMA, 0, (LPARAM)&lvi);
                 auto* rd = reinterpret_cast<TickerRowData*>(lvi.lParam);
                 if (rd) {
                     StartTimesales(rd->symbol, rd->conId);
@@ -289,7 +294,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     if (cd->iSubItem == 2 || cd->iSubItem == 3) {
                         // Change / %Change — colour green or red
                         char buf[32] = {};
-                        ListView_GetItemText(hTickerList, (int)cd->nmcd.dwItemSpec, 2, buf, sizeof(buf));
+                        ListView_GetItemText(GetDlgItem(hWnd, ID_TICKER_LIST), (int)cd->nmcd.dwItemSpec, 2, buf, sizeof(buf));
                         double v = atof(buf);
                         if (v > 0)      cd->clrText = RGB(80, 200, 120);
                         else if (v < 0) cd->clrText = RGB(220, 80, 80);
@@ -306,9 +311,7 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_DESTROY:
         api.unsetTickerWindow();
         api.removeApiUpdateWindow(hWnd);
-        Ticker_ClearList(); // frees lParam TickerRowData structs
-        hTickerListCombo = NULL;
-        hTickerList      = NULL;
+        Ticker_ClearList(hWnd); // frees lParam TickerRowData structs
         tickerCurrentEntries.clear();
         break;
     }

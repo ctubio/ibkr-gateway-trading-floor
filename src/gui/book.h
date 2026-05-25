@@ -17,7 +17,7 @@ void StartBook() { StartGenericWindow(BOOK_CLASS_NAME, "Book", L"IBKRGatewayClie
 #define ID_BOOK_NEW_SYMBOL_INPUT 2012
 #define TIMER_DROPDOWN             99
 
-#define WM_BOOKNEWLIST_START (WM_APP + 100)
+#define WM_BOOK_NEW_LIST_START (WM_APP + 100)
 
 static bool suppressSearch = false;
 static bool showingOffline = false;
@@ -282,17 +282,17 @@ LRESULT CALLBACK WndProcBookNewList(HWND hWnd, UINT message, WPARAM wParam, LPAR
         case WM_CREATE: {
             // Create the edit control and return immediately so WM_CREATE finishes.
             // The window will fully paint its NC area (title bar, border, icons)
-            // before WM_BOOKNEWLIST_START arrives, fixing the blank-title glitch.
+            // before WM_BOOK_NEW_LIST_START arrives, fixing the blank-title glitch.
             CreateWindowA("EDIT", "",
                 WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
                 10, 10, 260 - 28, 24,
                 hWnd, (HMENU)ID_BOOK_NEW_SYMBOL_INPUT, GetModuleHandle(NULL), NULL);
 
-            PostMessage(hWnd, WM_BOOKNEWLIST_START, 0, 0);
+            PostMessage(hWnd, WM_BOOK_NEW_LIST_START, 0, 0);
             break;
         }
 
-        case WM_BOOKNEWLIST_START: {
+        case WM_BOOK_NEW_LIST_START: {
             // Window is fully created and painted by now — safe to run the modal loop.
             SetFocus(GetDlgItem(hWnd, ID_BOOK_NEW_SYMBOL_INPUT));
 
