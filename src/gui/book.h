@@ -2,8 +2,6 @@
 
 void StartBook() { StartGenericWindow(BOOK_CLASS_NAME, "Book", L"IBKRGatewayClient.Book", 373, 240); }
 
-static HWND hAutoComplete = NULL;
-
 // Control IDs
 #define ID_BOOK_COMBO            2001
 #define ID_BOOK_NEW_LIST         2002
@@ -137,6 +135,9 @@ void Book_DeleteList(const char* listName) {
 // ─── AutoComplete ─────────────────────────────────────────────────────────────
 
 void Book_UpdateAutoComplete(HWND hWnd, const std::vector<std::string>& results) {
+    HWND hBookEdit = GetDlgItem(hWnd, ID_BOOK_EDIT);
+    HWND hAutoComplete = (HWND)GetPropA(hWnd, "hAutoComplete");
+
     EnableWindow(hAutoComplete, TRUE);
     currentResults = results;
 
@@ -151,8 +152,6 @@ void Book_UpdateAutoComplete(HWND hWnd, const std::vector<std::string>& results)
 
     RECT r;
     
-    HWND hBookWnd = FindWindowA(BOOK_CLASS_NAME, NULL);
-    HWND hBookEdit = GetDlgItem(hBookWnd, ID_BOOK_EDIT);
     GetWindowRect(hBookEdit, &r);
 
     int itemHeight = SendMessage(hAutoComplete, LB_GETITEMHEIGHT, 0, 0);
@@ -202,9 +201,10 @@ LRESULT CALLBACK ListBoxSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
     return DefSubclassProc(hWnd, msg, wParam, lParam);
 }
 
-LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam,
-                                   UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (msg == WM_KEYDOWN) {
+        HWND hBookWnd = FindWindowA(BOOK_CLASS_NAME, NULL);
+        HWND hAutoComplete = (HWND)GetPropA(hBookWnd, "hAutoComplete");
         bool acVisible = IsWindowVisible(hAutoComplete);
 
         if (wParam == VK_DOWN && acVisible) {
@@ -224,7 +224,6 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
         if (wParam == VK_RETURN && acVisible) {
             int sel = SendMessage(hAutoComplete, LB_GETCURSEL, 0, 0);
             if (sel != LB_ERR && sel < (int)currentResults.size()) {
-                HWND hBookWnd = FindWindowA(BOOK_CLASS_NAME, NULL);
                 HWND hBookEdit = GetDlgItem(hBookWnd, ID_BOOK_EDIT);
                 pendingFullEntry = currentResults[sel];
                 std::string label = Book_DisplayLabel(pendingFullEntry);
@@ -396,7 +395,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
             SetWindowSubclass(GetDlgItem(hWnd, ID_BOOK_EDIT), EditSubclassProc, 2, 0);
 
-            hAutoComplete = CreateWindowExA(
+            HWND hAutoComplete = CreateWindowExA(
                 WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
                 "LISTBOX", NULL,
                 WS_POPUP | WS_BORDER | LBS_NOTIFY,
@@ -404,6 +403,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hAutoComplete, AutoCompleteSubclassProc, 1, 0);
             ShowWindow(hAutoComplete, SW_HIDE);
+            SetPropA(hWnd, "hAutoComplete", hAutoComplete);
             
             Book_LoadAllLists(GetDlgItem(hWnd, ID_BOOK_COMBO));
 
@@ -420,12 +420,13 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
         case WM_DESTROY:
             api.setSymbolSearchWindow(NULL);
+            RemovePropA(hWnd, "hAutoComplete");
             break;
 
         case WM_TIMER:
             if (wParam == TIMER_DROPDOWN) {
                 KillTimer(hWnd, TIMER_DROPDOWN);
-                ShowWindow(hAutoComplete, SW_HIDE);
+                ShowWindow((HWND)GetPropA(hWnd, "hAutoComplete"), SW_HIDE);
             }
             break;
 
@@ -522,7 +523,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     bookItems.push_back(toStore);
                     Book_SaveFullList(name.c_str(), bookItems);
                     SetWindowTextA(GetDlgItem(hWnd, ID_BOOK_EDIT), "");
-                    ShowWindow(hAutoComplete, SW_HIDE);
+                    ShowWindow((HWND)GetPropA(hWnd, "hAutoComplete"), SW_HIDE);
                     Book_UpdateControlStates();
                 }
                 break;
@@ -539,7 +540,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     auto dot = query.find('.');
                     if (dot != std::string::npos)
                         query = query.substr(0, dot);
-
+                    HWND hAutoComplete = (HWND)GetPropA(hWnd, "hAutoComplete");
                     if (query.size() >= 1) {
                         if (!api.isConnected()) {
                             showingOffline = true;
@@ -579,7 +580,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             break;
 
         case WM_LBUTTONDOWN:
-            ShowWindow(hAutoComplete, SW_HIDE);
+            ShowWindow((HWND)GetPropA(hWnd, "hAutoComplete"), SW_HIDE);
             break;
 
         case WM_SYMBOL_RESULTS: {
