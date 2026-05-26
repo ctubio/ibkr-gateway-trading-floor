@@ -463,6 +463,11 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
         } else {
             sprintf(key, "AlwaysOnTop_%s", windowClassName);
         }
+        if (IsIconic(hWnd)) {
+            ShowWindow(hWnd, SW_RESTORE);
+        } else {
+            ShowWindow(hWnd, SW_SHOW);
+        }
         Settings_Save(key, 1);
     }
 }
