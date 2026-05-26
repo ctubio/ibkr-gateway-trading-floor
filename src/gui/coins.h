@@ -1,6 +1,6 @@
 #pragma once
 
-void StartCoins() { StartGenericWindow(COINS_CLASS_NAME, "Coins", L"IBKRGatewayClient.Coins", 350, 400); }
+void StartCoins() { StartGenericWindow(COINS_CLASS_NAME, "Coins", L"IBKRGatewayClient.Coins", 350, 450); }
 
 // Label IDs
 #define ID_COINS_LABEL_BASE 5000
@@ -11,7 +11,7 @@ static int  hCoinsLabelCount = 0;
 struct CoinRow { const char* label; const char* key; bool isPnL; };
 
 static CoinRow coinRows[] = {
-    { "Net Liquidation:",    "NetLiquidation",     false },
+    { "Net Liquidation:",    "NetLiquidation",      false },
     { "Total Cash:",         "TotalCashValue",      false },
     { "Gross Position:",     "GrossPositionValue",  false },
     { "Buying Power:",       "BuyingPower",         false },
@@ -25,6 +25,8 @@ static CoinRow coinRows[] = {
     { "Daily PnL:",          "DailyPnL",            true  },
     { "Unrealized PnL:",     "UnrealizedPnL",       true  },
     { "Realized PnL:",       "RealizedPnL",         true  },
+    { "Accrued Cash:",       "AccruedCash",         false },
+    { "Dividends:",          "AccruedDividend",     true  }
 };
 static const int COIN_ROW_COUNT = sizeof(coinRows) / sizeof(coinRows[0]);
 
