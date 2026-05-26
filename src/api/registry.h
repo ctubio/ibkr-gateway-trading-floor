@@ -23,10 +23,11 @@ static const char* TIMESALES_CLASS_NAME        = "TNTTimesalesWindowClass";
 static const char* TIMESALES_SEARCH_CLASS_NAME = "TNTTsSearchWindowClass";
 
 // Dark mode colors
-#define DM_BG        RGB(32,  32,  32)
-#define DM_BG2       RGB(45,  45,  45)
-#define DM_TEXT      RGB(220, 220, 220)
-#define DM_BORDER    RGB(70,  70,  70)
+#define DM_BG        RGB(30,  30,  30)   // Slightly darker, flatter background
+#define DM_BG2       RGB(42,  42,  42)   // Header/Alternate row background
+#define DM_TEXT      RGB(230, 230, 230)  // Crisp, slightly off-white text
+#define DM_BORDER    RGB(65,  65,  65)   // Outer borders
+#define DM_SEPARATOR RGB(85,  85,  85)   // Subtle inner column dividers
 
 // Light mode colors  
 #define LM_BG        GetSysColor(COLOR_BTNFACE)
@@ -231,15 +232,23 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                     HDC hdc = cd->hdc;
                     RECT rc = cd->rc;
 
-                    // 1. Draw border separators (Bottom and Right lines)
-                    HPEN hPen = CreatePen(PS_SOLID, 1, DM_BORDER);
+                    // 1. Draw modern, subtle separators
+                    HPEN hPen = CreatePen(PS_SOLID, 1, DM_SEPARATOR);
                     HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-                    MoveToEx(hdc, rc.right - 1, rc.top, NULL);
-                    LineTo(hdc, rc.right - 1, rc.bottom);
+                    
+                    // Draw a vertical divider, inset by 4 pixels (doesn't touch top/bottom edges)
+                    MoveToEx(hdc, rc.right - 1, rc.top + 4, NULL);
+                    LineTo(hdc, rc.right - 1, rc.bottom - 4);
+
+                    // Draw a single subtle bottom border under the header
+                    HPEN hBotPen = CreatePen(PS_SOLID, 1, DM_BORDER);
+                    SelectObject(hdc, hBotPen);
                     MoveToEx(hdc, rc.left, rc.bottom - 1, NULL);
                     LineTo(hdc, rc.right, rc.bottom - 1);
+
                     SelectObject(hdc, hOldPen);
                     DeleteObject(hPen);
+                    DeleteObject(hBotPen);
 
                     // 2. Get the Column Text and its Alignment
                     char text[128] = {0};
@@ -249,14 +258,14 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                     hdi.cchTextMax = sizeof(text);
                     SendMessageA(hdr->hwndFrom, HDM_GETITEMA, cd->dwItemSpec, (LPARAM)&hdi);
 
-                    // 3. Draw the Text
+                    // 3. Draw the Text (Centered nicely)
                     SetTextColor(hdc, DM_TEXT);
                     SetBkMode(hdc, TRANSPARENT);
                     
                     UINT format = DT_VCENTER | DT_SINGLELINE;
                     if (hdi.fmt & HDF_CENTER) { format |= DT_CENTER; }
-                    else if (hdi.fmt & HDF_RIGHT) { format |= DT_RIGHT; rc.right -= 6; }
-                    else { format |= DT_LEFT; rc.left += 6; } // Left pad slightly
+                    else if (hdi.fmt & HDF_RIGHT) { format |= DT_RIGHT; rc.right -= 8; }
+                    else { format |= DT_LEFT; rc.left += 8; } // Pad left/right so text doesn't touch separators
 
                     DrawTextA(hdc, text, -1, &rc, format);
 

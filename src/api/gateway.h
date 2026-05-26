@@ -26,11 +26,6 @@
 #define WM_NEWS_ARTICLE    (WM_USER + 11)
 #define WM_TICKER_UPDATE   (WM_USER + 12)
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TradingAPI — public interface
-// Implementation lives in Trading-Floor-Gateway.a (private.cpp / Impl).
-// ─────────────────────────────────────────────────────────────────────────────
-
 class TradingAPI {
 public:
 

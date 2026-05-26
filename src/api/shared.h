@@ -224,28 +224,59 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_DRAWITEM: {
             DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)lParam;
             if (dis->CtlType != ODT_BUTTON) return 0;
+
             bool dark = Settings_DarkMode();
             bool pressed  = (dis->itemState & ODS_SELECTED);
             bool disabled = (dis->itemState & ODS_DISABLED);
-            COLORREF bgColor     = dark ? (pressed ? RGB(60,60,60) : RGB(50,50,50))
-                                        : (pressed ? RGB(180,180,180) : RGB(225,225,225));
-            COLORREF textColor   = disabled ? RGB(120,120,120) : (dark ? DM_TEXT : LM_TEXT);
-            COLORREF borderColor = dark ? DM_BORDER : RGB(170,170,170);
+            bool focused  = (dis->itemState & ODS_FOCUS);
+
+            // 1. Modern, softer background colors
+            COLORREF bgColor = dark 
+                ? (pressed ? RGB(75, 75, 75) : RGB(45, 45, 45))
+                : (pressed ? RGB(210, 210, 210) : RGB(240, 240, 240));
+
+            // 2. Subtle border colors that blend smoothly
+            COLORREF borderColor = dark 
+                ? (pressed ? RGB(100, 100, 100) : RGB(65, 65, 65))
+                : (pressed ? RGB(180, 180, 180) : RGB(215, 215, 215));
+
+            COLORREF textColor = disabled 
+                ? (dark ? RGB(120, 120, 120) : RGB(160, 160, 160)) 
+                : (dark ? DM_TEXT : LM_TEXT);
+
+            // --- Fill Background ---
             HBRUSH hBg = CreateSolidBrush(bgColor);
             FillRect(dis->hDC, &dis->rcItem, hBg);
             DeleteObject(hBg);
+
+            // --- Draw Subtle Border ---
             HPEN hPen = CreatePen(PS_SOLID, 1, borderColor);
             HPEN hOld = (HPEN)SelectObject(dis->hDC, hPen);
-            SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
+            SelectObject(dis->hDC, GetStockObject(NULL_BRUSH)); // Transparent inside
             Rectangle(dis->hDC, dis->rcItem.left, dis->rcItem.top, dis->rcItem.right, dis->rcItem.bottom);
             SelectObject(dis->hDC, hOld);
             DeleteObject(hPen);
+
+            // --- Draw Text ---
             wchar_t text[128] = {};
             GetWindowTextW(dis->hwndItem, text, sizeof(text)/sizeof(wchar_t));
             SetTextColor(dis->hDC, textColor);
             SetBkMode(dis->hDC, TRANSPARENT);
             DrawTextW(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            if (dis->itemState & ODS_FOCUS) DrawFocusRect(dis->hDC, &dis->rcItem);
+
+            // --- Modern Focus Indicator ---
+            // DrawFocusRect draws an ugly black/white dotted line. 
+            // This draws a subtle inner border instead when focused (optional).
+            if (focused && !pressed) {
+                RECT rcFocus = dis->rcItem;
+                InflateRect(&rcFocus, -2, -2); // shrink by 2 pixels
+                HPEN hFocusPen = CreatePen(PS_DOT, 1, dark ? RGB(100, 100, 100) : RGB(170, 170, 170));
+                HPEN hOldFocus = (HPEN)SelectObject(dis->hDC, hFocusPen);
+                Rectangle(dis->hDC, rcFocus.left, rcFocus.top, rcFocus.right, rcFocus.bottom);
+                SelectObject(dis->hDC, hOldFocus);
+                DeleteObject(hFocusPen);
+            }
+
             return TRUE;
         }
     }

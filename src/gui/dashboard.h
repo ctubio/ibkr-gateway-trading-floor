@@ -158,13 +158,13 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int steps = 1;
             int stepz = 0;
             //charts from tradingview
-            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     3); // total daily eur usd
-            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_ORDERS,   10); // open, messages, history
-            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_DIAMONDS,  4); // portfolio + watchlist
+            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     3);
+            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_ORDERS,   10);
+            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_DIAMONDS,  4);
             
             addButtons(hWnd, hInst, "Ticker",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TICKER,    9);        
             addButtons(hWnd, hInst, "Levels",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_LEVELS,    8);
-            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TIMESALES, 7); // 3: 0, 100, 1000
+            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TIMESALES, 7);
             addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_NEWS,      6);
 
             addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SYMBOLS,   2);
@@ -205,24 +205,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
 
         case WM_TRAYICON: {
-            // FIX: In NOTIFYICON_VERSION_4, the mouse event is packed into the LOWORD of lParam.
-            // Additionally, Right-Clicks send WM_CONTEXTMENU and Left-Clicks send NIN_SELECT.
             WORD trayEvent = LOWORD(lParam);
-
-            if (trayEvent == WM_LBUTTONUP || trayEvent == NIN_SELECT) {
-                if (IsWindowVisible(hWnd) && !IsIconic(hWnd)) { 
-                    ShowWindow(hWnd, SW_HIDE);
+            if (trayEvent == WM_LBUTTONUP) {
+                if (IsIconic(hWnd)) { 
+                    ShowWindow(hWnd, SW_RESTORE);
                 } else {
-                    if (IsIconic(hWnd)) { 
-                        ShowWindow(hWnd, SW_RESTORE);
-                    } else {
-                        ShowWindow(hWnd, SW_SHOW);
-                    }
-                    
-                    SetForegroundWindow(hWnd);
-                    SetActiveWindow(hWnd);
-                    SetFocus(hWnd);
+                    ShowWindow(hWnd, SW_SHOW);
                 }
+                
+                SetForegroundWindow(hWnd);
+                SetActiveWindow(hWnd);
+                SetFocus(hWnd);
             }
             else if (trayEvent == WM_RBUTTONUP || trayEvent == WM_CONTEXTMENU) {
                 POINT pt;

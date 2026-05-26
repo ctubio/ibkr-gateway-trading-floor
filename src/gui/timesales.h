@@ -209,7 +209,7 @@ void StartTimesalesSearch() {
         RegisterClass(&wc);
         registered = true;
     }
-    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, TIMESALES_SEARCH_CLASS_NAME, "Time & Sales - Search Symbol", 
+    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, TIMESALES_SEARCH_CLASS_NAME, "Time & Sales: Search Symbol", 
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, 
         (GetSystemMetrics(SM_CXSCREEN) - 260) / 2, (GetSystemMetrics(SM_CYSCREEN) - 240) / 2, 275, 260, 
         NULL, NULL, GetModuleHandle(NULL), NULL);
