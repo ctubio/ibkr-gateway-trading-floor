@@ -4,6 +4,8 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBK
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
 
+static ListViewZoomData DiamondsZoomData = { NULL, 14, "DiamondsListZoom" };
+
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
     DCOL_SYMBOL = 0,
@@ -237,6 +239,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             0, 0, 1100, 420,
             hWnd, (HMENU)ID_DIAMONDS_RESULTS_LIST, hInst, NULL);
 
+        DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
+        ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.fontSize);
+        SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&DiamondsZoomData);
+
         DWORD exStyle = LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER;
         if (Settings_DarkMode()) exStyle |= LVS_EX_GRIDLINES;
         ListView_SetExtendedListViewStyle(hList, exStyle);
@@ -338,6 +344,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (dark) {
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         cd->clrText   = DM_TEXT;
+                    } else {
+                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
+                        cd->clrText   = LM_TEXT;
                     }
                     return CDRF_NOTIFYSUBITEMDRAW;
 
@@ -351,8 +360,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     {
                         HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                         char buf[32] = {};
-                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec,
-                                            cd->iSubItem, buf, sizeof(buf));
+                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, cd->iSubItem, buf, sizeof(buf));
 
                         // Guard: skip colouring the "--" sentinel — atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
@@ -375,6 +383,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_DESTROY:
         api.unsetDiamondsWindow();   // cancels market data subscriptions + positions
         api.removeApiUpdateWindow(hWnd);
+        if (DiamondsZoomData.hFont) {
+            DeleteObject(DiamondsZoomData.hFont);
+        }
         break;
     }
 

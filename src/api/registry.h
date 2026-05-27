@@ -275,7 +275,40 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
             }
         }
     }
-    
+
+    if (msg == WM_NCPAINT) {
+        // Let Windows paint the NC area first (scrollbars etc.)
+        LRESULT res = DefSubclassProc(hWnd, msg, wParam, lParam);
+
+        if (!Settings_DarkMode()) return res;
+
+        // Now overdraw just the border with our dark colour.
+        // GetWindowDC covers the full window rect including NC area.
+        HDC hdc = GetWindowDC(hWnd);
+        if (hdc) {
+            RECT rcWin;
+            GetWindowRect(hWnd, &rcWin);
+            // Convert to window-relative coordinates (top-left = 0,0)
+            OffsetRect(&rcWin, -rcWin.left, -rcWin.top);
+
+            // WS_EX_CLIENTEDGE draws a 2-pixel sunken border; overdraw it.
+            HPEN hPen  = CreatePen(PS_SOLID, 1, DM_BORDER);
+            HPEN hOld  = (HPEN)SelectObject(hdc, hPen);
+            HBRUSH hBr = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+            // Outer edge
+            Rectangle(hdc, rcWin.left, rcWin.top, rcWin.right, rcWin.bottom);
+            // Inner edge (WS_EX_CLIENTEDGE is 2px wide)
+            Rectangle(hdc, rcWin.left + 1, rcWin.top + 1, rcWin.right - 1, rcWin.bottom - 1);
+
+            SelectObject(hdc, hOld);
+            SelectObject(hdc, hBr);
+            DeleteObject(hPen);
+            ReleaseDC(hWnd, hdc);
+        }
+        return res;
+    }
+
     // Clean up subclass on destroy
     if (msg == WM_NCDESTROY) {
         RemoveWindowSubclass(hWnd, ListViewSubclassProc, uIdSubclass);

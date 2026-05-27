@@ -144,6 +144,61 @@ HICON CreateGrayIcon(HICON hOriginal) {
     return hGray;
 }
 
+struct ListViewZoomData {
+    HFONT hFont;
+    int fontSize;
+    const char* settingKey;
+};
+
+static void ApplyListViewFont(HWND hList, HFONT hFont, int fontSize) {
+    if (hFont) {
+        DeleteObject(hFont);
+    }
+
+    // Calculate the correct height based on the device context
+    HDC hdc = GetDC(hList);
+    int fontHeight = -MulDiv(fontSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(hList, hdc);
+
+    hFont = CreateFontA(fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, 
+        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+
+    SendMessage(hList, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+
+    HWND hHeader = ListView_GetHeader(hList);
+    int colCount = Header_GetItemCount(hHeader);
+    for (int i = 0; i < colCount; i++) {
+        ListView_SetColumnWidth(hList, i, LVSCW_AUTOSIZE_USEHEADER);
+    }
+    
+    // Redraw the control completely
+    InvalidateRect(hList, NULL, TRUE);
+}
+
+LRESULT CALLBACK ListViewZoomProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    auto* zoomData = reinterpret_cast<ListViewZoomData*>(dwRefData);
+    if (!zoomData) return DefSubclassProc(hList, uMsg, wParam, lParam);
+
+    if (uMsg == WM_MOUSEWHEEL) {
+        if (GetKeyState(VK_CONTROL) & 0x8000) {
+            int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+            if (zDelta > 0) zoomData->fontSize++;
+            else zoomData->fontSize--;
+
+            if (zoomData->fontSize < 6)  zoomData->fontSize = 6;
+            if (zoomData->fontSize > 30) zoomData->fontSize = 30;
+
+            Settings_Save(zoomData->settingKey, zoomData->fontSize);
+            ApplyListViewFont(hList, zoomData->hFont, zoomData->fontSize);
+
+            return 0; // Prevent default scrolling
+        }
+    }
+    return DefSubclassProc(hList, uMsg, wParam, lParam);
+}
+
 std::unordered_map<std::string, HICON> offlineIcons;
 std::unordered_map<std::string, HICON> onlineIcons;
 

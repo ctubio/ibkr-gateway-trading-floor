@@ -18,6 +18,8 @@ static const int NEWS_COMBO_H   = 24;
 static const int NEWS_COMBO_GAP = 8;
 static const int NEWS_SELECTOR_H = 8 + NEWS_COMBO_H + 8;
 
+static ListViewZoomData NewsZoomData = { NULL, 14, "NewsListZoom" };
+
 std::string articleBuffer;
 
 // Convert basic HTML to RTF for RichEdit display
@@ -250,6 +252,10 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             0, 0, 400, 450,
             hWnd, (HMENU)ID_NEWS_RESULTS_LIST, hInst, NULL);
 
+        NewsZoomData.fontSize = (int)Settings_Load(NewsZoomData.settingKey, NewsZoomData.fontSize);
+        ApplyListViewFont(hNewsResults, NewsZoomData.hFont, NewsZoomData.fontSize);
+        SetWindowSubclass(hNewsResults, ListViewZoomProc, 0, (DWORD_PTR)&NewsZoomData);
+
         // Combos at the bottom — initially hidden until focused
         hNewsListCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
@@ -373,36 +379,44 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
-        if (hdr->idFrom == ID_NEWS_RESULTS_LIST) {
-            if (hdr->code == NM_DBLCLK) {
-                NMITEMACTIVATE* nm = (NMITEMACTIVATE*)lParam;
-                if (nm->iItem >= 0) {
-                    LVITEMA lvi = {};
-                    lvi.mask   = LVIF_PARAM;
-                    lvi.iItem  = nm->iItem;
-                    SendMessageA(hNewsResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
-                    auto* rowId = reinterpret_cast<std::string*>(lvi.lParam);
-                    if (rowId) {
-                        auto sep = rowId->find('|');
-                        if (sep != std::string::npos) {
-                            std::string provider  = rowId->substr(0, sep);
-                            std::string articleId = rowId->substr(sep + 1);
-                            api.reqNewsArticle(provider, articleId);
-                        }
+        if (hdr->idFrom != ID_NEWS_RESULTS_LIST) break;
+
+        if (hdr->code == NM_DBLCLK) {
+            NMITEMACTIVATE* nm = (NMITEMACTIVATE*)lParam;
+            if (nm->iItem >= 0) {
+                LVITEMA lvi = {};
+                lvi.mask   = LVIF_PARAM;
+                lvi.iItem  = nm->iItem;
+                SendMessageA(hNewsResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+                auto* rowId = reinterpret_cast<std::string*>(lvi.lParam);
+                if (rowId) {
+                    auto sep = rowId->find('|');
+                    if (sep != std::string::npos) {
+                        std::string provider  = rowId->substr(0, sep);
+                        std::string articleId = rowId->substr(sep + 1);
+                        api.reqNewsArticle(provider, articleId);
                     }
                 }
-                return 0;
             }
-            if (hdr->code == NM_CUSTOMDRAW) {
-                NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
-                if (!Settings_DarkMode()) break;
-                switch (cd->nmcd.dwDrawStage) {
-                    case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
-                    case CDDS_ITEMPREPAINT:
+            return 0;
+        }
+        if (hdr->code == NM_CUSTOMDRAW) {
+            NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
+            bool dark = Settings_DarkMode();
+
+            switch (cd->nmcd.dwDrawStage) {
+                case CDDS_PREPAINT:
+                    return CDRF_NOTIFYITEMDRAW;
+
+                case CDDS_ITEMPREPAINT:
+                    if (dark) {
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         cd->clrText   = DM_TEXT;
-                        return CDRF_DODEFAULT;
-                }
+                    } else {
+                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
+                        cd->clrText   = LM_TEXT;
+                    }
+                    return CDRF_NOTIFYSUBITEMDRAW;
             }
         }
         break;
@@ -445,6 +459,9 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         hNewsSymCombo  = NULL;
         hNewsResults   = NULL;
         newsSymEntries.clear();
+        if (NewsZoomData.hFont) {
+            DeleteObject(NewsZoomData.hFont);
+        }
         api.removeApiUpdateWindow(hWnd);
         break;
     }
