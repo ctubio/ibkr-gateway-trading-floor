@@ -11,6 +11,8 @@ static std::vector<std::string> tickerCurrentEntries; // entries currently subsc
 static const int TICKER_COMBO_H    = 24;
 static const int TICKER_SELECTOR_H = 8 + TICKER_COMBO_H + 8;
 
+static ListViewZoomData TickerZoomData = { NULL, 14, "TickerListZoom" };
+
 // ── Column definitions ────────────────────────────────────────────────────────
 
 enum TickerColIdx {
@@ -226,6 +228,10 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 1000, 400,
             hWnd, (HMENU)ID_TICKER_LIST, hInst, NULL);
 
+        TickerZoomData.fontSize = (int)Settings_Load(TickerZoomData.settingKey, TickerZoomData.fontSize);
+        ApplyListViewFont(hTickerList, TickerZoomData.hFont, TickerZoomData.fontSize);
+        SetWindowSubclass(hTickerList, ListViewZoomProc, 0, (DWORD_PTR)&TickerZoomData);
+
         DWORD exStyle = LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER;
         if (Settings_DarkMode()) exStyle |= LVS_EX_GRIDLINES;
         ListView_SetExtendedListViewStyle(hTickerList, exStyle);
@@ -329,11 +335,16 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
             bool dark = Settings_DarkMode();
             switch (cd->nmcd.dwDrawStage) {
-                case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
+                    case CDDS_PREPAINT:
+                        return CDRF_NOTIFYITEMDRAW;
+
                 case CDDS_ITEMPREPAINT:
                     if (dark) {
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         cd->clrText   = DM_TEXT;
+                    } else {
+                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
+                        cd->clrText   = LM_TEXT;
                     }
                     return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
@@ -366,6 +377,9 @@ LRESULT CALLBACK WndProcTicker(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api.removeApiUpdateWindow(hWnd);
         Ticker_ClearList(hWnd); // frees lParam TickerRowData structs
         tickerCurrentEntries.clear();
+            if (TickerZoomData.hFont) {
+                DeleteObject(TickerZoomData.hFont);
+            }
         break;
     }
 

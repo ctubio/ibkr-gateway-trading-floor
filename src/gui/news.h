@@ -1,18 +1,30 @@
 #pragma once
 
-void StartNews() { StartGenericWindow(NEWS_CLASS_NAME, "News", L"IBKRGatewayClient.News", 420, 500); }
+void StartNews() { StartGenericWindow(NEWS_CLASS_NAME, "News", L"IBKRGatewayClient.News", 830, 250); }
 
 void StartNewsArticle() { StartGenericWindow(NEWS_ARTICLE_CLASS_NAME, "News Article", L"IBKRGatewayClient.NewsArticle", 600, 500); }
 
-#define ID_NEWS_LIST_COMBO   3001
-#define ID_NEWS_SYM_COMBO    3002
-#define ID_NEWS_RESULTS_LIST 3003
+#define ID_NEWS_LIST_COMBO     3001
+#define ID_NEWS_SYM_COMBO      3002
+#define ID_NEWS_RESULTS_LIST   3003
+#define ID_NEWS_PROVIDER_COMBO 3004
 
-static HWND hNewsArticleEdit = NULL;
-static HWND hNewsListCombo = NULL;
-static HWND hNewsSymCombo  = NULL;
-static HWND hNewsResults   = NULL;
+static HWND hNewsArticleEdit    = NULL;
+static HWND hNewsListCombo      = NULL;
+static HWND hNewsSymCombo       = NULL;
+static HWND hNewsProviderCombo  = NULL;
+static HWND hNewsResults        = NULL;
 static std::vector<std::string> newsSymEntries;
+
+// Stored news items for provider filtering
+struct StoredNewsItem {
+    std::string timeStamp;
+    std::string providerCode;
+    std::string articleId;
+    std::string headline;
+};
+static std::vector<StoredNewsItem> newsItems;
+static std::string newsProviderFilter; // "" means "All"
 
 static const int NEWS_COMBO_H   = 24;
 static const int NEWS_COMBO_GAP = 8;
@@ -189,20 +201,54 @@ static void News_Layout(HWND hWnd) {
     bool combosVisible = hNewsListCombo && IsWindowVisible(hNewsListCombo);
 
     if (combosVisible) {
-        int availW = rc.right - m * 2 - NEWS_COMBO_GAP;
-        int eachW  = availW / 2;
+        int availW = rc.right - m * 2 - NEWS_COMBO_GAP * 2;
+        int eachW  = availW / 3;
         int comboY = rc.bottom - NEWS_COMBO_H - m;
-        
+
         // Position ListView at top, taking up most of the space
         MoveWindow(hNewsResults, 0, 0, rc.right, comboY - m, TRUE);
-        
-        // Position combos at bottom
-        SetWindowPos(hNewsListCombo, NULL, m, comboY, eachW, NEWS_COMBO_H,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hNewsSymCombo,  NULL, m + eachW + NEWS_COMBO_GAP, comboY, eachW, NEWS_COMBO_H,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
+
+        // Position the three combos at the bottom
+        SetWindowPos(hNewsListCombo,     NULL, m,                                   comboY, eachW, NEWS_COMBO_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hNewsSymCombo,      NULL, m + eachW + NEWS_COMBO_GAP,          comboY, eachW, NEWS_COMBO_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hNewsProviderCombo, NULL, m + eachW * 2 + NEWS_COMBO_GAP * 2, comboY, eachW, NEWS_COMBO_H, SWP_NOZORDER | SWP_NOACTIVATE);
     } else {
         MoveWindow(hNewsResults, 0, 0, rc.right, rc.bottom, TRUE);
+    }
+}
+
+// ── Provider filter ───────────────────────────────────────────────────────────
+
+// Repopulate the list view from the stored items, honouring newsProviderFilter.
+static void News_ApplyProviderFilter() {
+    if (!hNewsResults) return;
+
+    // Free heap strings stored as row lParams
+    int count = ListView_GetItemCount(hNewsResults);
+    for (int i = 0; i < count; ++i) {
+        LVITEMA lvi = {};
+        lvi.mask  = LVIF_PARAM;
+        lvi.iItem = i;
+        SendMessageA(hNewsResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+        delete reinterpret_cast<std::string*>(lvi.lParam);
+    }
+    ListView_DeleteAllItems(hNewsResults);
+
+    // Re-insert in original arrival order, inserting each at index 0 so the
+    // newest item ends up at the top (mirrors the WM_NEWS_RESULTS behaviour).
+    for (const auto& item : newsItems) {
+        if (!newsProviderFilter.empty() && item.providerCode != newsProviderFilter)
+            continue;
+
+        auto* rowId = new std::string(item.providerCode + "|" + item.articleId);
+        LVITEMA lvi  = {};
+        lvi.mask     = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem    = 0;
+        lvi.lParam   = (LPARAM)rowId;
+        lvi.pszText  = (LPSTR)item.timeStamp.c_str();
+        int idx = (int)SendMessageA(hNewsResults, LVM_INSERTITEMA, 0, (LPARAM)&lvi);
+        ListView_SetItemText(hNewsResults, idx, 1, (LPSTR)item.providerCode.c_str());
+        ListView_SetItemText(hNewsResults, idx, 2, (LPSTR)item.headline.c_str());
     }
 }
 
@@ -221,6 +267,9 @@ void News_RequestForSymbol(HWND hWnd, const std::string& fullEntry) {
 
     if (hWnd) SetWindowTextA(hWnd, ("News: " + symbol).c_str());
 
+    // Clear stored items and the list view
+    newsItems.clear();
+
     if (hNewsResults) {
         int count = ListView_GetItemCount(hNewsResults);
         for (int i = 0; i < count; ++i) {
@@ -232,6 +281,16 @@ void News_RequestForSymbol(HWND hWnd, const std::string& fullEntry) {
         }
         ListView_DeleteAllItems(hNewsResults);
     }
+
+    // Reset provider combo to "All" only; providers are rebuilt as items arrive.
+    // newsProviderFilter is intentionally kept so the filter re-applies automatically
+    // when the first matching provider arrives.
+    if (hNewsProviderCombo) {
+        SendMessage(hNewsProviderCombo, CB_RESETCONTENT, 0, 0);
+        SendMessageA(hNewsProviderCombo, CB_ADDSTRING, 0, (LPARAM)"All");
+        SendMessage(hNewsProviderCombo, CB_SETCURSEL, 0, 0);
+    }
+
     api.reqNewsForSymbol(std::stoi(conIdStr), symbol);
 }
 
@@ -267,6 +326,14 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             m + 180 + NEWS_COMBO_GAP, 460, 180, 200,
             hWnd, (HMENU)ID_NEWS_SYM_COMBO, hInst, NULL);
 
+        hNewsProviderCombo = CreateWindowA("COMBOBOX", NULL,
+            WS_CHILD | WS_VSCROLL | CBS_DROPDOWNLIST,
+            m + 360 + NEWS_COMBO_GAP * 2, 460, 180, 200,
+            hWnd, (HMENU)ID_NEWS_PROVIDER_COMBO, hInst, NULL);
+        // Seed with the "All" option; provider entries are added as news arrives
+        SendMessageA(hNewsProviderCombo, CB_ADDSTRING, 0, (LPARAM)"All");
+        SendMessage(hNewsProviderCombo, CB_SETCURSEL, 0, 0);
+
         DWORD exStyle = LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER;
         if (Settings_DarkMode()) exStyle |= LVS_EX_GRIDLINES;
         ListView_SetExtendedListViewStyle(hNewsResults, exStyle);
@@ -284,15 +351,17 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         lvc.pszText = (LPSTR)"Provider";
         ListView_InsertColumn(hNewsResults, 1, &lvc);
 
-        lvc.cx = 350;
+        lvc.cx = 600;
         lvc.pszText = (LPSTR)"Headline";
         ListView_InsertColumn(hNewsResults, 2, &lvc);
 
         api.setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News");
 
-        std::string lastList  = Settings_LoadString("LastNewsList");
-        std::string lastEntry = Settings_LoadString("LastNewsEntry");
+        std::string lastList     = Settings_LoadString("LastNewsList");
+        std::string lastEntry    = Settings_LoadString("LastNewsEntry");
+        std::string lastProvider = Settings_LoadString("LastNewsProvider");
+        newsProviderFilter = lastProvider; // applied incrementally as items arrive
         News_LoadListCombo(lastList);
         if (News_LoadSymbolCombo(lastEntry)) {
             int sel = (int)SendMessage(hNewsSymCombo, CB_GETCURSEL, 0, 0);
@@ -311,11 +380,13 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_ACTIVATE:
         if (LOWORD(wParam) != WA_INACTIVE) {
-            ShowWindow(hNewsListCombo, SW_SHOW);
-            ShowWindow(hNewsSymCombo,  SW_SHOW);
+            ShowWindow(hNewsListCombo,     SW_SHOW);
+            ShowWindow(hNewsSymCombo,      SW_SHOW);
+            ShowWindow(hNewsProviderCombo, SW_SHOW);
         } else {
-            ShowWindow(hNewsListCombo, SW_HIDE);
-            ShowWindow(hNewsSymCombo,  SW_HIDE);
+            ShowWindow(hNewsListCombo,     SW_HIDE);
+            ShowWindow(hNewsSymCombo,      SW_HIDE);
+            ShowWindow(hNewsProviderCombo, SW_HIDE);
         }
         News_Layout(hWnd);
         return 0;
@@ -331,12 +402,55 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             if (sel != CB_ERR && sel < (int)newsSymEntries.size())
                 News_RequestForSymbol(hWnd, newsSymEntries[sel]);
         }
+        if (LOWORD(wParam) == ID_NEWS_PROVIDER_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
+            int sel = (int)SendMessage(hNewsProviderCombo, CB_GETCURSEL, 0, 0);
+            if (sel == 0) {
+                // "All" selected
+                newsProviderFilter.clear();
+            } else {
+                int len = (int)SendMessage(hNewsProviderCombo, CB_GETLBTEXTLEN, sel, 0);
+                if (len > 0) {
+                    std::string name(len + 1, '\0');
+                    SendMessageA(hNewsProviderCombo, CB_GETLBTEXT, sel, (LPARAM)name.data());
+                    name.resize(len);
+                    newsProviderFilter = name;
+                }
+            }
+            Settings_SaveString("LastNewsProvider", newsProviderFilter);
+            News_ApplyProviderFilter();
+        }
         break;
 
     case WM_NEWS_RESULTS: {
         auto* news = reinterpret_cast<TradingAPI::NewsTickEntry*>(lParam);
         if (!news) break;
         if (!hNewsResults) { delete news; break; }
+
+        // Store for re-filtering later
+        newsItems.push_back({ news->timeStamp, news->providerCode, news->articleId, news->headline });
+
+        // Add provider to combo if not already present
+        if (hNewsProviderCombo) {
+            int existing = (int)SendMessageA(hNewsProviderCombo, CB_FINDSTRINGEXACT, -1,
+                                             (LPARAM)news->providerCode.c_str());
+            if (existing == CB_ERR) {
+                SendMessageA(hNewsProviderCombo, CB_ADDSTRING, 0,
+                             (LPARAM)news->providerCode.c_str());
+                // If this is the provider we're supposed to restore, select it now
+                if (!newsProviderFilter.empty() && news->providerCode == newsProviderFilter) {
+                    int idx = (int)SendMessageA(hNewsProviderCombo, CB_FINDSTRINGEXACT, -1,
+                                                (LPARAM)newsProviderFilter.c_str());
+                    if (idx != CB_ERR)
+                        SendMessage(hNewsProviderCombo, CB_SETCURSEL, idx, 0);
+                }
+            }
+        }
+
+        // Only insert into the list view if it passes the active provider filter
+        if (!newsProviderFilter.empty() && news->providerCode != newsProviderFilter) {
+            delete news;
+            break;
+        }
 
         // Store "providerCode|articleId" as the item's lParam for double-click retrieval.
         // We heap-allocate it; it lives as long as the row does.
@@ -455,10 +569,13 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             }
         }
         api.setNewsWindow(NULL);
-        hNewsListCombo = NULL;
-        hNewsSymCombo  = NULL;
-        hNewsResults   = NULL;
+        hNewsListCombo     = NULL;
+        hNewsSymCombo      = NULL;
+        hNewsProviderCombo = NULL;
+        hNewsResults       = NULL;
         newsSymEntries.clear();
+        newsItems.clear();
+        newsProviderFilter.clear();
         if (NewsZoomData.hFont) {
             DeleteObject(NewsZoomData.hFont);
         }
