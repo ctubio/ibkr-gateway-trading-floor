@@ -26,6 +26,11 @@ struct TsState {
     bool tsFilteredView = false;
     std::string symbol;
     int conId = 0;
+
+    // --- Splitter State Variables ---
+    float splitX = 0.5f; // Vertical split ratio (50% default)
+    float splitY = 0.5f; // Horizontal split ratio (50% default)
+    int dragMode = 0;    // 0 = none, 1 = dragging vertical, 2 = dragging horizontal
 };
 static std::map<HWND, TsState*> tsStates;
 
@@ -90,13 +95,25 @@ static void Ts_Layout(HWND hWnd, TsState* state) {
     int availW = rc.right;
 
     if (state->tsFilteredView) {
-        int leftW = availW / 2; int rightW = availW - leftW; int halfH = availH / 2;
-        ShowWindow(state->hTsList, SW_SHOW); ShowWindow(state->hTsListF100, SW_SHOW); ShowWindow(state->hTsListF1000, SW_SHOW);
+        int splitThick = 6; // 6 pixels of grab space
+        
+        // Calculate dimensions based on the split ratios
+        int leftW = (int)(availW * state->splitX) - (splitThick / 2);
+        int rightW = availW - leftW - splitThick;
+        int topH = (int)(availH * state->splitY) - (splitThick / 2);
+        int botH = availH - topH - splitThick;
+
+        ShowWindow(state->hTsList, SW_SHOW); 
+        ShowWindow(state->hTsListF100, SW_SHOW); 
+        ShowWindow(state->hTsListF1000, SW_SHOW);
+        
         MoveWindow(state->hTsList, 0, 0, leftW, availH, TRUE);
-        MoveWindow(state->hTsListF100, leftW, 0, rightW, halfH, TRUE);
-        MoveWindow(state->hTsListF1000, leftW, halfH, rightW, availH - halfH, TRUE);
+        MoveWindow(state->hTsListF100, leftW + splitThick, 0, rightW, topH, TRUE);
+        MoveWindow(state->hTsListF1000, leftW + splitThick, topH + splitThick, rightW, botH, TRUE);
     } else {
-        ShowWindow(state->hTsListF100, SW_HIDE); ShowWindow(state->hTsListF1000, SW_HIDE); ShowWindow(state->hTsList, SW_SHOW);
+        ShowWindow(state->hTsListF100, SW_HIDE); 
+        ShowWindow(state->hTsListF1000, SW_HIDE); 
+        ShowWindow(state->hTsList, SW_SHOW);
         MoveWindow(state->hTsList, 0, 0, availW, availH, TRUE);
     }
     SetWindowPos(state->hTsFilterCheck, NULL, 8, rc.bottom - 20, 100, 16, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -226,6 +243,29 @@ HWND StartTimesales(const std::string& symbol, int conId) {
     return StartGenericWindow(TIMESALES_CLASS_NAME, ("Time & Sales: " + symbol).c_str(), L"IBKRGatewayClient.Timesales", 380, 500, NULL, key, data);
 }
 
+static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
+    if (!state->tsFilteredView) return 0; // No splitters visible
+
+    RECT rc; GetClientRect(hWnd, &rc);
+    int availH = rc.bottom - 24; 
+    int availW = rc.right;
+    int splitThick = 6; // Must match the thickness in Ts_Layout
+
+    int splitXPos = (int)(availW * state->splitX);
+    int splitYPos = (int)(availH * state->splitY);
+
+    // Check vertical splitter (separates left and right columns)
+    if (x >= splitXPos - splitThick && x <= splitXPos + splitThick && y >= 0 && y <= availH) {
+        return 1; // 1 = Vertical Splitter
+    }
+    // Check horizontal splitter (separates top right and bottom right)
+    if (x > splitXPos + splitThick && y >= splitYPos - splitThick && y <= splitYPos + splitThick) {
+        return 2; // 2 = Horizontal Splitter
+    }
+    
+    return 0; // 0 = Not hovering over a splitter
+}
+
 // ── Window procedure ──────────────────────────────────────────────────────────
 LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
@@ -253,6 +293,18 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         state->hTsFilterCheck = CreateWindowA("BUTTON", "Filter Size", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, 0, 100, 16, hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
         
+        // Restore splitter positions and filter checkbox if previously saved for this symbol
+        if (!state->symbol.empty()) {
+            Settings_LoadTimesalesSplitter(state->symbol, state->splitX, state->splitY);
+
+            char filterKey[256];
+            sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
+            if (Settings_Load(filterKey, 0)) {
+                state->tsFilteredView = true;
+                SendMessage(state->hTsFilterCheck, BM_SETCHECK, BST_CHECKED, 0);
+            }
+        }
+
         api.setTimesalesWindow(hWnd, state->conId, state->symbol);
         api.addApiUpdateWindow(hWnd);
         UpdateTimesalesRegistry(); // Ensure registry is immediately aware of this new instance
@@ -268,6 +320,11 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             state->tsFilteredView = (SendMessage(state->hTsFilterCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
             if (state->tsFilteredView) {
                 ListView_DeleteAllItems(state->hTsListF100); ListView_DeleteAllItems(state->hTsListF1000);
+            }
+            if (!state->symbol.empty()) {
+                char filterKey[256];
+                sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
+                Settings_Save(filterKey, state->tsFilteredView ? 1 : 0);
             }
             Ts_Layout(hWnd, state);
         }
@@ -314,7 +371,80 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         break;
     }
+    
+    case WM_SETCURSOR: {
+        if (state && state->tsFilteredView && LOWORD(lParam) == HTCLIENT) {
+            POINT pt; 
+            GetCursorPos(&pt); 
+            ScreenToClient(hWnd, &pt);
+            
+            int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
+            if (hit == 1) {
+                SetCursor(LoadCursor(NULL, IDC_SIZEWE)); // Left/Right resize cursor
+                return TRUE;
+            } else if (hit == 2) {
+                SetCursor(LoadCursor(NULL, IDC_SIZENS)); // Up/Down resize cursor
+                return TRUE;
+            }
+        }
+        break; 
+    }
 
+    case WM_LBUTTONDOWN: {
+        if (state && state->tsFilteredView) {
+            int x = (short)LOWORD(lParam);
+            int y = (short)HIWORD(lParam);
+            
+            state->dragMode = HitTestSplitter(hWnd, state, x, y);
+            if (state->dragMode != 0) {
+                SetCapture(hWnd); // Lock mouse input to this window during drag
+            }
+        }
+        break;
+    }
+
+    case WM_MOUSEMOVE: {
+        if (state && state->dragMode != 0) {
+            RECT rc; GetClientRect(hWnd, &rc);
+            int availH = rc.bottom - 24; 
+            int availW = rc.right;
+            int x = (short)LOWORD(lParam);
+            int y = (short)HIWORD(lParam);
+
+            if (state->dragMode == 1) { // Dragging vertical splitter
+                float newSplit = (float)x / (float)availW;
+                // Clamp ratios so windows don't disappear
+                if (newSplit < 0.1f) newSplit = 0.1f;
+                if (newSplit > 0.9f) newSplit = 0.9f;
+                state->splitX = newSplit;
+            } 
+            else if (state->dragMode == 2) { // Dragging horizontal splitter
+                float newSplit = (float)y / (float)availH;
+                // Clamp ratios so windows don't disappear
+                if (newSplit < 0.1f) newSplit = 0.1f;
+                if (newSplit > 0.9f) newSplit = 0.9f;
+                state->splitY = newSplit;
+            }
+            
+            // Force layout recalculation
+            Ts_Layout(hWnd, state);
+            InvalidateRect(hWnd, NULL, TRUE); 
+        }
+        break;
+    }
+
+    case WM_LBUTTONUP: {
+        if (state && state->dragMode != 0) {
+            state->dragMode = 0; // Stop dragging
+            ReleaseCapture();    // Release the mouse lock
+
+            // Persist the new splitter positions for this symbol
+            if (!state->symbol.empty()) {
+                Settings_SaveTimesalesSplitter(state->symbol, state->splitX, state->splitY);
+            }
+        }
+        break;
+    }
     case WM_DESTROY:
         api.unsetTimesalesWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);

@@ -1,6 +1,6 @@
 #pragma once
 
-void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBKRGatewayClient.Diamonds", 1100, 420); }
+void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBKRGatewayClient.Diamonds", 1476, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
 

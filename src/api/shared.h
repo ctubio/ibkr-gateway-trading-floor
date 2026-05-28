@@ -484,6 +484,27 @@ void KillGateway() {
     CloseHandle(hSnap);
 }
 
+std::string FormatWithCommas(double value) {
+    char temp[64];
+    // Format to 2 decimal places first
+    snprintf(temp, sizeof(temp), "%.2f", value);
+    std::string s(temp);
+
+    // Find the decimal point
+    int dotPos = s.find('.');
+    if (dotPos == std::string::npos) dotPos = s.length();
+
+    // If it's a negative number, don't put a comma after the minus sign!
+    int start = (value < 0.0) ? 1 : 0;
+
+    // Insert commas every 3 characters moving left from the decimal point
+    for (int i = dotPos - 3; i > start; i -= 3) {
+        s.insert(i, ",");
+    }
+
+    return s;
+}
+
 std::wstring StringToWide(const std::string& str) {
     int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0);
     std::wstring wstrTo(size_needed, 0);

@@ -577,6 +577,38 @@ void SetTimesalesAlwaysOnTop(HWND hWnd, bool onTop) {
     SetWindowPos(hWnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
+// ── Timesales splitter persistence ───────────────────────────────────────────
+// splitX / splitY are stored as DWORD scaled ×10000 so floats survive REG_DWORD.
+// Keys are per-symbol so multiple open windows never collide.
+
+void Settings_SaveTimesalesSplitter(const std::string& symbol, float splitX, float splitY) {
+    char keyX[256], keyY[256];
+    sprintf(keyX, "TsSplitX_%s", symbol.c_str());
+    sprintf(keyY, "TsSplitY_%s", symbol.c_str());
+    Settings_Save(keyX, (DWORD)(splitX * 10000.0f));
+    Settings_Save(keyY, (DWORD)(splitY * 10000.0f));
+}
+
+bool Settings_LoadTimesalesSplitter(const std::string& symbol, float& splitX, float& splitY) {
+    char keyX[256], keyY[256];
+    sprintf(keyX, "TsSplitX_%s", symbol.c_str());
+    sprintf(keyY, "TsSplitY_%s", symbol.c_str());
+
+    // Use sentinel 0xFFFFFFFF to detect "not saved yet"
+    DWORD dx = Settings_Load(keyX, 0xFFFFFFFF);
+    DWORD dy = Settings_Load(keyY, 0xFFFFFFFF);
+    if (dx == 0xFFFFFFFF || dy == 0xFFFFFFFF) return false;
+
+    float fx = (float)dx / 10000.0f;
+    float fy = (float)dy / 10000.0f;
+    // Clamp defensively in case of corrupted registry data
+    if (fx < 0.1f || fx > 0.9f || fy < 0.1f || fy > 0.9f) return false;
+
+    splitX = fx;
+    splitY = fy;
+    return true;
+}
+
 void Session_RestoreWindows(
     const std::function<void()>& StartBook,
     const std::function<void()>& StartCoins,
