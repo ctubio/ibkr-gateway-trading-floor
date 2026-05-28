@@ -134,6 +134,10 @@ All app settings and state are stored under:
 HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor
 ```
 
+The application does not create any configuration files in the filesystem; it stores its settings only in the Windows Registry.
+
+The executable is portable and can be placed anywhere on disk. There is no required installation folder — `Trading-Floor.exe` may be run from any directory.
+
 Saved state includes:
 
 - window size/position
