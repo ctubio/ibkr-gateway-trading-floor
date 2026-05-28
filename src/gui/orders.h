@@ -92,7 +92,9 @@ static void Orders_Repopulate(HWND hList) {
 struct EditOrderCtx {
     int    orderId;
     HWND   hPriceEdit;
-    HWND   hQtyEdit;
+    HWND   hQtyEdit;       // NULL when partialFill — qty row is omitted
+    bool   partialFill;    // true → show price only; use originalQty for modifyOrder
+    double originalQty;    // captured from order when partialFill is true
 };
 
 // Forward ENTER / ESC from an edit control up to the popup parent, handle TAB and Arrows.
@@ -113,7 +115,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
         if (wParam == VK_TAB) {
             HWND hParent = GetParent(hWnd);
             EditOrderCtx* ctx = (EditOrderCtx*)GetWindowLongPtr(hParent, GWLP_USERDATA);
-            if (ctx) {
+            if (ctx && ctx->hQtyEdit) {
                 HWND hNext = (hWnd == ctx->hPriceEdit) ? ctx->hQtyEdit : ctx->hPriceEdit;
                 SetFocus(hNext);
                 // Auto-select text when focusing to make typing over it easy
@@ -126,17 +128,18 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             char buf[32] = {};
             GetWindowTextA(hWnd, buf, sizeof(buf));
             
-            double val = atof(buf);
+            double val  = atof(buf);
+            double step = (uIdSubclass == 1) ? 0.01 : 1.0;  // price vs qty
             if (wParam == VK_UP) {
-                val += 0.01;
-            } else if (wParam == VK_DOWN) {
-                val -= 0.01;
+                val += step;
+            } else {
+                val -= step;
             }
 
             // Prevent negative pricing/quantities
             if (val < 0.0) val = 0.0;
 
-            snprintf(buf, sizeof(buf), "%.2f", val);
+            snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
             SetWindowTextA(hWnd, buf);
             
             // Re-select the text so rapid pressing keeps it highlighted
@@ -170,20 +173,22 @@ static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LP
             CreateWindowA("STATIC", "Price:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
             ctx->hPriceEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_RIGHT,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 ex, y, ew, fh, hWnd, (HMENU)1, hInst, NULL);
 
-            // Row 2 — Qty
-            y += 34;
-            CreateWindowA("STATIC", "Qty:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
-            ctx->hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_RIGHT,
-                ex, y, ew, fh, hWnd, (HMENU)2, hInst, NULL);
+            // Row 2 — Qty (omitted for Partially Filled orders)
+            if (!ctx->partialFill) {
+                y += 34;
+                CreateWindowA("STATIC", "Qty:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                    lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
+                ctx->hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                    ex, y, ew, fh, hWnd, (HMENU)2, hInst, NULL);
+                SetWindowSubclass(ctx->hQtyEdit, EditField_SubclassProc, 2, 0);
+            }
 
-            // Subclass both fields so they forward ENTER / ESC to us.
+            // Subclass price field; qty field only when it exists.
             SetWindowSubclass(ctx->hPriceEdit, EditField_SubclassProc, 1, 0);
-            SetWindowSubclass(ctx->hQtyEdit,   EditField_SubclassProc, 2, 0);
 
             SetFocus(ctx->hPriceEdit);
             return 0;
@@ -198,9 +203,14 @@ static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LP
             if (wParam == VK_RETURN) {
                 char pBuf[32] = {}, qBuf[32] = {};
                 GetWindowTextA(ctx->hPriceEdit, pBuf, sizeof(pBuf));
-                GetWindowTextA(ctx->hQtyEdit,   qBuf, sizeof(qBuf));
                 double price = atof(pBuf);
-                double qty   = atof(qBuf);
+                double qty;
+                if (ctx->hQtyEdit) {
+                    GetWindowTextA(ctx->hQtyEdit, qBuf, sizeof(qBuf));
+                    qty = atof(qBuf);
+                } else {
+                    qty = ctx->originalQty;   // Partially Filled: keep existing qty
+                }
                 if (qty > 0)
                     api.modifyOrder(ctx->orderId, price, qty);
                 DestroyWindow(hWnd);
@@ -242,7 +252,9 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     }
 
     auto* ctx    = new EditOrderCtx{};
-    ctx->orderId = order.orderId;
+    ctx->orderId     = order.orderId;
+    ctx->partialFill = (st == "Partially Filled");
+    ctx->originalQty = order.totalQty;
 
     char title[80];
     snprintf(title, sizeof(title), "Edit %s %s: %s", order.orderType.c_str(), order.action.c_str(), order.symbol.c_str());
@@ -250,7 +262,8 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     // Center over the parent window.
     RECT pr;
     GetWindowRect(hParent, &pr);
-    int w = 222, h = 110;
+    // Partially Filled orders only show the Price row → shorter popup.
+    int w = 222, h = ctx->partialFill ? 76 : 110;
     int x = pr.left + (pr.right  - pr.left - w) / 2;
     int y = pr.top  + (pr.bottom - pr.top  - h) / 2;
 
@@ -272,7 +285,8 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     SendMessageA(ctx->hPriceEdit, EM_SETSEL, 0, -1);
 
     snprintf(buf, sizeof(buf), "%.0f", order.totalQty);
-    SetWindowTextA(ctx->hQtyEdit, buf);
+    if (ctx->hQtyEdit)
+        SetWindowTextA(ctx->hQtyEdit, buf);
 
     ShowWindow(hPop, SW_SHOW);
     UpdateWindow(hPop);
