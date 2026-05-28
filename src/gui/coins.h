@@ -80,7 +80,7 @@ static CoinRow coinRows[] = {
     { nullptr, nullptr, 0, true },
     { "EUR Cash:",         "EUR_CashBalance",     0, false },
     { "USD Cash:",         "USD_CashBalance",     0, false },
-    { "Total Cash:",        "CashBalance",         0, false },
+    { "Total Cash:",        "CashBalance",        0, false },
 };
 static const int COIN_ROW_COUNT = (int)(sizeof(coinRows) / sizeof(coinRows[0]));
 
@@ -272,7 +272,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (hCoin_NetLiq) {
         char buf[80];
         std::string formattedNum = FormatWithCommas(netLiq);
-        snprintf(buf, sizeof(buf), "%s  %s", currency.c_str(), formattedNum.c_str());
+        snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
         SetWindowTextA(hCoin_NetLiq, buf);
     }
 
@@ -347,11 +347,11 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
-        hFontCoins_NetLiq  = Coins_MakeFont(13, false);
+        hFontCoins_NetLiq  = Coins_MakeFont(13, true);
         hFontCoins_BigPnL  = Coins_MakeFont(20, true);
-        hFontCoins_Pct     = Coins_MakeFont(10, false);
+        hFontCoins_Pct     = Coins_MakeFont(11, true);
         hFontCoins_Label   = Coins_MakeFont(10, false);
-        hFontCoins_Value   = Coins_MakeFont(10, false);
+        hFontCoins_Value   = Coins_MakeFont(11, true);
         hFontCoins_Speaker = Coins_MakeMDL2Font(11);
 
         const int m  = 12;
@@ -380,7 +380,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         // Speaker icon - placed immediately to the left of the BigPnL block
         hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-            m + lblW - 10, 50, 22, 22, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
+            m + lblW - 10, 48, 22, 22, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
         SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFontCoins_Speaker, TRUE);
         SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
 
@@ -394,13 +394,13 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         // Daily PnL % Label
         HWND hLblPct = CreateWindowA("STATIC", "Daily PnL %:",
             WS_CHILD | WS_VISIBLE | SS_LEFT,
-            m, 80, lblW, 18, hWnd, NULL, hInst, NULL);
+            m, 76, lblW, 18, hWnd, NULL, hInst, NULL);
         SendMessage(hLblPct, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
         // Daily PnL % Value
         hCoin_Pct = CreateWindowA("STATIC", "--",
             WS_CHILD | WS_VISIBLE | SS_RIGHT,
-            m + lblW, 80, valW, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
+            m + lblW, 76, valW, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
         SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFontCoins_Pct, TRUE);
         SetCtrlColor(hCoin_Pct, COINS_CLR_GREEN);
 
@@ -442,24 +442,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         api.addApiUpdateWindow(hWnd);
         api.setCoinWindow(hWnd);
         break;
-    }
-
-    case WM_CTLCOLORSTATIC: {
-        HDC  hdc = (HDC)wParam;
-        HWND hw  = (HWND)lParam;
-        COLORREF clr = GetCtrlColor(hw);
-        if (clr == COINS_CLR_THEME) {
-            // Delegate entirely to the shared dark/light mode handler
-            return HandleDarkModeMessages(hWnd, message, wParam, lParam);
-        }
-        SetTextColor(hdc, clr);
-        if (Settings_DarkMode()) {
-            SetBkColor(hdc, DM_BG);
-            return (LRESULT)hDarkBrush;
-        } else {
-            SetBkColor(hdc, GetSysColor(COLOR_BTNFACE));
-            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
-        }
     }
 
     case WM_COMMAND: {

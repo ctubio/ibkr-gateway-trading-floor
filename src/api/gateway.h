@@ -16,7 +16,7 @@
 
 #define WM_API_UPDATE      (WM_USER + 2)
 #define WM_SYMBOL_RESULTS  (WM_USER + 3)
-#define WM_API_ERROR       (WM_USER + 4)
+#define WM_API_LOG         (WM_USER + 4)
 #define WM_ACCOUNT_SUMMARY (WM_USER + 5)
 #define WM_PNL_UPDATE      (WM_USER + 6)
 #define WM_ORDERS_UPDATE   (WM_USER + 7)
@@ -33,10 +33,12 @@ public:
 
     struct OrderInfo {
         int         orderId   = 0;
+        int         conId     = 0;      // TWS contract ID — populated from openOrder
         std::string symbol;
         std::string exchange;
         std::string action;
         std::string orderType;
+        std::string tif;
         double      price     = 0.0;
         double      auxPrice  = 0.0;
         double      totalQty  = 0.0;
@@ -163,6 +165,14 @@ public:
     void setOrdersWindow(HWND hWnd);
     void unsetOrdersWindow();
     std::vector<OrderInfo> getOrdersSorted();
+
+    // Transmit a cancel request for the given order.
+    void cancelOrder(int orderId);
+
+    // Resubmit an existing order with a new limit price and quantity while
+    // keeping all other order fields (type, action, exchange, …) intact.
+    // Pass price=0 to keep the original limit price.
+    void modifyOrder(int orderId, double price, double qty);
 
     // ── Portfolio ─────────────────────────────────────────────────────────────
 

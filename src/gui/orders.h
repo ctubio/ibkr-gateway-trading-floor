@@ -50,7 +50,7 @@ static void Orders_Repopulate(HWND hList) {
         lvi.mask     = LVIF_TEXT | LVIF_PARAM;
         lvi.iItem    = i;
         lvi.iSubItem = col++;
-        lvi.lParam   = (LPARAM)i;         // store row index for custom draw
+        lvi.lParam   = (LPARAM)o.orderId;  // orderId — used by cancel/edit handlers
         lvi.pszText  = (LPSTR)o.time.c_str();
         ListView_InsertItem(hList, &lvi);
 
@@ -80,6 +80,202 @@ static void Orders_Repopulate(HWND hList) {
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+}
+
+// ── Edit-Order popup ──────────────────────────────────────────────────────────
+// A lightweight non-modal popup with two edit boxes (Price / Qty).
+// ENTER confirms and calls api.modifyOrder(); ESCAPE closes without action.
+// Only one popup may be open at a time.
+
+#define EDIT_ORDER_CLASS "TF_EditOrder"
+
+struct EditOrderCtx {
+    int    orderId;
+    HWND   hPriceEdit;
+    HWND   hQtyEdit;
+};
+
+// Forward ENTER / ESC from an edit control up to the popup parent, handle TAB and Arrows.
+static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
+                                               LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (message == WM_GETDLGCODE) {
+        LRESULT res = DefSubclassProc(hWnd, message, wParam, lParam);
+        // Explicitly tell Windows this control wants to process TAB and ARROW keys
+        return res | DLGC_WANTTAB | DLGC_WANTARROWS;
+    }
+
+    if (message == WM_KEYDOWN) {
+        if (wParam == VK_RETURN || wParam == VK_ESCAPE) {
+            SendMessage(GetParent(hWnd), WM_KEYDOWN, wParam, lParam);
+            return 0;
+        }
+
+        if (wParam == VK_TAB) {
+            HWND hParent = GetParent(hWnd);
+            EditOrderCtx* ctx = (EditOrderCtx*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+            if (ctx) {
+                HWND hNext = (hWnd == ctx->hPriceEdit) ? ctx->hQtyEdit : ctx->hPriceEdit;
+                SetFocus(hNext);
+                // Auto-select text when focusing to make typing over it easy
+                SendMessageA(hNext, EM_SETSEL, 0, -1);
+            }
+            return 0;
+        }
+
+        if (wParam == VK_UP || wParam == VK_DOWN) {
+            char buf[32] = {};
+            GetWindowTextA(hWnd, buf, sizeof(buf));
+            
+            double val = atof(buf);
+            if (wParam == VK_UP) {
+                val += 0.01;
+            } else if (wParam == VK_DOWN) {
+                val -= 0.01;
+            }
+
+            // Prevent negative pricing/quantities
+            if (val < 0.0) val = 0.0;
+
+            snprintf(buf, sizeof(buf), "%.2f", val);
+            SetWindowTextA(hWnd, buf);
+            
+            // Re-select the text so rapid pressing keeps it highlighted
+            SendMessageA(hWnd, EM_SETSEL, 0, -1);
+            return 0;
+        }
+    }
+    return DefSubclassProc(hWnd, message, wParam, lParam);
+}
+
+static HWND s_hEditOrderPopup = NULL;   // at most one popup at a time
+
+static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    EditOrderCtx* ctx = (EditOrderCtx*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+    switch (message) {
+
+        case WM_CREATE: {
+            ctx = (EditOrderCtx*)((LPCREATESTRUCT)lParam)->lpCreateParams;
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
+
+            // Dark title bar (Windows 10 20H1+).
+            BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
+            DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+
+            HINSTANCE hInst = GetModuleHandle(NULL);
+            int lx = 2, ex = 90, ew = 112, fh = 22;
+
+            // Row 1 — Price
+            int y = 14;
+            CreateWindowA("STATIC", "Price:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
+            ctx->hPriceEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_RIGHT,
+                ex, y, ew, fh, hWnd, (HMENU)1, hInst, NULL);
+
+            // Row 2 — Qty
+            y += 34;
+            CreateWindowA("STATIC", "Qty:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
+            ctx->hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_RIGHT,
+                ex, y, ew, fh, hWnd, (HMENU)2, hInst, NULL);
+
+            // Subclass both fields so they forward ENTER / ESC to us.
+            SetWindowSubclass(ctx->hPriceEdit, EditField_SubclassProc, 1, 0);
+            SetWindowSubclass(ctx->hQtyEdit,   EditField_SubclassProc, 2, 0);
+
+            SetFocus(ctx->hPriceEdit);
+            return 0;
+        }
+
+        case WM_KEYDOWN: {
+            if (!ctx) break;
+            if (wParam == VK_ESCAPE) {
+                DestroyWindow(hWnd);
+                return 0;
+            }
+            if (wParam == VK_RETURN) {
+                char pBuf[32] = {}, qBuf[32] = {};
+                GetWindowTextA(ctx->hPriceEdit, pBuf, sizeof(pBuf));
+                GetWindowTextA(ctx->hQtyEdit,   qBuf, sizeof(qBuf));
+                double price = atof(pBuf);
+                double qty   = atof(qBuf);
+                if (qty > 0)
+                    api.modifyOrder(ctx->orderId, price, qty);
+                DestroyWindow(hWnd);
+                return 0;
+            }
+            break;
+        }
+
+        case WM_NCDESTROY:
+            s_hEditOrderPopup = NULL;
+            delete ctx;
+            return 0;
+    }
+
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
+}
+
+static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& order) {
+    // Guard: only one popup at a time.
+    if (s_hEditOrderPopup && IsWindow(s_hEditOrderPopup)) {
+        SetForegroundWindow(s_hEditOrderPopup);
+        return;
+    }
+    // Don't allow editing orders that are already terminal.
+    const std::string& st = order.status;
+    if (st == "Filled" || st == "Cancelled" || st == "Inactive") return;
+
+    // Register the popup class once.
+    static bool s_classReg = false;
+    if (!s_classReg) {
+        WNDCLASSA wc      = {};
+        wc.lpfnWndProc    = EditOrderProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = EDIT_ORDER_CLASS;
+        wc.hbrBackground  = (HBRUSH)(COLOR_BTNFACE + 1);
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassA(&wc);
+        s_classReg = true;
+    }
+
+    auto* ctx    = new EditOrderCtx{};
+    ctx->orderId = order.orderId;
+
+    char title[80];
+    snprintf(title, sizeof(title), "Edit %s %s: %s", order.orderType.c_str(), order.action.c_str(), order.symbol.c_str());
+
+    // Center over the parent window.
+    RECT pr;
+    GetWindowRect(hParent, &pr);
+    int w = 222, h = 110;
+    int x = pr.left + (pr.right  - pr.left - w) / 2;
+    int y = pr.top  + (pr.bottom - pr.top  - h) / 2;
+
+    HWND hPop = CreateWindowExA(
+        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        EDIT_ORDER_CLASS, title,
+        WS_POPUP | WS_CAPTION | WS_SYSMENU,
+        x, y, w, h,
+        hParent, NULL, GetModuleHandle(NULL), ctx);
+
+    if (!hPop) { delete ctx; return; }
+    s_hEditOrderPopup = hPop;
+
+    // Pre-fill fields.
+    char buf[32];
+    if (order.price > 0) snprintf(buf, sizeof(buf), "%.2f", order.price);
+    else                  snprintf(buf, sizeof(buf), "0.00");
+    SetWindowTextA(ctx->hPriceEdit, buf);
+    SendMessageA(ctx->hPriceEdit, EM_SETSEL, 0, -1);
+
+    snprintf(buf, sizeof(buf), "%.0f", order.totalQty);
+    SetWindowTextA(ctx->hQtyEdit, buf);
+
+    ShowWindow(hPop, SW_SHOW);
+    UpdateWindow(hPop);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -142,6 +338,47 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
 
+            // ── ESC on selected row → cancel that order ───────────────────────
+            if (hdr->code == LVN_KEYDOWN) {
+                NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
+                if (kd->wVKey == VK_ESCAPE) {
+                    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                    int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+                    if (sel >= 0) {
+                        LVITEMA lvi = {};
+                        lvi.mask    = LVIF_PARAM;
+                        lvi.iItem   = sel;
+                        if (ListView_GetItem(hList, &lvi))
+                            api.cancelOrder((int)lvi.lParam);
+                    }
+                }
+                break;
+            }
+
+            // ── Double-click → edit price / qty ──────────────────────────────
+            if (hdr->code == NM_DBLCLK) {
+                NMITEMACTIVATE* ia = (NMITEMACTIVATE*)lParam;
+                if (ia->iItem >= 0) {
+                    // Retrieve orderId stored in lParam by Orders_Repopulate.
+                    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                    LVITEMA lvi = {};
+                    lvi.mask    = LVIF_PARAM;
+                    lvi.iItem   = ia->iItem;
+                    if (ListView_GetItem(hList, &lvi)) {
+                        int orderId = (int)lvi.lParam;
+                        // Find the matching OrderInfo snapshot.
+                        auto orders = api.getOrdersSorted();
+                        for (const auto& o : orders) {
+                            if (o.orderId == orderId) {
+                                Orders_ShowEditPopup(hWnd, o);
+                                break;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
             if (hdr->code == NM_CUSTOMDRAW) {
                 NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
                 bool dark = Settings_DarkMode();
@@ -203,6 +440,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         
         case WM_DESTROY:
+            if (s_hEditOrderPopup && IsWindow(s_hEditOrderPopup))
+                DestroyWindow(s_hEditOrderPopup);
             api.unsetOrdersWindow();
             api.removeApiUpdateWindow(hWnd);
             if (OrdersZoomData.hFont) {

@@ -184,7 +184,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             UpdateTrayIcon(hWnd);
             break;
 
-        case WM_API_ERROR: {
+        case WM_API_LOG: {
             std::string* msg = (std::string*)lParam;
             LogDebug(msg->c_str());
             delete msg;
