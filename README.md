@@ -143,7 +143,7 @@ Saved state includes:
 - window size/position
 - watchlist definitions
 - last selected news list/symbol
-- open Time & Sales sessions
+- open market sessions
 - dark mode and sound preferences
 - auto-gateway and kill-gateway options
 

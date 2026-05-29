@@ -7,6 +7,7 @@ void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"
 
 static bool watchlistSelectorsVisible = false;
 static std::vector<std::string> watchlistCurrentEntries; // entries currently subscribed
+static std::string watchlistCurrentListName;             // name of the currently subscribed list
 
 static const int WATCHLIST_COMBO_H    = 24;
 static const int WATCHLIST_SELECTOR_H = 8 + WATCHLIST_COMBO_H + 8;
@@ -190,6 +191,7 @@ static void Watchlist_ShowSelectors(HWND hWnd, bool show) {
 static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
     if (listName.empty()) return;
     Settings_SaveString("LastWatchlistList", listName);
+    watchlistCurrentListName = listName;
 
     auto entries = Book_ReadListEntries(listName.c_str());
     watchlistCurrentEntries = entries;
@@ -296,6 +298,19 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         delete key;
         break;
+    }
+
+    // ── Book list changed notification ────────────────────────────────────────
+    // Sent by Book_NotifyListChanged whenever a list is mutated (add/delete/sort).
+    // lParam = new std::string*(listName) — we own and must delete.
+    case WM_BOOK_LIST_CHANGED: {
+        auto* name = reinterpret_cast<std::string*>(lParam);
+        if (name) {
+            if (*name == watchlistCurrentListName)
+                Watchlist_Subscribe(hWnd, *name);
+            delete name;
+        }
+        return 0;
     }
 
     case WM_API_UPDATE:

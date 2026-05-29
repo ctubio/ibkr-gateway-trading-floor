@@ -17,7 +17,13 @@ void StartBook() { StartGenericWindow(BOOK_CLASS_NAME, "Book", L"IBKRGatewayClie
 #define ID_BOOK_NEW_SYMBOL_INPUT 2012
 #define TIMER_DROPDOWN             99
 
-#define WM_BOOK_NEW_LIST_START (WM_APP + 200)
+#define WM_BOOK_NEW_LIST_START  (WM_APP + 200)
+// Posted to the Watchlist window whenever a book list's contents change.
+// lParam = new std::string*(listName) — receiver must delete.
+#define WM_BOOK_LIST_CHANGED    (WM_APP + 201)
+// Posted to the Book window when an external caller (e.g. Diamonds) adds an
+// item to a list.  lParam = new std::string*(listName) — receiver must delete.
+#define WM_BOOK_ITEM_ADDED      (WM_APP + 202)
 
 static bool suppressSearch = false;
 static bool showingOffline = false;
@@ -101,25 +107,48 @@ void Book_LoadList(const char* listName) {
     }
 }
 
-void Book_LoadAllLists(HWND hCB) {
-    SendMessage(hCB, CB_RESETCONTENT, 0, 0);
-
+// Returns every list name stored under the Book registry key.
+// Shared by Book_LoadAllLists (combo box) and any caller that only needs the names.
+std::vector<std::string> Book_LoadAllListNames() {
+    std::vector<std::string> names;
     HKEY hKey;
     char fullPath[256];
     wsprintf(fullPath, "%s\\Book", APP_REG_ROOT);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
-
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return names;
     char valueName[256];
     DWORD index = 0, nameSize = sizeof(valueName);
     while (RegEnumValueA(hKey, index++, valueName, &nameSize,
-        NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-        SendMessageA(hCB, CB_ADDSTRING, 0, (LPARAM)valueName);
+                         NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+        names.push_back(valueName);
         nameSize = sizeof(valueName);
     }
     RegCloseKey(hKey);
+    return names;
+}
 
+void Book_LoadAllLists(HWND hCB) {
+    SendMessage(hCB, CB_RESETCONTENT, 0, 0);
+    for (const auto& name : Book_LoadAllListNames())
+        SendMessageA(hCB, CB_ADDSTRING, 0, (LPARAM)name.c_str());
     if (SendMessage(hCB, CB_GETCOUNT, 0, 0) > 0)
         SendMessage(hCB, CB_SETCURSEL, 0, 0);
+}
+
+// Notifies the Watchlist window (if open) that a book list's contents changed.
+// The watchlist will re-subscribe if it is currently showing that list.
+void Book_NotifyListChanged(const std::string& listName) {
+    HWND hWL = FindWindowA(WATCHLIST_CLASS_NAME, NULL);
+    if (hWL)
+        PostMessage(hWL, WM_BOOK_LIST_CHANGED, 0, (LPARAM)new std::string(listName));
+}
+
+// Notifies the Book window (if open) that an external caller added an item to
+// a list.  The book will reload if that list is currently displayed.
+void Book_NotifyBookWindow(const std::string& listName) {
+    HWND hBK = FindWindowA(BOOK_CLASS_NAME, NULL);
+    if (hBK)
+        PostMessage(hBK, WM_BOOK_ITEM_ADDED, 0, (LPARAM)new std::string(listName));
 }
 
 void Book_DeleteList(const char* listName) {
@@ -192,6 +221,7 @@ LRESULT CALLBACK ListBoxSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
             SendMessage(hWnd, LB_DELETESTRING, sel, 0);
             bookItems.erase(bookItems.begin() + sel);
             Book_SaveFullList(name.c_str(), bookItems);
+            Book_NotifyListChanged(name);
             Book_UpdateControlStates();
         }
         return 0;
@@ -423,6 +453,21 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             RemovePropA(hWnd, "hAutoComplete");
             break;
 
+        // An external caller (e.g. Diamonds) added an item to a book list.
+        // Reload our listbox if we are currently showing that list.
+        // lParam = new std::string*(listName) — we own and must delete.
+        case WM_BOOK_ITEM_ADDED: {
+            auto* name = reinterpret_cast<std::string*>(lParam);
+            if (name) {
+                if (*name == Book_GetSelectedBook()) {
+                    Book_LoadList(name->c_str());
+                    Book_UpdateControlStates();
+                }
+                delete name;
+            }
+            return 0;
+        }
+
         case WM_TIMER:
             if (wParam == TIMER_DROPDOWN) {
                 KillTimer(hWnd, TIMER_DROPDOWN);
@@ -444,6 +489,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 SendMessage(hBookListBox, LB_SETCURSEL, sel - 1, 0);
                 std::swap(bookItems[sel], bookItems[sel - 1]);
                 Book_SaveFullList(Book_GetSelectedBook().c_str(), bookItems);
+                Book_NotifyListChanged(Book_GetSelectedBook());
                 Book_UpdateControlStates();
                 break;
             }
@@ -460,6 +506,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 SendMessage(hBookListBox, LB_SETCURSEL, sel + 1, 0);
                 std::swap(bookItems[sel], bookItems[sel + 1]);
                 Book_SaveFullList(Book_GetSelectedBook().c_str(), bookItems);
+                Book_NotifyListChanged(Book_GetSelectedBook());
                 Book_UpdateControlStates();
                 break;
             }
@@ -522,6 +569,7 @@ LRESULT CALLBACK WndProcBook(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     SendMessageA(GetDlgItem(hWnd, ID_BOOK_LISTBOX), LB_ADDSTRING, 0, (LPARAM)displayLabel.c_str());
                     bookItems.push_back(toStore);
                     Book_SaveFullList(name.c_str(), bookItems);
+                    Book_NotifyListChanged(name);
                     SetWindowTextA(GetDlgItem(hWnd, ID_BOOK_EDIT), "");
                     ShowWindow((HWND)GetPropA(hWnd, "hAutoComplete"), SW_HIDE);
                     Book_UpdateControlStates();
