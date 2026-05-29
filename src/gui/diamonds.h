@@ -13,7 +13,7 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBK
 #define DIAMONDS_TAB_HEIGHT   26        // height of the NC band carved below the caption
 #define DIAMONDS_TAB_WIDTH    100       // fixed width per tab, pixels
 
-static const char* g_DiamondTabNames[DIAMONDS_TAB_COUNT] = { "All", "Watchlist", "Dividends" };
+static const char* g_DiamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "High-Yield Dividends", "Quarantine" };
 static int         g_DiamondsActiveTab = DTAB_ALL;
 // Maps conId → assigned tab (DTAB_ALL = untagged, visible in all tabs).
 static std::map<int,int> g_DiamondsTabMap;
@@ -563,9 +563,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 // Build context menu.
                 // IDs 1-3: tab assignments.  IDs 100+: "Add to Book: <name>".
                 HMENU hMenu = CreatePopupMenu();
-                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_ALL   ? MF_GRAYED : 0), 1, "Move to All");
-                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_WATCH ? MF_GRAYED : 0), 2, "Move to Watchlist");
-                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_DIV   ? MF_GRAYED : 0), 3, "Move to Dividends");
+                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_ALL   ? MF_GRAYED : 0), 1, "Move to Growth");
+                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_WATCH ? MF_GRAYED : 0), 2, "Move to High-Yield Dividends");
+                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_DIV   ? MF_GRAYED : 0), 3, "Move to Quarantine");
 
                 if (!bookLists.empty()) {
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
