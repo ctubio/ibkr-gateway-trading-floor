@@ -3,7 +3,7 @@
 #include <sphelper.h>
 #pragma comment(lib, "ole32.lib")
 
-void StartCoins() { StartGenericWindow(COINS_CLASS_NAME, "Coins", L"IBKRGatewayClient.Coins", 230, 410); }
+void StartCoins() { StartGenericWindow(COINS_CLASS_NAME, "Coins", L"IBKRGatewayClient.Coins", 250, 410); }
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 #define COINS_CLR_GREEN   RGB(  0, 138,  69)
@@ -212,6 +212,10 @@ static void Coins_SpeakDailyPnL() {
     if (dotPos != std::wstring::npos) {
         wtext.erase(dotPos);
     }
+    if (!wtext.empty() && wtext.front() == L'+') {
+        wtext.erase(0, 1);
+    }
+    wtext.erase(std::remove(wtext.begin(), wtext.end(), L','), wtext.end());
     g_pCoinsVoice->Speak(wtext.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
 }
 
@@ -355,7 +359,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         hFontCoins_Speaker = Coins_MakeMDL2Font(11);
 
         const int m  = 12;
-        const int rW = 200;
+        const int rW = 220;
         int lblW = 70;
         int valW = rW - lblW;
 

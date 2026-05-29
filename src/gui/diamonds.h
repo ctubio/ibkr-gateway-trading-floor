@@ -73,10 +73,10 @@ static int Diamonds_FindRow(HWND hList, int conId) {
     return -1;
 }
 
-// Update the market-data columns of one row from a TickerInfo snapshot.
+// Update the market-data columns of one row from a WatchlistInfo snapshot.
 // All columns that depend on a valid Last price display "--" when Last == 0,
 // preventing bogus P&L calculations (e.g. -100%) during market-closed hours.
-static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::TickerInfo& t) {
+static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::WatchlistInfo& t) {
     char buf[64];
 
     // Helper: format a non-zero double, or blank the cell.
@@ -213,8 +213,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
         ListView_SetItemText(hList, i, DCOL_AVGPRICE, buf);
 
         // ── Market data columns — pre-fill from cache if already available ───
-        TradingAPI::TickerInfo tickInfo;
-        if (api.getTickerData(pos.conId, pos.symbol, tickInfo))
+        TradingAPI::WatchlistInfo tickInfo;
+        if (api.getWatchlistData(pos.conId, pos.symbol, tickInfo))
             Diamonds_UpdateMarketCols(hList, i, tickInfo);
     }
 
@@ -277,7 +277,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     // ── Live market data update for one symbol ────────────────────────────────
     // Posted by Impl::tickPrice / tickSize / tickString / tickGeneric
     // lParam = new std::string("conId.symbol") — we own it and must delete.
-    case WM_TICKER_UPDATE: {
+    case WM_WATCHLIST_UPDATE: {
         auto* key = reinterpret_cast<std::string*>(lParam);
         if (!key) break;
 
@@ -286,8 +286,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             int conId          = std::stoi(key->substr(0, dot));
             std::string symbol = key->substr(dot + 1);
 
-            TradingAPI::TickerInfo info;
-            if (api.getTickerData(conId, symbol, info)) {
+            TradingAPI::WatchlistInfo info;
+            if (api.getWatchlistData(conId, symbol, info)) {
                 HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                 int row = Diamonds_FindRow(hList, conId);
                 if (row >= 0)
@@ -328,7 +328,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 item.mask  = LVIF_PARAM;
                 item.iItem = row;
                 ListView_GetItem(hList, &item);
-                StartTimesales(sym, (int)item.lParam);
+                StartMarket(sym, (int)item.lParam);
             }
         }
 

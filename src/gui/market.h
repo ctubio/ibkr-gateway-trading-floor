@@ -7,8 +7,8 @@
 // Payload passed during HWND creation
 struct TsInitData { std::string symbol; int conId; };
 
-void StartTimesalesSearch(); // Forward declaration
-HWND StartTimesales(const std::string& symbol = "", int conId = 0);
+void StartMarketSearch(); // Forward declaration
+HWND StartMarket(const std::string& symbol = "", int conId = 0);
 
 #define ID_TS_LIST          6003
 #define ID_TS_FILTER_CHECK  6004
@@ -34,14 +34,14 @@ struct TsState {
 };
 static std::map<HWND, TsState*> tsStates;
 
-static void UpdateTimesalesRegistry() {
+static void UpdateMarketRegistry() {
     std::vector<std::string> sessions;
     for (const auto& pair : tsStates) {
         if (pair.second && pair.second->conId != 0 && !pair.second->symbol.empty()) {
             sessions.push_back(std::to_string(pair.second->conId) + "." + pair.second->symbol);
         }
     }
-    Settings_SaveTimesales(sessions);
+    Settings_SaveMarket(sessions);
 }
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ LRESULT CALLBACK TsSearchEditSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                     int cid = std::stoi(r.substr(0, dot));
                     std::string rest = r.substr(dot + 1);
                     auto d2 = rest.find('.');
-                    StartTimesales((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
+                    StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
                 }
                 DestroyWindow(GetParent(hWnd));
             }
@@ -168,7 +168,7 @@ LRESULT CALLBACK TsSearchListSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                 int cid = std::stoi(r.substr(0, dot));
                 std::string rest = r.substr(dot + 1);
                 auto d2 = rest.find('.');
-                StartTimesales((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
+                StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
             }
             DestroyWindow(GetParent(hWnd));
         }
@@ -214,33 +214,33 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
-void StartTimesalesSearch() {
+void StartMarketSearch() {
     static bool registered = false;
     if (!registered) {
         WNDCLASS wc = { 0 };
         wc.lpfnWndProc = WndProcTsSearch;
         wc.hInstance = GetModuleHandle(NULL);
-        wc.lpszClassName = TIMESALES_SEARCH_CLASS_NAME;
+        wc.lpszClassName = MARKET_SEARCH_CLASS_NAME;
         wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         RegisterClass(&wc);
         registered = true;
     }
-    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, TIMESALES_SEARCH_CLASS_NAME, "Time & Sales: Search Symbol", 
+    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Time & Sales: Search Symbol", 
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, 
         (GetSystemMetrics(SM_CXSCREEN) - 260) / 2, (GetSystemMetrics(SM_CYSCREEN) - 240) / 2, 275, 260, 
         NULL, NULL, GetModuleHandle(NULL), NULL);
     ApplyDarkMode(hWnd);
 }
 
-HWND StartTimesales(const std::string& symbol, int conId) {
+HWND StartMarket(const std::string& symbol, int conId) {
     if (symbol.empty() || conId == 0) {
-        StartTimesalesSearch();
+        StartMarketSearch();
         return NULL;
     }
-    std::string key = TIMESALES_CLASS_NAME + std::string("_") + std::to_string(conId);
+    std::string key = MARKET_CLASS_NAME + std::string("_") + std::to_string(conId);
     TsInitData* data = new TsInitData{symbol, conId};
-    return StartGenericWindow(TIMESALES_CLASS_NAME, ("Time & Sales: " + symbol).c_str(), L"IBKRGatewayClient.Timesales", 380, 500, NULL, key, data);
+    return StartGenericWindow(MARKET_CLASS_NAME, ("Time & Sales: " + symbol).c_str(), L"IBKRGatewayClient.Market", 380, 500, NULL, key, data);
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
@@ -267,7 +267,7 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
-LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
     if (message != WM_CREATE) {
         auto it = tsStates.find(hWnd);
@@ -295,7 +295,7 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         
         // Restore splitter positions and filter checkbox if previously saved for this symbol
         if (!state->symbol.empty()) {
-            Settings_LoadTimesalesSplitter(state->symbol, state->splitX, state->splitY);
+            Settings_LoadMarketSplitter(state->symbol, state->splitX, state->splitY);
 
             char filterKey[256];
             sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
@@ -305,9 +305,9 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
         }
 
-        api.setTimesalesWindow(hWnd, state->conId, state->symbol);
+        api.setMarketWindow(hWnd, state->conId, state->symbol);
         api.addApiUpdateWindow(hWnd);
-        UpdateTimesalesRegistry(); // Ensure registry is immediately aware of this new instance
+        UpdateMarketRegistry(); // Ensure registry is immediately aware of this new instance
         break;
     }
 
@@ -330,7 +330,7 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         break;
 
-    case WM_TIMESALES_TICK: {
+    case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
             Ts_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->exchange);
@@ -362,7 +362,7 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     case WM_API_UPDATE: {
         if (state) {
             if (api.isMarketDataConnected() && api.isTradingConnected()) {
-                api.setTimesalesWindow(hWnd, state->conId, state->symbol);
+                api.setMarketWindow(hWnd, state->conId, state->symbol);
             } else {
                 ListView_DeleteAllItems(state->hTsList);
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
@@ -440,16 +440,16 @@ LRESULT CALLBACK WndProcTimesales(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             // Persist the new splitter positions for this symbol
             if (!state->symbol.empty()) {
-                Settings_SaveTimesalesSplitter(state->symbol, state->splitX, state->splitY);
+                Settings_SaveMarketSplitter(state->symbol, state->splitX, state->splitY);
             }
         }
         break;
     }
     case WM_DESTROY:
-        api.unsetTimesalesWindow(hWnd);
+        api.unsetMarketWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);
         if (state) { delete state; tsStates.erase(hWnd); }
-        UpdateTimesalesRegistry(); // Ensure registry forgets this instance immediately
+        UpdateMarketRegistry(); // Ensure registry forgets this instance immediately
         break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);

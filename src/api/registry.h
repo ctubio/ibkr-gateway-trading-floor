@@ -14,13 +14,12 @@ static const char* BOOK_CLASS_NAME             = "TNTBookWindowClass";
 static const char* BOOK_NEW_LIST_CLASS_NAME    = "TNTBookNewListWindowClass";
 static const char* COINS_CLASS_NAME            = "TNTCoinsWindowClass";
 static const char* ORDERS_CLASS_NAME           = "TNTOrdersWindowClass";
-static const char* LEVELS_CLASS_NAME           = "TNTLevelsWindowClass";
 static const char* NEWS_CLASS_NAME             = "TNTNewsWindowClass";
 static const char* NEWS_ARTICLE_CLASS_NAME     = "TNTNewsArticleWindowClass";
 static const char* DIAMONDS_CLASS_NAME         = "TNTDiamondsWindowClass";
-static const char* TICKER_CLASS_NAME           = "TNTTickerWindowClass";
-static const char* TIMESALES_CLASS_NAME        = "TNTTimesalesWindowClass";
-static const char* TIMESALES_SEARCH_CLASS_NAME = "TNTTsSearchWindowClass";
+static const char* WATCHLIST_CLASS_NAME           = "TNTWatchlistWindowClass";
+static const char* MARKET_CLASS_NAME        = "TNTMarketWindowClass";
+static const char* MARKET_SEARCH_CLASS_NAME = "TNTTsSearchWindowClass";
 
 // Dark mode colors
 #define DM_BG        RGB(30,  30,  30)   // Slightly darker, flatter background
@@ -89,13 +88,13 @@ std::string Settings_LoadString(const char* key, const std::string& defaultValue
     return defaultValue;
 }
 
-void Settings_SaveTimesales(const std::vector<std::string>& sessions) {
+void Settings_SaveMarket(const std::vector<std::string>& sessions) {
     std::string combined;
     for (size_t i = 0; i < sessions.size(); ++i) {
         if (i > 0) combined += " ";
         combined += sessions[i];
     }
-    Settings_SaveString("OpenTimesales", combined);
+    Settings_SaveString("OpenMarket", combined);
 }
 
 void Settings_Save(const char* key, DWORD value) {
@@ -462,7 +461,7 @@ HWND IsWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifi
 
 // Toggle Always On Top state for a window and save the preference
 // For single-instance windows: className only
-// For Timesales windows: className and symbol (e.g., "MSFT")
+// For Market windows: className and symbol (e.g., "MSFT")
 void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
     HWND hWnd = windowIdentifier ? 
         FindWindowA(windowClassName, windowIdentifier) : 
@@ -505,16 +504,16 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
     }
 }
 
-// Enumerate all open Timesales windows and extract their symbols
-struct TimesalesWindowInfo {
+// Enumerate all open Market windows and extract their symbols
+struct MarketWindowInfo {
     HWND hWnd;
     std::string symbol;
 };
 
-static std::vector<TimesalesWindowInfo> EnumerateTimesalesWindows() {
-    std::vector<TimesalesWindowInfo> result;
+static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
+    std::vector<MarketWindowInfo> result;
     
-    HWND hWnd = FindWindowA(TIMESALES_CLASS_NAME, NULL);
+    HWND hWnd = FindWindowA(MARKET_CLASS_NAME, NULL);
     while (hWnd) {
         // Get the window title
         char title[256] = {};
@@ -529,24 +528,24 @@ static std::vector<TimesalesWindowInfo> EnumerateTimesalesWindows() {
         }
         
         // Find next window of the same class with a different title
-        hWnd = FindWindowExA(NULL, hWnd, TIMESALES_CLASS_NAME, NULL);
+        hWnd = FindWindowExA(NULL, hWnd, MARKET_CLASS_NAME, NULL);
     }
     
     return result;
 }
 
-// Check if a specific Timesales window is set to Always On Top
-bool IsTimesalesAlwaysOnTop(const std::string& symbol) {
+// Check if a specific Market window is set to Always On Top
+bool IsMarketAlwaysOnTop(const std::string& symbol) {
     char key[256];
-    sprintf(key, "AlwaysOnTop_%s_%s", TIMESALES_CLASS_NAME, symbol.c_str());
+    sprintf(key, "AlwaysOnTop_%s_%s", MARKET_CLASS_NAME, symbol.c_str());
     return Settings_Load(key, 0) != 0;
 }
 
-// Toggle Always On Top for a specific Timesales window by symbol
+// Toggle Always On Top for a specific Market window by symbol
 // Uses consistent registry key format based on symbol only
-void ToggleTimesalesAlwaysOnTop(const std::string& symbol) {
+void ToggleMarketAlwaysOnTop(const std::string& symbol) {
     std::string fullTitle = "Time & Sales: " + symbol;
-    HWND hWnd = FindWindowA(TIMESALES_CLASS_NAME, fullTitle.c_str());
+    HWND hWnd = FindWindowA(MARKET_CLASS_NAME, fullTitle.c_str());
     
     if (!hWnd) {
         return; // Window not found
@@ -556,7 +555,7 @@ void ToggleTimesalesAlwaysOnTop(const std::string& symbol) {
     bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
     
     char key[256];
-    sprintf(key, "AlwaysOnTop_%s_%s", TIMESALES_CLASS_NAME, symbol.c_str());
+    sprintf(key, "AlwaysOnTop_%s_%s", MARKET_CLASS_NAME, symbol.c_str());
     
     if (isCurrentlyOnTop) {
         // Currently always on top, remove it
@@ -569,19 +568,19 @@ void ToggleTimesalesAlwaysOnTop(const std::string& symbol) {
     }
 }
 
-// Set Always On Top state for a Timesales window using its HWND directly.
+// Set Always On Top state for a Market window using its HWND directly.
 // Called at restore time — avoids a FindWindowA-by-title race where the window
-// title may not yet be set when StartTimesales() returns.
-void SetTimesalesAlwaysOnTop(HWND hWnd, bool onTop) {
+// title may not yet be set when StartMarket() returns.
+void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
     if (!hWnd) return;
     SetWindowPos(hWnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
-// ── Timesales splitter persistence ───────────────────────────────────────────
+// ── Market splitter persistence ───────────────────────────────────────────
 // splitX / splitY are stored as DWORD scaled ×10000 so floats survive REG_DWORD.
 // Keys are per-symbol so multiple open windows never collide.
 
-void Settings_SaveTimesalesSplitter(const std::string& symbol, float splitX, float splitY) {
+void Settings_SaveMarketSplitter(const std::string& symbol, float splitX, float splitY) {
     char keyX[256], keyY[256];
     sprintf(keyX, "TsSplitX_%s", symbol.c_str());
     sprintf(keyY, "TsSplitY_%s", symbol.c_str());
@@ -589,7 +588,7 @@ void Settings_SaveTimesalesSplitter(const std::string& symbol, float splitX, flo
     Settings_Save(keyY, (DWORD)(splitY * 10000.0f));
 }
 
-bool Settings_LoadTimesalesSplitter(const std::string& symbol, float& splitX, float& splitY) {
+bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitX, float& splitY) {
     char keyX[256], keyY[256];
     sprintf(keyX, "TsSplitX_%s", symbol.c_str());
     sprintf(keyY, "TsSplitY_%s", symbol.c_str());
@@ -615,9 +614,8 @@ void Session_RestoreWindows(
     const std::function<void()>& StartDiamonds,
     const std::function<void()>& StartNews,
     const std::function<void()>& StartSettings,
-    const std::function<HWND(const std::string&, int)>& StartTimesales,
-    const std::function<void()>& StartLevels,
-    const std::function<void()>& StartTicker,
+    const std::function<HWND(const std::string&, int)>& StartMarket,
+    const std::function<void()>& StartWatchlist,
     const std::function<void()>& StartOrders,
     const std::function<void()>& StartDebugLog
 ) {
@@ -672,19 +670,12 @@ void Session_RestoreWindows(
             if(Settings_Load(key, 0)) 
                 ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME); 
         }
-        else if (cls == LEVELS_CLASS_NAME)    { 
-            StartLevels(); 
+        else if (cls == WATCHLIST_CLASS_NAME)    { 
+            StartWatchlist(); 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", LEVELS_CLASS_NAME);
+            sprintf(key, "AlwaysOnTop_%s", WATCHLIST_CLASS_NAME);
             if(Settings_Load(key, 0)) 
-                ToggleWindowAlwaysOnTop(LEVELS_CLASS_NAME); 
-        }
-        else if (cls == TICKER_CLASS_NAME)    { 
-            StartTicker(); 
-            char key[256];
-            sprintf(key, "AlwaysOnTop_%s", TICKER_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
-                ToggleWindowAlwaysOnTop(TICKER_CLASS_NAME); 
+                ToggleWindowAlwaysOnTop(WATCHLIST_CLASS_NAME); 
         }
         else if (cls == ORDERS_CLASS_NAME)    { 
             StartOrders(); 
@@ -706,10 +697,10 @@ void Session_RestoreWindows(
             if(Settings_Load(key, 0)) 
                 ToggleWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME); 
         }
-        else if (cls == TIMESALES_CLASS_NAME) {
-            std::string tsSaved = Settings_LoadString("OpenTimesales");
+        else if (cls == MARKET_CLASS_NAME) {
+            std::string tsSaved = Settings_LoadString("OpenMarket");
             if (tsSaved.empty()) {
-                StartTimesales("", 0);
+                StartMarket("", 0);
             } else {
                 size_t start = 0;
                 while (start < tsSaved.length()) {
@@ -720,14 +711,14 @@ void Session_RestoreWindows(
                     if (dot != std::string::npos) {
                         int cid = std::stoi(token.substr(0, dot));
                         std::string sym = token.substr(dot + 1);
-                        HWND tsHwnd = StartTimesales(sym, cid);
+                        HWND tsHwnd = StartMarket(sym, cid);
 
                         // Restore AlwaysOnTop using the HWND we just got — avoids a
                         // FindWindowA-by-title race where the title may not be set yet.
                         char key[256];
-                        sprintf(key, "AlwaysOnTop_%s_%s", TIMESALES_CLASS_NAME, sym.c_str());
+                        sprintf(key, "AlwaysOnTop_%s_%s", MARKET_CLASS_NAME, sym.c_str());
                         if (Settings_Load(key, 0)) {
-                            SetTimesalesAlwaysOnTop(tsHwnd, true);
+                            SetMarketAlwaysOnTop(tsHwnd, true);
                         }
                     }
                     start = end + 1;

@@ -1,5 +1,7 @@
 #pragma once
 
+// 🟢 **Filled** | 🟡 **Partially Filled** | 🔵 **Submitted** | ⚪ **Cancelled/Inactive**
+
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 786, 240); }
 
 #define ID_ORDERS_LIST          9003

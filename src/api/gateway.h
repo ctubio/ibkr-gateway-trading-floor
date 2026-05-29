@@ -22,9 +22,9 @@
 #define WM_ORDERS_UPDATE   (WM_USER + 7)
 #define WM_DIAMONDS_UPDATE (WM_USER + 8)
 #define WM_NEWS_RESULTS    (WM_USER + 9)
-#define WM_TIMESALES_TICK  (WM_USER + 10)
+#define WM_MARKET_TICK  (WM_USER + 10)
 #define WM_NEWS_ARTICLE    (WM_USER + 11)
-#define WM_TICKER_UPDATE   (WM_USER + 12)
+#define WM_WATCHLIST_UPDATE   (WM_USER + 12)
 
 class TradingAPI {
 public:
@@ -56,11 +56,11 @@ public:
         double      avgCost           = 0.0;
         double      dailyPnL          = 0.0;
         double      marketValue       = 0.0;
-        double      fiftyTwoWeekChange = 0.0;  // kept for compat; populated via TickerInfo now
-        double      marketCap         = 0.0;   // kept for compat; populated via TickerInfo now
+        double      fiftyTwoWeekChange = 0.0;  // kept for compat; populated via WatchlistInfo now
+        double      marketCap         = 0.0;   // kept for compat; populated via WatchlistInfo now
     };
 
-    // lParam of WM_TIMESALES_TICK — handler owns and must delete.
+    // lParam of WM_MARKET_TICK — handler owns and must delete.
     struct TsTickEntry {
         double      price    = 0.0;
         double      size     = 0.0;
@@ -77,10 +77,10 @@ public:
         std::string extraData;
     };
 
-    // One row in the watchlist / diamonds ticker.
-    // Posted via WM_TICKER_UPDATE (lParam = new std::string("conId.symbol")).
-    // Handler calls getTickerData(conId, symbol, out) then deletes the string.
-    struct TickerInfo {
+    // One row in the watchlist / diamonds watchlist.
+    // Posted via WM_WATCHLIST_UPDATE (lParam = new std::string("conId.symbol")).
+    // Handler calls getWatchlistData(conId, symbol, out) then deletes the string.
+    struct WatchlistInfo {
         std::string symbol;
 
         // ── Price ticks (tickPrice) ──────────────────────────────────────────
@@ -184,15 +184,15 @@ public:
 
     // ── Time and Sales ────────────────────────────────────────────────────────
 
-    void setTimesalesWindow(HWND hWnd, int conId, const std::string& symbol);
-    void unsetTimesalesWindow(HWND hWnd);
+    void setMarketWindow(HWND hWnd, int conId, const std::string& symbol);
+    void unsetMarketWindow(HWND hWnd);
 
-    // ── Ticker (watchlist) ────────────────────────────────────────────────────
+    // ── Watchlist (watchlist) ────────────────────────────────────────────────────
 
-    void setTickerWindow(HWND hWnd, const std::vector<std::string>& entries);
-    void unsetTickerWindow();
+    void setWatchlistWindow(HWND hWnd, const std::vector<std::string>& entries);
+    void unsetWatchlistWindow();
     void reqWatchlist();
-    bool getTickerData(int conId, const std::string& symbol, TickerInfo& out);
+    bool getWatchlistData(int conId, const std::string& symbol, WatchlistInfo& out);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 

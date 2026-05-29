@@ -1,6 +1,6 @@
 #pragma once
 
-void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", 324, 70, hInst); }
+void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", 293, 70, hInst); }
 
 #define WM_TRAYICON (WM_APP + 100)
 
@@ -11,28 +11,26 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_MB_DIAMONDS   1003
 #define ID_MB_SETTINGS   1004
 #define ID_MB_NEWS       1005
-#define ID_MB_TICKER     1006
-#define ID_MB_TIMESALES  1007
-#define ID_MB_LEVELS     1008
-#define ID_MB_ORDERS     1009
-#define ID_M_SYMBOLS     1010
-#define ID_M_COINS       1011
-#define ID_M_DIAMONDS    1012
-#define ID_M_SETTINGS    1013
-#define ID_M_NEWS        1014
-#define ID_M_TICKER      1015
-#define ID_M_TIMESALES   1016
-#define ID_M_LEVELS      1017
-#define ID_M_ORDERS      1018
-#define ID_M_DASHBOARD   1019
-#define ID_M_DEBUGLOG    1020
+#define ID_MB_WATCHLIST     1006
+#define ID_MB_MARKET  1007
+#define ID_MB_ORDERS     1008
+#define ID_M_SYMBOLS     1009
+#define ID_M_COINS       1010
+#define ID_M_DIAMONDS    1011
+#define ID_M_SETTINGS    1012
+#define ID_M_NEWS        1013
+#define ID_M_WATCHLIST      1014
+#define ID_M_MARKET   1015
+#define ID_M_ORDERS      1016
+#define ID_M_DASHBOARD   1017
+#define ID_M_DEBUGLOG    1018
 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
 #define ID_M_EXIT       1102
 
-#define ID_M_TIMESALES_BASE 1500
-#define ID_M_TIMESALES_MAX   100
+#define ID_M_MARKET_BASE 1500
+#define ID_M_MARKET_MAX   100
 
 bool shouldBeConnected = true;
 
@@ -127,12 +125,14 @@ void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HME
 		// Create the button
         HWND hBtn = CreateWindow(
             "BUTTON", buttonText,
-            WS_VISIBLE | WS_CHILD | BS_ICON,
+            WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
             x, y, 26, 26,
             hWnd, menuId, hInst, NULL
         );
-        SendMessage(hBtn, BM_SETIMAGE, (WPARAM)IMAGE_ICON,
-            (LPARAM)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR));
+        // Store the icon via SetProp so WM_DRAWITEM can retrieve it with GetProp.
+        // (BM_GETIMAGE is unreliable without BS_ICON in the style.)
+        HICON hIcon = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 24, 24, LR_DEFAULTCOLOR);
+        SetProp(hBtn, "hIcon", (HANDLE)hIcon);
 
         // Add tooltip
         HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
@@ -157,18 +157,16 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             int steps = 1;
             int stepz = 0;
-            //charts from tradingview
-            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     3);
-            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_ORDERS,   10);
-            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_DIAMONDS,  4);
+            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     102);
+            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_ORDERS,    103);
+            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_DIAMONDS,  104);
             
-            addButtons(hWnd, hInst, "Ticker",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TICKER,    9);        
-            addButtons(hWnd, hInst, "Levels",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_LEVELS,    8);
-            addButtons(hWnd, hInst, "Timesales",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_TIMESALES, 7);
-            addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_NEWS,      6);
+            addButtons(hWnd, hInst, "Watchlist",  6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_WATCHLIST, 105);
+            addButtons(hWnd, hInst, "Market",     6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_MARKET,    106);
+            addButtons(hWnd, hInst, "News",       6 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_NEWS,      107);
 
-            addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SYMBOLS,   2);
-            addButtons(hWnd, hInst, "Settings",  12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SETTINGS,  5);
+            addButtons(hWnd, hInst, "Symbols",   12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SYMBOLS,   108);
+            addButtons(hWnd, hInst, "Settings",  12 + (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_SETTINGS,  109);
 
             api.addApiUpdateWindow(hWnd);
             api.setApiErrorWindow(hWnd);
@@ -243,19 +241,18 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (FindWindowA(COINS_CLASS_NAME, NULL))     AppendMenuW(hMenu, MF_STRING, ID_M_COINS,     IsWindowAlwaysOnTop(COINS_CLASS_NAME)     ? L"[ ★ ] Coins"     : L"[  ] Coins");
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds");
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders");
-                    if (FindWindowA(TICKER_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_TICKER,    IsWindowAlwaysOnTop(TICKER_CLASS_NAME)    ? L"[ ★ ] Ticker"    : L"[  ] Ticker");
-                    if (FindWindowA(LEVELS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_LEVELS,    IsWindowAlwaysOnTop(LEVELS_CLASS_NAME)    ? L"[ ★ ] Levels"    : L"[  ] Levels");
+                    if (FindWindowA(WATCHLIST_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_WATCHLIST, IsWindowAlwaysOnTop(WATCHLIST_CLASS_NAME)    ? L"[ ★ ] Watchlist"    : L"[  ] Watchlist");
                     
-                    auto tsWindows = EnumerateTimesalesWindows();
+                    auto tsWindows = EnumerateMarketWindows();
                     std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
                         return a.symbol < b.symbol;
                     });
-                    for (size_t i = 0; i < tsWindows.size() && i < ID_M_TIMESALES_MAX; ++i) {
-                        std::wstring label = IsTimesalesAlwaysOnTop(tsWindows[i].symbol) ? 
-                            L"[ ★ ] Timesales: " + StringToWide(tsWindows[i].symbol) : 
-                            L"[  ] Timesales: " + StringToWide(tsWindows[i].symbol);
+                    for (size_t i = 0; i < tsWindows.size() && i < ID_M_MARKET_MAX; ++i) {
+                        std::wstring label = IsMarketAlwaysOnTop(tsWindows[i].symbol) ? 
+                            L"[ ★ ] Market: " + StringToWide(tsWindows[i].symbol) : 
+                            L"[  ] Market: " + StringToWide(tsWindows[i].symbol);
                             
-                        AppendMenuW(hMenu, MF_STRING, ID_M_TIMESALES_BASE + (int)i, label.c_str());
+                        AppendMenuW(hMenu, MF_STRING, ID_M_MARKET_BASE + (int)i, label.c_str());
                     }
                     
                     if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenuW(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME)      ? L"[ ★ ] News"      : L"[  ] News");
@@ -283,8 +280,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_COINS:
                         case ID_M_DIAMONDS:
                         case ID_M_ORDERS:
-                        case ID_M_TICKER:
-                        case ID_M_LEVELS:
+                        case ID_M_WATCHLIST:
                         case ID_M_NEWS:
                         case ID_M_SYMBOLS:
                         case ID_M_SETTINGS:
@@ -302,9 +298,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                             bKeepMenuAlive = false;
                             break;
                         
-                        // Handle dynamically generated Timesales menu items
+                        // Handle dynamically generated Market menu items
                         default:
-                            if (selectedCmd >= ID_M_TIMESALES_BASE && selectedCmd < ID_M_TIMESALES_BASE + ID_M_TIMESALES_MAX) {
+                            if (selectedCmd >= ID_M_MARKET_BASE && selectedCmd < ID_M_MARKET_BASE + ID_M_MARKET_MAX) {
                                 SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
                                 // Menu stays open
                             } else if (selectedCmd != 0) {
@@ -353,14 +349,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_NEWS:
                     StartNews();
                     break;
-                case ID_MB_TIMESALES:
-                    StartTimesales();
+                case ID_MB_MARKET:
+                    StartMarket();
                     break;
-                case ID_MB_LEVELS:
-                    StartLevels();
-                    break;
-                case ID_MB_TICKER:
-                    StartTicker();
+                case ID_MB_WATCHLIST:
+                    StartWatchlist();
                     break;
                 case ID_MB_SETTINGS:
                     StartSettings();
@@ -383,11 +376,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_M_NEWS:
                     ToggleWindowAlwaysOnTop(NEWS_CLASS_NAME);
                     break;
-                case ID_M_LEVELS:
-                    ToggleWindowAlwaysOnTop(LEVELS_CLASS_NAME);
-                    break;
-                case ID_M_TICKER:
-                    ToggleWindowAlwaysOnTop(TICKER_CLASS_NAME);
+                case ID_M_WATCHLIST:
+                    ToggleWindowAlwaysOnTop(WATCHLIST_CLASS_NAME);
                     break;
                 case ID_M_SETTINGS:
                     ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME);
@@ -399,16 +389,16 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
                     break;
                 
-                // Handle dynamically generated Timesales menu items
+                // Handle dynamically generated Market menu items
                 default:
-                    if (LOWORD(wParam) >= ID_M_TIMESALES_BASE && LOWORD(wParam) < ID_M_TIMESALES_BASE + ID_M_TIMESALES_MAX) {
-                        auto tsWindows = EnumerateTimesalesWindows();
+                    if (LOWORD(wParam) >= ID_M_MARKET_BASE && LOWORD(wParam) < ID_M_MARKET_BASE + ID_M_MARKET_MAX) {
+                        auto tsWindows = EnumerateMarketWindows();
                          std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
                             return a.symbol < b.symbol;
                         });
-                         int index = LOWORD(wParam) - ID_M_TIMESALES_BASE;
+                         int index = LOWORD(wParam) - ID_M_MARKET_BASE;
                         if (index >= 0 && index < (int)tsWindows.size()) {
-                            ToggleTimesalesAlwaysOnTop(tsWindows[index].symbol);
+                            ToggleMarketAlwaysOnTop(tsWindows[index].symbol);
                         }
                     }
                     break;

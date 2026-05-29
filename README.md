@@ -21,8 +21,8 @@ This application is a modern desktop trading companion built on the Interactive 
 
 - **Tray-Centric Design**: Runs primarily from the system tray with dynamic status icons (Connected/Disconnected) and a context menu for quick window management.
 - **Auto-Connect Watchdog**: A dedicated background timer monitors the connection to `127.0.0.1:4001` and automatically restores the session if the Gateway drops.
-- **Modular Window Architecture**: A "Trading Floor" layout where 10+ independent windows (Dashboard, Coins, Diamonds, Orders, Ticker, News, Time & Sales, Book, Settings, Debug Log) can be arranged, persisted, and restored.
-- **Advanced Watchlists**: Create and manage named symbol lists in the **Book** module, which are then shared across the Ticker, News, and Time & Sales windows.
+- **Modular Window Architecture**: A "Trading Floor" layout where 10+ independent windows (Dashboard, Coins, Diamonds, Orders, Watchlist, News, Time & Sales, Book, Settings, Debug Log) can be arranged, persisted, and restored.
+- **Advanced Watchlists**: Create and manage named symbol lists in the **Book** module, which are then shared across the Watchlist, News, and Time & Sales windows.
 - **Accessibility & Alerts**: Integrated Windows SAPI for NetLiq voice alerts and custom sound notifications for critical trading events.
 - **Visual Customization**: Full Dark Mode support, list view font zooming, and high-contrast color-coding for P&L and order statuses.
 
@@ -56,7 +56,7 @@ Precision order tracking and management:
 - **Interactive Management**: In-place modification of order price and quantity.
 - **Audit Trail**: Sorted by status and timestamp to prioritize the most recent updates.
 
-### 📈 Ticker & Levels
+### 📈 Watchlist
 Real-time quote monitoring with saved watchlists and fast table navigation:
 - **Comprehensive Data**: Last price, bid/ask sizes, change %, dividend yield, dividend date, and annual dividend.
 - **Extended Metrics**: Fundamental tick updates, 52-week ranges, and market-cap style insights.
@@ -64,13 +64,13 @@ Real-time quote monitoring with saved watchlists and fast table navigation:
 - **Live Placeholder Rows**: Symbols appear immediately while market data subscriptions are still initializing.
 - **Zoomable Tables**: Use `Ctrl + Mouse Wheel` on list views to resize text for readability.
 
-### 📖 Book (Watchlist Manager)
+### 📖 Book (Symbol Manager)
 The database for your reusable trading symbols:
 - **CRUD Operations**: Create, rename, and delete named watchlists.
 - **Symbol Auto-Complete**: Add instruments quickly using the inline searchable symbol entry box.
 - **Keyboard-Friendly Editing**: Use Delete to remove list items, and Up/Down buttons to reorder symbols.
 - **Registry Persistence**: All lists are stored under the Windows Registry and recovered across restarts.
-- **Shared Workflow**: Feeds the Ticker, News, and Time & Sales windows with the same saved symbol lists.
+- **Shared Workflow**: Feeds the Watchlist, News, and Time & Sales windows with the same saved symbol lists.
 
 ### 📰 News
 Contextual market intelligence with provider filtering and article preview:
@@ -196,7 +196,7 @@ src/api/sound.h      # audio notification queue
 
 - Use the tray icon to show/hide the main dashboard.
 - Open windows for account, positions, orders, market quotes, news, and Time & Sales.
-- Manage watchlists from the Book window and reuse them in Ticker/News.
+- Manage watchlists from the Book window and reuse them in Watchlist/News.
 - Use the Settings window to tune app behavior.
 - Open Debug Log for live diagnostics.
 

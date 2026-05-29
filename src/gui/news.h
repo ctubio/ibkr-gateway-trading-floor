@@ -35,7 +35,7 @@ static ListViewZoomData NewsZoomData = { NULL, 14, "NewsListZoom" };
 std::string articleBuffer;
 
 // Convert basic HTML to RTF for RichEdit display
-static std::string ConvertHtmlToRtf(const std::string& html) {
+static std::string ConvertHtmlToRtf(const std::string& html, bool dark) {
     std::string text = html;
     std::string::size_type pos = 0;
 
@@ -100,12 +100,34 @@ static std::string ConvertHtmlToRtf(const std::string& html) {
             break;
     }
 
-    // 6. Wrap everything cleanly inside the RTF payload header
-    std::string result = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Segoe UI;}}{\\colortbl;\\red0\\green0\\blue0;}\n\\viewkind4\\uc1\\pard\\f0\\fs20 ";
+    // 6. Wrap everything cleanly inside the RTF payload header.
+    //    Color table entry 1 is set to the appropriate text color for the current
+    //    theme; \cf1 in the body references it.  \fs28 = 14 pt (RTF half-points).
+    COLORREF tc = dark ? DM_TEXT : RGB(0, 0, 0);
+    char colortbl[128];
+    sprintf(colortbl, "{\\colortbl;\\red%d\\green%d\\blue%d;}",
+            GetRValue(tc), GetGValue(tc), GetBValue(tc));
+
+    std::string result = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Segoe UI;}}";
+    result += colortbl;
+    result += "\n\\viewkind4\\uc1\\pard\\cf1\\f0\\fs28 ";
     result += text;
     result += "}";
-    
+
     return result;
+}
+
+// Apply dark-mode background and 20 px margin to the article RichEdit.
+// Must be called after every resize and after loading new content.
+static void News_ApplyArticleStyle(HWND hEdit) {
+    if (!hEdit || !IsWindow(hEdit)) return;
+    bool dark = Settings_DarkMode();
+    SendMessage(hEdit, EM_SETBKGNDCOLOR, 0,
+                dark ? (LPARAM)DM_BG : (LPARAM)GetSysColor(COLOR_WINDOW));
+    RECT rc;
+    GetClientRect(hEdit, &rc);
+    InflateRect(&rc, -20, -20);
+    SendMessage(hEdit, EM_SETRECT, 0, (LPARAM)&rc);
 }
 
 void FlushArticleBuffer() {
@@ -113,13 +135,14 @@ void FlushArticleBuffer() {
     LogDebug(!hNewsArticleEdit ? "hNewsArticleEdit is null" : (!IsWindow(hNewsArticleEdit) ? "hNewsArticleEdit is not a valid window" : "hNewsArticleEdit is valid"));
     if (!hNewsArticleEdit || !IsWindow(hNewsArticleEdit)) return;
     
-    // Convert HTML to RTF
-    std::string rtf = ConvertHtmlToRtf(articleBuffer);
+    // Convert HTML to RTF, coloured for the active theme
+    std::string rtf = ConvertHtmlToRtf(articleBuffer, Settings_DarkMode());
     LogDebug("Flushing article buffer to edit control. Original length: " + std::to_string(articleBuffer.size()) +
              ", RTF length: " + std::to_string(rtf.size()));
     // Use SETTEXTEX to load RTF
     SETTEXTEX st = { ST_DEFAULT, CP_UTF8 };
     SendMessageA(hNewsArticleEdit, EM_SETTEXTEX, (WPARAM)&st, (LPARAM)rtf.c_str());
+    News_ApplyArticleStyle(hNewsArticleEdit); // re-apply after text load clears formatting rect
 }
 
 LRESULT CALLBACK WndProcNewsArticle(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -136,6 +159,7 @@ LRESULT CALLBACK WndProcNewsArticle(HWND hWnd, UINT message, WPARAM wParam, LPAR
             RECT rc;
             GetClientRect(hWnd, &rc);
             SetWindowPos(hNewsArticleEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
+            News_ApplyArticleStyle(hNewsArticleEdit); // dark bg + 20 px margin
             FlushArticleBuffer(); // ← show all buffered messages
             break;
         }
@@ -144,8 +168,22 @@ LRESULT CALLBACK WndProcNewsArticle(HWND hWnd, UINT message, WPARAM wParam, LPAR
                 RECT rc;
                 GetClientRect(hWnd, &rc);
                 SetWindowPos(hNewsArticleEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
+                News_ApplyArticleStyle(hNewsArticleEdit); // reapply margin after resize
             }
             break;
+        }
+        case WM_ERASEBKGND: {
+            // Re-sync RichEdit colors when dark mode is toggled at runtime.
+            // WM_ERASEBKGND fires on every invalidation, so we guard with a
+            // cached flag and only do the expensive re-flush on actual changes.
+            static bool lastDark = false;
+            bool dark = Settings_DarkMode();
+            if (dark != lastDark) {
+                lastDark = dark;
+                News_ApplyArticleStyle(hNewsArticleEdit); // update bg color immediately
+                FlushArticleBuffer();                     // regenerate RTF with new text color
+            }
+            break; // fall through to HandleCommonMessages for the actual bg fill
         }
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);

@@ -31,7 +31,7 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
 }
 
 HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
-    // Multi-instance windows (windowKey differs from className, e.g. timesales per-symbol)
+    // Multi-instance windows (windowKey differs from className, e.g. market per-symbol)
     // are distinguished by title - each has a unique one. Single-instance windows match
     // on class alone. Either way no map needed: FindWindowA does the work.
     bool multiInstance = !windowKey.empty() && windowKey != className;
@@ -65,10 +65,9 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         if (strcmp(className, NEWS_CLASS_NAME)         == 0
          || strcmp(className, ORDERS_CLASS_NAME)       == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)     == 0
-         || strcmp(className, TIMESALES_CLASS_NAME)    == 0
-         || strcmp(className, TICKER_CLASS_NAME)       == 0
+         || strcmp(className, MARKET_CLASS_NAME)    == 0
+         || strcmp(className, WATCHLIST_CLASS_NAME)       == 0
          || strcmp(className, NEWS_ARTICLE_CLASS_NAME) == 0
-         || strcmp(className, LEVELS_CLASS_NAME)       == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
@@ -227,7 +226,7 @@ void ClearAlwaysOnTopSetting(HWND hWnd) {
     GetClassNameA(hWnd, className, sizeof(className));
 
     char key[256] = {};
-    if (strcmp(className, TIMESALES_CLASS_NAME) == 0) {
+    if (strcmp(className, MARKET_CLASS_NAME) == 0) {
         char title[256] = {};
         GetWindowTextA(hWnd, title, sizeof(title));
         const std::string titleStr = title;
@@ -312,12 +311,22 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SelectObject(dis->hDC, hOld);
             DeleteObject(hPen);
 
-            // --- Draw Text ---
-            wchar_t text[128] = {};
-            GetWindowTextW(dis->hwndItem, text, sizeof(text)/sizeof(wchar_t));
-            SetTextColor(dis->hDC, textColor);
-            SetBkMode(dis->hDC, TRANSPARENT);
-            DrawTextW(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            // --- Draw Icon or Text ---
+            // Icon buttons store their handle via SetProp; text buttons return NULL.
+            HICON hIcon = (HICON)GetProp(dis->hwndItem, "hIcon");
+            if (hIcon) {
+                // Centre the 24×24 icon inside the button rect, nudge 1px on press
+                int iconW = 24, iconH = 24;
+                int ix = dis->rcItem.left + ((dis->rcItem.right  - dis->rcItem.left) - iconW) / 2 + (pressed ? 1 : 0);
+                int iy = dis->rcItem.top  + ((dis->rcItem.bottom - dis->rcItem.top)  - iconH) / 2 + (pressed ? 1 : 0);
+                DrawIconEx(dis->hDC, ix, iy, hIcon, iconW, iconH, 0, NULL, DI_NORMAL);
+            } else {
+                wchar_t text[128] = {};
+                GetWindowTextW(dis->hwndItem, text, sizeof(text)/sizeof(wchar_t));
+                SetTextColor(dis->hDC, textColor);
+                SetBkMode(dis->hDC, TRANSPARENT);
+                DrawTextW(dis->hDC, text, -1, &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
 
             // --- Modern Focus Indicator ---
             // DrawFocusRect draws an ugly black/white dotted line. 
