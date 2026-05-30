@@ -6,7 +6,7 @@ void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatew
 
 #define ID_ORDERS_LIST          9003
 
-static ListViewZoomData OrdersZoomData = { NULL, 14, "OrdersListZoom" };
+static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -312,7 +312,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 hWnd, (HMENU)ID_ORDERS_LIST, hInst, NULL);
 
             OrdersZoomData.fontSize = (int)Settings_Load(OrdersZoomData.settingKey, OrdersZoomData.fontSize);
-            ApplyListViewFont(hList, OrdersZoomData.hFont, OrdersZoomData.fontSize);
+            ApplyListViewFont(hList, OrdersZoomData.hFont, OrdersZoomData.hBoldFont, OrdersZoomData.fontSize);
             SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&OrdersZoomData);
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -459,6 +459,9 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             api.removeApiUpdateWindow(hWnd);
             if (OrdersZoomData.hFont) {
                 DeleteObject(OrdersZoomData.hFont);
+            }   
+            if (OrdersZoomData.hBoldFont) {
+                DeleteObject(OrdersZoomData.hBoldFont);
             }
             break;
     }

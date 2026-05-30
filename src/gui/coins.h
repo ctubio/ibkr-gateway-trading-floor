@@ -76,11 +76,11 @@ static CoinRow coinRows[] = {
  // { "Excess Liquidity:", "ExcessLiquidity",     0, false },
  // { "Init Margin:",      "InitMarginReq",       0, false },
     { "Maint Margin:",     "MaintMarginReq",      0, false },
-    { "Accrued Cash:",     "AccruedCash",         0, false },
+    { "Accrued Cash:",     "AccruedCash",         3, false },
     { nullptr, nullptr, 0, true },
-    { "EUR Cash:",         "EUR_CashBalance",     0, false },
-    { "USD Cash:",         "USD_CashBalance",     0, false },
-    { "Total Cash:",        "CashBalance",        0, false },
+    { "EUR Cash:",         "EUR_CashBalance",     3, false },
+    { "USD Cash:",         "USD_CashBalance",     3, false },
+    { "Total Cash:",        "CashBalance",        3, false },
 };
 static const int COIN_ROW_COUNT = (int)(sizeof(coinRows) / sizeof(coinRows[0]));
 
@@ -322,7 +322,7 @@ void Coins_UpdateLabels(HWND hWnd) {
                 std::string formattedNum = FormatWithCommas(d);
                 snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
                 clr = COINS_CLR_PURPLE;
-            } else {
+            } else if (coinRows[i].colorType == 3) {
                 const char* suffix = "";
                 std::string dynamicSuffix;
                 if (strcmp(coinRows[i].key, "CashBalance") == 0) {
@@ -335,6 +335,10 @@ void Coins_UpdateLabels(HWND hWnd) {
                 }
                 std::string formattedNum = FormatWithCommas(d);
                 snprintf(buf, sizeof(buf), "%s%s", formattedNum.c_str(), suffix);
+                clr = d > 0.0 ? COINS_CLR_GREEN : (d < 0.0 ? COINS_CLR_RED : COINS_CLR_THEME);
+            } else {
+                std::string formattedNum = FormatWithCommas(d);
+                snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
             }
         } catch (...) {}
 

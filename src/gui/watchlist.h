@@ -30,7 +30,8 @@ static std::vector<std::string> wl_currentResults;
 static const int WATCHLIST_COMBO_H    = 24;
 static const int WATCHLIST_SELECTOR_H = 8 + WATCHLIST_COMBO_H + 8;
 
-static ListViewZoomData WatchlistZoomData = { NULL, 14, "WatchlistListZoom" };
+static ListViewZoomData WatchlistZoomData = { NULL, NULL, 14, "Zoom_Watchlist" };
+static ListViewZoomData WatchlistAutocompleteZoomData = { NULL, NULL, 14, "Zoom_Watchlist" };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -48,6 +49,11 @@ enum WatchlistColIdx {
     TCOL_ANNUAL_DIV,
     TCOL_COUNT
 };
+
+// ── Sort state ────────────────────────────────────────────────────────────────
+static int  g_WatchlistSortCol = TCOL_SYMBOL;
+static bool g_WatchlistSortAsc = true;
+static HWND g_WatchlistListForSort = NULL;
 
 struct WatchlistCol { const char* header; int width; int fmt; };
 static const WatchlistCol watchlistCols[] = {
@@ -140,7 +146,46 @@ static void Watchlist_ClearList(HWND hWnd) {
     ListView_DeleteAllItems(hWatchlistList);
 }
 
-// Insert a placeholder row for symbol+conId.
+// ── Sort helpers ──────────────────────────────────────────────────────────────
+
+static void Watchlist_SetSortArrow(HWND hList, int col, bool asc) {
+    HWND hHdr = ListView_GetHeader(hList);
+    int n = Header_GetItemCount(hHdr);
+    for (int i = 0; i < n; ++i) {
+        HDITEM hdi = {}; hdi.mask = HDI_FORMAT;
+        Header_GetItem(hHdr, i, &hdi);
+        hdi.fmt &= ~(HDF_SORTUP | HDF_SORTDOWN);
+        if (i == col) hdi.fmt |= asc ? HDF_SORTUP : HDF_SORTDOWN;
+        Header_SetItem(hHdr, i, &hdi);
+    }
+}
+
+static bool Watchlist_ColIsNumeric(int col) {
+    return col != TCOL_SYMBOL && col != TCOL_DIV_DATE;
+}
+
+static int CALLBACK Watchlist_SortCompare(LPARAM idx1, LPARAM idx2, LPARAM /*extra*/) {
+    char b1[64] = {}, b2[64] = {};
+    ListView_GetItemText(g_WatchlistListForSort, (int)idx1, g_WatchlistSortCol, b1, sizeof(b1));
+    ListView_GetItemText(g_WatchlistListForSort, (int)idx2, g_WatchlistSortCol, b2, sizeof(b2));
+    int cmp;
+    if (Watchlist_ColIsNumeric(g_WatchlistSortCol)) {
+        double v1 = atof(b1), v2 = atof(b2);
+        cmp = (v1 < v2) ? -1 : (v1 > v2) ? 1 : 0;
+    } else {
+        cmp = _stricmp(b1, b2);
+    }
+    return g_WatchlistSortAsc ? cmp : -cmp;
+}
+
+static void Watchlist_ApplySort(HWND hWnd) {
+    HWND hList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
+    g_WatchlistListForSort = hList;
+    ListView_SortItemsEx(hList, Watchlist_SortCompare, 0);
+    Watchlist_SetSortArrow(hList, g_WatchlistSortCol, g_WatchlistSortAsc);
+}
+
+
 static void Watchlist_InsertRow(HWND hWnd, const std::string& symbol, int conId) {
     HWND hWatchlistList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
     auto* rd    = new WatchlistRowData{symbol, conId};
@@ -227,6 +272,7 @@ static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
 
     SetWindowTextA(hWnd, ("Watchlist: " + listName).c_str());
     api.setWatchlistWindow(hWnd, entries);
+    Watchlist_ApplySort(hWnd);
 }
 
 // Reload the combo from the registry, keeping the sentinel at index 0.
@@ -513,12 +559,12 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         HWND hWatchlistList = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
             WS_CHILD | WS_VISIBLE | WS_BORDER |
-            LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+            LVS_REPORT | LVS_SHOWSELALWAYS,
             0, 0, 1000, 400,
             hWnd, (HMENU)ID_WATCHLIST_LIST, hInst, NULL);
 
         WatchlistZoomData.fontSize = (int)Settings_Load(WatchlistZoomData.settingKey, WatchlistZoomData.fontSize);
-        ApplyListViewFont(hWatchlistList, WatchlistZoomData.hFont, WatchlistZoomData.fontSize);
+        ApplyListViewFont(hWatchlistList, WatchlistZoomData.hFont, WatchlistZoomData.hBoldFont, WatchlistZoomData.fontSize);
         SetWindowSubclass(hWatchlistList, ListViewZoomProc, 0, (DWORD_PTR)&WatchlistZoomData);
 
         ListView_SetExtendedListViewStyle(hWatchlistList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -557,7 +603,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         // Store the watchlist HWND on the autocomplete so its subclass can reach it.
         SetPropA(hAC, "hWLParent", (HANDLE)hWnd);
         SetPropA(hWnd, "hWLAutoComplete", (HANDLE)hAC);
-        ApplyListViewFont(hAC, WatchlistZoomData.hFont, WatchlistZoomData.fontSize);
+        WatchlistAutocompleteZoomData.fontSize = WatchlistZoomData.fontSize;
+        ApplyListViewFont(hAC, WatchlistAutocompleteZoomData.hFont, WatchlistAutocompleteZoomData.hBoldFont, WatchlistAutocompleteZoomData.fontSize);
 
         // Populate combo (sentinel + all lists).
         Watchlist_LoadListCombo(hWnd);
@@ -573,6 +620,11 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
 
         api.addApiUpdateWindow(hWnd);
+
+        // Load sort settings.
+        g_WatchlistSortCol = (int)Settings_Load("WatchlistSortCol", TCOL_SYMBOL);
+        g_WatchlistSortAsc = Settings_Load("WatchlistSortAsc", 1) != 0;
+        if (g_WatchlistSortCol < 0 || g_WatchlistSortCol >= TCOL_COUNT) g_WatchlistSortCol = TCOL_SYMBOL;
         break;
     }
 
@@ -684,6 +736,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
         }
         delete key;
+        Watchlist_ApplySort(hWnd);
         break;
     }
 
@@ -749,6 +802,17 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->idFrom != ID_WATCHLIST_LIST) break;
+
+        if (hdr->code == LVN_COLUMNCLICK) {
+            NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
+            int col = nmlv->iSubItem;
+            if (col == g_WatchlistSortCol) g_WatchlistSortAsc = !g_WatchlistSortAsc;
+            else { g_WatchlistSortCol = col; g_WatchlistSortAsc = true; }
+            Settings_Save("WatchlistSortCol", g_WatchlistSortCol);
+            Settings_Save("WatchlistSortAsc", g_WatchlistSortAsc ? 1 : 0);
+            Watchlist_ApplySort(hWnd);
+            return 0;
+        }
 
         if (hdr->code == LVN_KEYDOWN) {
             NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
@@ -823,6 +887,14 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     }
                     return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    if (cd->iSubItem == TCOL_SYMBOL) {
+                        SelectObject(cd->nmcd.hdc, WatchlistZoomData.hBoldFont);
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == TCOL_LAST) {
+                        SelectObject(cd->nmcd.hdc, WatchlistZoomData.hFont);
+                        return CDRF_NEWFONT;
+                    }
                     if (cd->iSubItem == TCOL_CHGPCT) {
                         char buf[32] = {};
                         ListView_GetItemText(GetDlgItem(hWnd, ID_WATCHLIST_LIST),
@@ -858,7 +930,18 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hAC) { RemovePropA(hAC, "hWLParent"); DestroyWindow(hAC); }
             RemovePropA(hWnd, "hWLAutoComplete");
         }
-        if (WatchlistZoomData.hFont) DeleteObject(WatchlistZoomData.hFont);
+        if (WatchlistZoomData.hFont) {
+            DeleteObject(WatchlistZoomData.hFont);
+        }
+        if (WatchlistZoomData.hBoldFont) {
+            DeleteObject(WatchlistZoomData.hBoldFont);
+        }
+        if (WatchlistAutocompleteZoomData.hFont) {
+            DeleteObject(WatchlistAutocompleteZoomData.hFont);
+        }
+        if (WatchlistAutocompleteZoomData.hBoldFont) {
+            DeleteObject(WatchlistAutocompleteZoomData.hBoldFont);
+        }
         break;
     }
 

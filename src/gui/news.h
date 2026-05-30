@@ -30,7 +30,7 @@ static const int NEWS_COMBO_H   = 24;
 static const int NEWS_COMBO_GAP = 8;
 static const int NEWS_SELECTOR_H = 8 + NEWS_COMBO_H + 8;
 
-static ListViewZoomData NewsZoomData = { NULL, 14, "NewsListZoom" };
+static ListViewZoomData NewsZoomData = { NULL, NULL, 14, "Zoom_News" };
 
 std::string articleBuffer;
 
@@ -350,7 +350,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             hWnd, (HMENU)ID_NEWS_RESULTS_LIST, hInst, NULL);
 
         NewsZoomData.fontSize = (int)Settings_Load(NewsZoomData.settingKey, NewsZoomData.fontSize);
-        ApplyListViewFont(hNewsResults, NewsZoomData.hFont, NewsZoomData.fontSize);
+        ApplyListViewFont(hNewsResults, NewsZoomData.hFont, NewsZoomData.hBoldFont, NewsZoomData.fontSize);
         SetWindowSubclass(hNewsResults, ListViewZoomProc, 0, (DWORD_PTR)&NewsZoomData);
 
         // Combos at the bottom — initially hidden until focused
@@ -615,6 +615,9 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         newsProviderFilter.clear();
         if (NewsZoomData.hFont) {
             DeleteObject(NewsZoomData.hFont);
+        }
+        if (NewsZoomData.hBoldFont) {
+            DeleteObject(NewsZoomData.hBoldFont);
         }
         api.removeApiUpdateWindow(hWnd);
         break;

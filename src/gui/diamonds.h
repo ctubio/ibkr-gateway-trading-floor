@@ -4,21 +4,49 @@
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBKRGatewayClient.Diamonds", 1476, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
+#define ID_DIAMONDS_CHK_0        7002   // "Growth"
+#define ID_DIAMONDS_CHK_1        7003   // "High-Yield Dividends"
+#define ID_DIAMONDS_CHK_2        7004   // "Quarantine"
+#define DIAMONDS_CHK_STRIP_H     32     // height of the checkbox bar at the bottom
 
-// ── Titlebar tab constants ────────────────────────────────────────────────────
+// ── Filter / tab constants ────────────────────────────────────────────────────
 #define DTAB_ALL              0
-#define DTAB_WATCH            1
-#define DTAB_DIV              2
+#define DTAB_GROWTH           1
+#define DTAB_QUARENTINE       2
 #define DIAMONDS_TAB_COUNT    3
-#define DIAMONDS_TAB_HEIGHT   26        // height of the NC band carved below the caption
-#define DIAMONDS_TAB_WIDTH    100       // fixed width per tab, pixels
 
 static const char* g_DiamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "High-Yield Dividends", "Quarantine" };
-static int         g_DiamondsActiveTab = DTAB_ALL;
-// Maps conId → assigned tab (DTAB_ALL = untagged, visible in all tabs).
+
+// Bitmask: bit N set means group N is currently visible.  Default = all visible.
+static UINT g_DiamondsCheckedTabs = 0x7;
+
+// Maps conId → assigned group (DTAB_ALL = untagged = shown when bit 0 is set).
 static std::map<int,int> g_DiamondsTabMap;
 
-static ListViewZoomData DiamondsZoomData = { NULL, 14, "DiamondsListZoom" };
+// ── Symbol color palette ──────────────────────────────────────────────────────
+// Index 0-5 = named colors.  No entry in the map (or index -1) = inherit theme.
+#define DIAMONDS_COLOR_COUNT  6
+#define DIAMONDS_COLOR_NONE  -1   // sentinel: remove override, inherit by theme
+
+struct DiamondsColorDef { COLORREF rgb; const char* label; };
+static const DiamondsColorDef g_DiamondColorPalette[DIAMONDS_COLOR_COUNT] = {
+    { RGB(159,  27,  27), "Set Color: Red"    },
+    { RGB( 18, 220,  18), "Set Color: Green"  },
+    { RGB(  0, 167, 255), "Set Color: Blue"   },
+    { RGB(167,  84, 212), "Set Color: Purple" },
+    { RGB(255, 215,   0), "Set Color: Gold"   },
+    { RGB(163, 104,  14), "Set Color: Brown"  },
+};
+
+// Maps conId → color index (0..DIAMONDS_COLOR_COUNT-1), or not present = inherit.
+static std::map<int,int> g_DiamondsSymbolColors;
+
+// Stash the hList pointer so the static sort callback can reach it.
+static HWND g_DiamondsListForSort = NULL;
+
+static bool g_DiamondsChkVisible = false;
+
+static ListViewZoomData DiamondsZoomData = { NULL, NULL, 14, "Zoom_Diamonds" };
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
@@ -42,6 +70,10 @@ enum DiamondColIdx {
     DCOL_ANNUAL_DIV,
     DCOL_COUNT
 };
+
+// ── Sort state ────────────────────────────────────────────────────────────────
+static int  g_DiamondsSortCol = DCOL_SYMBOL;
+static bool g_DiamondsSortAsc = true;
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -73,18 +105,18 @@ static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
 
 // Saves g_DiamondsTabMap to the registry as two space-separated conId lists.
 static void Diamonds_SaveTabMap() {
-    std::string watchList, divList;
+    std::string growthList, quarentineList;
     for (auto& [conId, tab] : g_DiamondsTabMap) {
-        if (tab == DTAB_WATCH) {
-            if (!watchList.empty()) watchList += ' ';
-            watchList += std::to_string(conId);
-        } else if (tab == DTAB_DIV) {
-            if (!divList.empty()) divList += ' ';
-            divList += std::to_string(conId);
+        if (tab == DTAB_GROWTH) {
+            if (!growthList.empty()) growthList += ' ';
+            growthList += std::to_string(conId);
+        } else if (tab == DTAB_QUARENTINE) {
+            if (!quarentineList.empty()) quarentineList += ' ';
+            quarentineList += std::to_string(conId);
         }
     }
-    Settings_SaveString("DiamondsTabWatch", watchList);
-    Settings_SaveString("DiamondsTabDiv",   divList);
+    Settings_SaveString("DiamondsTabGrowth", growthList);
+    Settings_SaveString("DiamondsTabQuarantine",    quarentineList);
 }
 
 // Loads g_DiamondsTabMap from the registry.
@@ -102,108 +134,113 @@ static void Diamonds_LoadTabMap() {
             start = end + 1;
         }
     };
-    parseIds(Settings_LoadString("DiamondsTabWatch"), DTAB_WATCH);
-    parseIds(Settings_LoadString("DiamondsTabDiv"),   DTAB_DIV);
+    parseIds(Settings_LoadString("DiamondsTabGrowth"), DTAB_GROWTH);
+    parseIds(Settings_LoadString("DiamondsTabQuarantine"),    DTAB_QUARENTINE);
 }
 
-// ── Tab geometry & painting ───────────────────────────────────────────────────
-//
-// A DIAMONDS_TAB_HEIGHT px band is carved out of the NC area immediately below
-// the caption (via WM_NCCALCSIZE).  Tabs are painted there with GetWindowDC.
-// The ListView client area is completely untouched.
+// ── Symbol color persistence ──────────────────────────────────────────────────
 
-// Returns the tab band rect in WINDOW coordinates.
-// Uses ClientToScreen so it works correctly when maximized or DPI-scaled.
-static RECT Diamonds_TabBandRect(HWND hWnd) {
-    RECT  wr;  GetWindowRect(hWnd, &wr);
-    POINT ptCl = { 0, 0 };
-    ClientToScreen(hWnd, &ptCl);
-    int clientTopW = ptCl.y - wr.top;       // client top in window coords
-    if (clientTopW < DIAMONDS_TAB_HEIGHT) return { 0, 0, 0, 0 };
-    return { 0, clientTopW - DIAMONDS_TAB_HEIGHT, wr.right - wr.left, clientTopW };
-}
-
-// Returns 0-based tab index under ptW (window coords), or -1.
-static int Diamonds_HitTestTab(HWND hWnd, POINT ptW) {
-    RECT band = Diamonds_TabBandRect(hWnd);
-    if (ptW.y < band.top || ptW.y >= band.bottom) return -1;
-    for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-        int x0 = band.left + i * DIAMONDS_TAB_WIDTH;
-        if (ptW.x >= x0 && ptW.x < x0 + DIAMONDS_TAB_WIDTH) return i;
+static void Diamonds_SaveSymbolColors() {
+    std::string s;
+    for (auto& [conId, idx] : g_DiamondsSymbolColors) {
+        if (!s.empty()) s += ' ';
+        s += std::to_string(conId) + ':' + std::to_string(idx);
     }
-    return -1;
+    Settings_SaveString("DiamondsSymbolColors", s);
 }
 
-// Paints the tab band into the NC area.  Call AFTER DefWindowProc so we
-// overdraw whatever the system put there.
-static void Diamonds_PaintTabs(HWND hWnd) {
-    RECT band = Diamonds_TabBandRect(hWnd);
-    if (band.right == 0) return;
-
-    HDC hdc = GetWindowDC(hWnd);
-    if (!hdc) return;
-
-    bool dark = Settings_DarkMode();
-
-    // Band background — a solid stripe clearly distinct from the caption above.
-    COLORREF bgCol = dark ? RGB(25, 25, 28) : RGB(235, 235, 238);
-    HBRUSH   bgBr  = CreateSolidBrush(bgCol);
-    FillRect(hdc, &band, bgBr);
-    DeleteObject(bgBr);
-
-    // Bottom separator line (between band and client area).
-    COLORREF sepCol = dark ? RGB(75, 75, 80) : RGB(180, 180, 185);
-    HPEN     sepPen = CreatePen(PS_SOLID, 1, sepCol);
-    HPEN     oldPen = (HPEN)SelectObject(hdc, sepPen);
-    MoveToEx(hdc, band.left,  band.bottom - 1, NULL);
-    LineTo  (hdc, band.right, band.bottom - 1);
-    SelectObject(hdc, oldPen);
-    DeleteObject(sepPen);
-
-    HFONT hFont   = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
-    HFONT oldFont = (HFONT)SelectObject(hdc, hFont);
-    SetBkMode(hdc, TRANSPARENT);
-
-    for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-        bool isActive = (i == g_DiamondsActiveTab);
-
-        RECT tr = {
-            band.left + i * DIAMONDS_TAB_WIDTH, band.top,
-            band.left + i * DIAMONDS_TAB_WIDTH + DIAMONDS_TAB_WIDTH, band.bottom
-        };
-
-        // Active tab: same color as client area so it looks "open".
-        // Inactive: a step darker than the band background.
-        COLORREF tabBg = isActive
-            ? (dark ? RGB(30, 30, 30) : RGB(255, 255, 255))
-            : (dark ? RGB(40, 40, 44) : RGB(215, 215, 218));
-        HBRUSH tabBr = CreateSolidBrush(tabBg);
-        FillRect(hdc, &tr, tabBr);
-        DeleteObject(tabBr);
-
-        // Tab border: left, top, right.
-        // Active tab has no bottom border — it merges with the client area.
-        HPEN pen   = CreatePen(PS_SOLID, 1, sepCol);
-        HPEN oldP2 = (HPEN)SelectObject(hdc, pen);
-        int  bBot  = isActive ? tr.bottom : tr.bottom - 1;
-        MoveToEx(hdc, tr.left,      bBot,    NULL);
-        LineTo  (hdc, tr.left,      tr.top);
-        LineTo  (hdc, tr.right - 1, tr.top);
-        LineTo  (hdc, tr.right - 1, bBot);
-        SelectObject(hdc, oldP2);
-        DeleteObject(pen);
-
-        // Label — high-contrast text regardless of dark/light mode.
-        COLORREF txtCol = isActive
-            ? (dark ? RGB(230, 230, 235) : RGB(10, 10, 10))
-            : (dark ? RGB(140, 140, 145) : RGB(90, 90, 95));
-        SetTextColor(hdc, txtCol);
-        DrawTextA(hdc, g_DiamondTabNames[i], -1, &tr,
-                  DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+static void Diamonds_LoadSymbolColors() {
+    g_DiamondsSymbolColors.clear();
+    std::string s = Settings_LoadString("DiamondsSymbolColors");
+    size_t pos = 0;
+    while (pos < s.size()) {
+        size_t end = s.find(' ', pos);
+        if (end == std::string::npos) end = s.size();
+        std::string tok = s.substr(pos, end - pos);
+        auto colon = tok.find(':');
+        if (colon != std::string::npos) {
+            try {
+                int conId = std::stoi(tok.substr(0, colon));
+                int idx   = std::stoi(tok.substr(colon + 1));
+                if (idx >= 0 && idx < DIAMONDS_COLOR_COUNT)
+                    g_DiamondsSymbolColors[conId] = idx;
+            } catch (...) {}
+        }
+        pos = end + 1;
     }
+}
 
-    SelectObject(hdc, oldFont);
-    ReleaseDC(hWnd, hdc);
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+static void Diamonds_Layout(HWND hWnd) {
+    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+    if (!hList) return;
+    RECT rc; GetClientRect(hWnd, &rc);
+    int listH = g_DiamondsChkVisible ? rc.bottom - DIAMONDS_CHK_STRIP_H : rc.bottom;
+    MoveWindow(hList, 0, 0, rc.right, listH, TRUE);
+
+    if (!g_DiamondsChkVisible) return;
+
+    // Space the three checkboxes evenly across the bottom strip.
+    static const int chkW[DIAMONDS_TAB_COUNT] = { 90, 175, 115 };
+    int totalW = 0;
+    for (int w : chkW) totalW += w;
+    int startX = (rc.right - totalW) / 2;
+    int y = listH + (DIAMONDS_CHK_STRIP_H - 20) / 2;
+    int x = startX;
+    for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
+        SetWindowPos(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), NULL,
+                     x, y, chkW[i], 20, SWP_NOZORDER | SWP_NOACTIVATE);
+        x += chkW[i];
+    }
+}
+
+static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
+    if (g_DiamondsChkVisible == show) return;
+    g_DiamondsChkVisible = show;
+    int sw = show ? SW_SHOW : SW_HIDE;
+    for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i)
+        ShowWindow(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), sw);
+    Diamonds_Layout(hWnd);
+}
+
+// ── Sort helpers ──────────────────────────────────────────────────────────────
+
+static void Diamonds_SetSortArrow(HWND hList, int col, bool asc) {
+    HWND hHdr = ListView_GetHeader(hList);
+    int n = Header_GetItemCount(hHdr);
+    for (int i = 0; i < n; ++i) {
+        HDITEM hdi = {}; hdi.mask = HDI_FORMAT;
+        Header_GetItem(hHdr, i, &hdi);
+        hdi.fmt &= ~(HDF_SORTUP | HDF_SORTDOWN);
+        if (i == col) hdi.fmt |= asc ? HDF_SORTUP : HDF_SORTDOWN;
+        Header_SetItem(hHdr, i, &hdi);
+    }
+}
+
+// Numeric columns — strip leading +/% suffix chars before atof.
+static bool Diamonds_ColIsNumeric(int col) {
+    return col != DCOL_SYMBOL && col != DCOL_DIV_DATE;
+}
+
+static int CALLBACK Diamonds_SortCompare(LPARAM idx1, LPARAM idx2, LPARAM /*extra*/) {
+    char b1[64] = {}, b2[64] = {};
+    ListView_GetItemText(g_DiamondsListForSort, (int)idx1, g_DiamondsSortCol, b1, sizeof(b1));
+    ListView_GetItemText(g_DiamondsListForSort, (int)idx2, g_DiamondsSortCol, b2, sizeof(b2));
+    int cmp;
+    if (Diamonds_ColIsNumeric(g_DiamondsSortCol)) {
+        double v1 = atof(b1), v2 = atof(b2);
+        cmp = (v1 < v2) ? -1 : (v1 > v2) ? 1 : 0;
+    } else {
+        cmp = _stricmp(b1, b2);
+    }
+    return g_DiamondsSortAsc ? cmp : -cmp;
+}
+
+static void Diamonds_ApplySort(HWND hList) {
+    g_DiamondsListForSort = hList;
+    ListView_SortItemsEx(hList, Diamonds_SortCompare, 0);
+    Diamonds_SetSortArrow(hList, g_DiamondsSortCol, g_DiamondsSortAsc);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -335,17 +372,16 @@ static void Diamonds_Repopulate(HWND hWnd) {
     {
         std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
         for (auto const& [sym, info] : api.getPortfolioMap()) {
-            // Strict single-tab membership:
-            //   DTAB_ALL   → items NOT in g_DiamondsTabMap (unassigned)
-            //   DTAB_WATCH → items mapped to DTAB_WATCH
-            //   DTAB_DIV   → items mapped to DTAB_DIV
+            // Show item if its assigned group's bit is set in g_DiamondsCheckedTabs.
             auto it = g_DiamondsTabMap.find(info.conId);
             int  assignedTab = (it != g_DiamondsTabMap.end()) ? it->second : DTAB_ALL;
-            if (assignedTab != g_DiamondsActiveTab) continue;
+            if (!((g_DiamondsCheckedTabs >> assignedTab) & 1)) continue;
             rows.push_back(info);
         }
     }
 
+    // Initial insertion order: alphabetical by symbol.
+    // After insert we re-sort by the active sort column/direction.
     std::sort(rows.begin(), rows.end(),
               [](const TradingAPI::PositionInfo& a, const TradingAPI::PositionInfo& b) {
                   return a.symbol < b.symbol;
@@ -379,8 +415,16 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+    Diamonds_ApplySort(hList);
 
-    SetWindowTextA(hWnd, ("Diamonds: " + std::to_string(rows.size()) + " Positions").c_str());
+    std::string title = "Diamonds: " + std::to_string(rows.size()) + " ";
+    int activeTabs = 0;
+    for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
+        if (SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), BM_GETCHECK, 0, 0) == BST_CHECKED)
+            title += std::string(activeTabs++ == 0 ? "" : " + ") + g_DiamondTabNames[i];
+    }
+    title += " Positions";
+    SetWindowTextA(hWnd, title.c_str());
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -388,46 +432,10 @@ static void Diamonds_Repopulate(HWND hWnd) {
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
 
-    // ── Non-client area: carve DIAMONDS_TAB_HEIGHT px below the caption ──────
-    case WM_NCCALCSIZE: {
-        LRESULT lr = DefWindowProc(hWnd, message, wParam, lParam);
-        if (wParam) {
-            // Push the client rect's top edge down to create the tab band.
-            NCCALCSIZE_PARAMS* p = (NCCALCSIZE_PARAMS*)lParam;
-            p->rgrc[0].top += DIAMONDS_TAB_HEIGHT;
-        }
-        return lr;
-    }
-
-    // Repaint tabs after any NC repaint (focus change, theme change, resize).
-    // For WM_NCACTIVATE we always return TRUE so the caption redraws correctly
-    // when the window gains/loses focus, then we overdraw with our tabs.
-    case WM_NCPAINT: {
-        LRESULT lr = DefWindowProc(hWnd, message, wParam, lParam);
-        Diamonds_PaintTabs(hWnd);
-        return lr;
-    }
-    case WM_NCACTIVATE: {
-        LRESULT lr = DefWindowProc(hWnd, message, wParam, lParam);
-        Diamonds_PaintTabs(hWnd);
-        return TRUE;   // always repaint the NC area on focus change
-    }
-
-    // ── Non-client left-button: intercept tab clicks ──────────────────────
-    case WM_NCLBUTTONDOWN: {
-        // Convert screen coords to window coords and hit-test the tab band.
-        POINT ptScreen = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        RECT  wr;  GetWindowRect(hWnd, &wr);
-        POINT ptW  = { ptScreen.x - wr.left, ptScreen.y - wr.top };
-        int   tab  = Diamonds_HitTestTab(hWnd, ptW);
-        if (tab >= 0 && tab != g_DiamondsActiveTab) {
-            g_DiamondsActiveTab = tab;
-            Diamonds_PaintTabs(hWnd);
-            Diamonds_Repopulate(hWnd);
-            return 0;   // consumed — do NOT pass to DefWindowProc (avoids drag)
-        }
-        break;
-    }
+    // ── Checkboxes show when active, hide when inactive ───────────────────────
+    case WM_ACTIVATE:
+        Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
+        return 0;
 
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
@@ -435,12 +443,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         HWND hList = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
             WS_CHILD | WS_VISIBLE | WS_BORDER |
-            LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+            LVS_REPORT | LVS_SHOWSELALWAYS,
             0, 0, 1100, 420,
             hWnd, (HMENU)ID_DIAMONDS_RESULTS_LIST, hInst, NULL);
 
         DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
-        ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.fontSize);
+        ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.hBoldFont, DiamondsZoomData.fontSize);
         SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&DiamondsZoomData);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -454,28 +462,54 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             ListView_InsertColumn(hList, i, &lvc);
         }
 
+        // Create the three filter checkboxes (hidden until window is focused).
+        for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
+            HWND hChk = CreateWindowA("BUTTON", g_DiamondTabNames[i],
+                WS_CHILD | BS_AUTOCHECKBOX | BS_NOTIFY,
+                0, 0, 10, 10,
+                hWnd, (HMENU)(UINT_PTR)(ID_DIAMONDS_CHK_0 + i), hInst, NULL);
+            // Default: all checked.
+            SendMessage(hChk, BM_SETCHECK, BST_CHECKED, 0);
+        }
+
         api.setDiamondsWindow(hWnd);
         api.addApiUpdateWindow(hWnd);
 
-        // Load saved tab assignments from the registry.
+        // Load saved tab assignments, checkbox state, sort settings, and symbol colors.
         Diamonds_LoadTabMap();
+        Diamonds_LoadSymbolColors();
+        g_DiamondsSortCol = (int)Settings_Load("DiamondsSortCol", DCOL_SYMBOL);
+        g_DiamondsSortAsc = Settings_Load("DiamondsSortAsc", 1) != 0;
+        if (g_DiamondsSortCol < 0 || g_DiamondsSortCol >= DCOL_COUNT) g_DiamondsSortCol = DCOL_SYMBOL;
 
-        // Force WM_NCCALCSIZE to run now so the tab band is carved out before
-        // the first paint.  Without this the ListView briefly fills the full
-        // window height on startup.
-        SetWindowPos(hWnd, NULL, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                     SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        // Restore checkbox bitmask (default 0x7 = all checked).
+        g_DiamondsCheckedTabs = (UINT)Settings_Load("DiamondsCheckedTabs", 0x7);
+        g_DiamondsCheckedTabs &= 0x7;  // clamp to valid 3-bit range
+        for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
+            bool checked = (g_DiamondsCheckedTabs >> i) & 1;
+            SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i),
+                        BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+        }
         break;
     }
 
     case WM_SIZE: {
-        HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-        if (!hList) return 0;
-        RECT rc; GetClientRect(hWnd, &rc);
-        MoveWindow(hList, 0, 0, rc.right, rc.bottom, TRUE);
-        // Repaint the NC tab band after maximize / restore.
-        RedrawWindow(hWnd, NULL, NULL, RDW_FRAME | RDW_INVALIDATE | RDW_NOCHILDREN);
+        Diamonds_Layout(hWnd);
+        break;
+    }
+
+    case WM_COMMAND: {
+        WORD id = LOWORD(wParam);
+        if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2 && HIWORD(wParam) == BN_CLICKED) {
+            // Rebuild bitmask from checkbox states.
+            g_DiamondsCheckedTabs = 0;
+            for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
+                if (SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), BM_GETCHECK, 0, 0) == BST_CHECKED)
+                    g_DiamondsCheckedTabs |= (1u << i);
+            }
+            Settings_Save("DiamondsCheckedTabs", (int)g_DiamondsCheckedTabs);
+            Diamonds_Repopulate(hWnd);
+        }
         break;
     }
 
@@ -527,6 +561,18 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->idFrom != ID_DIAMONDS_RESULTS_LIST) break;
 
+        if (hdr->code == LVN_COLUMNCLICK) {
+            NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
+            int col = nmlv->iSubItem;
+            if (col == g_DiamondsSortCol) g_DiamondsSortAsc = !g_DiamondsSortAsc;
+            else { g_DiamondsSortCol = col; g_DiamondsSortAsc = true; }
+            Settings_Save("DiamondsSortCol", g_DiamondsSortCol);
+            Settings_Save("DiamondsSortAsc", g_DiamondsSortAsc ? 1 : 0);
+            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+            Diamonds_ApplySort(hList);
+            return 0;
+        }
+
         if (hdr->code == NM_DBLCLK) {
             LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
             int row = act->iItem;
@@ -557,24 +603,63 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 ListView_GetItem(hList, &item);
                 int conId = (int)item.lParam;
 
-                // Read watchlist lists fresh every time (user may have edited them).
+                // Build the full registry entry string for this symbol.
+                std::string exchange;
+                {
+                    std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
+                    auto& pmap = api.getPortfolioMap();
+                    auto pit = pmap.find(sym);
+                    if (pit != pmap.end()) exchange = pit->second.exchange;
+                }
+                std::string entry = std::to_string(conId) + "." + sym;
+                if (!exchange.empty()) entry += "." + exchange;
+
+                // Read watchlist lists fresh every time.
                 std::vector<std::string> watchlistLists = Watchlist_LoadAllListNames();
 
-                // Build context menu.
-                // IDs 1-3: tab assignments.  IDs 100+: "Add to Watchlist: <name>".
+                // Determine current group assignment for this item.
+                auto mapIt = g_DiamondsTabMap.find(conId);
+                int currentGroup = (mapIt != g_DiamondsTabMap.end()) ? mapIt->second : DTAB_ALL;
+
+                // Determine current color assignment for this item.
+                auto colorIt = g_DiamondsSymbolColors.find(conId);
+                int currentColor = (colorIt != g_DiamondsSymbolColors.end()) ? colorIt->second : DIAMONDS_COLOR_NONE;
+
+                // ── Build context menu ────────────────────────────────────────
+                // IDs 1-3:   group assignment
+                // IDs 100+:  "Add to Watchlist: <name>"
+                // IDs 200-206: color options (200+idx for colors, 206 = None)
                 HMENU hMenu = CreatePopupMenu();
-                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_ALL   ? MF_GRAYED : 0), 1, "Move to Growth");
-                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_WATCH ? MF_GRAYED : 0), 2, "Move to High-Yield Dividends");
-                AppendMenuA(hMenu, MF_STRING | (g_DiamondsActiveTab == DTAB_DIV   ? MF_GRAYED : 0), 3, "Move to Quarantine");
+
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Assign to Growth");
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Assign to High-Yield Dividends");
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Assign to Quarantine");
 
                 if (!watchlistLists.empty()) {
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
                     for (int i = 0; i < (int)watchlistLists.size(); ++i) {
+                        // Gray this entry if the symbol is already in that list.
+                        auto listEntries = Watchlist_ReadListEntries(watchlistLists[i].c_str());
+                        bool alreadyIn = false;
+                        for (const auto& e : listEntries)
+                            if (e == entry) { alreadyIn = true; break; }
                         std::string label = "Add to Watchlist: " + watchlistLists[i];
-                        AppendMenuA(hMenu, MF_STRING, 100 + i, label.c_str());
+                        AppendMenuA(hMenu, MF_STRING | (alreadyIn ? MF_GRAYED : 0), 100 + i, label.c_str());
                     }
                 }
 
+                // ── Color submenu ─────────────────────────────────────────────
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+                
+                // "None" option — grayed when no color is currently assigned.
+                AppendMenuA(hMenu, MF_STRING | (currentColor == DIAMONDS_COLOR_NONE ? MF_GRAYED : 0),
+                            200 + DIAMONDS_COLOR_COUNT, "Set Color: None");
+
+                for (int i = 0; i < DIAMONDS_COLOR_COUNT; ++i) {
+                    bool isCurrent = (currentColor == i);
+                    AppendMenuA(hMenu, MF_STRING | (isCurrent ? MF_GRAYED : 0),
+                                200 + i, g_DiamondColorPalette[i].label);
+                }
                 POINT pt;
                 GetCursorPos(&pt);
                 int cmd = (int)TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
@@ -582,7 +667,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 DestroyMenu(hMenu);
 
                 if (cmd >= 1 && cmd <= 3) {
-                    // Tab assignment.
+                    // Group assignment.
                     int targetTab = cmd - 1;
                     if (targetTab == DTAB_ALL)
                         g_DiamondsTabMap.erase(conId);
@@ -591,31 +676,29 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     Diamonds_SaveTabMap();
                     Diamonds_Repopulate(hWnd);
                 } else if (cmd >= 100 && cmd < 100 + (int)watchlistLists.size()) {
-                    // Add to watchlist list.
+                    // Add to watchlist list (only if not already present — menu grayed it, but guard anyway).
                     const std::string& listName = watchlistLists[cmd - 100];
-                    // Look up the full PositionInfo so we can include the exchange.
-                    std::string exchange;
-                    {
-                        std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
-                        auto& pmap = api.getPortfolioMap();
-                        auto it = pmap.find(sym);
-                        if (it != pmap.end())
-                            exchange = it->second.exchange;
-                    }
-                    std::string entry = std::to_string(conId) + "." + sym;
-                    if (!exchange.empty())
-                        entry += "." + exchange;
-
                     auto entries = Watchlist_ReadListEntries(listName.c_str());
-                    // Only add if not already present.
                     bool exists = false;
-                    for (const auto& e : entries)
-                        if (e == entry) { exists = true; break; }
+                    for (const auto& e : entries) if (e == entry) { exists = true; break; }
                     if (!exists) {
                         entries.push_back(entry);
                         Watchlist_SaveFullList(listName.c_str(), entries);
                         Watchlist_NotifyListChanged(listName);
                     }
+                } else if (cmd >= 200 && cmd <= 200 + DIAMONDS_COLOR_COUNT) {
+                    // Color assignment.
+                    int pickedIdx = cmd - 200;
+                    if (pickedIdx == DIAMONDS_COLOR_COUNT) {
+                        // "None" — remove override.
+                        g_DiamondsSymbolColors.erase(conId);
+                    } else {
+                        g_DiamondsSymbolColors[conId] = pickedIdx;
+                    }
+                    Diamonds_SaveSymbolColors();
+                    // Invalidate just this row so the color appears immediately.
+                    ListView_RedrawItems(hList, row, row);
+                    UpdateWindow(hList);
                 }
             }
         }
@@ -639,6 +722,17 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     return CDRF_NOTIFYSUBITEMDRAW;
 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    // ── Symbol column: apply per-symbol color override ────────
+                    if (cd->iSubItem == DCOL_SYMBOL) {
+                        SelectObject(cd->nmcd.hdc, DiamondsZoomData.hBoldFont);
+                        auto cit = g_DiamondsSymbolColors.find((int)cd->nmcd.lItemlParam);
+                        if (cit != g_DiamondsSymbolColors.end() &&
+                            cit->second >= 0 && cit->second < DIAMONDS_COLOR_COUNT) {
+                            cd->clrText = g_DiamondColorPalette[cit->second].rgb;
+                            if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        }
+                        return CDRF_NEWFONT;
+                    }
                     // Only colour P&L / change columns — and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
                     if (cd->iSubItem == DCOL_CHGPCT    ||
@@ -660,6 +754,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             else if (val < 0.0) cd->clrText = RGB(220, 80, 80);
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        SelectObject(cd->nmcd.hdc, DiamondsZoomData.hFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE    ||
@@ -693,6 +788,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         api.removeApiUpdateWindow(hWnd);
         if (DiamondsZoomData.hFont) {
             DeleteObject(DiamondsZoomData.hFont);
+        }
+        if (DiamondsZoomData.hBoldFont) {
+            DeleteObject(DiamondsZoomData.hBoldFont);
         }
         break;
     }

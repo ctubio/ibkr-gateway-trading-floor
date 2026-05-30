@@ -145,11 +145,23 @@ HICON CreateGrayIcon(HICON hOriginal) {
 
 struct ListViewZoomData {
     HFONT hFont;
+    HFONT hBoldFont;
     int fontSize;
     const char* settingKey;
 };
 
-static void ApplyListViewFont(HWND hList, HFONT hFont, int fontSize) {
+HFONT CreateBoldFont(HFONT hNormalFont) {
+    LOGFONTA lf;
+    if (!GetObjectA(hNormalFont, sizeof(LOGFONTA), &lf)) {
+        return NULL; 
+    }
+    
+    lf.lfWeight = FW_BOLD; 
+    
+    return CreateFontIndirectA(&lf);
+}
+
+static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize) {
     if (hFont) {
         DeleteObject(hFont);
     }
@@ -162,7 +174,12 @@ static void ApplyListViewFont(HWND hList, HFONT hFont, int fontSize) {
     hFont = CreateFontA(fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, 
         DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-
+    
+    if (hBoldFont) {
+        DeleteObject(hBoldFont);
+    }
+    hBoldFont = CreateBoldFont(hFont);
+    
     SendMessage(hList, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
     HWND hHeader = ListView_GetHeader(hList);
@@ -190,7 +207,7 @@ LRESULT CALLBACK ListViewZoomProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM l
             if (zoomData->fontSize > 30) zoomData->fontSize = 30;
 
             Settings_Save(zoomData->settingKey, zoomData->fontSize);
-            ApplyListViewFont(hList, zoomData->hFont, zoomData->fontSize);
+            ApplyListViewFont(hList, zoomData->hFont, zoomData->hBoldFont, zoomData->fontSize);
 
             return 0; // Prevent default scrolling
         }
