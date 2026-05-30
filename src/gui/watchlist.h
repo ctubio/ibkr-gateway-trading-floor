@@ -777,7 +777,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         if (newName.empty()) {
             HWND hCB = GetDlgItem(hWnd, ID_WATCHLIST_LIST_COMBO);
             int count = (int)SendMessage(hCB, CB_GETCOUNT, 0, 0);
-            if (count > 2) {
+            if (count > 1) {
                 int targetIndex = 1;
                 SendMessage(hCB, CB_SETCURSEL, targetIndex, 0);
                 int textLen = (int)SendMessage(hCB, CB_GETLBTEXTLEN, targetIndex, 0);
