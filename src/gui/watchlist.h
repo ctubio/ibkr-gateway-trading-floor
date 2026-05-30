@@ -325,6 +325,17 @@ static void Watchlist_AddItem(HWND hWnd, const std::string& fullEntry) {
     auto entries = Watchlist_ReadListEntries(listName.c_str());
     for (const auto& e : entries) if (e == fullEntry) return;   // duplicate
     entries.push_back(fullEntry);
+    
+    std::sort(entries.begin(), entries.end(), [](const std::string& a, const std::string& b) {
+        size_t dot_a = a.find('.');
+        size_t dot_b = b.find('.');
+
+        // Create a string_view that ignores everything up to and including the first dot
+        std::string_view view_a = (dot_a != std::string::npos) ? std::string_view(a).substr(dot_a + 1) : a;
+        std::string_view view_b = (dot_b != std::string::npos) ? std::string_view(b).substr(dot_b + 1) : b;
+
+        return view_a < view_b;
+     });
     Watchlist_SaveFullList(listName.c_str(), entries);
     Watchlist_Subscribe(hWnd, listName);  // refresh this window immediately
 }

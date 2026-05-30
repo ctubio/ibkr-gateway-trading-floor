@@ -379,17 +379,18 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
         lvc.fmt = LVCFMT_LEFT;
 
-        lvc.cx = 90;
-        lvc.pszText = (LPSTR)"Time";
+        lvc.cx = 600;
+        lvc.pszText = (LPSTR)"Headline";
         ListView_InsertColumn(hNewsResults, 0, &lvc);
 
         lvc.cx = 100;
         lvc.pszText = (LPSTR)"Provider";
         ListView_InsertColumn(hNewsResults, 1, &lvc);
 
-        lvc.cx = 600;
-        lvc.pszText = (LPSTR)"Headline";
+        lvc.cx = 90;
+        lvc.pszText = (LPSTR)"Time";
         ListView_InsertColumn(hNewsResults, 2, &lvc);
+
 
         api.setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News");
@@ -496,11 +497,11 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         lvi.mask     = LVIF_TEXT | LVIF_PARAM;
         lvi.iItem    = 0;
         lvi.lParam   = (LPARAM)rowId;
-        lvi.pszText  = (LPSTR)news->timeStamp.c_str();
+        lvi.pszText  = (LPSTR)news->headline.c_str();
         int idx = (int)SendMessageA(hNewsResults, LVM_INSERTITEMA, 0, (LPARAM)&lvi);
 
         ListView_SetItemText(hNewsResults, idx, 1, (LPSTR)news->providerCode.c_str());
-        ListView_SetItemText(hNewsResults, idx, 2, (LPSTR)news->headline.c_str());
+        ListView_SetItemText(hNewsResults, idx, 2, (LPSTR)news->timeStamp.c_str());
 
         delete news;
         break;
