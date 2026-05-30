@@ -30,10 +30,11 @@ This application is a modern desktop trading companion built on the Interactive 
 
 ### 💼 Dashboard
 The central command hub of the application:
-- **Connection Status**: Real-time monitoring of Market Data and Trading sessions.
+- **Connection Status**: Real-time monitoring of Market Data and Trading sessions via tray tooltip and icon.
 - **Quick Launch**: One-click buttons to open any module in the suite.
-- **Window Management**: Dynamic menu to toggle "Always On Top" for active Market windows.
-- **Session Control**: Manual Connect/Disconnect overrides.
+- **Sticky Tray Menu**: Manage window "Always On Top" states and connections directly from the tray context menu without losing focus.
+- **Session Control**: Toggle between manual and automatic connection watchdog.
+- **Instance Management**: Ensures a single running instance; launching a new one replaces the old process.
 
 ### 💰 Coins (Account Summary)
 High-level financial health monitoring:
@@ -46,7 +47,9 @@ High-level financial health monitoring:
 Precision order tracking and management:
 - **Visual Status**: Color-coded rows for instant recognition:
   - 🟢 **Filled** | 🟡 **Partially Filled** | 🔵 **Submitted** | ⚪ **Cancelled/Inactive**
-- **Interactive Management**: In-place modification of order price and quantity.
+- **Interactive Management**: In-place modification of order price and quantity via double-click.
+  - **Keyboard Controls**: Use `Enter` to confirm, `Esc` to cancel, `Tab` to switch fields, and `Up`/`Down` arrows to increment/decrement prices and quantities.
+- **Quick Cancel**: Press the `Delete` or `Escape` key on a selected order in the list to immediately transmit a cancellation request.
 - **Audit Trail**: Sorted by status and timestamp to prioritize the most recent updates.
 
 ### 💎 Diamonds
@@ -61,18 +64,21 @@ Real-time quote monitoring with saved watchlists and fast table navigation:
 - **Comprehensive Data**: Last price, bid/ask sizes, change %, dividend yield, dividend date, and annual dividend.
 - **Extended Metrics**: Fundamental tick updates, 52-week ranges, and market-cap style insights.
 - **Symbol Auto-Complete**: Add instruments quickly using the inline searchable symbol entry box.
+- **Table Navigation**: Double-click any row to instantly open a dedicated Market window for that instrument.
+- **Column Sorting**: Click headers to sort by any column (Price, Change %, Symbol, etc.). The sort preference is saved per session.
 - **Registry Persistence**: All lists are stored under the Windows Registry and recovered across restarts.
 - **Live Placeholder Rows**: Symbols appear immediately while market data subscriptions are still initializing.
 - **Zoomable Tables**: Use `Ctrl + Mouse Wheel` on list views to resize text for readability.
-- **Keyboard-Friendly Editing**: Use Delete key to remove lists and list items.
+- **Keyboard-Friendly Editing**: Use `Delete` key to remove lists and list items.
 
 ### 🏦 Market
 High-frequency trade monitoring with split-panel filtering and symbol search:
 - **Tick-by-Tick Feed**: Live trade price, size, time, and exchange for the active symbol.
 - **Filtered Views**: Toggle between full trades, top 100, and top 1000 size filters.
-- **Split Panel Layout**: Supports multiple synchronized panes for detailed trade inspection.
+- **Interactive Splitters**: Customize your view with **draggable vertical and horizontal splitters**. The application remembers your preferred layout for each symbol.
 - **Multi-Window Support**: Open many Market sessions at once for different instruments.
-- **Symbol Search Popup**: Rapidly look up symbols and open a new Market window from the search dialog.
+- **Market Search**: A dedicated search dialog with auto-complete and keyboard navigation (`Arrows` + `Enter`) to quickly find and launch new market windows.
+- **Persistent Preferences**: Filter states and splitter positions are saved to the registry and restored automatically.
 
 ### 📰 News
 Contextual market intelligence with provider filtering and article preview:
@@ -86,7 +92,7 @@ Contextual market intelligence with provider filtering and article preview:
 Personalized application configuration with immediate feedback:
 - **Gateway Automation**: Auto-start IBKR Gateway on launch and optionally kill it on exit.
 - **Dark Mode**: Applies instantly across all windows with a full repaint for UI consistency.
-- **Sound Notifications**: Enable or disable global event sounds from one place.
+- **Asynchronous Audio**: Toggle global event sounds. Audio is processed via a dedicated **async sound queue** to ensure zero impact on UI responsiveness.
 - **Debug Log Access**: Open the live debug console directly from Settings.
 - **Registry Backed**: Saves Dark Mode, sound, auto-gateway, and kill-on-exit preferences to the registry.
 
