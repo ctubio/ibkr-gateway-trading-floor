@@ -11,7 +11,6 @@ static const char* DASHBOARD_CLASS_NAME          = "TNTDashboardClass";
 static const char* SETTINGS_CLASS_NAME           = "TNTSettingsWindowClass";
 static const char* DEBUGLOG_CLASS_NAME           = "TNTDebugLogWindowClass";
 static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "TNTWatchlistNewListWindowClass";
-static const char* COINS_CLASS_NAME              = "TNTCoinsWindowClass";
 static const char* ORDERS_CLASS_NAME             = "TNTOrdersWindowClass";
 static const char* NEWS_CLASS_NAME               = "TNTNewsWindowClass";
 static const char* NEWS_ARTICLE_CLASS_NAME       = "TNTNewsArticleWindowClass";
@@ -699,7 +698,6 @@ bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitX, float
 }
 
 void Session_RestoreWindows(
-    const std::function<void()>& StartCoins,
     const std::function<void()>& StartDiamonds,
     const std::function<void()>& StartNews,
     const std::function<void()>& StartSettings,
@@ -724,12 +722,11 @@ void Session_RestoreWindows(
     const char* p = buf.data();
     while (*p) {
         std::string cls = p;
-        if (cls == COINS_CLASS_NAME)     {
-            StartCoins();
+        if (cls == DASHBOARD_CLASS_NAME)    { 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", COINS_CLASS_NAME);
-            if(Settings_Load(key, 0))
-                ToggleWindowAlwaysOnTop(COINS_CLASS_NAME);
+            sprintf(key, "AlwaysOnTop_%s", DASHBOARD_CLASS_NAME);
+            if(Settings_Load(key, 0)) 
+                ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
         }
         else if (cls == DIAMONDS_CLASS_NAME)  { 
             StartDiamonds(); 
@@ -765,12 +762,6 @@ void Session_RestoreWindows(
             sprintf(key, "AlwaysOnTop_%s", ORDERS_CLASS_NAME);
             if(Settings_Load(key, 0)) 
                 ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME); 
-        }
-        else if (cls == DASHBOARD_CLASS_NAME)    { 
-            char key[256];
-            sprintf(key, "AlwaysOnTop_%s", DASHBOARD_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
-                ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
         }
         else if (cls == DEBUGLOG_CLASS_NAME)  { 
             StartDebugLog(); 

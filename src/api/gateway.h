@@ -8,6 +8,8 @@
 #include <propkey.h>
 #include <propvarutil.h>
 #include <richedit.h>
+#include <sapi.h>
+#include <sphelper.h>
 
 #include <string>
 #include <vector>

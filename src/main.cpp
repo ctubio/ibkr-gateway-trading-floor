@@ -7,7 +7,6 @@
 #include "gui/market.h"
 #include "gui/watchlist.h"
 #include "gui/diamonds.h"
-#include "gui/coins.h"
 #include "gui/orders.h"
 #include "gui/news.h"
 #include "gui/dashboard.h"
@@ -16,7 +15,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     MutexGatewayInstance();
 
     RegisterWindowClass(hInst, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
-    RegisterWindowClass(hInst, WndProcCoins,       COINS_CLASS_NAME,              101);
     RegisterWindowClass(hInst, WndProcOrders,      ORDERS_CLASS_NAME,             103);
     RegisterWindowClass(hInst, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
     RegisterWindowClass(hInst, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);
@@ -31,7 +29,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES };
     InitCommonControlsEx(&icex);
 
-    Session_RestoreWindows(StartCoins, StartDiamonds, StartNews, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
+    Session_RestoreWindows(StartDiamonds, StartNews, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
