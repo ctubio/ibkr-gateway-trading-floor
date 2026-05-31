@@ -1,7 +1,6 @@
 #pragma once
 #include <sapi.h>
 #include <sphelper.h>
-#pragma comment(lib, "ole32.lib")
 
 void StartCoins() { StartGenericWindow(COINS_CLASS_NAME, "Coins", L"IBKRGatewayClient.Coins", 250, 410); }
 
@@ -12,8 +11,6 @@ void StartCoins() { StartGenericWindow(COINS_CLASS_NAME, "Coins", L"IBKRGatewayC
 #define COINS_CLR_BLACK   RGB(30,  30,  30)
 #define COINS_CLR_GRAY    RGB(150, 150, 150)
 #define COINS_CLR_PURPLE  RGB(185, 105, 225)
-// Sentinel: no custom color – let HandleDarkModeMessages / system theme paint this control
-#define COINS_CLR_THEME   ((COLORREF)0xFFFFFFFF)
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 static HFONT hFontCoins_NetLiq  = NULL;
@@ -88,22 +85,6 @@ static const int COIN_ROW_COUNT = (int)(sizeof(coinRows) / sizeof(coinRows[0]));
 
 static HWND hCoinLbl[COIN_ROW_COUNT] = {};
 static HWND hCoinVal[COIN_ROW_COUNT] = {};
-
-// ─── Per-control color table ──────────────────────────────────────────────────
-static HWND     gClrHwnd[160]  = {};
-static COLORREF gClrColor[160] = {};
-static int      gClrCount      = 0;
-
-static void SetCtrlColor(HWND hw, COLORREF c) {
-    for (int i = 0; i < gClrCount; i++)
-        if (gClrHwnd[i] == hw) { gClrColor[i] = c; return; }
-    if (gClrCount < 160) { gClrHwnd[gClrCount] = hw; gClrColor[gClrCount++] = c; }
-}
-static COLORREF GetCtrlColor(HWND hw) {
-    for (int i = 0; i < gClrCount; i++)
-        if (gClrHwnd[i] == hw) return gClrColor[i];
-    return COINS_CLR_THEME;  // not registered = let theme handle it
-}
 
 // ─── TTS helpers ──────────────────────────────────────────────────────────────
 
@@ -311,7 +292,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         }
 
         char buf[80] = "--";
-        COLORREF clr = COINS_CLR_THEME;  // default: let theme paint it
+        COLORREF clr = COLOR_THEME;  // default: let theme paint it
         try {
             double d = std::stod(raw);
             if (coinRows[i].colorType == 1) {
@@ -335,7 +316,7 @@ void Coins_UpdateLabels(HWND hWnd) {
                 }
                 std::string formattedNum = FormatWithCommas(d);
                 snprintf(buf, sizeof(buf), "%s%s", formattedNum.c_str(), suffix);
-                clr = d > 0.0 ? COINS_CLR_GREEN : (d < 0.0 ? COINS_CLR_RED : COINS_CLR_THEME);
+                clr = d > 0.0 ? COINS_CLR_GREEN : (d < 0.0 ? COINS_CLR_RED : COLOR_THEME);
             } else {
                 std::string formattedNum = FormatWithCommas(d);
                 snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
@@ -452,24 +433,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         break;
     }
 
-    case WM_CTLCOLORSTATIC: {
-        HDC  hdc = (HDC)wParam;
-        HWND hw  = (HWND)lParam;
-        COLORREF clr = GetCtrlColor(hw);
-        if (clr == COINS_CLR_THEME) {
-            // Delegate entirely to the shared dark/light mode handler
-            return HandleDarkModeMessages(hWnd, message, wParam, lParam);
-        }
-        SetTextColor(hdc, clr);
-        if (Settings_DarkMode()) {
-            SetBkColor(hdc, DM_BG);
-            return (LRESULT)hDarkBrush;
-        } else {
-            SetBkColor(hdc, GetSysColor(COLOR_BTNFACE));
-            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
-        }
-    }
-
     case WM_COMMAND: {
         WORD id  = LOWORD(wParam);
         WORD evt = HIWORD(wParam);
@@ -484,6 +447,15 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             Coins_SpeakDailyPnL();
         break;
 
+    case WM_SETCURSOR: {
+        int id = GetDlgCtrlID((HWND)wParam);
+        if  (id == ID_COIN_SPEAKER || id == ID_COIN_BIGPNL) {
+            SetCursor(LoadCursor(NULL, IDC_HAND));
+            return TRUE;
+        }
+        break; 
+    }
+    
     case WM_API_UPDATE:
         if (api.isMarketDataConnected() && api.isTradingConnected()) {
             api.setCoinWindow(hWnd);

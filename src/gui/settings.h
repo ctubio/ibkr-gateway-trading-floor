@@ -29,6 +29,7 @@ void FlushDebugBuffer() {
 LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
+            
             hDebugEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
@@ -58,7 +59,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // Call this on every window after creating it
 void ApplyDarkModeToAllWindows() {
     // Enumerate all top-level windows owned by this process
-    InitDarkBrushes();
     EnumWindows([](HWND hWnd, LPARAM) -> BOOL {
         DWORD pid;
         GetWindowThreadProcessId(hWnd, &pid);

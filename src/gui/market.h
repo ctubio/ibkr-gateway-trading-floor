@@ -16,6 +16,11 @@ HWND StartMarket(const std::string& symbol = "", int conId = 0);
 #define ID_TS_LIST_F1000    6006
 #define ID_TS_SEARCH_INPUT  6007
 #define ID_TS_SEARCH_LIST   6008
+#define ID_TS_L2_LIST       6009   // Level 2 depth SysListView32 (left panel)
+
+// ── Layout constants ─────────────────────────────────────────────────────────
+static const int HEADER_H = 82;   // Stats bar (22) + separator (1) + L1 quote (58) + separator (1)
+static const int L2_W     = 200;  // Fixed width of the Level 2 depth panel
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
 
@@ -25,12 +30,24 @@ struct TsState {
     HWND hTsListF100 = NULL;
     HWND hTsListF1000 = NULL;
     HWND hTsFilterCheck = NULL;
+    HWND hL2List = NULL;           // Level 2 depth list (left panel)
     bool tsFilteredView = false;
     std::string symbol;
     int conId = 0;
 
+    // ── Level 1 quote (updated via WM_MARKET_L1) ─────────────────────────────
+    TradingAPI::Level1Info l1Info;
+
+    // ── Portfolio snapshot (position + avg price for the stats header) ────────
+    double position = 0.0;
+    double avgPrice = 0.0;
+
+    // ── Cached fonts for the header panel (created in WM_CREATE) ─────────────
+    HFONT hBigFont = NULL;   // ~22pt bold — large last price
+    HFONT hSmFont  = NULL;   // ~11pt regular — labels / change / bid-ask
+
     // --- Splitter State Variables ---
-    float splitX = 0.5f; // Vertical split ratio (50% default)
+    float splitX = 0.5f; // Vertical split ratio (50% default) within the T&S area
     float splitY = 0.5f; // Horizontal split ratio (50% default)
     int dragMode = 0;    // 0 = none, 1 = dragging vertical, 2 = dragging horizontal
 };
@@ -56,7 +73,32 @@ static const TsCol tsCols[] = {
 };
 static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 
-// ── ListView helpers ──────────────────────────────────────────────────────────
+// ── L2 column definitions ─────────────────────────────────────────────────────
+// Layout: BidSz | Bid | Ask | AskSz
+// Bid rows fill cols 0-1 (blue); ask rows fill cols 2-3 (red).
+struct L2Col { const char* header; int width; int fmt; };
+static const L2Col l2Cols[] = {
+    { "B.Sz",  46, LVCFMT_RIGHT },
+    { "Bid",   54, LVCFMT_RIGHT },
+    { "Ask",   54, LVCFMT_RIGHT },
+    { "A.Sz",  46, LVCFMT_RIGHT },
+};
+static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
+
+static HWND Ts_CreateL2List(HWND hParent, HINSTANCE hInst) {
+    HWND hList = CreateWindowExA(
+        WS_EX_CLIENTEDGE, "SysListView32", "",
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        0, 0, L2_W, 100, hParent, (HMENU)(intptr_t)ID_TS_L2_LIST, hInst, NULL);
+    ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+    LVCOLUMNA lvc = {};
+    lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
+    for (int i = 0; i < L2_COL_COUNT; ++i) {
+        lvc.cx = l2Cols[i].width; lvc.pszText = (LPSTR)l2Cols[i].header; lvc.fmt = l2Cols[i].fmt;
+        ListView_InsertColumn(hList, i, &lvc);
+    }
+    return hList;
+}
 static HWND Ts_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
@@ -88,34 +130,48 @@ static void Ts_InsertTick(HWND hList, double price, double size, const std::stri
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
+// Window structure (top → bottom):
+//   HEADER_H px  : painted header (stats bar + L1 quote block)
+//   remaining    : L2 panel (left, L2_W wide) | T&S panel(s) (right)
+//   bottom 24 px : filter checkbox
 static void Ts_Layout(HWND hWnd, TsState* state) {
     if (!state || !state->hTsList) return;
     RECT rc; GetClientRect(hWnd, &rc);
-    int availH = rc.bottom - 24; 
-    int availW = rc.right;
+
+    const int hdrH     = HEADER_H;
+    const int chkH     = 24;
+    const int bodyY    = hdrH;
+    const int bodyH    = rc.bottom - hdrH - chkH;
+    const int bodyW    = rc.right;
+
+    // ── Level 2 panel (always shown on left) ──────────────────────────────────
+    if (state->hL2List)
+        MoveWindow(state->hL2List, 0, bodyY, L2_W, bodyH, TRUE);
+
+    // ── T&S area (right of L2 panel) ─────────────────────────────────────────
+    const int tsX  = L2_W;
+    const int tsW  = bodyW - L2_W;
 
     if (state->tsFilteredView) {
-        int splitThick = 6; // 6 pixels of grab space
-        
-        // Calculate dimensions based on the split ratios
-        int leftW = (int)(availW * state->splitX) - (splitThick / 2);
-        int rightW = availW - leftW - splitThick;
-        int topH = (int)(availH * state->splitY) - (splitThick / 2);
-        int botH = availH - topH - splitThick;
+        const int splitThick = 6;
+        int leftW = (int)(tsW * state->splitX) - splitThick / 2;
+        int rightW = tsW - leftW - splitThick;
+        int topH  = (int)(bodyH * state->splitY) - splitThick / 2;
+        int botH  = bodyH - topH - splitThick;
 
-        ShowWindow(state->hTsList, SW_SHOW); 
-        ShowWindow(state->hTsListF100, SW_SHOW); 
-        ShowWindow(state->hTsListF1000, SW_SHOW);
-        
-        MoveWindow(state->hTsList, 0, 0, leftW, availH, TRUE);
-        MoveWindow(state->hTsListF100, leftW + splitThick, 0, rightW, topH, TRUE);
-        MoveWindow(state->hTsListF1000, leftW + splitThick, topH + splitThick, rightW, botH, TRUE);
+        ShowWindow(state->hTsList,     SW_SHOW);
+        ShowWindow(state->hTsListF100, SW_SHOW);
+        ShowWindow(state->hTsListF1000,SW_SHOW);
+        MoveWindow(state->hTsList,      tsX,               bodyY,           leftW,  bodyH, TRUE);
+        MoveWindow(state->hTsListF100,  tsX + leftW + splitThick, bodyY,           rightW, topH,  TRUE);
+        MoveWindow(state->hTsListF1000, tsX + leftW + splitThick, bodyY + topH + splitThick, rightW, botH, TRUE);
     } else {
-        ShowWindow(state->hTsListF100, SW_HIDE); 
-        ShowWindow(state->hTsListF1000, SW_HIDE); 
-        ShowWindow(state->hTsList, SW_SHOW);
-        MoveWindow(state->hTsList, 0, 0, availW, availH, TRUE);
+        ShowWindow(state->hTsListF100,  SW_HIDE);
+        ShowWindow(state->hTsListF1000, SW_HIDE);
+        ShowWindow(state->hTsList,      SW_SHOW);
+        MoveWindow(state->hTsList, tsX, bodyY, tsW, bodyH, TRUE);
     }
+
     SetWindowPos(state->hTsFilterCheck, NULL, 8, rc.bottom - 20, 100, 16, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
@@ -247,26 +303,221 @@ HWND StartMarket(const std::string& symbol, int conId) {
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
-    if (!state->tsFilteredView) return 0; // No splitters visible
+    if (!state->tsFilteredView) return 0;
 
     RECT rc; GetClientRect(hWnd, &rc);
-    int availH = rc.bottom - 24; 
-    int availW = rc.right;
-    int splitThick = 6; // Must match the thickness in Ts_Layout
+    const int bodyY  = HEADER_H;
+    const int bodyH  = rc.bottom - HEADER_H - 24;
+    const int tsX    = L2_W;
+    const int tsW    = rc.right - L2_W;
+    const int splitThick = 6;
 
-    int splitXPos = (int)(availW * state->splitX);
-    int splitYPos = (int)(availH * state->splitY);
+    // x is relative to the T&S sub-area
+    int relX = x - tsX;
+    int relY = y - bodyY;
+    if (relX < 0 || relY < 0 || relY > bodyH) return 0;
 
-    // Check vertical splitter (separates left and right columns)
-    if (x >= splitXPos - splitThick && x <= splitXPos + splitThick && y >= 0 && y <= availH) {
-        return 1; // 1 = Vertical Splitter
+    int splitXPos = (int)(tsW * state->splitX);
+    int splitYPos = (int)(bodyH * state->splitY);
+
+    if (relX >= splitXPos - splitThick && relX <= splitXPos + splitThick && relY >= 0 && relY <= bodyH)
+        return 1; // vertical splitter
+    if (relX > splitXPos + splitThick && relY >= splitYPos - splitThick && relY <= splitYPos + splitThick)
+        return 2; // horizontal splitter
+
+    return 0;
+}
+
+// ── Formatting helpers ────────────────────────────────────────────────────────
+static std::string Ts_Fmt(double v, int dec = 2) {
+    if (v == 0.0) return "--";
+    char buf[32]; snprintf(buf, sizeof(buf), "%.*f", dec, v); return buf;
+}
+static std::string Ts_FmtSigned(double v, int dec = 2) {
+    if (v == 0.0) return "--";
+    char buf[32]; snprintf(buf, sizeof(buf), "%+.*f", dec, v); return buf;
+}
+static std::string Ts_FmtQty(double v) {
+    if (v == 0.0) return "--";
+    if (v == (long long)v) { char b[32]; snprintf(b,sizeof(b),"%lld",(long long)v); return b; }
+    char b[32]; snprintf(b,sizeof(b),"%.2f",v); return b;
+}
+
+// ── L2 list refresh ───────────────────────────────────────────────────────────
+// Rebuilds all rows from the latest book snapshot.
+// Each row shows a paired bid+ask level side by side (merged table):
+//   col0=B.Sz  col1=Bid  col2=Ask  col3=A.Sz
+static void Ts_RefreshL2(HWND hWnd, TsState* state) {
+    if (!state || !state->hL2List) return;
+
+    std::vector<TradingAPI::Level2Entry> bids, asks;
+    api.getLevel2Snapshot(hWnd, bids, asks);
+
+    HWND hList = state->hL2List;
+    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
+    ListView_DeleteAllItems(hList);
+
+    int rows = (int)std::max(bids.size(), asks.size());
+    for (int i = 0; i < rows; ++i) {
+        // Insert empty row
+        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
+        // lParam encodes row parity: 0=bid side exists, 1=ask side exists, 2=both
+        int hasBid = (i < (int)bids.size()) ? 1 : 0;
+        int hasAsk = (i < (int)asks.size()) ? 2 : 0;
+        lvi.lParam  = (LPARAM)(hasBid | hasAsk);
+        lvi.iItem   = i;
+        std::string bidSzStr = hasBid ? Ts_FmtQty(bids[i].size) : "";
+        lvi.pszText = (LPSTR)bidSzStr.c_str();
+        ListView_InsertItem(hList, &lvi);
+
+        std::string bidStr = hasBid ? Ts_Fmt(bids[i].price) : "";
+        std::string askStr = hasAsk ? Ts_Fmt(asks[i].price) : "";
+        std::string askSzStr = hasAsk ? Ts_FmtQty(asks[i].size) : "";
+        ListView_SetItemText(hList, i, 1, (LPSTR)bidStr.c_str());
+        ListView_SetItemText(hList, i, 2, (LPSTR)askStr.c_str());
+        ListView_SetItemText(hList, i, 3, (LPSTR)askSzStr.c_str());
     }
-    // Check horizontal splitter (separates top right and bottom right)
-    if (x > splitXPos + splitThick && y >= splitYPos - splitThick && y <= splitYPos + splitThick) {
-        return 2; // 2 = Horizontal Splitter
+    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(hList, NULL, FALSE);
+}
+
+// ── Header paint ──────────────────────────────────────────────────────────────
+// Paints the HEADER_H px band at the top of the market window.
+//
+// Row 1 (22px) — stats bar:
+//   O: xxx  C: xxx  H: xxx  L: xxx  Pos: xxx  AvgPr: xxx
+//
+// Separator (1px)
+//
+// Row 2 (~58px) — L1 quote (mirrors screenshot design):
+//   left:   large last price (bold ~22pt)
+//           change / changePct% below (red/green)
+//   right:  Ask  price × size  (red)
+//           Bid  price × size  (blue)
+//
+// Separator (1px)
+static void Ts_PaintHeader(HWND hWnd, TsState* state) {
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(hWnd, &ps);
+
+    RECT rc; GetClientRect(hWnd, &rc);
+    const bool dark = Settings_DarkMode();
+    const COLORREF bgColor    = dark ? DM_BG   : GetSysColor(COLOR_BTNFACE);
+    const COLORREF textColor  = dark ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
+    const COLORREF sepColor   = dark ? RGB(60,60,60) : RGB(200,200,200);
+    const COLORREF redColor   = RGB(220, 70, 70);
+    const COLORREF greenColor = RGB(80, 200, 120);
+    const COLORREF blueColor  = RGB(80, 160, 255);
+
+    // ── Fill background ───────────────────────────────────────────────────────
+    RECT hdrRc = { 0, 0, rc.right, HEADER_H };
+    HBRUSH hBgBrush = CreateSolidBrush(bgColor);
+    FillRect(hdc, &hdrRc, hBgBrush);
+    DeleteObject(hBgBrush);
+
+    SetBkMode(hdc, TRANSPARENT);
+
+    // ── Row 1: stats bar (0..21) ──────────────────────────────────────────────
+    HFONT hOldFont = (HFONT)SelectObject(hdc, state->hSmFont);
+    SetTextColor(hdc, textColor);
+
+    const TradingAPI::Level1Info& L1 = state->l1Info;
+
+    char buf[256];
+    // Build label-value pairs; fmt as a single string for simplicity
+    snprintf(buf, sizeof(buf),
+        "O: %s   C: %s   H: %s   L: %s   Pos: %s   AvgPr: %s",
+        Ts_Fmt(L1.open).c_str(),
+        Ts_Fmt(L1.prevClose).c_str(),
+        Ts_Fmt(L1.high).c_str(),
+        Ts_Fmt(L1.low).c_str(),
+        Ts_FmtQty(state->position).c_str(),
+        Ts_Fmt(state->avgPrice).c_str()
+    );
+    RECT statsRc = { 8, 3, rc.right - 4, 22 };
+    DrawTextA(hdc, buf, -1, &statsRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+    // ── Separator ─────────────────────────────────────────────────────────────
+    HPEN hSepPen = CreatePen(PS_SOLID, 1, sepColor);
+    HPEN hOldPen = (HPEN)SelectObject(hdc, hSepPen);
+    MoveToEx(hdc, 0, 22, NULL); LineTo(hdc, rc.right, 22);
+    SelectObject(hdc, hOldPen); DeleteObject(hSepPen);
+
+    // ── Row 2: L1 quote block (23..HEADER_H-2) ───────────────────────────────
+    const int quoteY = 23;
+    const int quoteH = HEADER_H - quoteY - 1;
+
+    // Left half: large last price + change
+    // Fall back to prevClose when last is not yet available (market closed).
+    SelectObject(hdc, state->hBigFont);
+    double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
+    std::string lastStr = Ts_Fmt(displayLast);
+    SetTextColor(hdc, textColor);
+    RECT lastRc = { 10, quoteY + 4, rc.right / 2, quoteY + quoteH / 2 + 4 };
+    DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+    // Change row — only meaningful when prevClose is known
+    SelectObject(hdc, state->hSmFont);
+    double chg    = L1.change();    // uses last internally; 0 when last==0
+    double chgPct = L1.changePct();
+    if (L1.last > 0.0 && (chg != 0.0 || L1.prevClose > 0.0)) {
+        snprintf(buf, sizeof(buf), "%.2f  %.2f%%", chg, chgPct);
+        COLORREF chgColor = (chg >= 0.0) ? greenColor : redColor;
+        SetTextColor(hdc, chgColor);
+        RECT chgRc = { 10, quoteY + quoteH / 2 + 4, rc.right / 2, quoteY + quoteH };
+        DrawTextA(hdc, buf, -1, &chgRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
-    
-    return 0; // 0 = Not hovering over a splitter
+
+    // Right half: Ask / Bid rows (styled as in screenshot)
+    int rX = rc.right / 2 + 8;
+    int rW = rc.right - rX - 8;
+    int rowH = quoteH / 2;
+
+    // Ask row (red)
+    {
+        SetTextColor(hdc, redColor);
+        std::string askLabel = "Ask";
+        RECT lblRc = { rX, quoteY + 2, rX + 28, quoteY + rowH };
+        DrawTextA(hdc, askLabel.c_str(), -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        // price × size in bold
+        SelectObject(hdc, state->hBigFont);
+        std::string priceStr = Ts_Fmt(L1.ask);
+        RECT pRc = { rX + 30, quoteY + 2, rX + 30 + 80, quoteY + rowH };
+        DrawTextA(hdc, priceStr.c_str(), -1, &pRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        SelectObject(hdc, state->hSmFont);
+        snprintf(buf, sizeof(buf), "× %s", Ts_FmtQty(L1.askSize).c_str());
+        RECT szRc = { rX + 115, quoteY + 2, rX + rW, quoteY + rowH };
+        DrawTextA(hdc, buf, -1, &szRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
+
+    // Bid row (blue)
+    {
+        SetTextColor(hdc, blueColor);
+        std::string bidLabel = "Bid";
+        RECT lblRc = { rX, quoteY + rowH + 2, rX + 28, quoteY + quoteH };
+        DrawTextA(hdc, bidLabel.c_str(), -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        SelectObject(hdc, state->hBigFont);
+        std::string priceStr = Ts_Fmt(L1.bid);
+        RECT pRc = { rX + 30, quoteY + rowH + 2, rX + 30 + 80, quoteY + quoteH };
+        DrawTextA(hdc, priceStr.c_str(), -1, &pRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        SelectObject(hdc, state->hSmFont);
+        snprintf(buf, sizeof(buf), "× %s", Ts_FmtQty(L1.bidSize).c_str());
+        RECT szRc = { rX + 115, quoteY + rowH + 2, rX + rW, quoteY + quoteH };
+        DrawTextA(hdc, buf, -1, &szRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
+
+    // ── Bottom separator ──────────────────────────────────────────────────────
+    SelectObject(hdc, hOldFont);
+    hSepPen = CreatePen(PS_SOLID, 1, sepColor);
+    hOldPen = (HPEN)SelectObject(hdc, hSepPen);
+    MoveToEx(hdc, 0, HEADER_H - 1, NULL); LineTo(hdc, rc.right, HEADER_H - 1);
+    SelectObject(hdc, hOldPen); DeleteObject(hSepPen);
+
+    EndPaint(hWnd, &ps);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -284,22 +535,45 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state = new TsState();
         if (data) {
             state->symbol = data->symbol;
-            state->conId = data->conId;
+            state->conId  = data->conId;
             delete data;
         }
         tsStates[hWnd] = state;
 
+        // ── Header fonts ──────────────────────────────────────────────────────
+        state->hBigFont = CreateFontA(-22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        state->hSmFont  = CreateFontA(-11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+
+        // ── Snapshot position + avg price from portfolio ───────────────────────
+        if (!state->symbol.empty()) {
+            std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
+            auto& pm = api.getPortfolioMap();
+            auto it = pm.find(state->symbol);
+            if (it != pm.end()) {
+                state->position = it->second.shares;
+                state->avgPrice = it->second.avgCost;
+            }
+        }
+
+        // ── Lists ─────────────────────────────────────────────────────────────
+        state->hL2List      = Ts_CreateL2List(hWnd, hInst);
         state->hTsList      = Ts_CreateListView(hWnd, ID_TS_LIST,       hInst);
         state->hTsListF100  = Ts_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
         state->hTsListF1000 = Ts_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
-        ShowWindow(state->hTsList, SW_SHOW);
+        ShowWindow(state->hTsList,  SW_SHOW);
+        ShowWindow(state->hL2List,  SW_SHOW);
 
-        state->hTsFilterCheck = CreateWindowA("BUTTON", "Filter Size", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, 0, 100, 16, hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
-        
-        // Restore splitter positions and filter checkbox if previously saved for this symbol
+        state->hTsFilterCheck = CreateWindowA("BUTTON", "Filter Size",
+            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+            0, 0, 100, 16, hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
+
+        // Restore splitter positions and filter state
         if (!state->symbol.empty()) {
             Settings_LoadMarketSplitter(state->symbol, state->splitX, state->splitY);
-
             char filterKey[256];
             sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
             if (Settings_Load(filterKey, 0)) {
@@ -310,13 +584,108 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         api.setMarketWindow(hWnd, state->conId, state->symbol);
         api.addApiUpdateWindow(hWnd);
-        UpdateMarketRegistry(); // Ensure registry is immediately aware of this new instance
+        UpdateMarketRegistry();
         break;
     }
 
     case WM_SIZE:
         Ts_Layout(hWnd, state);
+        InvalidateRect(hWnd, NULL, FALSE);   // repaint header on resize
         return 0;
+
+    case WM_PAINT:
+        if (state) Ts_PaintHeader(hWnd, state);
+        else { PAINTSTRUCT ps; BeginPaint(hWnd, &ps); EndPaint(hWnd, &ps); }
+        return 0;
+
+    case WM_MARKET_L1: {
+        if (!state) break;
+        // Primary: pull from the dedicated reqMktData subscription
+        TradingAPI::Level1Info fresh;
+        if (api.getLevel1Data(hWnd, fresh)) {
+            // Merge: keep last from the dedicated feed only if watchlist hasn't
+            // already supplied it via WM_MARKET_TICK (non-zero wins)
+            if (fresh.last     > 0.0) state->l1Info.last     = fresh.last;
+            if (fresh.open     > 0.0) state->l1Info.open     = fresh.open;
+            if (fresh.prevClose> 0.0) state->l1Info.prevClose= fresh.prevClose;
+            if (fresh.high     > 0.0) state->l1Info.high     = fresh.high;
+            if (fresh.low      > 0.0) state->l1Info.low      = fresh.low;
+            if (fresh.bid      > 0.0) state->l1Info.bid      = fresh.bid;
+            if (fresh.ask      > 0.0) state->l1Info.ask      = fresh.ask;
+            if (fresh.bidSize  > 0.0) state->l1Info.bidSize  = fresh.bidSize;
+            if (fresh.askSize  > 0.0) state->l1Info.askSize  = fresh.askSize;
+        }
+        // Also try watchlist as a secondary source (covers open/close for
+        // symbols that trade infrequently so WM_MARKET_TICK fires rarely)
+        TradingAPI::WatchlistInfo wi;
+        if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+            if (wi.open      > 0.0 && state->l1Info.open      == 0.0) state->l1Info.open      = wi.open;
+            if (wi.prevClose > 0.0 && state->l1Info.prevClose  == 0.0) state->l1Info.prevClose = wi.prevClose;
+            if (wi.high      > 0.0 && state->l1Info.high       == 0.0) state->l1Info.high      = wi.high;
+            if (wi.low       > 0.0 && state->l1Info.low        == 0.0) state->l1Info.low       = wi.low;
+        }
+        // Refresh position/avgPrice
+        {
+            std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
+            auto& pm = api.getPortfolioMap();
+            auto it = pm.find(state->symbol);
+            if (it != pm.end()) {
+                state->position = it->second.shares;
+                state->avgPrice = it->second.avgCost;
+            }
+        }
+        RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+        InvalidateRect(hWnd, &hdrRc, FALSE);
+        break;
+    }
+
+    case WM_MARKET_L2:
+        if (state) Ts_RefreshL2(hWnd, state);
+        break;
+
+    // ── Watchlist / historical-data tick ─────────────────────────────────────
+    // Fires for every streaming tick AND for the historical-data fallback that
+    // the gateway uses to populate prevClose/last when the market is closed.
+    // This is the only path that brings L1 data when there are no T&S prints.
+    case WM_WATCHLIST_UPDATE: {
+        auto* key = reinterpret_cast<std::string*>(lParam);
+        if (!key) break;
+        if (state) {
+            auto dot = key->find('.');
+            if (dot != std::string::npos) {
+                int    updConId = std::stoi(key->substr(0, dot));
+                std::string updSym = key->substr(dot + 1);
+                if (updConId == state->conId && updSym == state->symbol) {
+                    TradingAPI::WatchlistInfo wi;
+                    if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+                        // Populate all L1 fields; last from watchlist includes
+                        // the gateway's historical-data fallback when last == 0.
+                        if (wi.last      > 0.0) state->l1Info.last      = wi.last;
+                        if (wi.open      > 0.0) state->l1Info.open      = wi.open;
+                        if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
+                        if (wi.high      > 0.0) state->l1Info.high      = wi.high;
+                        if (wi.low       > 0.0) state->l1Info.low       = wi.low;
+                        if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
+                        if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
+                        if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
+                        if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
+
+                        std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
+                        auto& pm = api.getPortfolioMap();
+                        auto pit = pm.find(state->symbol);
+                        if (pit != pm.end()) {
+                            state->position = pit->second.shares;
+                            state->avgPrice = pit->second.avgCost;
+                        }
+                    }
+                    RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+                    InvalidateRect(hWnd, &hdrRc, FALSE);
+                }
+            }
+        }
+        delete key;
+        break;
+    }
 
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_TS_FILTER_CHECK && HIWORD(wParam) == BN_CLICKED && state) {
@@ -338,9 +707,42 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state) {
             Ts_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->exchange);
             if (state->tsFilteredView) {
-                if (tick->size >= 100.0) Ts_InsertTick(state->hTsListF100, tick->price, tick->size, tick->time, tick->exchange);
+                if (tick->size >= 100.0)  Ts_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->exchange);
                 if (tick->size >= 1000.0) Ts_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->exchange);
             }
+
+            // ── Update L1 header on every T&S tick ───────────────────────────
+            // last: use the actual print price (always accurate, no subscription needed)
+            state->l1Info.last = tick->price;
+
+            // open/close/high/low/bid/ask: pull from the watchlist subscription
+            // which is already streaming for this symbol — no separate reqMktData needed.
+            TradingAPI::WatchlistInfo wi;
+            if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+                state->l1Info.open      = wi.open;
+                state->l1Info.prevClose = wi.prevClose;
+                state->l1Info.high      = wi.high;
+                state->l1Info.low       = wi.low;
+                state->l1Info.bid       = wi.bid;
+                state->l1Info.ask       = wi.ask;
+                state->l1Info.bidSize   = wi.bidSize;
+                state->l1Info.askSize   = wi.askSize;
+            }
+
+            // Refresh position / avg price
+            {
+                std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
+                auto& pm = api.getPortfolioMap();
+                auto pit = pm.find(state->symbol);
+                if (pit != pm.end()) {
+                    state->position = pit->second.shares;
+                    state->avgPrice = pit->second.avgCost;
+                }
+            }
+
+            // Invalidate only the header band (leave lists undisturbed)
+            RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+            InvalidateRect(hWnd, &hdrRc, FALSE);
         }
         delete tick;
         break;
@@ -349,15 +751,46 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->code != NM_CUSTOMDRAW) break;
-        if (hdr->idFrom != ID_TS_LIST && hdr->idFrom != ID_TS_LIST_F100 && hdr->idFrom != ID_TS_LIST_F1000) break;
-        NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
-        if (!Settings_DarkMode()) break;
-        switch (cd->nmcd.dwDrawStage) {
-            case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
-            case CDDS_ITEMPREPAINT:
-                cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                cd->clrText   = DM_TEXT;
-                return CDRF_DODEFAULT;
+
+        // ── T&S lists ─────────────────────────────────────────────────────────
+        if (hdr->idFrom == ID_TS_LIST || hdr->idFrom == ID_TS_LIST_F100 || hdr->idFrom == ID_TS_LIST_F1000) {
+            NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
+            if (!Settings_DarkMode()) break;
+            switch (cd->nmcd.dwDrawStage) {
+                case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
+                case CDDS_ITEMPREPAINT:
+                    cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                    cd->clrText   = DM_TEXT;
+                    return CDRF_DODEFAULT;
+            }
+            break;
+        }
+
+        // ── L2 depth list ─────────────────────────────────────────────────────
+        if (hdr->idFrom == ID_TS_L2_LIST) {
+            NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
+            switch (cd->nmcd.dwDrawStage) {
+                case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
+                case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
+                case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    bool dark = Settings_DarkMode();
+                    COLORREF rowBg = dark
+                        ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
+                        : (cd->nmcd.dwItemSpec % 2 == 0 ? RGB(245,245,245) : RGB(255,255,255));
+                    int col = cd->iSubItem;
+                    // Bid side: cols 0-1 → blue tint text
+                    // Ask side: cols 2-3 → red tint text
+                    if (col <= 1) {
+                        cd->clrText   = RGB(80, 160, 255);
+                        cd->clrTextBk = rowBg;
+                    } else {
+                        cd->clrText   = RGB(220, 70, 70);
+                        cd->clrTextBk = rowBg;
+                    }
+                    return CDRF_DODEFAULT;
+                }
+            }
+            break;
         }
         break;
     }
@@ -370,6 +803,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 ListView_DeleteAllItems(state->hTsList);
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
                 if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
+                if (state->hL2List)      ListView_DeleteAllItems(state->hL2List);
+                state->l1Info = TradingAPI::Level1Info{};   // clear stale quote
+                RECT hdrRc = { 0, 0, 0, 0 };
+                GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+                InvalidateRect(hWnd, &hdrRc, FALSE);
             }
         }
         break;
@@ -409,29 +847,24 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MOUSEMOVE: {
         if (state && state->dragMode != 0) {
             RECT rc; GetClientRect(hWnd, &rc);
-            int availH = rc.bottom - 24; 
-            int availW = rc.right;
-            int x = (short)LOWORD(lParam);
-            int y = (short)HIWORD(lParam);
+            const int bodyH = rc.bottom - HEADER_H - 24;
+            const int tsW   = rc.right - L2_W;
+            int x = (short)LOWORD(lParam) - L2_W;  // relative to T&S area
+            int y = (short)HIWORD(lParam) - HEADER_H;
 
-            if (state->dragMode == 1) { // Dragging vertical splitter
-                float newSplit = (float)x / (float)availW;
-                // Clamp ratios so windows don't disappear
+            if (state->dragMode == 1) {
+                float newSplit = (tsW > 0) ? (float)x / (float)tsW : 0.5f;
                 if (newSplit < 0.1f) newSplit = 0.1f;
                 if (newSplit > 0.9f) newSplit = 0.9f;
                 state->splitX = newSplit;
-            } 
-            else if (state->dragMode == 2) { // Dragging horizontal splitter
-                float newSplit = (float)y / (float)availH;
-                // Clamp ratios so windows don't disappear
+            } else if (state->dragMode == 2) {
+                float newSplit = (bodyH > 0) ? (float)y / (float)bodyH : 0.5f;
                 if (newSplit < 0.1f) newSplit = 0.1f;
                 if (newSplit > 0.9f) newSplit = 0.9f;
                 state->splitY = newSplit;
             }
-            
-            // Force layout recalculation
             Ts_Layout(hWnd, state);
-            InvalidateRect(hWnd, NULL, TRUE); 
+            InvalidateRect(hWnd, NULL, TRUE);
         }
         break;
     }
@@ -451,8 +884,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_DESTROY:
         api.unsetMarketWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);
-        if (state) { delete state; tsStates.erase(hWnd); }
-        UpdateMarketRegistry(); // Ensure registry forgets this instance immediately
+        if (state) {
+            if (state->hBigFont) DeleteObject(state->hBigFont);
+            if (state->hSmFont)  DeleteObject(state->hSmFont);
+            delete state;
+            tsStates.erase(hWnd);
+        }
+        UpdateMarketRegistry();
         break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);

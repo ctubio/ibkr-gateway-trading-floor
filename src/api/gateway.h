@@ -26,6 +26,8 @@
 #define WM_MARKET_TICK      (WM_USER + 10)
 #define WM_NEWS_ARTICLE     (WM_USER + 11)
 #define WM_WATCHLIST_UPDATE (WM_USER + 12)
+#define WM_MARKET_L1        (WM_USER + 13)   // Level 1 quote tick — handler calls getLevel1Data()
+#define WM_MARKET_L2        (WM_USER + 14)   // Level 2 depth change — handler calls getLevel2Snapshot()
 
 class TradingAPI {
 public:
@@ -128,6 +130,33 @@ public:
         }
     };
  
+    // ── Level 1 quote (per market window) ────────────────────────────────────
+    // Populated via reqMktData ticks; retrieved with getLevel1Data().
+    // Posted via WM_MARKET_L1 (no lParam — call getLevel1Data to read).
+    struct Level1Info {
+        double open      = 0.0;   // OPEN tick (field 14, generic tick "221")
+        double prevClose = 0.0;   // CLOSE tick (field 9) — yesterday's close
+        double last      = 0.0;   // LAST tick (field 4)
+        double high      = 0.0;   // HIGH tick (field 6)
+        double low       = 0.0;   // LOW tick  (field 7)
+        double bid       = 0.0;   // BID  tick (field 1)
+        double bidSize   = 0.0;
+        double ask       = 0.0;   // ASK  tick (field 2)
+        double askSize   = 0.0;
+        double change()    const { return prevClose > 0 ? last - prevClose : 0.0; }
+        double changePct() const { return prevClose > 0 ? (last - prevClose) / prevClose * 100.0 : 0.0; }
+    };
+
+    // ── Level 2 depth entry (one row per side) ────────────────────────────────
+    // Retrieved with getLevel2Snapshot(); bids sorted best-first (price desc),
+    // asks sorted best-first (price asc).
+    // Posted via WM_MARKET_L2 (no lParam — call getLevel2Snapshot to read).
+    struct Level2Entry {
+        std::string mmid;      // market-maker ID or venue name (may be empty)
+        double      price = 0.0;
+        double      size  = 0.0;
+    };
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     TradingAPI();
@@ -188,6 +217,20 @@ public:
 
     void setMarketWindow(HWND hWnd, int conId, const std::string& symbol);
     void unsetMarketWindow(HWND hWnd);
+
+    // ── Level 1 / Level 2 data (market window) ────────────────────────────────
+
+    // Returns the latest L1 quote snapshot for the given market window.
+    // Call from the WM_MARKET_L1 handler; thread-safe.
+    bool getLevel1Data(HWND hMarketWnd, Level1Info& out);
+
+    // Returns a sorted snapshot of the order book for the given market window.
+    //   bids : sorted by price descending  (bids[0] = best bid)
+    //   asks : sorted by price ascending   (asks[0] = best ask)
+    // Call from the WM_MARKET_L2 handler; thread-safe.
+    bool getLevel2Snapshot(HWND hMarketWnd,
+                           std::vector<Level2Entry>& bids,
+                           std::vector<Level2Entry>& asks);
 
     // ── Watchlist (watchlist) ────────────────────────────────────────────────────
 

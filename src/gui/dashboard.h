@@ -155,7 +155,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             int steps = 1;
             int stepz = 0;
-            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     102);
+            addButtons(hWnd, hInst, "Coins",          (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_COINS,     101);
             addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_ORDERS,    103);
             addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + 1, 7, (HMENU)ID_MB_DIAMONDS,  104);
             

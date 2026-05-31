@@ -56,6 +56,8 @@ enum DiamondColIdx {
     DCOL_ASKSIZE,
     DCOL_ASK,
     DCOL_LAST,
+    DCOL_OPEN,
+    DCOL_CLOSE,
     DCOL_BID,
     DCOL_BIDSIZE,
     DCOL_DAILYPNL,
@@ -85,6 +87,8 @@ static const DiamondCol diamondCols[] = {
     { "Ask Size",          70, LVCFMT_RIGHT },
     { "Ask",               70, LVCFMT_RIGHT },
     { "Last",              70, LVCFMT_RIGHT },
+    { "Open",              70, LVCFMT_RIGHT },
+    { "Close",             70, LVCFMT_RIGHT },
     { "Bid",               70, LVCFMT_RIGHT },
     { "Bid Size",          70, LVCFMT_RIGHT },
     { "Daily P&L",         85, LVCFMT_RIGHT },
@@ -288,6 +292,8 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
     setNum(DCOL_ASK,     t.ask,     "%.2f");
     setNum(DCOL_BID,     t.bid,     "%.2f");
     setNum(DCOL_BIDSIZE, t.bidSize, "%.0f");
+    setNum(DCOL_OPEN,    t.open,      "%.2f");
+    setNum(DCOL_CLOSE,   t.prevClose, "%.2f");
 
     // ── Dividend columns — independent of Last being live ────────────────────
     setNum(DCOL_DIV_YIELD,  t.dividendYield(),   "%.2f%%");

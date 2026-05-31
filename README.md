@@ -9,13 +9,13 @@ A lightweight Windows tray application that connects to Interactive Brokers Gate
 This application is a modern desktop trading companion built on the Interactive Brokers C++ API. It is designed to work with **IBKR Gateway** (not Trader Workstation) and provides a modular, multi-window environment for professional traders.
 
 ### Core Capabilities:
-- **Real-time Market Data**: Live quotes, tick-by-tick Market, and symbol watchlists.
+- **Real-time Market Data**: Live quotes, tick-by-tick Market, and symbol watchlists with advanced filtering and customizable layouts.
 - **Account Intelligence**: Live margin metrics, Net Liquidation Value with optional Text-to-Speech (TTS) alerts, and detailed P&L analytics.
-- **Portfolio Management**: Comprehensive position tracking with dividend data and 52-week range analysis.
-- **Order Execution Tracking**: Real-time order status monitoring with intuitive color-coding and in-place modifications.
-- **Information Hub**: Symbol-specific news headlines with provider filtering, HTML-to-RTF article preview, and a centralized watchlist manager.
-- **User-Friendly UI**: Font zoom support for ListViews, split-panel Market, and auto-complete symbol entry in Watchlist.
-- **Robust Infrastructure**: Auto-reconnecting watchdog, persistent registry-based settings, and a system-tray-first design.
+- **Portfolio Management**: Comprehensive position tracking with dividend data, 52-week range analysis, and customizable tagging/color-coding.
+- **Order Execution Tracking**: Real-time order status monitoring with intuitive color-coding, in-place modifications, and quick cancellation.
+- **Information Hub**: Symbol-specific news headlines with provider filtering, HTML-to-RTF article preview, and a centralized watchlist manager with auto-complete.
+- **User-Friendly UI**: Font zoom support for ListViews, dynamic split-panel Market, and intelligent auto-complete symbol entry in Watchlist.
+- **Robust Infrastructure**: Auto-reconnecting watchdog, persistent registry-based settings, asynchronous audio notifications, and a system-tray-first design.
 
 ## Key Highlights
 

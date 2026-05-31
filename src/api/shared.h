@@ -11,6 +11,25 @@
 
 NOTIFYICONDATAW nid = { 0 };
 
+// Sentinel: no custom color – let HandleDarkModeMessages / system theme paint this control
+#define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
+
+// ─── Per-control color table ──────────────────────────────────────────────────
+static HWND     gClrHwnd[160]  = {};
+static COLORREF gClrColor[160] = {};
+static int      gClrCount      = 0;
+
+static void SetCtrlColor(HWND hw, COLORREF c) {
+    for (int i = 0; i < gClrCount; i++)
+        if (gClrHwnd[i] == hw) { gClrColor[i] = c; return; }
+    if (gClrCount < 160) { gClrHwnd[gClrCount] = hw; gClrColor[gClrCount++] = c; }
+}
+static COLORREF GetCtrlColor(HWND hw) {
+    for (int i = 0; i < gClrCount; i++)
+        if (gClrHwnd[i] == hw) return gClrColor[i];
+    return COLOR_THEME;  // not registered = let theme handle it
+}
+
 void InitDarkBrushes() {
     if (hDarkBrush)  DeleteObject(hDarkBrush);
     if (hDarkBrush2) DeleteObject(hDarkBrush2);
@@ -31,6 +50,7 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
 }
 
 HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
+    if (hDarkBrush == NULL || hDarkBrush2 == NULL) InitDarkBrushes();
     // Multi-instance windows (windowKey differs from className, e.g. market per-symbol)
     // are distinguished by title - each has a unique one. Single-instance windows match
     // on class alone. Either way no map needed: FindWindowA does the work.
@@ -285,6 +305,21 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             return (LRESULT)hDarkBrush2;
         }
         case WM_CTLCOLORSTATIC: {
+            char className[256] = {};
+            GetClassNameA(hWnd, className, sizeof(className));
+            if (strcmp(className, COINS_CLASS_NAME) == 0) {
+                COLORREF clr = GetCtrlColor((HWND)lParam);
+                if (clr != COLOR_THEME) {
+                    SetTextColor((HDC)wParam, clr);
+                    if (Settings_DarkMode()) {
+                        SetBkColor((HDC)wParam, DM_BG);
+                        return (LRESULT)hDarkBrush;
+                    } else {
+                        SetBkColor((HDC)wParam, GetSysColor(COLOR_BTNFACE));
+                        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+                    }
+                }
+            }
             if (!Settings_DarkMode()) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG);
@@ -377,8 +412,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             HICON hIcon = api.isConnected() ? onlineIcons[std::string(className)] : offlineIcons[std::string(className)];
             SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             SendMessage(hWnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
-            if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) 
-                Session_AddWindow(hWnd);
+            Session_AddWindow(hWnd);
             return 0;
         }
         case WM_CLOSE:

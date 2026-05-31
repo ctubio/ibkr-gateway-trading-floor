@@ -16,7 +16,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     MutexGatewayInstance();
 
     RegisterWindowClass(hInst, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
-    RegisterWindowClass(hInst, WndProcCoins,       COINS_CLASS_NAME,              102);
+    RegisterWindowClass(hInst, WndProcCoins,       COINS_CLASS_NAME,              101);
     RegisterWindowClass(hInst, WndProcOrders,      ORDERS_CLASS_NAME,             103);
     RegisterWindowClass(hInst, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
     RegisterWindowClass(hInst, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);
@@ -32,8 +32,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     InitCommonControlsEx(&icex);
 
     Session_RestoreWindows(StartCoins, StartDiamonds, StartNews, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
-
-    ApplyDarkModeToAllWindows();
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {

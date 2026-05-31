@@ -122,8 +122,7 @@ static std::string ConvertHtmlToRtf(const std::string& html, bool dark) {
 static void News_ApplyArticleStyle(HWND hEdit) {
     if (!hEdit || !IsWindow(hEdit)) return;
     bool dark = Settings_DarkMode();
-    SendMessage(hEdit, EM_SETBKGNDCOLOR, 0,
-                dark ? (LPARAM)DM_BG : (LPARAM)GetSysColor(COLOR_WINDOW));
+    SendMessage(hEdit, EM_SETBKGNDCOLOR, 0, dark ? (LPARAM)DM_BG : (LPARAM)GetSysColor(COLOR_WINDOW));
     RECT rc;
     GetClientRect(hEdit, &rc);
     InflateRect(&rc, -20, -20);

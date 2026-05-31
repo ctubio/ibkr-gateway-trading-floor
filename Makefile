@@ -11,7 +11,7 @@ WINDRES := x86_64-w64-mingw32-windres
 all: bin/Trading-Floor.exe
 
 bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
-	@echo -n "please wait, building Trading-Floor.exe.."
+	@echo -n "please wait, building Trading-Floor.exe.. "
 	@rm -f bin/Trading-Floor.exe
 	@$(CXX) \
 	    src/main.cpp \
@@ -24,7 +24,7 @@ bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
 	    -lshlwapi -lwininet -lcomctl32 -luxtheme \
 		-s -o bin/Trading-Floor.exe
-	@echo " Build Complete!" && echo
+	@echo "OK"
 	@ls -la bin/Trading-Floor.exe
 
 lib/Trading-Floor-Assets.res: res/resources.rc
