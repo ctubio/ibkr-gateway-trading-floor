@@ -17,9 +17,12 @@ HWND StartMarket(const std::string& symbol = "", int conId = 0);
 #define ID_TS_SEARCH_INPUT  6007
 #define ID_TS_SEARCH_LIST   6008
 #define ID_TS_L2_LIST       6009   // Level 2 depth SysListView32 (left panel)
+#define ID_TS_SPEAKER       6010   // Speaker icon for TTS
+
+#define TIMER_TS_SPEAKER    0xC020  // WM_TIMER id for per-market TTS (21s)
 
 // ── Layout constants ─────────────────────────────────────────────────────────
-static const int HEADER_H = 82;   // Stats bar (22) + separator (1) + L1 quote (58) + separator (1)
+static const int HEADER_H = 90;   // Stats bar (28) + separator (1) + L1 quote (60) + separator (1)
 static const int L2_W     = 200;  // Fixed width of the Level 2 depth panel
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
@@ -43,8 +46,16 @@ struct TsState {
     double avgPrice = 0.0;
 
     // ── Cached fonts for the header panel (created in WM_CREATE) ─────────────
-    HFONT hBigFont = NULL;   // ~22pt bold — large last price
-    HFONT hSmFont  = NULL;   // ~11pt regular — labels / change / bid-ask
+    HFONT hBigFont     = NULL;   // ~22pt bold — large last price
+    HFONT hSmFont      = NULL;   // ~11pt regular — labels / change / bid-ask
+    HFONT hStatFont    = NULL;   // ~13pt regular — stats bar (O/C/H/L/Pos/AvgPr)
+    HFONT hSpeakerFont = NULL;   // Segoe MDL2 Assets — speaker glyph
+
+    // ── TTS state ─────────────────────────────────────────────────────────────
+    ISpVoice* hTtsVoice    = nullptr;
+    bool      ttsOn        = false;
+    bool      ttsComInit   = false;
+    HWND      hSpeakerBtn  = NULL;  // speaker icon (SS_NOTIFY static)
 
     // --- Splitter State Variables ---
     float splitX = 0.5f; // Vertical split ratio (50% default) within the T&S area
@@ -132,17 +143,32 @@ static void Ts_InsertTick(HWND hList, double price, double size, const std::stri
 // ── Layout ────────────────────────────────────────────────────────────────────
 // Window structure (top → bottom):
 //   HEADER_H px  : painted header (stats bar + L1 quote block)
+//                  Filter checkbox is positioned top-right in the stats bar row
 //   remaining    : L2 panel (left, L2_W wide) | T&S panel(s) (right)
-//   bottom 24 px : filter checkbox
 static void Ts_Layout(HWND hWnd, TsState* state) {
     if (!state || !state->hTsList) return;
     RECT rc; GetClientRect(hWnd, &rc);
 
     const int hdrH     = HEADER_H;
-    const int chkH     = 24;
     const int bodyY    = hdrH;
-    const int bodyH    = rc.bottom - hdrH - chkH;
+    const int bodyH    = rc.bottom - hdrH;
     const int bodyW    = rc.right;
+
+    // ── Filter checkbox: top-right corner of header (stats row) ──────────────
+    const int chkW = 16, chkH = 16;
+    if (state->hTsFilterCheck)
+        SetWindowPos(state->hTsFilterCheck, NULL,
+            rc.right - chkW - 4, 6, chkW, chkH,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+
+    // ── Speaker button: in the L1 quote area ─────────────────────────────────
+    if (state->hSpeakerBtn) {
+        // Positioned just to the right of the large last-price text area
+        int spX = rc.right / 2 - 26;
+        int spY = 23 + 4;
+        SetWindowPos(state->hSpeakerBtn, NULL, spX, spY, 22, 22,
+            SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 
     // ── Level 2 panel (always shown on left) ──────────────────────────────────
     if (state->hL2List)
@@ -171,8 +197,6 @@ static void Ts_Layout(HWND hWnd, TsState* state) {
         ShowWindow(state->hTsList,      SW_SHOW);
         MoveWindow(state->hTsList, tsX, bodyY, tsW, bodyH, TRUE);
     }
-
-    SetWindowPos(state->hTsFilterCheck, NULL, 8, rc.bottom - 20, 100, 16, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 // ── Search Popup Elements ─────────────────────────────────────────────────────
@@ -307,7 +331,7 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 
     RECT rc; GetClientRect(hWnd, &rc);
     const int bodyY  = HEADER_H;
-    const int bodyH  = rc.bottom - HEADER_H - 24;
+    const int bodyH  = rc.bottom - HEADER_H;
     const int tsX    = L2_W;
     const int tsW    = rc.right - L2_W;
     const int splitThick = 6;
@@ -384,16 +408,17 @@ static void Ts_RefreshL2(HWND hWnd, TsState* state) {
 // ── Header paint ──────────────────────────────────────────────────────────────
 // Paints the HEADER_H px band at the top of the market window.
 //
-// Row 1 (22px) — stats bar:
+// Row 1 (28px) — stats bar (larger font, colored values):
 //   O: xxx  C: xxx  H: xxx  L: xxx  Pos: xxx  AvgPr: xxx
+//   [checkbox top-right]
 //
 // Separator (1px)
 //
-// Row 2 (~58px) — L1 quote (mirrors screenshot design):
-//   left:   large last price (bold ~22pt)
+// Row 2 (~60px) — L1 quote:
+//   left:   large last price (bold ~22pt) + speaker icon to its right
 //           change / changePct% below (red/green)
-//   right:  Ask  price × size  (red)
-//           Bid  price × size  (blue)
+//   right:  Ask  price x size  (red)
+//           Bid  price x size  (blue)
 //
 // Separator (1px)
 static void Ts_PaintHeader(HWND hWnd, TsState* state) {
@@ -404,6 +429,7 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
     const bool dark = Settings_DarkMode();
     const COLORREF bgColor    = dark ? DM_BG   : GetSysColor(COLOR_BTNFACE);
     const COLORREF textColor  = dark ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
+    const COLORREF labelColor = dark ? RGB(160,160,160) : RGB(100,100,100);
     const COLORREF sepColor   = dark ? RGB(60,60,60) : RGB(200,200,200);
     const COLORREF redColor   = RGB(220, 70, 70);
     const COLORREF greenColor = RGB(80, 200, 120);
@@ -417,77 +443,134 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
 
     SetBkMode(hdc, TRANSPARENT);
 
-    // ── Row 1: stats bar (0..21) ──────────────────────────────────────────────
-    HFONT hOldFont = (HFONT)SelectObject(hdc, state->hSmFont);
-    SetTextColor(hdc, textColor);
-
     const TradingAPI::Level1Info& L1 = state->l1Info;
 
-    char buf[256];
-    // Build label-value pairs; fmt as a single string for simplicity
-    snprintf(buf, sizeof(buf),
-        "O: %s   C: %s   H: %s   L: %s   Pos: %s   AvgPr: %s",
-        Ts_Fmt(L1.open).c_str(),
-        Ts_Fmt(L1.prevClose).c_str(),
-        Ts_Fmt(L1.high).c_str(),
-        Ts_Fmt(L1.low).c_str(),
-        Ts_FmtQty(state->position).c_str(),
-        Ts_Fmt(state->avgPrice).c_str()
-    );
-    RECT statsRc = { 8, 3, rc.right - 4, 22 };
-    DrawTextA(hdc, buf, -1, &statsRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    // ── Row 1: stats bar (0..27) — draw label+value pairs with individual colors ──
+    // Reserve right edge for checkbox (20px)
+    const int statsRowH = 28;
+    const int statsRight = rc.right - 22;  // leave room for checkbox
+
+    HFONT hOldFont = (HFONT)SelectObject(hdc, state->hStatFont);
+    SetTextColor(hdc, textColor);
+
+    // We draw each label+value pair individually so values can be colored.
+    // Layout: O C H L Pos AvgPr — evenly spaced across statsRight
+    struct StatItem { const char* label; std::string value; COLORREF color; };
+
+    double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
+
+    // Color rules:
+    // Open:    green if last > open, red if last < open, default otherwise
+    // Close:   neutral (reference value)
+    // High:    green (it's the high)
+    // Low:     red (it's the low)
+    // Pos:     green if positive, red if negative
+    // AvgPr:   green if last > avgPrice, red if last < avgPrice
+    COLORREF openColor   = textColor;
+    if (displayLast > 0.0 && L1.open > 0.0) {
+        openColor = (displayLast >= L1.open) ? greenColor : redColor;
+    }
+    COLORREF highColor   = (L1.high > 0.0) ? greenColor : textColor;
+    COLORREF lowColor    = (L1.low  > 0.0) ? redColor   : textColor;
+    COLORREF posColor    = (state->position > 0.0) ? greenColor
+                         : (state->position < 0.0) ? redColor
+                         : textColor;
+    COLORREF avgPrColor  = textColor;
+    if (displayLast > 0.0 && state->avgPrice > 0.0) {
+        avgPrColor = (displayLast >= state->avgPrice) ? greenColor : redColor;
+    }
+
+    StatItem stats[] = {
+        { "O:",    Ts_Fmt(L1.open),           openColor   },
+        { "C:",    Ts_Fmt(L1.prevClose),       textColor   },
+        { "H:",    Ts_Fmt(L1.high),            highColor   },
+        { "L:",    Ts_Fmt(L1.low),             lowColor    },
+        { "Pos:",  Ts_FmtQty(state->position), posColor    },
+        { "Ap:",   Ts_Fmt(state->avgPrice),    avgPrColor  },
+    };
+    const int nStats = 6;
+
+    // Measure each pair, then lay them out left-to-right with even spacing
+    SIZE sz;
+    int totalW = 0;
+    int pairWidths[nStats] = {};
+    char comboBuf[nStats][48];
+    for (int i = 0; i < nStats; i++) {
+        snprintf(comboBuf[i], sizeof(comboBuf[i]), "%s %s", stats[i].label, stats[i].value.c_str());
+        GetTextExtentPoint32A(hdc, comboBuf[i], (int)strlen(comboBuf[i]), &sz);
+        pairWidths[i] = sz.cx;
+        totalW += sz.cx;
+    }
+    // Distribute gap evenly
+    int gap = (nStats > 1) ? std::max(4, (statsRight - 8 - totalW) / (nStats - 1)) : 0;
+
+    int cx = 8;
+    for (int i = 0; i < nStats; i++) {
+        // Draw label in labelColor
+        char labBuf[16]; snprintf(labBuf, sizeof(labBuf), "%s ", stats[i].label);
+        SIZE lblSz;
+        GetTextExtentPoint32A(hdc, labBuf, (int)strlen(labBuf), &lblSz);
+        SetTextColor(hdc, labelColor);
+        RECT labRc = { cx, 4, cx + lblSz.cx, statsRowH - 2 };
+        DrawTextA(hdc, labBuf, -1, &labRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        // Draw value in its color
+        SetTextColor(hdc, stats[i].color);
+        RECT valRc = { cx + lblSz.cx, 4, cx + pairWidths[i] + 4, statsRowH - 2 };
+        DrawTextA(hdc, stats[i].value.c_str(), -1, &valRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        cx += pairWidths[i] + gap;
+    }
 
     // ── Separator ─────────────────────────────────────────────────────────────
     HPEN hSepPen = CreatePen(PS_SOLID, 1, sepColor);
     HPEN hOldPen = (HPEN)SelectObject(hdc, hSepPen);
-    MoveToEx(hdc, 0, 22, NULL); LineTo(hdc, rc.right, 22);
+    MoveToEx(hdc, 0, statsRowH, NULL); LineTo(hdc, rc.right, statsRowH);
     SelectObject(hdc, hOldPen); DeleteObject(hSepPen);
 
-    // ── Row 2: L1 quote block (23..HEADER_H-2) ───────────────────────────────
-    const int quoteY = 23;
+    // ── Row 2: L1 quote block (statsRowH+1 .. HEADER_H-2) ────────────────────
+    const int quoteY = statsRowH + 1;
     const int quoteH = HEADER_H - quoteY - 1;
 
-    // Left half: large last price + change
-    // Fall back to prevClose when last is not yet available (market closed).
+    // Left half: large last price + speaker icon to its right + change below
     SelectObject(hdc, state->hBigFont);
-    double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
     std::string lastStr = Ts_Fmt(displayLast);
     SetTextColor(hdc, textColor);
-    RECT lastRc = { 10, quoteY + 4, rc.right / 2, quoteY + quoteH / 2 + 4 };
+    // last price rect: from left up to midpoint minus a margin for speaker icon
+    RECT lastRc = { 10, quoteY + 4, rc.right / 2 - 30, quoteY + quoteH / 2 + 4 };
     DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-    // Change row — only meaningful when prevClose is known
+    // Change row
     SelectObject(hdc, state->hSmFont);
-    double chg    = L1.change();    // uses last internally; 0 when last==0
+    double chg    = L1.change();
     double chgPct = L1.changePct();
     if (L1.last > 0.0 && (chg != 0.0 || L1.prevClose > 0.0)) {
-        snprintf(buf, sizeof(buf), "%.2f  %.2f%%", chg, chgPct);
+        char buf[64]; snprintf(buf, sizeof(buf), "%.2f  %.2f%%", chg, chgPct);
         COLORREF chgColor = (chg >= 0.0) ? greenColor : redColor;
         SetTextColor(hdc, chgColor);
-        RECT chgRc = { 10, quoteY + quoteH / 2 + 4, rc.right / 2, quoteY + quoteH };
+        RECT chgRc = { 10, quoteY + quoteH / 2 + 4, rc.right / 2 - 30, quoteY + quoteH };
         DrawTextA(hdc, buf, -1, &chgRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
-    // Right half: Ask / Bid rows (styled as in screenshot)
+    // Right half: Ask / Bid rows
     int rX = rc.right / 2 + 8;
     int rW = rc.right - rX - 8;
     int rowH = quoteH / 2;
+    char buf[64];
 
     // Ask row (red)
     {
         SetTextColor(hdc, redColor);
-        std::string askLabel = "Ask";
         RECT lblRc = { rX, quoteY + 2, rX + 28, quoteY + rowH };
-        DrawTextA(hdc, askLabel.c_str(), -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextA(hdc, "Ask", -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        // price × size in bold
         SelectObject(hdc, state->hBigFont);
         std::string priceStr = Ts_Fmt(L1.ask);
         RECT pRc = { rX + 30, quoteY + 2, rX + 30 + 80, quoteY + rowH };
         DrawTextA(hdc, priceStr.c_str(), -1, &pRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hSmFont);
-        snprintf(buf, sizeof(buf), "× %s", Ts_FmtQty(L1.askSize).c_str());
+        snprintf(buf, sizeof(buf), "x %s", Ts_FmtQty(L1.askSize).c_str());
         RECT szRc = { rX + 115, quoteY + 2, rX + rW, quoteY + rowH };
         DrawTextA(hdc, buf, -1, &szRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -495,9 +578,8 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
     // Bid row (blue)
     {
         SetTextColor(hdc, blueColor);
-        std::string bidLabel = "Bid";
         RECT lblRc = { rX, quoteY + rowH + 2, rX + 28, quoteY + quoteH };
-        DrawTextA(hdc, bidLabel.c_str(), -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextA(hdc, "Bid", -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hBigFont);
         std::string priceStr = Ts_Fmt(L1.bid);
@@ -505,7 +587,7 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, priceStr.c_str(), -1, &pRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hSmFont);
-        snprintf(buf, sizeof(buf), "× %s", Ts_FmtQty(L1.bidSize).c_str());
+        snprintf(buf, sizeof(buf), "x %s", Ts_FmtQty(L1.bidSize).c_str());
         RECT szRc = { rX + 115, quoteY + rowH + 2, rX + rW, quoteY + quoteH };
         DrawTextA(hdc, buf, -1, &szRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -518,6 +600,55 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
     SelectObject(hdc, hOldPen); DeleteObject(hSepPen);
 
     EndPaint(hWnd, &ps);
+}
+
+// ── Market TTS helpers ────────────────────────────────────────────────────────
+static const wchar_t TS_SPEAKER_GLYPH[] = L"\uE767";   // Segoe MDL2 Assets volume-on
+
+static bool Ts_InitVoice(TsState* state) {
+    if (state->hTtsVoice) return true;
+    if (!state->ttsComInit) {
+        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+        state->ttsComInit = SUCCEEDED(hr) || (hr == RPC_E_CHANGED_MODE);
+    }
+    HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&state->hTtsVoice);
+    if (FAILED(hr)) { state->hTtsVoice = nullptr; return false; }
+    return true;
+}
+
+static void Ts_SpeakLast(TsState* state) {
+    if (!state->hTtsVoice) return;
+    double displayLast = (state->l1Info.last > 0.0) ? state->l1Info.last : state->l1Info.prevClose;
+    if (displayLast <= 0.0) return;
+    char buf[64]; snprintf(buf, sizeof(buf), "%.2f", displayLast);
+    // Strip trailing zeros: "123.50" → "123.5", "123.00" → "123"
+    std::string s(buf);
+    if (s.find('.') != std::string::npos) {
+        while (s.size() > 1 && s.back() == '0') s.pop_back();
+        if (s.back() == '.') s.pop_back();
+    }
+    std::wstring ws(s.begin(), s.end());
+    state->hTtsVoice->Speak(ws.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
+}
+
+static void Ts_ToggleTTS(HWND hWnd, TsState* state) {
+    state->ttsOn = !state->ttsOn;
+    if (state->ttsOn) {
+        if (!Ts_InitVoice(state)) { state->ttsOn = false; return; }
+        // Color speaker bright
+        if (state->hSpeakerBtn)
+            SetCtrlColor(state->hSpeakerBtn,
+                Settings_DarkMode() ? RGB(220,220,220) : RGB(30,30,30));
+        SetTimer(hWnd, TIMER_TS_SPEAKER, 21000, NULL);
+        Ts_SpeakLast(state);   // speak immediately
+    } else {
+        KillTimer(hWnd, TIMER_TS_SPEAKER);
+        if (state->hTtsVoice)
+            state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+        if (state->hSpeakerBtn)
+            SetCtrlColor(state->hSpeakerBtn, RGB(120,120,120));
+    }
+    if (state->hSpeakerBtn) InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -547,6 +678,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hSmFont  = CreateFontA(-11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        // Stats bar font — slightly larger (fits single row within HEADER_H)
+        state->hStatFont = CreateFontA(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        // Speaker icon font (Segoe MDL2 Assets)
+        state->hSpeakerFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 
         // ── Snapshot position + avg price from portfolio ───────────────────────
         if (!state->symbol.empty()) {
@@ -559,17 +698,55 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
         }
 
-        // ── Lists ─────────────────────────────────────────────────────────────
+        // ── Lists (font size 14) ──────────────────────────────────────────────
         state->hL2List      = Ts_CreateL2List(hWnd, hInst);
         state->hTsList      = Ts_CreateListView(hWnd, ID_TS_LIST,       hInst);
         state->hTsListF100  = Ts_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
         state->hTsListF1000 = Ts_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
+
+        // Apply font-14 to all three T&S lists and the L2 list
+        {
+            HFONT hListFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            SendMessage(state->hTsList,      WM_SETFONT, (WPARAM)hListFont, TRUE);
+            SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hListFont, TRUE);
+            SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hListFont, TRUE);
+            SendMessage(state->hL2List,      WM_SETFONT, (WPARAM)hListFont, TRUE);
+            // Note: we intentionally do not store hListFont in TsState for now
+            // (it's managed by the OS when the list is destroyed).  If you need
+            // to delete it manually, add an hListFont member to TsState.
+        }
+
         ShowWindow(state->hTsList,  SW_SHOW);
         ShowWindow(state->hL2List,  SW_SHOW);
 
-        state->hTsFilterCheck = CreateWindowA("BUTTON", "Filter Size",
+        // ── Filter checkbox (no label — tooltip explains) ─────────────────────
+        state->hTsFilterCheck = CreateWindowA("BUTTON", "",
             WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-            0, 0, 100, 16, hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
+            0, 0, 16, 16, hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
+
+        // Tooltip for filter checkbox
+        {
+            HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
+                WS_POPUP | TTS_ALWAYSTIP,
+                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                hWnd, NULL, hInst, NULL);
+            TOOLINFOA ti = {};
+            ti.cbSize   = sizeof(ti);
+            ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
+            ti.hwnd     = hWnd;
+            ti.uId      = (UINT_PTR)state->hTsFilterCheck;
+            ti.lpszText = (LPSTR)"Filter Size x 100 and 1000";
+            SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
+        }
+
+        // ── Speaker button (MDL2 Assets glyph, SS_NOTIFY so clicks fire WM_COMMAND) ──
+        state->hSpeakerBtn = CreateWindowW(L"STATIC", TS_SPEAKER_GLYPH,
+            WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
+            0, 0, 22, 22, hWnd, (HMENU)ID_TS_SPEAKER, hInst, NULL);
+        SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
+        SetCtrlColor(state->hSpeakerBtn, RGB(120, 120, 120));  // dim = inactive
 
         // Restore splitter positions and filter state
         if (!state->symbol.empty()) {
@@ -700,6 +877,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             Ts_Layout(hWnd, state);
         }
+        // Speaker icon or last-price area toggles TTS
+        if ((LOWORD(wParam) == ID_TS_SPEAKER) && HIWORD(wParam) == STN_CLICKED && state)
+            Ts_ToggleTTS(hWnd, state);
+        break;
+
+    case WM_TIMER:
+        if (wParam == TIMER_TS_SPEAKER && state && state->ttsOn)
+            Ts_SpeakLast(state);
         break;
 
     case WM_MARKET_TICK: {
@@ -832,13 +1017,24 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_LBUTTONDOWN: {
-        if (state && state->tsFilteredView) {
+        if (state) {
             int x = (short)LOWORD(lParam);
             int y = (short)HIWORD(lParam);
-            
-            state->dragMode = HitTestSplitter(hWnd, state, x, y);
-            if (state->dragMode != 0) {
-                SetCapture(hWnd); // Lock mouse input to this window during drag
+
+            // Click on last-price area in header toggles TTS
+            // (speaker icon also handled via WM_COMMAND/STN_CLICKED)
+            const int quoteY = 29;  // statsRowH + 1
+            const int quoteH = HEADER_H - quoteY - 1;
+            RECT rc2; GetClientRect(hWnd, &rc2);
+            RECT lastPriceRc = { 10, quoteY, rc2.right / 2 - 30, quoteY + quoteH };
+            if (PtInRect(&lastPriceRc, { x, y }))
+                Ts_ToggleTTS(hWnd, state);
+
+            if (state->tsFilteredView) {
+                state->dragMode = HitTestSplitter(hWnd, state, x, y);
+                if (state->dragMode != 0) {
+                    SetCapture(hWnd);
+                }
             }
         }
         break;
@@ -847,7 +1043,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MOUSEMOVE: {
         if (state && state->dragMode != 0) {
             RECT rc; GetClientRect(hWnd, &rc);
-            const int bodyH = rc.bottom - HEADER_H - 24;
+            const int bodyH = rc.bottom - HEADER_H;
             const int tsW   = rc.right - L2_W;
             int x = (short)LOWORD(lParam) - L2_W;  // relative to T&S area
             int y = (short)HIWORD(lParam) - HEADER_H;
@@ -885,8 +1081,17 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api.unsetMarketWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);
         if (state) {
-            if (state->hBigFont) DeleteObject(state->hBigFont);
-            if (state->hSmFont)  DeleteObject(state->hSmFont);
+            // Stop TTS
+            if (state->ttsOn) KillTimer(hWnd, TIMER_TS_SPEAKER);
+            if (state->hTtsVoice) {
+                state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+                state->hTtsVoice->Release();
+                state->hTtsVoice = nullptr;
+            }
+            if (state->hBigFont)     DeleteObject(state->hBigFont);
+            if (state->hSmFont)      DeleteObject(state->hSmFont);
+            if (state->hStatFont)    DeleteObject(state->hStatFont);
+            if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             delete state;
             tsStates.erase(hWnd);
         }

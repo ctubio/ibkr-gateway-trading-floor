@@ -419,25 +419,23 @@ void Coins_UpdateLabels(HWND hWnd) {
                 snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
                 clr = COINS_CLR_PURPLE;
             } else if (coinRows[i].colorType == 3) {
-                const char* suffix = "";
-                std::string dynamicSuffix;
+                std::string suffixStr;
                 if (strcmp(coinRows[i].key, "CashBalance") == 0) {
-                    dynamicSuffix = " " + currency;
-                    suffix = dynamicSuffix.c_str();
+                    suffixStr = " " + currency;
                 } else if (strncmp(coinRows[i].key, "EUR_", 4) == 0) {
-                    suffix = " EUR";
+                    suffixStr = " EUR";
                 } else if (strncmp(coinRows[i].key, "USD_", 4) == 0) {
-                    suffix = " USD";
+                    suffixStr = " USD";
                 }
                 std::string formattedNum = FormatWithCommas(d);
-                snprintf(buf, sizeof(buf), "%s%s", formattedNum.c_str(), suffix);
+                snprintf(buf, sizeof(buf), "%s%s", formattedNum.c_str(), suffixStr.c_str());
                 clr = d > 0.0 ? COINS_CLR_GREEN : (d < 0.0 ? COINS_CLR_RED : COLOR_THEME);
             } else {
                 std::string formattedNum = FormatWithCommas(d);
                 snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
             }
         } catch (...) {}
-
+        
         SetCtrlColor(hCoinVal[i], clr);
         SetWindowTextA(hCoinVal[i], buf);
         InvalidateRect(hCoinVal[i], NULL, TRUE);
@@ -542,7 +540,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Body rows
             const int rowH = 23;
             int y = 111;
-            lblW  = 110;
+            lblW  = 90;
             valW  = rW - lblW;
             for (int i = 0; i < COIN_ROW_COUNT; i++) {
                 if (coinRows[i].isSeparator) {

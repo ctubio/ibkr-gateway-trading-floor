@@ -718,17 +718,17 @@ void Session_RestoreWindows(
     std::vector<char> buf(size);
     RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
     RegCloseKey(hKey);
-
+    { 
+        char key[256];
+        sprintf(key, "AlwaysOnTop_%s", DASHBOARD_CLASS_NAME);
+        if(Settings_Load(key, 0)) {
+            ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
+        }
+    }
     const char* p = buf.data();
     while (*p) {
         std::string cls = p;
-        if (cls == DASHBOARD_CLASS_NAME)    { 
-            char key[256];
-            sprintf(key, "AlwaysOnTop_%s", DASHBOARD_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
-                ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
-        }
-        else if (cls == DIAMONDS_CLASS_NAME)  { 
+        if (cls == DIAMONDS_CLASS_NAME)  { 
             StartDiamonds(); 
             char key[256];
             sprintf(key, "AlwaysOnTop_%s", DIAMONDS_CLASS_NAME);
