@@ -2,7 +2,7 @@
 
 // 🟢 **Filled** | 🟡 **Partially Filled** | 🔵 **Submitted** | ⚪ **Cancelled/Inactive**
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 786, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 826, 240); }
 
 #define ID_ORDERS_LIST          9003
 
@@ -14,7 +14,7 @@ struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
     { "Time",          80,  LVCFMT_LEFT  },
     { "Symbol",        80,  LVCFMT_LEFT  },
-    { "Type",         100,  LVCFMT_LEFT  },
+    { "Type",         140,  LVCFMT_LEFT  },
     { "Price",         85,  LVCFMT_RIGHT },
     { "Avg Fill",      85,  LVCFMT_RIGHT },
     { "Filled / Qty", 100,  LVCFMT_RIGHT },
@@ -58,7 +58,7 @@ static void Orders_Repopulate(HWND hList) {
 
         ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
 
-        ListView_SetItemText(hList, i, col++, (LPSTR)(o.orderType + " " + o.action).c_str());
+        ListView_SetItemText(hList, i, col++, (LPSTR)(o.orderType + " " + o.tif + " " + o.action).c_str());
 
         if (o.price > 0)
             snprintf(buf, sizeof(buf), "%.2f", o.price);
@@ -261,7 +261,7 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     ctx->originalQty = order.totalQty;
 
     char title[80];
-    snprintf(title, sizeof(title), "Edit %s %s: %s", order.orderType.c_str(), order.action.c_str(), order.symbol.c_str());
+    snprintf(title, sizeof(title), "Edit %s %s %s: %s", order.orderType.c_str(), order.tif.c_str(), order.action.c_str(), order.symbol.c_str());
 
     // Center over the parent window.
     RECT pr;
