@@ -52,6 +52,7 @@ public:
         std::string status;
         std::string time;
         long long   timestamp = 0;
+        bool includeOvernight = false;
     };
 
     struct PositionInfo {
