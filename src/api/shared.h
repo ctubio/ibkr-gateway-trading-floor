@@ -185,6 +185,12 @@ HFONT CreateBoldFont(HFONT hNormalFont) {
     return CreateFontIndirectA(&lf);
 }
 
+BOOL CALLBACK SetFontCallback(HWND hwndChild, LPARAM lParam) {
+    HFONT hFont = (HFONT)lParam;
+    SendMessage(hwndChild, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+    return TRUE;
+}
+
 static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize) {
     if (hFont) {
         DeleteObject(hFont);

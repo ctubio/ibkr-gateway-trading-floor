@@ -1,8 +1,6 @@
 #pragma once
 
-// 🟢 **Filled** | 🟡 **Partially Filled** | 🔵 **Submitted** | ⚪ **Cancelled/Inactive**
-
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 826, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 726, 240); }
 
 #define ID_ORDERS_LIST          9003
 
@@ -12,27 +10,29 @@ static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
 
 struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
-    { "Time",          80,  LVCFMT_LEFT  },
     { "Symbol",        80,  LVCFMT_LEFT  },
     { "Type",         140,  LVCFMT_LEFT  },
     { "Price",         85,  LVCFMT_RIGHT },
     { "Avg Fill",      85,  LVCFMT_RIGHT },
     { "Filled / Qty", 100,  LVCFMT_RIGHT },
-    { "Status",       135, LVCFMT_RIGHT  },
-    { "Exchange",     100,  LVCFMT_LEFT  },
+    { "Status",       135,  LVCFMT_CENTER  },
+    { "Time",          80,  LVCFMT_LEFT  },
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Returns a color for the status text (used in NM_CUSTOMDRAW).
-static COLORREF Orders_StatusColor(const std::string& status, bool dark) {
-    if (status == "Filled")                           return RGB(80, 200, 120);
+static COLORREF Orders_StatusColor(const std::string& orderType, const std::string& status, bool dark) {
+    if (status == "Filled")                           return RGB(196, 110, 43);
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
     if (status == "Cancelled" || status == "Inactive")
         return dark ? RGB(130, 130, 130) : RGB(160, 160, 160);
-    if (status == "Submitted" || status == "PreSubmitted")
-        return dark ? RGB(120, 180, 255) : RGB(30, 100, 220);
+    if (status == "Submitted" || status == "PreSubmitted") {
+        if (orderType == "BUY") return RGB(80, 200, 120);
+        else if (orderType == "SELL") return RGB(220, 80, 80);
+    }
+        
     return dark ? DM_TEXT : LM_TEXT;
 }
 
@@ -53,12 +53,10 @@ static void Orders_Repopulate(HWND hList) {
         lvi.iItem    = i;
         lvi.iSubItem = col++;
         lvi.lParam   = (LPARAM)o.orderId;  // orderId — used by cancel/edit handlers
-        lvi.pszText  = (LPSTR)o.time.c_str();
+        lvi.pszText  = (LPSTR)o.symbol.c_str();
         ListView_InsertItem(hList, &lvi);
 
-        ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
-
-        ListView_SetItemText(hList, i, col++, (LPSTR)(o.orderType + " " + o.tif + " " + o.action).c_str());
+        ListView_SetItemText(hList, i, col++, (LPSTR)(o.tif + " " + o.orderType + " " + o.action).c_str());
 
         if (o.price > 0)
             snprintf(buf, sizeof(buf), "%.2f", o.price);
@@ -77,7 +75,7 @@ static void Orders_Repopulate(HWND hList) {
 
         ListView_SetItemText(hList, i, col++, (LPSTR)o.status.c_str());
 
-        ListView_SetItemText(hList, i, col++, (LPSTR)o.exchange.c_str());
+        ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
     }
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
@@ -170,21 +168,21 @@ static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LP
             DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
 
             HINSTANCE hInst = GetModuleHandle(NULL);
-            int lx = 2, ex = 90, ew = 112, fh = 22;
+            int lx = 17, ex = 90, ew = 112, fh = 30;
 
             // Row 1 — Price
             int y = 14;
             CreateWindowA("STATIC", "Price:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
+                lx, y + 3, 45, 25, hWnd, NULL, hInst, NULL);
             ctx->hPriceEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 ex, y, ew, fh, hWnd, (HMENU)1, hInst, NULL);
 
             // Row 2 — Qty (omitted for Partially Filled orders)
             if (!ctx->partialFill) {
-                y += 34;
+                y += 38;
                 CreateWindowA("STATIC", "Qty:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                    lx, y + 3, 40, 16, hWnd, NULL, hInst, NULL);
+                    lx, y + 3, 45, 25, hWnd, NULL, hInst, NULL);
                 ctx->hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                     WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                     ex, y, ew, fh, hWnd, (HMENU)2, hInst, NULL);
@@ -194,6 +192,7 @@ static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LP
             // Subclass price field; qty field only when it exists.
             SetWindowSubclass(ctx->hPriceEdit, EditField_SubclassProc, 1, 0);
 
+            EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersZoomData.hFont);
             SetFocus(ctx->hPriceEdit);
             return 0;
         }
@@ -261,13 +260,13 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     ctx->originalQty = order.totalQty;
 
     char title[80];
-    snprintf(title, sizeof(title), "Edit %s %s %s: %s", order.orderType.c_str(), order.tif.c_str(), order.action.c_str(), order.symbol.c_str());
+    snprintf(title, sizeof(title), "Edit %s: %s %s %s", order.symbol.c_str(), order.tif.c_str(), order.orderType.c_str(), order.action.c_str());
 
     // Center over the parent window.
     RECT pr;
     GetWindowRect(hParent, &pr);
     // Partially Filled orders only show the Price row → shorter popup.
-    int w = 222, h = ctx->partialFill ? 76 : 110;
+    int w = 222, h = ctx->partialFill ? 80 : 118;
     int x = pr.left + (pr.right  - pr.left - w) / 2;
     int y = pr.top  + (pr.bottom - pr.top  - h) / 2;
 
@@ -290,7 +289,7 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     snprintf(buf, sizeof(buf), "%.0f", order.totalQty);
     if (ctx->hQtyEdit)
         SetWindowTextA(ctx->hQtyEdit, buf);
-
+    
     ShowWindow(hPop, SW_SHOW);
     UpdateWindow(hPop);
 }
@@ -411,24 +410,20 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         return CDRF_NOTIFYSUBITEMDRAW;
 
                     case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
-                        if (cd->iSubItem == 0 || cd->iSubItem == 6) { // Status column — color by state
+                        if (cd->iSubItem >= 0) {
                             // Get status text
                             char statusBuf[64] = {};
                             HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 6, statusBuf, sizeof(statusBuf));
-                            cd->clrText = Orders_StatusColor(statusBuf, dark);
-                            if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                            return CDRF_NEWFONT;
-                        }
-                        if (cd->iSubItem == 2) { // Action — BUY green, SELL red
+                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 5, statusBuf, sizeof(statusBuf));
                             char buf[16] = {};
-                            HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 2, buf, sizeof(buf));
+                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 1, buf, sizeof(buf));
                             size_t len = strlen(buf);
+                            std::string orderType;
                             if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)
-                                cd->clrText = RGB(80, 200, 120);
+                                orderType = "BUY";
                             else if (len >= 4 && strcmp(buf + len - 4, "SELL") == 0)
-                                cd->clrText = RGB(220, 80, 80);
+                                orderType = "SELL";
+                            cd->clrText = Orders_StatusColor(orderType, statusBuf, dark);
                             if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             return CDRF_NEWFONT;
                         }
