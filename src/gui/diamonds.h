@@ -278,6 +278,14 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
         ListView_SetItemText(hList, row, col, buf);
     };
 
+    // Helper: format a double always (including 0), or blank when sentinel indicates no data.
+    // Use this for signed columns (Change%, DailyPnL, UnrealizedPnL) where 0.00 is a valid
+    // and meaningful value that must be displayed, not silently hidden.
+    auto setNumAlways = [&](int col, double val, const char* fmt) {
+        snprintf(buf, sizeof(buf), fmt, val);
+        ListView_SetItemText(hList, row, col, buf);
+    };
+
     // Helper: set a cell to the "--" sentinel.
     auto setNA = [&](int col) {
         ListView_SetItemText(hList, row, col, (LPSTR)DIAMONDS_NO_DATA);
@@ -296,10 +304,22 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
     setNum(DCOL_CLOSE,   t.prevClose, "%.2f");
 
     // ── Dividend columns — independent of Last being live ────────────────────
-    setNum(DCOL_DIV_YIELD,  t.dividendYield(),   "%.2f%%");
-    setStr(DCOL_DIV_DATE,   t.dividendDate);
+    // annualDividends / dividendAmount: blank when zero (genuinely no dividend).
     setNum(DCOL_DIV_AMT,    t.dividendAmount,    "%.3f");
     setNum(DCOL_ANNUAL_DIV, t.annualDividends,   "%.3f");
+    setStr(DCOL_DIV_DATE,   t.dividendDate);
+    // Dividend yield requires both Last > 0 and annualDividends > 0; show "--"
+    // (not blank) when unavailable so the user can distinguish "no data yet"
+    // from "this stock pays no dividend".
+    if (t.last > 0.0 && t.annualDividends > 0.0) {
+        setNum(DCOL_DIV_YIELD, t.dividendYield(), "%.2f%%");
+    } else if (t.annualDividends == 0.0) {
+        buf[0] = '\0';
+        ListView_SetItemText(hList, row, DCOL_DIV_YIELD, buf); // blank = no dividend
+    }
+    else {
+        setNA(DCOL_DIV_YIELD); // last not yet available
+    }
 
     // ── Columns that require Last > 0 ─────────────────────────────────────────
     // When the market is closed, reqMktData may return Last == 0.
@@ -349,18 +369,20 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
                         ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
     double pctNetLiq  = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
 
-    // Daily P&L: only meaningful when prevClose is available.
+    // Daily P&L / Change %: only meaningful when prevClose is available.
+    // Use setNumAlways so that a zero change (price unchanged from close) still
+    // displays as "+0.00" rather than a blank cell that looks like missing data.
     if (t.prevClose > 0.0) {
         double dailyPnL = shares * t.change();
-        setNum(DCOL_DAILYPNL, dailyPnL, "%+.2f");
-        setNum(DCOL_CHGPCT,   t.changePct(), "%+.2f%%");
+        setNumAlways(DCOL_DAILYPNL, dailyPnL, "%+.2f");
+        setNumAlways(DCOL_CHGPCT,   t.changePct(), "%+.2f%%");
     } else {
         setNA(DCOL_DAILYPNL);
         setNA(DCOL_CHGPCT);
     }
 
-    setNum(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
-    setNum(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
+    setNumAlways(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
+    setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
     setNum(DCOL_MKTVAL,            mktVal,     "%.2f");
     setNum(DCOL_PCT_NETLIQ,        pctNetLiq,  "%.2f%%");
 }
