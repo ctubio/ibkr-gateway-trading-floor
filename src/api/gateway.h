@@ -10,12 +10,15 @@
 #include <richedit.h>
 #include <sapi.h>
 #include <sphelper.h>
+#include <dwmapi.h>
 
 #include <string>
 #include <vector>
 #include <map>
 #include <mutex>
 #include <memory>
+#include <algorithm>
+#include <functional>
 
 #define WM_API_UPDATE       (WM_USER +  2)
 #define WM_SYMBOL_RESULTS   (WM_USER +  3)

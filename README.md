@@ -119,7 +119,7 @@ Runtime diagnostics and transparency for deeper troubleshooting:
 ## Installation
 
 1. Download the latest `Trading-Floor.exe` build.
-2. Place it anywhere on your machine, for example `C:\Program Files\TNT\`.
+2. Place it anywhere on your machine, for example `C:\Program Files\Trading-Floor\`.
 3. Run `Trading-Floor.exe`.
 4. Start and authenticate IBKR Gateway.
 5. The app will auto-connect within seconds when Gateway is available.

@@ -165,7 +165,7 @@ static void Ts_Layout(HWND hWnd, TsState* state) {
     if (state->hSpeakerBtn) {
         // Positioned just to the right of the large last-price text area
         int spX = rc.right / 2 - 26;
-        int spY = 23 + 4;
+        int spY = 23 + 10;
         SetWindowPos(state->hSpeakerBtn, NULL, spX, spY, 22, 22,
             SWP_NOZORDER | SWP_NOACTIVATE);
     }
@@ -321,7 +321,7 @@ HWND StartMarket(const std::string& symbol, int conId) {
         StartMarketSearch();
         return NULL;
     }
-    std::string key = MARKET_CLASS_NAME + std::string("_") + std::to_string(conId);
+    std::string key = MARKET_CLASS_NAME + std::string("_") + symbol;
     TsInitData* data = new TsInitData{symbol, conId};
     return StartGenericWindow(MARKET_CLASS_NAME, ("Market: " + symbol).c_str(), L"IBKRGatewayClient.Market", 380, 500, NULL, key, data);
 }
@@ -613,6 +613,7 @@ static bool Ts_InitVoice(TsState* state) {
     }
     HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&state->hTtsVoice);
     if (FAILED(hr)) { state->hTtsVoice = nullptr; return false; }
+    TTS_ApplySavedVoice(state->hTtsVoice);
     return true;
 }
 
@@ -621,13 +622,10 @@ static void Ts_SpeakLast(TsState* state) {
     double displayLast = (state->l1Info.last > 0.0) ? state->l1Info.last : state->l1Info.prevClose;
     if (displayLast <= 0.0) return;
     char buf[64]; snprintf(buf, sizeof(buf), "%.2f", displayLast);
-    // Strip trailing zeros: "123.50" → "123.5", "123.00" → "123"
     std::string s(buf);
-    if (s.find('.') != std::string::npos) {
-        while (s.size() > 1 && s.back() == '0') s.pop_back();
-        if (s.back() == '.') s.pop_back();
-    }
     std::wstring ws(s.begin(), s.end());
+    ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
+    std::replace(ws.begin(), ws.end(), L'.', L',');
     state->hTtsVoice->Speak(ws.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
 }
 
@@ -764,7 +762,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         UpdateMarketRegistry();
         break;
     }
-
+    
     case WM_SIZE:
         Ts_Layout(hWnd, state);
         InvalidateRect(hWnd, NULL, FALSE);   // repaint header on resize
@@ -887,6 +885,32 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             Ts_SpeakLast(state);
         break;
 
+    case WM_TTS_VOICE_CHANGED: {
+        if (!state) break;
+        // Release the current voice so the next Ts_InitVoice call re-creates
+        // it with the newly saved token from the registry.
+        if (state->hTtsVoice) {
+            state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+            state->hTtsVoice->Release();
+            state->hTtsVoice = nullptr;
+        }
+        // If TTS is active, re-initialise and restart the timer immediately.
+        if (state->ttsOn) {
+            KillTimer(hWnd, TIMER_TS_SPEAKER);
+            if (Ts_InitVoice(state)) {
+                SetTimer(hWnd, TIMER_TS_SPEAKER, 21000, NULL);
+                Ts_SpeakLast(state); // speak now with the new voice
+            } else {
+                state->ttsOn = false;
+                if (state->hSpeakerBtn) {
+                    SetCtrlColor(state->hSpeakerBtn, RGB(120, 120, 120));
+                    InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
+                }
+            }
+        }
+        break;
+    }
+
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
@@ -999,6 +1023,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
     
     case WM_SETCURSOR: {
+        int id = GetDlgCtrlID((HWND)wParam);
+        if  (id == ID_TS_SPEAKER) {
+            SetCursor(LoadCursor(NULL, IDC_HAND));
+            return TRUE;
+        }
         if (state && state->tsFilteredView && LOWORD(lParam) == HTCLIENT) {
             POINT pt; 
             GetCursorPos(&pt); 

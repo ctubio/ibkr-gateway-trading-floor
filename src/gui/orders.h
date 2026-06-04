@@ -10,16 +10,14 @@ static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
 
 struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
-    { "Symbol",        80,  LVCFMT_LEFT  },
-    { "Type",         140,  LVCFMT_LEFT  },
-    { "Price",         85,  LVCFMT_RIGHT },
-    { "Avg Fill",      85,  LVCFMT_RIGHT },
-    { "Filled / Qty", 100,  LVCFMT_RIGHT },
-    { "Status",       135,  LVCFMT_CENTER  },
-    { "Time",          80,  LVCFMT_LEFT  },
+    { "Side",          50,  LVCFMT_CENTER},
+    { "Symbol",        80,  LVCFMT_CENTER},
+    { "Quote",        135,  LVCFMT_RIGHT },
+    { "Avg Filled",   135,  LVCFMT_RIGHT },
+    { "Status",       225,  LVCFMT_CENTER},
+    { "Time",          80,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Returns a color for the status text (used in NM_CUSTOMDRAW).
@@ -53,27 +51,25 @@ static void Orders_Repopulate(HWND hList) {
         lvi.iItem    = i;
         lvi.iSubItem = col++;
         lvi.lParam   = (LPARAM)o.orderId;  // orderId — used by cancel/edit handlers
-        lvi.pszText  = (LPSTR)o.symbol.c_str();
+        lvi.pszText  = (LPSTR)o.action.c_str();
         ListView_InsertItem(hList, &lvi);
 
-        ListView_SetItemText(hList, i, col++, (LPSTR)(o.tif + " " + o.orderType + " " + o.action).c_str());
+        ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
 
         if (o.price > 0)
-            snprintf(buf, sizeof(buf), "%.2f", o.price);
+            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.totalQty, o.price);
         else
-            snprintf(buf, sizeof(buf), "MKT");
+            snprintf(buf, sizeof(buf), "%.0f @ MKT", o.totalQty);
         ListView_SetItemText(hList, i, col++, buf);
 
         if (o.avgFillPx > 0)
-            snprintf(buf, sizeof(buf), "%.2f", o.avgFillPx);
+            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.filledQty, o.avgFillPx);
         else
-            snprintf(buf, sizeof(buf), "--");
+            snprintf(buf, sizeof(buf), "-- @ --");
         ListView_SetItemText(hList, i, col++, buf);
-
-        snprintf(buf, sizeof(buf), "%.0f / %.0f", o.filledQty, o.totalQty);
-        ListView_SetItemText(hList, i, col++, buf);
-
-        ListView_SetItemText(hList, i, col++, (LPSTR)o.status.c_str());
+        
+        std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
+        ListView_SetItemText(hList, i, col++, (LPSTR)fullTypeStr.c_str());
 
         ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
     }
@@ -86,8 +82,6 @@ static void Orders_Repopulate(HWND hList) {
 // A lightweight non-modal popup with two edit boxes (Price / Qty).
 // ENTER confirms and calls api.modifyOrder(); ESCAPE closes without action.
 // Only one popup may be open at a time.
-
-#define EDIT_ORDER_CLASS "TF_EditOrder"
 
 struct EditOrderCtx {
     int    orderId;
@@ -225,6 +219,7 @@ static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LP
         case WM_NCDESTROY:
             s_hEditOrderPopup = NULL;
             delete ctx;
+            SetFocus(GetDlgItem(GetParent(hWnd), ID_ORDERS_LIST));
             return 0;
     }
 
@@ -247,7 +242,7 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
         WNDCLASSA wc      = {};
         wc.lpfnWndProc    = EditOrderProc;
         wc.hInstance      = GetModuleHandle(NULL);
-        wc.lpszClassName  = EDIT_ORDER_CLASS;
+        wc.lpszClassName  = ORDERS_EDIT_CLASS_NAME;
         wc.hbrBackground  = (HBRUSH)(COLOR_BTNFACE + 1);
         wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
         RegisterClassA(&wc);
@@ -272,7 +267,7 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
 
     HWND hPop = CreateWindowExA(
         WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-        EDIT_ORDER_CLASS, title,
+        ORDERS_EDIT_CLASS_NAME, title,
         WS_POPUP | WS_CAPTION | WS_SYSMENU,
         x, y, w, h,
         hParent, NULL, GetModuleHandle(NULL), ctx);
@@ -350,10 +345,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
 
-            // ── ESC on selected row → cancel that order ───────────────────────
+            // ── DEL on selected row → cancel that order ───────────────────────
             if (hdr->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
-                if (kd->wVKey == VK_ESCAPE) {
+                if (kd->wVKey == VK_DELETE) {
                     HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                     if (sel >= 0) {
@@ -368,7 +363,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
 
             // ── Double-click → edit price / qty ──────────────────────────────
-            if (hdr->code == NM_DBLCLK) {
+            if (hdr->code == NM_DBLCLK || hdr->code == NM_RETURN) {
                 NMITEMACTIVATE* ia = (NMITEMACTIVATE*)lParam;
                 if (ia->iItem >= 0) {
                     // Retrieve orderId stored in lParam by Orders_Repopulate.
@@ -414,16 +409,19 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             // Get status text
                             char statusBuf[64] = {};
                             HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 5, statusBuf, sizeof(statusBuf));
+                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 4, statusBuf, sizeof(statusBuf));
+                            std::string statusStr(statusBuf);
+                            size_t pos = statusStr.rfind(' ');
+                            statusStr = (pos == std::string::npos) ? statusStr : statusStr.substr(pos + 1);
                             char buf[16] = {};
-                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 1, buf, sizeof(buf));
+                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 0, buf, sizeof(buf));
                             size_t len = strlen(buf);
                             std::string orderType;
                             if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)
                                 orderType = "BUY";
                             else if (len >= 4 && strcmp(buf + len - 4, "SELL") == 0)
                                 orderType = "SELL";
-                            cd->clrText = Orders_StatusColor(orderType, statusBuf, dark);
+                            cd->clrText = Orders_StatusColor(orderType, statusStr, dark);
                             if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             return CDRF_NEWFONT;
                         }

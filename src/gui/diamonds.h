@@ -119,8 +119,8 @@ static void Diamonds_SaveTabMap() {
             quarentineList += std::to_string(conId);
         }
     }
-    Settings_SaveString("DiamondsTabGrowth", growthList);
-    Settings_SaveString("DiamondsTabQuarantine",    quarentineList);
+    Settings_Tab_Save("Tab_Dividends",  growthList);
+    Settings_Tab_Save("Tab_Quarantine", quarentineList);
 }
 
 // Loads g_DiamondsTabMap from the registry.
@@ -138,8 +138,8 @@ static void Diamonds_LoadTabMap() {
             start = end + 1;
         }
     };
-    parseIds(Settings_LoadString("DiamondsTabGrowth"), DTAB_GROWTH);
-    parseIds(Settings_LoadString("DiamondsTabQuarantine"),    DTAB_QUARENTINE);
+    parseIds(Settings_Tab_Load("Tab_Dividends"),  DTAB_GROWTH);
+    parseIds(Settings_Tab_Load("Tab_Quarantine"), DTAB_QUARENTINE);
 }
 
 // ── Symbol color persistence ──────────────────────────────────────────────────
@@ -150,12 +150,12 @@ static void Diamonds_SaveSymbolColors() {
         if (!s.empty()) s += ' ';
         s += std::to_string(conId) + ':' + std::to_string(idx);
     }
-    Settings_SaveString("DiamondsSymbolColors", s);
+    Settings_SymbolColors_Save(s);
 }
 
 static void Diamonds_LoadSymbolColors() {
     g_DiamondsSymbolColors.clear();
-    std::string s = Settings_LoadString("DiamondsSymbolColors");
+    std::string s = Settings_SymbolColors_Load();
     size_t pos = 0;
     while (pos < s.size()) {
         size_t end = s.find(' ', pos);
@@ -506,12 +506,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Load saved tab assignments, checkbox state, sort settings, and symbol colors.
         Diamonds_LoadTabMap();
         Diamonds_LoadSymbolColors();
-        g_DiamondsSortCol = (int)Settings_Load("DiamondsSortCol", DCOL_SYMBOL);
-        g_DiamondsSortAsc = Settings_Load("DiamondsSortAsc", 1) != 0;
+        g_DiamondsSortCol = (int)Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
+        g_DiamondsSortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 1) != 0;
         if (g_DiamondsSortCol < 0 || g_DiamondsSortCol >= DCOL_COUNT) g_DiamondsSortCol = DCOL_SYMBOL;
 
         // Restore checkbox bitmask (default 0x7 = all checked).
-        g_DiamondsCheckedTabs = (UINT)Settings_Load("DiamondsCheckedTabs", 0x7);
+        g_DiamondsCheckedTabs = (UINT)Settings_CheckedTabs_Load(0x7);
         g_DiamondsCheckedTabs &= 0x7;  // clamp to valid 3-bit range
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
             bool checked = (g_DiamondsCheckedTabs >> i) & 1;
@@ -535,7 +535,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 if (SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), BM_GETCHECK, 0, 0) == BST_CHECKED)
                     g_DiamondsCheckedTabs |= (1u << i);
             }
-            Settings_Save("DiamondsCheckedTabs", (int)g_DiamondsCheckedTabs);
+            Settings_CheckedTabs_Save((int)g_DiamondsCheckedTabs);
             Diamonds_Repopulate(hWnd);
         }
         break;
@@ -594,8 +594,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             int col = nmlv->iSubItem;
             if (col == g_DiamondsSortCol) g_DiamondsSortAsc = !g_DiamondsSortAsc;
             else { g_DiamondsSortCol = col; g_DiamondsSortAsc = true; }
-            Settings_Save("DiamondsSortCol", g_DiamondsSortCol);
-            Settings_Save("DiamondsSortAsc", g_DiamondsSortAsc ? 1 : 0);
+            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortCol", g_DiamondsSortCol);
+            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortAsc", g_DiamondsSortAsc ? 1 : 0);
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
             return 0;
@@ -659,9 +659,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 // IDs 200-206: color options (200+idx for colors, 206 = None)
                 HMENU hMenu = CreatePopupMenu();
 
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Assign to Growth");
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Assign to High-Yield Dividends");
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Assign to Quarantine");
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to High-Yield Dividends");
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
 
                 if (!watchlistLists.empty()) {
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);

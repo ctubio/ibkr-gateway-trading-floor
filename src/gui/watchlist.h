@@ -251,7 +251,7 @@ static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::WatchlistI
 
 static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
     if (listName.empty()) return;
-    Settings_SaveString("LastWatchlistList", listName);
+    Settings_OpenList_Save(listName);
     watchlistCurrentListName = listName;
 
     auto entries = Watchlist_ReadListEntries(listName.c_str());
@@ -528,14 +528,7 @@ LRESULT CALLBACK WndProcNewList(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             DestroyWindow(hWnd);
 
             if (strlen(newName) > 0) {
-                HKEY hKey;
-                char fullPath[256];
-                wsprintf(fullPath, "%s\\Watchlist", APP_REG_ROOT);
-                if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-                    const char empty[2] = { '\0', '\0' };
-                    RegSetValueExA(hKey, newName, 0, REG_MULTI_SZ, (const BYTE*)empty, 2);
-                    RegCloseKey(hKey);
-                }
+                Settings_NewList_Save(newName);
 
                 // Notify Watchlist to reload their combos.
                 HWND hWL = FindWindowA(WATCHLIST_CLASS_NAME, NULL);
@@ -609,21 +602,21 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         // Populate combo (sentinel + all lists).
         Watchlist_LoadListCombo(hWnd);
 
-        // Restore last session.
-        std::string lastList = Settings_LoadString("LastWatchlistList");
-        if (!lastList.empty()) {
-            int idx = (int)SendMessageA(hCB, CB_FINDSTRINGEXACT, -1, (LPARAM)lastList.c_str());
+        // Restore previously opened list.
+        std::string openList = Settings_OpenList_Load();
+        if (!openList.empty()) {
+            int idx = (int)SendMessageA(hCB, CB_FINDSTRINGEXACT, -1, (LPARAM)openList.c_str());
             if (idx != CB_ERR) {
                 SendMessage(hCB, CB_SETCURSEL, idx, 0);
-                Watchlist_Subscribe(hWnd, lastList);
+                Watchlist_Subscribe(hWnd, openList);
             }
         }
 
         api.addApiUpdateWindow(hWnd);
 
         // Load sort settings.
-        g_WatchlistSortCol = (int)Settings_Load("WatchlistSortCol", TCOL_SYMBOL);
-        g_WatchlistSortAsc = Settings_Load("WatchlistSortAsc", 1) != 0;
+        g_WatchlistSortCol = (int)Settings_Sort_Load(WATCHLIST_CLASS_NAME, "SortCol", TCOL_SYMBOL);
+        g_WatchlistSortAsc = Settings_Sort_Load(WATCHLIST_CLASS_NAME, "SortAsc", 1) != 0;
         if (g_WatchlistSortCol < 0 || g_WatchlistSortCol >= TCOL_COUNT) g_WatchlistSortCol = TCOL_SYMBOL;
         break;
     }
@@ -808,8 +801,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int col = nmlv->iSubItem;
             if (col == g_WatchlistSortCol) g_WatchlistSortAsc = !g_WatchlistSortAsc;
             else { g_WatchlistSortCol = col; g_WatchlistSortAsc = true; }
-            Settings_Save("WatchlistSortCol", g_WatchlistSortCol);
-            Settings_Save("WatchlistSortAsc", g_WatchlistSortAsc ? 1 : 0);
+            Settings_Sort_Save(WATCHLIST_CLASS_NAME, "SortCol", g_WatchlistSortCol);
+            Settings_Sort_Save(WATCHLIST_CLASS_NAME, "SortAsc", g_WatchlistSortAsc ? 1 : 0);
             Watchlist_ApplySort(hWnd);
             return 0;
         }

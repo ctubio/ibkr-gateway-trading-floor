@@ -1,23 +1,19 @@
 #pragma once
 
-#include <dwmapi.h>
-#include <functional>
-#include <vector>
-#include <string>
-
 constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
-static const char* DASHBOARD_CLASS_NAME          = "TNTDashboardClass";
-static const char* SETTINGS_CLASS_NAME           = "TNTSettingsWindowClass";
-static const char* DEBUGLOG_CLASS_NAME           = "TNTDebugLogWindowClass";
-static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "TNTWatchlistNewListWindowClass";
-static const char* ORDERS_CLASS_NAME             = "TNTOrdersWindowClass";
-static const char* NEWS_CLASS_NAME               = "TNTNewsWindowClass";
-static const char* NEWS_ARTICLE_CLASS_NAME       = "TNTNewsArticleWindowClass";
-static const char* DIAMONDS_CLASS_NAME           = "TNTDiamondsWindowClass";
-static const char* WATCHLIST_CLASS_NAME          = "TNTWatchlistWindowClass";
-static const char* MARKET_CLASS_NAME             = "TNTMarketWindowClass";
-static const char* MARKET_SEARCH_CLASS_NAME      = "TNTTsSearchWindowClass";
+static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
+static const char* SETTINGS_CLASS_NAME           = "Settings";
+static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
+static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
+static const char* ORDERS_CLASS_NAME             = "Orders";
+static const char* ORDERS_EDIT_CLASS_NAME        = "Orders_Edit";
+static const char* NEWS_CLASS_NAME               = "News";
+static const char* NEWS_ARTICLE_CLASS_NAME       = "NewsArticle";
+static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
+static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
+static const char* MARKET_CLASS_NAME             = "Market";
+static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
 
 // Dark mode colors
 #define DM_BG        RGB(30,  30,  30)   // Slightly darker, flatter background
@@ -59,25 +55,25 @@ void LogDebug(const std::string& msg) {
     }
 }
 
-void Settings_SaveString(const char* key, const std::string& value) {
+// Generic registry helpers to reduce duplication
+void RegSetString(const char* subPath, const char* valueName, const std::string& value) {
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
     if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, key, 0, REG_SZ,
-            (const BYTE*)value.c_str(), (DWORD)value.size() + 1);
+        RegSetValueExA(hKey, valueName, 0, REG_SZ, (const BYTE*)value.c_str(), (DWORD)value.size() + 1);
         RegCloseKey(hKey);
     }
 }
 
-std::string Settings_LoadString(const char* key, const std::string& defaultValue = "") {
+std::string RegGetString(const char* subPath, const char* valueName, const std::string& defaultValue = "") {
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        char buf[2048] = {}; // Increased buffer to handle many saved windows
+        char buf[2048] = {};
         DWORD size = sizeof(buf);
-        if (RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)buf, &size) == ERROR_SUCCESS) {
+        if (RegQueryValueExA(hKey, valueName, NULL, NULL, (LPBYTE)buf, &size) == ERROR_SUCCESS) {
             RegCloseKey(hKey);
             return std::string(buf);
         }
@@ -86,54 +82,127 @@ std::string Settings_LoadString(const char* key, const std::string& defaultValue
     return defaultValue;
 }
 
+void RegSetDword(const char* subPath, const char* valueName, DWORD value) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, valueName, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
+DWORD RegGetDword(const char* subPath, const char* valueName, DWORD defaultValue = 0) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
+    DWORD value = defaultValue;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD size = sizeof(DWORD);
+        RegQueryValueExA(hKey, valueName, NULL, NULL, (LPBYTE)&value, &size);
+        RegCloseKey(hKey);
+    }
+    return value;
+}
+
+void RegDelete(const char* subPath, const char* valueName) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
+        RegDeleteValueA(hKey, valueName);
+        RegCloseKey(hKey);
+    }
+}
+
+// Convenience wrappers
+void Settings_SaveString(const char* key, const std::string& value) {
+    RegSetString("Settings", key, value);
+}
+
+std::string Settings_LoadString(const char* key, const std::string& defaultValue = "") {
+    return RegGetString("Settings", key, defaultValue);
+}
+
+void Settings_OpenList_Save(const std::string& value) {
+    RegSetString(WATCHLIST_CLASS_NAME, "OpenList", value);
+}
+
+std::string Settings_OpenList_Load(const std::string& defaultValue = "") {
+    return RegGetString(WATCHLIST_CLASS_NAME, "OpenList", defaultValue);
+}
+
+std::string Settings_Tab_Load(const char* key, const std::string& defaultValue = "") {
+    return RegGetString(DIAMONDS_CLASS_NAME, key, defaultValue);
+}
+
+void Settings_Tab_Save(const char* key, const std::string& value) {
+    RegSetString(DIAMONDS_CLASS_NAME, key, value);
+}
+
+std::string Settings_SymbolColors_Load(const std::string& defaultValue = "") {
+    return RegGetString(DIAMONDS_CLASS_NAME, "SymbolColors", defaultValue);
+}
+
+void Settings_SymbolColors_Save(const std::string& value) {
+    RegSetString(DIAMONDS_CLASS_NAME, "SymbolColors", value);
+}
+
 void Settings_SaveMarket(const std::vector<std::string>& sessions) {
     std::string combined;
     for (size_t i = 0; i < sessions.size(); ++i) {
         if (i > 0) combined += " ";
         combined += sessions[i];
     }
-    Settings_SaveString("OpenMarket", combined);
+    Settings_SaveString("OpenWindows_Market", combined);
+}
+
+DWORD Settings_Sort_Load(const char* windowClassKey, const char* sortKey, DWORD defaultValue) {
+    return RegGetDword(windowClassKey, sortKey, defaultValue);
+}
+
+void Settings_Sort_Save(const char* windowClassKey, const char* sortKey, DWORD value) {
+    RegSetDword(windowClassKey, sortKey, value);
+}
+
+DWORD Settings_CheckedTabs_Load(DWORD defaultValue) {
+    return RegGetDword(DIAMONDS_CLASS_NAME, "CheckedTabs", defaultValue);
+}
+
+void Settings_CheckedTabs_Save(DWORD value) {
+    RegSetDword(DIAMONDS_CLASS_NAME, "CheckedTabs", value);
 }
 
 void Settings_Save(const char* key, DWORD value) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, key, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
-        RegCloseKey(hKey);
-    }
+    RegSetDword("Settings", key, value);
 }
 
 void Settings_Delete(const char* key) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
-        RegDeleteValueA(hKey, key);
-        RegCloseKey(hKey);
-    }
+    RegDelete("Settings", key);
 }
 
 DWORD Settings_Load(const char* key, DWORD defaultValue) {
-    HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    DWORD value = defaultValue;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD size = sizeof(DWORD);
-        RegQueryValueExA(hKey, key, NULL, NULL, (LPBYTE)&value, &size);
-        RegCloseKey(hKey);
-    }
-    return value;
+    return RegGetDword("Settings", key, defaultValue);
+}
+
+void Settings_AlwaysOnTop_Save(const char* windowClassKey, DWORD value) {
+    RegSetDword(windowClassKey, "AlwaysOnTop", value);
+}
+
+void Settings_AlwaysOnTop_Delete(const char* windowClassKey) {
+    RegDelete(windowClassKey, "AlwaysOnTop");
+}
+
+DWORD Settings_AlwaysOnTop_Load(const char* windowClassKey, DWORD defaultValue) {
+    return RegGetDword(windowClassKey, "AlwaysOnTop", defaultValue);
 }
 
 bool Settings_KillGatewayOnExit() {
-    return Settings_Load("KillGatewayOnExit", 0) != 0;
+    return Settings_Load("Gateway_KillOnExit", 0) != 0;
 }
 
 bool Settings_AutoGateway() {
-    return Settings_Load("AutoGateway", 0) != 0;
+    return Settings_Load("Gateway_AutoStart", 0) != 0;
 }
 
 bool Settings_DarkMode() {
@@ -161,15 +230,15 @@ void SaveWinPosition(HWND hWnd) {
         winKey = className;
     }
     char fullPath[256];
-    wsprintf(fullPath, "%s\\WindowSettings\\%s", APP_REG_ROOT, winKey.c_str());
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, winKey.c_str());
 
     if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath, 0, NULL, 
         REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) 
     {
-        RegSetValueEx(hKey, "X", 0, REG_DWORD, (const BYTE*)&x, sizeof(DWORD));
-        RegSetValueEx(hKey, "Y", 0, REG_DWORD, (const BYTE*)&y, sizeof(DWORD));
-        RegSetValueEx(hKey, "W", 0, REG_DWORD, (const BYTE*)&w, sizeof(DWORD));
-        RegSetValueEx(hKey, "H", 0, REG_DWORD, (const BYTE*)&h, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_X", 0, REG_DWORD, (const BYTE*)&x, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_Y", 0, REG_DWORD, (const BYTE*)&y, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_W", 0, REG_DWORD, (const BYTE*)&w, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_H", 0, REG_DWORD, (const BYTE*)&h, sizeof(DWORD));
         RegCloseKey(hKey);
     }
 }
@@ -177,14 +246,14 @@ void SaveWinPosition(HWND hWnd) {
 bool LoadWinPosition(const char* subKeyName, int &x, int &y, int &w, int &h) {
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\WindowSettings\\%s", APP_REG_ROOT, subKeyName);
+    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subKeyName);
 
     if (RegOpenKeyEx(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD dwSize = sizeof(DWORD);
-        RegQueryValueEx(hKey, "X", NULL, NULL, (LPBYTE)&x, &dwSize);
-        RegQueryValueEx(hKey, "Y", NULL, NULL, (LPBYTE)&y, &dwSize);
-        RegQueryValueEx(hKey, "W", NULL, NULL, (LPBYTE)&w, &dwSize);
-        RegQueryValueEx(hKey, "H", NULL, NULL, (LPBYTE)&h, &dwSize);
+        RegQueryValueEx(hKey, "Window_X", NULL, NULL, (LPBYTE)&x, &dwSize);
+        RegQueryValueEx(hKey, "Window_Y", NULL, NULL, (LPBYTE)&y, &dwSize);
+        RegQueryValueEx(hKey, "Window_W", NULL, NULL, (LPBYTE)&w, &dwSize);
+        RegQueryValueEx(hKey, "Window_H", NULL, NULL, (LPBYTE)&h, &dwSize);
         RegCloseKey(hKey);
         return true;
     }
@@ -463,7 +532,7 @@ void Session_RemoveWindow(HWND hWnd) {
 void Watchlist_DeleteList(const char* listName) {
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\Watchlist", APP_REG_ROOT);
+    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
         RegDeleteValueA(hKey, listName);
         RegCloseKey(hKey);
@@ -480,7 +549,7 @@ void Watchlist_SaveFullList(const char* listName, const std::vector<std::string>
 
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\Watchlist", APP_REG_ROOT);
+    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
     if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, listName, 0, REG_MULTI_SZ,
             (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
@@ -494,7 +563,7 @@ std::vector<std::string> Watchlist_LoadAllListNames() {
     std::vector<std::string> names;
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\Watchlist", APP_REG_ROOT);
+    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         return names;
     char valueName[256];
@@ -512,7 +581,7 @@ std::vector<std::string> Watchlist_ReadListEntries(const char* listName) {
     std::vector<std::string> entries;
     HKEY hKey;
     char fullPath[256];
-    wsprintf(fullPath, "%s\\Watchlist", APP_REG_ROOT);
+    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         return entries;
     DWORD type, size = 0;
@@ -525,6 +594,16 @@ std::vector<std::string> Watchlist_ReadListEntries(const char* listName) {
     }
     RegCloseKey(hKey);
     return entries;
+}
+void Settings_NewList_Save(const char* newName) {
+    HKEY hKey;
+    char fullPath[256];
+    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        const char empty[2] = { '\0', '\0' };
+        RegSetValueExA(hKey, newName, 0, REG_MULTI_SZ, (const BYTE*)empty, 2);
+        RegCloseKey(hKey);
+    }
 }
 
 // Check if a window is currently set to Always On Top
@@ -568,27 +647,27 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
         // Save state: not on top
         char key[256];
         if (windowIdentifier && strlen(windowIdentifier) > 0) {
-            sprintf(key, "AlwaysOnTop_%s_%s", windowClassName, windowIdentifier);
+            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
         } else {
-            sprintf(key, "AlwaysOnTop_%s", windowClassName);
+            sprintf(key, "%s", windowClassName);
         }
-        Settings_Save(key, 0);
+        Settings_AlwaysOnTop_Save(key, 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         // Save state: on top
         char key[256];
         if (windowIdentifier && strlen(windowIdentifier) > 0) {
-            sprintf(key, "AlwaysOnTop_%s_%s", windowClassName, windowIdentifier);
+            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
         } else {
-            sprintf(key, "AlwaysOnTop_%s", windowClassName);
+            sprintf(key, "%s", windowClassName);
         }
         if (IsIconic(hWnd)) {
             ShowWindow(hWnd, SW_RESTORE);
         } else {
             ShowWindow(hWnd, SW_SHOW);
         }
-        Settings_Save(key, 1);
+        Settings_AlwaysOnTop_Save(key, 1);
     }
 }
 
@@ -626,8 +705,8 @@ static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
 // Check if a specific Market window is set to Always On Top
 bool IsMarketAlwaysOnTop(const std::string& symbol) {
     char key[256];
-    sprintf(key, "AlwaysOnTop_%s_%s", MARKET_CLASS_NAME, symbol.c_str());
-    return Settings_Load(key, 0) != 0;
+    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    return Settings_AlwaysOnTop_Load(key, 0) != 0;
 }
 
 // Toggle Always On Top for a specific Market window by symbol
@@ -644,16 +723,16 @@ void ToggleMarketAlwaysOnTop(const std::string& symbol) {
     bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
     
     char key[256];
-    sprintf(key, "AlwaysOnTop_%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
     
     if (isCurrentlyOnTop) {
         // Currently always on top, remove it
         SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_Save(key, 0);
+        Settings_AlwaysOnTop_Save(key, 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_Save(key, 1);
+        Settings_AlwaysOnTop_Save(key, 1);
     }
 }
 
@@ -697,6 +776,166 @@ bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitX, float
     return true;
 }
 
+// ── TTS voice persistence ─────────────────────────────────────────────────────
+// Saves/loads the SAPI token ID (registry path string) for the selected TTS voice.
+// Default is empty string → caller should fall back to Herena-Catalan search.
+
+void Settings_SaveTtsVoice(const std::string& tokenId) {
+    Settings_SaveString("VoiceTokenId", tokenId);
+}
+
+std::string Settings_LoadTtsVoice() {
+    return Settings_LoadString("VoiceTokenId", "");
+}
+
+// ── Shared TTS voice-selection helper ────────────────────────────────────────
+// Case-insensitive wstring contains check (shared utility, safe to define here).
+static bool TTS_ContainsCI(const WCHAR* s, const WCHAR* needle) {
+    if (!s || !needle) return false;
+    std::wstring ws(s), wn(needle);
+    auto toLo = [](wchar_t c) { return (wchar_t)towlower(c); };
+    std::transform(ws.begin(), ws.end(), ws.begin(), toLo);
+    std::transform(wn.begin(), wn.end(), wn.begin(), toLo);
+    return ws.find(wn) != std::wstring::npos;
+}
+
+// Search one voice category for a token matching the given ID string.
+// If tokenId is empty, falls back to searching for Herena/Catalan.
+// Returns a token the caller must Release(), or nullptr.
+static ISpObjectToken* TTS_FindVoiceInCategory(const WCHAR* categoryId, const std::wstring& tokenId) {
+    IEnumSpObjectTokens* pEnum = nullptr;
+    if (FAILED(SpEnumTokens(categoryId, NULL, NULL, &pEnum))) return nullptr;
+
+    ISpObjectToken* pToken  = nullptr;
+    ISpObjectToken* pFound  = nullptr;
+
+    while (!pFound && SUCCEEDED(pEnum->Next(1, &pToken, NULL)) && pToken) {
+        WCHAR* pId       = nullptr;
+        WCHAR* pDesc     = nullptr;
+        WCHAR* pAttrName = nullptr;
+
+        pToken->GetId(&pId);
+        SpGetDescription(pToken, &pDesc);
+        ISpDataKey* pAttribs = nullptr;
+        if (SUCCEEDED(pToken->OpenKey(L"Attributes", &pAttribs))) {
+            pAttribs->GetStringValue(L"Name", &pAttrName);
+            pAttribs->Release();
+        }
+
+        bool match = false;
+        if (!tokenId.empty()) {
+            // Exact match on token ID (registry path)
+            match = (pId && tokenId == std::wstring(pId));
+        } else {
+            // Default fallback: search for Herena/Catalan
+            match = TTS_ContainsCI(pId,       L"herena")  ||
+                    TTS_ContainsCI(pDesc,     L"herena")  ||
+                    TTS_ContainsCI(pAttrName, L"herena")  ||
+                    TTS_ContainsCI(pId,       L"helena")  ||
+                    TTS_ContainsCI(pDesc,     L"helena")  ||
+                    TTS_ContainsCI(pAttrName, L"helena")  ||
+                    TTS_ContainsCI(pId,       L"ca-es")   ||
+                    TTS_ContainsCI(pDesc,     L"ca-es")   ||
+                    TTS_ContainsCI(pAttrName, L"ca-es")   ||
+                    TTS_ContainsCI(pId,       L"catalan") ||
+                    TTS_ContainsCI(pDesc,     L"catalan") ||
+                    TTS_ContainsCI(pAttrName, L"catalan");
+        }
+
+        if (pId)       CoTaskMemFree(pId);
+        if (pDesc)     CoTaskMemFree(pDesc);
+        if (pAttrName) CoTaskMemFree(pAttrName);
+
+        if (match) pFound = pToken;
+        else       { pToken->Release(); pToken = nullptr; }
+    }
+    pEnum->Release();
+    return pFound;
+}
+
+// Apply the saved (or default Herena-Catalan) voice to an ISpVoice instance.
+// Searches both classic SAPI and OneCore registries.
+static void TTS_ApplySavedVoice(ISpVoice* pVoice) {
+    if (!pVoice) return;
+
+    std::string savedA = Settings_LoadTtsVoice();
+    std::wstring tokenId(savedA.begin(), savedA.end());
+
+    // 1. Classic SAPI voices
+    ISpObjectToken* pFound = TTS_FindVoiceInCategory(SPCAT_VOICES, tokenId);
+
+    // 2. OneCore voices (Win10+ neural / browser voices)
+    if (!pFound)
+        pFound = TTS_FindVoiceInCategory(
+            L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices", tokenId);
+
+    if (pFound) {
+        pVoice->SetVoice(pFound);
+        pFound->Release();
+    }
+    // else: keep system default
+}
+
+// ── Voice enumeration for the Settings UI ────────────────────────────────────
+struct TtsVoiceEntry {
+    std::wstring tokenId;   // SAPI token registry path (used as key)
+    std::wstring display;   // Friendly name shown in the combo
+};
+
+// Custom message broadcast to all top-level windows when the user picks a new
+// TTS voice in Settings, so open Market and Dashboard windows hot-swap immediately.
+// wParam = 0, lParam = 0.
+#define WM_TTS_VOICE_CHANGED (WM_APP + 201)
+
+// Enumerate ALL voices from both classic SAPI and OneCore registries.
+// Duplicates (same tokenId) are suppressed so voices that appear in both
+// registries are not listed twice.
+static std::vector<TtsVoiceEntry> TTS_EnumerateVoices() {
+    std::vector<TtsVoiceEntry> voices;
+    auto addFromCategory = [&](const WCHAR* categoryId) {
+        IEnumSpObjectTokens* pEnum = nullptr;
+        if (FAILED(SpEnumTokens(categoryId, NULL, NULL, &pEnum))) return;
+
+        ISpObjectToken* pToken = nullptr;
+        while (SUCCEEDED(pEnum->Next(1, &pToken, NULL)) && pToken) {
+            WCHAR* pId       = nullptr;
+            WCHAR* pDesc     = nullptr;
+            WCHAR* pAttrName = nullptr;
+
+            pToken->GetId(&pId);
+            SpGetDescription(pToken, &pDesc);
+            ISpDataKey* pAttribs = nullptr;
+            if (SUCCEEDED(pToken->OpenKey(L"Attributes", &pAttribs))) {
+                pAttribs->GetStringValue(L"Name", &pAttrName);
+                pAttribs->Release();
+            }
+
+            if (pId) {
+                std::wstring tid(pId);
+                // Deduplicate by tokenId
+                bool dup = false;
+                for (const auto& v : voices) if (v.tokenId == tid) { dup = true; break; }
+                if (!dup) {
+                    std::wstring disp = pAttrName ? std::wstring(pAttrName)
+                                      : pDesc    ? std::wstring(pDesc)
+                                      :            tid;
+                    voices.push_back({ tid, disp });
+                }
+            }
+
+            if (pId)       CoTaskMemFree(pId);
+            if (pDesc)     CoTaskMemFree(pDesc);
+            if (pAttrName) CoTaskMemFree(pAttrName);
+            pToken->Release();
+        }
+        pEnum->Release();
+    };
+
+    addFromCategory(SPCAT_VOICES);
+    addFromCategory(L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices");
+    return voices;
+}
+
 void Session_RestoreWindows(
     const std::function<void()>& StartDiamonds,
     const std::function<void()>& StartNews,
@@ -720,8 +959,8 @@ void Session_RestoreWindows(
     RegCloseKey(hKey);
     { 
         char key[256];
-        sprintf(key, "AlwaysOnTop_%s", DASHBOARD_CLASS_NAME);
-        if(Settings_Load(key, 0)) {
+        sprintf(key, "%s", DASHBOARD_CLASS_NAME);
+        if(Settings_AlwaysOnTop_Load(DASHBOARD_CLASS_NAME, 0)) {
             ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
         }
     }
@@ -731,47 +970,45 @@ void Session_RestoreWindows(
         if (cls == DIAMONDS_CLASS_NAME)  { 
             StartDiamonds(); 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", DIAMONDS_CLASS_NAME);
-            if(Settings_Load(key, 0))
+            sprintf(key, "%s", DIAMONDS_CLASS_NAME);
+            if(Settings_AlwaysOnTop_Load(DIAMONDS_CLASS_NAME, 0))
                 ToggleWindowAlwaysOnTop(DIAMONDS_CLASS_NAME); 
         }
         else if (cls == NEWS_CLASS_NAME)      { 
             StartNews(); 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", NEWS_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
+            sprintf(key, "%s", NEWS_CLASS_NAME);
+            if(Settings_AlwaysOnTop_Load(NEWS_CLASS_NAME, 0)) 
                 ToggleWindowAlwaysOnTop(NEWS_CLASS_NAME); 
         }
         else if (cls == SETTINGS_CLASS_NAME)  { 
             StartSettings(); 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", SETTINGS_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
+            sprintf(key, "%s", SETTINGS_CLASS_NAME);
+            if(Settings_AlwaysOnTop_Load(SETTINGS_CLASS_NAME, 0)) 
                 ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME); 
         }
         else if (cls == WATCHLIST_CLASS_NAME)    { 
             StartWatchlist(); 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", WATCHLIST_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
+            sprintf(key, "%s", WATCHLIST_CLASS_NAME);
+            if(Settings_AlwaysOnTop_Load(WATCHLIST_CLASS_NAME, 0)) 
                 ToggleWindowAlwaysOnTop(WATCHLIST_CLASS_NAME); 
         }
         else if (cls == ORDERS_CLASS_NAME)    { 
             StartOrders(); 
             char key[256];
-            sprintf(key, "AlwaysOnTop_%s", ORDERS_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
+            sprintf(key, "%s", ORDERS_CLASS_NAME);
+            if(Settings_AlwaysOnTop_Load(ORDERS_CLASS_NAME, 0)) 
                 ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME); 
         }
         else if (cls == DEBUGLOG_CLASS_NAME)  { 
             StartDebugLog(); 
-            char key[256];
-            sprintf(key, "AlwaysOnTop_%s", DEBUGLOG_CLASS_NAME);
-            if(Settings_Load(key, 0)) 
+            if(Settings_AlwaysOnTop_Load(DEBUGLOG_CLASS_NAME, 0)) 
                 ToggleWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME); 
         }
         else if (cls == MARKET_CLASS_NAME) {
-            std::string tsSaved = Settings_LoadString("OpenMarket");
+            std::string tsSaved = Settings_LoadString("OpenWindows_Market");
             if (tsSaved.empty()) {
                 StartMarket("", 0);
             } else {
@@ -789,8 +1026,8 @@ void Session_RestoreWindows(
                         // Restore AlwaysOnTop using the HWND we just got — avoids a
                         // FindWindowA-by-title race where the title may not be set yet.
                         char key[256];
-                        sprintf(key, "AlwaysOnTop_%s_%s", MARKET_CLASS_NAME, sym.c_str());
-                        if (Settings_Load(key, 0)) {
+                        sprintf(key, "%s_%s", MARKET_CLASS_NAME, sym.c_str());
+                        if (Settings_AlwaysOnTop_Load(key, 0)) {
                             SetMarketAlwaysOnTop(tsHwnd, true);
                         }
                     }

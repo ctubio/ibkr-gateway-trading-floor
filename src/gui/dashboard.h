@@ -117,87 +117,6 @@ static HWND hCoinVal[COIN_ROW_COUNT] = {};
 
 // ─── TTS helpers ──────────────────────────────────────────────────────────────
 
-// Case-insensitive wstring search helper
-static bool Coins_ContainsCI(const WCHAR* s, const WCHAR* needle) {
-    if (!s || !needle) return false;
-    std::wstring ws(s), wn(needle);
-    auto toLo = [](wchar_t c) { return (wchar_t)towlower(c); };
-    std::transform(ws.begin(), ws.end(), ws.begin(), toLo);
-    std::transform(wn.begin(), wn.end(), wn.begin(), toLo);
-    return ws.find(wn) != std::wstring::npos;
-}
-
-// Search one voice category for Herena/Helena/Catalan; return token (caller releases) or nullptr.
-static ISpObjectToken* Coins_FindVoiceInCategory(const WCHAR* categoryId) {
-    IEnumSpObjectTokens* pEnum = nullptr;
-    if (FAILED(SpEnumTokens(categoryId, NULL, NULL, &pEnum))) return nullptr;
-
-    ISpObjectToken* pToken = nullptr;
-    ISpObjectToken* pFound = nullptr;
-
-    while (!pFound && SUCCEEDED(pEnum->Next(1, &pToken, NULL)) && pToken) {
-        // 1. Token ID (registry path) – typically contains "HERENA" and "CA-ES"
-        WCHAR* pId = nullptr;
-        pToken->GetId(&pId);
-
-        // 2. Display description
-        WCHAR* pDesc = nullptr;
-        SpGetDescription(pToken, &pDesc);
-
-        // 3. Attributes\Name subkey – the most reliable friendly name
-        WCHAR* pAttrName = nullptr;
-        ISpDataKey* pAttribs = nullptr;
-        if (SUCCEEDED(pToken->OpenKey(L"Attributes", &pAttribs))) {
-            pAttribs->GetStringValue(L"Name", &pAttrName);
-            pAttribs->Release();
-        }
-
-        bool match = Coins_ContainsCI(pId,        L"herena")  ||
-                     Coins_ContainsCI(pDesc,      L"herena")  ||
-                     Coins_ContainsCI(pAttrName,  L"herena")  ||
-                     Coins_ContainsCI(pId,        L"helena")  ||
-                     Coins_ContainsCI(pDesc,      L"helena")  ||
-                     Coins_ContainsCI(pAttrName,  L"helena")  ||
-                     Coins_ContainsCI(pId,        L"ca-es")   ||
-                     Coins_ContainsCI(pDesc,      L"ca-es")   ||
-                     Coins_ContainsCI(pAttrName,  L"ca-es")   ||
-                     Coins_ContainsCI(pId,        L"catalan") ||
-                     Coins_ContainsCI(pDesc,      L"catalan") ||
-                     Coins_ContainsCI(pAttrName,  L"catalan");
-
-        if (pId)       CoTaskMemFree(pId);
-        if (pDesc)     CoTaskMemFree(pDesc);
-        if (pAttrName) CoTaskMemFree(pAttrName);
-
-        if (match) pFound = pToken;
-        else       { pToken->Release(); pToken = nullptr; }
-    }
-    pEnum->Release();
-    return pFound;
-}
-
-// Select Herena-Catalan voice; searches both classic SAPI and OneCore (Win10+)
-// registries, since modern voices installed for browsers live in OneCore.
-// Falls back to system default if not found.
-static void Coins_SelectVoice() {
-    if (!g_pCoinsVoice) return;
-
-    // 1. Classic SAPI voices (HKLM\SOFTWARE\Microsoft\Speech\Voices)
-    ISpObjectToken* pFound = Coins_FindVoiceInCategory(SPCAT_VOICES);
-
-    // 2. OneCore voices (HKLM\SOFTWARE\Microsoft\Speech_OneCore\Voices)
-    //    This is where modern/neural voices installed via Windows Settings live.
-    if (!pFound)
-        pFound = Coins_FindVoiceInCategory(
-            L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices");
-
-    if (pFound) {
-        g_pCoinsVoice->SetVoice(pFound);
-        pFound->Release();
-    }
-    // else: keep system default voice
-}
-
 static bool Coins_InitVoice() {
     if (g_pCoinsVoice) return true;
 
@@ -209,7 +128,7 @@ static bool Coins_InitVoice() {
     HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&g_pCoinsVoice);
     if (FAILED(hr)) { g_pCoinsVoice = nullptr; return false; }
 
-    Coins_SelectVoice();
+    TTS_ApplySavedVoice(g_pCoinsVoice);
     return true;
 }
 
@@ -648,6 +567,31 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 }
             }
             break;
+
+        case WM_TTS_VOICE_CHANGED: {
+            // Hot-swap the TTS voice without closing the window.
+            // Release the current voice object so the next Coins_InitVoice call
+            // picks up the newly saved token from the registry.
+            if (g_pCoinsVoice) {
+                g_pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+                g_pCoinsVoice->Release();
+                g_pCoinsVoice = nullptr;
+            }
+            // If TTS is currently active, re-initialise with the new voice and
+            // restart the timer so it fires on the normal 21-second cadence.
+            if (g_coinsTtsOn) {
+                KillTimer(hWnd, TIMER_COINS_SPEAKER);
+                if (Coins_InitVoice()) {
+                    SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
+                    Coins_SpeakDailyPnL(); // speak immediately with the new voice
+                } else {
+                    g_coinsTtsOn = false;
+                    SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
+                    if (hCoin_Speaker) InvalidateRect(hCoin_Speaker, NULL, TRUE);
+                }
+            }
+            break;
+        }
 
         case WM_TRAYICON: {
             WORD trayEvent = LOWORD(lParam);

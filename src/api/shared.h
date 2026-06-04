@@ -286,12 +286,12 @@ void ClearAlwaysOnTopSetting(HWND hWnd) {
         if (symbol.empty()) {
             return;
         }
-        sprintf(key, "AlwaysOnTop_%s_%s", className, symbol.c_str());
+        sprintf(key, "%s_%s", className, symbol.c_str());
     } else if (className == "ImpossibleToFindClass") {
-        sprintf(key, "AlwaysOnTop_%s", className);
+        sprintf(key, "%s", className);
     }
 
-    Settings_Delete(key);
+    Settings_AlwaysOnTop_Delete(key);
 }
 
 LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -476,7 +476,7 @@ std::string GetGatewayPath() {
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         char path[MAX_PATH] = {};
         DWORD size = sizeof(path);
-        if (RegQueryValueExA(hKey, "GatewayPath", NULL, NULL, (LPBYTE)path, &size) == ERROR_SUCCESS && strlen(path) > 0) {
+        if (RegQueryValueExA(hKey, "Gateway_Path", NULL, NULL, (LPBYTE)path, &size) == ERROR_SUCCESS && strlen(path) > 0) {
             RegCloseKey(hKey);
             return std::string(path);
         }
@@ -490,7 +490,7 @@ void SaveGatewayPath(const std::string& path) {
     char fullPath[256];
     wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
     if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, "GatewayPath", 0, REG_SZ, (const BYTE*)path.c_str(), (DWORD)path.size() + 1);
+        RegSetValueExA(hKey, "Gateway_Path", 0, REG_SZ, (const BYTE*)path.c_str(), (DWORD)path.size() + 1);
         RegCloseKey(hKey);
     }
 }
