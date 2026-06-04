@@ -299,7 +299,7 @@ void News_RequestForSymbol(HWND hWnd, const std::string& fullEntry) {
     auto secondDot       = rest.find('.');
     std::string symbol   = (secondDot != std::string::npos) ? rest.substr(0, secondDot) : rest;
 
-    Settings_SaveString("LastNewsEntry", fullEntry);
+    Settings_News_Save("LastEntry", fullEntry);
     LogDebug("News request for: " + symbol + " conId: " + conIdStr);
 
     if (hWnd) SetWindowTextA(hWnd, ("News: " + symbol).c_str());
@@ -394,9 +394,9 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         api.setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News");
 
-        std::string lastList     = Settings_LoadString("LastNewsList");
-        std::string lastEntry    = Settings_LoadString("LastNewsEntry");
-        std::string lastProvider = Settings_LoadString("LastNewsProvider");
+        std::string lastList     = Settings_News_Load("LastList");
+        std::string lastEntry    = Settings_News_Load("LastEntry");
+        std::string lastProvider = Settings_News_Load("LastProvider");
         newsProviderFilter = lastProvider; // applied incrementally as items arrive
         News_LoadListCombo(lastList);
         if (News_LoadSymbolCombo(lastEntry)) {
@@ -429,7 +429,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_NEWS_LIST_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
-            Settings_SaveString("LastNewsList", News_GetSelectedList());
+            Settings_News_Save("LastList", News_GetSelectedList());
             News_LoadSymbolCombo();
             if (!newsSymEntries.empty()) News_RequestForSymbol(hWnd, newsSymEntries[0]);
         }
@@ -452,7 +452,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     newsProviderFilter = name;
                 }
             }
-            Settings_SaveString("LastNewsProvider", newsProviderFilter);
+            Settings_News_Save("LastProvider", newsProviderFilter);
             News_ApplyProviderFilter();
         }
         break;

@@ -251,7 +251,7 @@ static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::WatchlistI
 
 static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
     if (listName.empty()) return;
-    Settings_OpenList_Save(listName);
+    Settings_LastList_Save(listName);
     watchlistCurrentListName = listName;
 
     auto entries = Watchlist_ReadListEntries(listName.c_str());
@@ -602,8 +602,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         // Populate combo (sentinel + all lists).
         Watchlist_LoadListCombo(hWnd);
 
-        // Restore previously opened list.
-        std::string openList = Settings_OpenList_Load();
+        // Restore last list.
+        std::string openList = Settings_LastList_Load();
         if (!openList.empty()) {
             int idx = (int)SendMessageA(hCB, CB_FINDSTRINGEXACT, -1, (LPARAM)openList.c_str());
             if (idx != CB_ERR) {

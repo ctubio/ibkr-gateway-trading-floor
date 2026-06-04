@@ -124,12 +124,20 @@ std::string Settings_LoadString(const char* key, const std::string& defaultValue
     return RegGetString("Settings", key, defaultValue);
 }
 
-void Settings_OpenList_Save(const std::string& value) {
-    RegSetString(WATCHLIST_CLASS_NAME, "OpenList", value);
+void Settings_News_Save(const char* key, const std::string& value) {
+    RegSetString(NEWS_CLASS_NAME, key, value);
 }
 
-std::string Settings_OpenList_Load(const std::string& defaultValue = "") {
-    return RegGetString(WATCHLIST_CLASS_NAME, "OpenList", defaultValue);
+std::string Settings_News_Load(const char* key, const std::string& defaultValue = "") {
+    return RegGetString(NEWS_CLASS_NAME, key, defaultValue);
+}
+
+void Settings_LastList_Save(const std::string& value) {
+    RegSetString(WATCHLIST_CLASS_NAME, "LastList", value);
+}
+
+std::string Settings_LastList_Load(const std::string& defaultValue = "") {
+    return RegGetString(WATCHLIST_CLASS_NAME, "LastList", defaultValue);
 }
 
 std::string Settings_Tab_Load(const char* key, const std::string& defaultValue = "") {
