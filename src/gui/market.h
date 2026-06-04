@@ -126,7 +126,7 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     return hList;
 }
 
-static HWND Market_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
+static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
         WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
@@ -141,7 +141,7 @@ static HWND Market_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     return hList;
 }
 
-static void Market_InsertTick(HWND hList, double price, double size, const std::string& time) {
+static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time) {
     char buf[32]; snprintf(buf, sizeof(buf), "%.2f", price);
     LVITEMA lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = 0; lvi.pszText = buf;
     ListView_InsertItem(hList, &lvi);
@@ -696,9 +696,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hL2List      = Market_CreateL2List(hWnd, hInst);
-        state->hTsList      = Market_CreateListView(hWnd, ID_TS_LIST,       hInst);
-        state->hTsListF100  = Market_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
-        state->hTsListF1000 = Market_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
+        state->hTsList      = TimeSales_CreateListView(hWnd, ID_TS_LIST,       hInst);
+        state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
+        state->hTsListF1000 = TimeSales_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
 
         {
             HFONT hListFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
@@ -900,10 +900,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            Market_InsertTick(state->hTsList, tick->price, tick->size, tick->time);
+            TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time);
             if (state->tsFilteredView) {
-                if (tick->size >= 100.0)  Market_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
-                if (tick->size >= 1000.0) Market_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
+                if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
+                if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
             }
             state->l1Info.last = tick->price;
             TradingAPI::WatchlistInfo wi;
