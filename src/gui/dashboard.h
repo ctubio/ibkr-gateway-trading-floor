@@ -547,7 +547,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (wParam == TIMER_WATCHDOG) { // 10000
                 if (shouldBeConnected && !api.isConnected()) {
                     EnsureGatewayRunning(hWnd);
-                    api.connect();
+                    int port = 7496;
+                    if (IsProcessRunning("ibgateway.exe")) {
+                        port = 4001;
+                    }
+                    api.connect(port);
                     UpdateTrayIcon(hWnd);
                 } else if (!shouldBeConnected && api.isConnected()) {
                     api.disconnect();

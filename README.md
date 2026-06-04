@@ -6,7 +6,7 @@ A lightweight Windows tray application that connects to Interactive Brokers Gate
 
 ## Overview
 
-This application is a modern desktop trading companion built on the Interactive Brokers C++ API. It is designed to work with **IBKR Gateway** (not Trader Workstation) and provides a modular, multi-window environment for professional traders.
+This application is a modern desktop trading companion built on the Interactive Brokers C++ API. It is designed to work with **TWS** or **IB Gateway** (not Trader Workstation) and provides a modular, multi-window environment for professional traders.
 
 ### Core Capabilities:
 - **Real-time Market Data**: Live quotes, tick-by-tick Market, and symbol watchlists with advanced filtering and customizable layouts.
@@ -105,7 +105,7 @@ Contextual market intelligence with provider filtering and rich article preview:
 
 ### ⚙️ Settings
 Personalized application configuration with immediate feedback:
-- **Gateway Automation**: Auto-start IBKR Gateway on launch and optionally kill it on exit.
+- **Gateway Automation**: Auto-start TWWS or IB Gateway on launch and optionally kill it on exit.
 - **Dark Mode**: Applies instantly across all windows with a full repaint for UI consistency.
 - **Asynchronous Audio**: Toggle global event sounds. Audio is processed via a dedicated **async sound queue** to ensure zero impact on UI responsiveness.
 - **TTS Voice Selection**: Choose from all available system voices for announcements. Voices are enumerated from Windows SAPI, with a smart default (Catalan/Herena if available).
@@ -274,7 +274,7 @@ src/gui/settings.h        # Preferences UI with voice selector
 
 ## Troubleshooting
 
-- If the app cannot locate `ibgateway.exe`, it will prompt you to select the path.
+- If the app cannot locate `tws.exe` or `ibgateway.exe`, it will prompt you to select the path.
 - If IB Gateway is not running, enable Auto-start Gateway or start it manually.
 - Use the Debug Log to inspect connection, market data, and news events.
 - Delete the registry root to reset preferences:

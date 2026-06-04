@@ -1,6 +1,6 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 276, 235); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 276, 275); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 790, 240); }
 

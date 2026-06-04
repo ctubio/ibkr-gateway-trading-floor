@@ -11,14 +11,20 @@
 #include <sapi.h>
 #include <sphelper.h>
 #include <dwmapi.h>
+#include <uxtheme.h>
+#include <commctrl.h>
 
 #include <string>
 #include <vector>
 #include <map>
 #include <mutex>
 #include <memory>
+#include <unordered_map>
 #include <algorithm>
 #include <functional>
+#include <cstring>
+#include <algorithm>
+#include <filesystem>
 
 #define WM_API_UPDATE       (WM_USER +  2)
 #define WM_SYMBOL_RESULTS   (WM_USER +  3)
@@ -174,7 +180,7 @@ public:
 
     // ── Connection ────────────────────────────────────────────────────────────
 
-    bool connect();
+    bool connect(int port);
     void disconnect();
     bool isConnected()           const;
     bool isMarketDataConnected() const;

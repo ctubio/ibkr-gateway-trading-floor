@@ -1,14 +1,5 @@
 #pragma once
 
-#include <cstring>
-#include <algorithm>
-#include <string>
-#include <vector>
-#include <unordered_map>
-#include <dwmapi.h>
-#include <uxtheme.h>
-#include <commctrl.h>
-
 NOTIFYICONDATAW nid = { 0 };
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
@@ -504,13 +495,13 @@ void SaveGatewayPath(const std::string& path) {
 
 std::string AskGatewayPath(HWND hParent) {
     OPENFILENAMEA ofn = {};
-    char path[MAX_PATH] = "ibgateway.exe";
+    char path[MAX_PATH] = "";
     ofn.lStructSize     = sizeof(ofn);
     ofn.hwndOwner       = hParent;
     ofn.lpstrFilter     = "Executable\0*.exe\0All Files\0*.*\0";
     ofn.lpstrFile       = path;
     ofn.nMaxFile        = sizeof(path);
-    ofn.lpstrTitle      = "Locate ibgateway.exe";
+    ofn.lpstrTitle      = "Locate ibgateway.exe or tws.exe";
     ofn.lpstrInitialDir = "C:\\Program Files\\IBKR";
     ofn.Flags           = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
     if (GetOpenFileNameA(&ofn)) return std::string(path);
@@ -519,31 +510,23 @@ std::string AskGatewayPath(HWND hParent) {
 
 bool alreadyEnsureGatewayRunning = false;
 void EnsureGatewayRunning(HWND hParent) {
-    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe")) return;
+    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe")) return;
     alreadyEnsureGatewayRunning = true;
     std::string path = GetGatewayPath();
-    if (path.empty()) {
-        const char* defaultPath = "C:\\whatever\\ibgateway.exe";
-        if (GetFileAttributesA(defaultPath) != INVALID_FILE_ATTRIBUTES) {
-            path = defaultPath;
-            SaveGatewayPath(path);
-        }
-    }
     if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        MessageBoxA(hParent, "IB Gateway not found. Please locate ibgateway.exe.", "Gateway Not Found", MB_OK | MB_ICONINFORMATION);
+        MessageBoxA(hParent, "TWS or IB Gateway not found. Please locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
         path = AskGatewayPath(hParent);
         if (path.empty()) return; 
         SaveGatewayPath(path);
     }
     alreadyEnsureGatewayRunning = false;
-    LogDebug("Running IBKR Gateway, please login..");
+    LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
 }
 
-#include <filesystem>
 void KillGateway() {
     std::string path = GetGatewayPath();
-    if (path.empty()) path = "C:\\whatever\\ibgateway.exe";
+    if (path.empty()) return;
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) return;
     PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
