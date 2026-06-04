@@ -11,6 +11,14 @@
 
 NOTIFYICONDATAW nid = { 0 };
 
+// ─── Colors ───────────────────────────────────────────────────────────────────
+#define COINS_CLR_GREEN   RGB( 18, 220,  18)
+#define COINS_CLR_RED     RGB(220,  55,  55)
+#define COINS_CLR_WHITE   RGB(220, 220, 220)
+#define COINS_CLR_BLACK   RGB(30,  30,  30)
+#define COINS_CLR_GRAY    RGB(150, 150, 150)
+#define COINS_CLR_BLUE    RGB(80, 160, 255)
+#define COINS_CLR_PURPLE  RGB(185, 105, 225)
 // Sentinel: no custom color – let HandleDarkModeMessages / system theme paint this control
 #define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
 
@@ -255,11 +263,10 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     offlineIcon = CreateGrayIcon(onlineIcon);
     WNDCLASS wc = { 0 };
     wc.lpfnWndProc   = WndProc;
-    wc.hInstance     = hInst;
     wc.lpszClassName = className;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0 || strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) == 0) {
+    if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0 || strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) == 0 || strcmp(className, MARKET_SEARCH_CLASS_NAME) == 0) {
         wc.hInstance = GetModuleHandle(NULL);
     } else {
         wc.hInstance = hInst;

@@ -20,6 +20,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     RegisterWindowClass(hInst, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);
     RegisterWindowClass(hInst, WndProcNewList,     WATCHLIST_NEW_LIST_CLASS_NAME, 105);
     RegisterWindowClass(hInst, WndProcMarket,      MARKET_CLASS_NAME,             106);
+    RegisterWindowClass(hInst, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      106);
     RegisterWindowClass(hInst, WndProcNews,        NEWS_CLASS_NAME,               107);
     RegisterWindowClass(hInst, WndProcNewsArticle, NEWS_ARTICLE_CLASS_NAME,       107);
     RegisterWindowClass(hInst, WndProcSettings,    SETTINGS_CLASS_NAME,           108);

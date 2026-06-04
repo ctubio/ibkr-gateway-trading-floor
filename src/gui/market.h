@@ -7,6 +7,9 @@
 // Payload passed during HWND creation
 struct TsInitData { std::string symbol; int conId; };
 
+int windowMarketWidth = 414;
+int windowMarketHeight = 500;
+
 void StartMarketSearch(); // Forward declaration
 HWND StartMarket(const std::string& symbol = "", int conId = 0);
 
@@ -22,8 +25,8 @@ HWND StartMarket(const std::string& symbol = "", int conId = 0);
 #define TIMER_TS_SPEAKER    0xC020  // WM_TIMER id for per-market TTS (21s)
 
 // ── Layout constants ─────────────────────────────────────────────────────────
-static const int HEADER_H = 90;   // Stats bar (28) + separator (1) + L1 quote (60) + separator (1)
-static const int L2_W     = 200;  // Fixed width of the Level 2 depth panel
+static const int HEADER_H = 90;   // Stats bar (30) + separator (1) + L1 quote (60) + separator (1)
+static const int L2_W     = 224;  // Fixed width of the Level 2 depth panel
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
 
@@ -79,8 +82,7 @@ struct TsCol { const char* header; int width; int fmt; };
 static const TsCol tsCols[] = {
     { "Price",    60, LVCFMT_RIGHT },
     { "Size",     40, LVCFMT_RIGHT },
-    { "Time",     90, LVCFMT_LEFT  },
-    { "Exchange", 90, LVCFMT_LEFT  },
+    { "Time",     70, LVCFMT_LEFT  },
 };
 static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 
@@ -89,14 +91,14 @@ static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 // Bid rows fill cols 0-1 (blue); ask rows fill cols 2-3 (red).
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
-    { "B.Sz",  46, LVCFMT_RIGHT },
-    { "Bid",   54, LVCFMT_RIGHT },
-    { "Ask",   54, LVCFMT_RIGHT },
-    { "A.Sz",  46, LVCFMT_RIGHT },
+    { "Size",  46, LVCFMT_RIGHT },
+    { "Bid",   64, LVCFMT_RIGHT },
+    { "Ask",   64, LVCFMT_RIGHT },
+    { "Size",  46, LVCFMT_RIGHT },
 };
 static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 
-static HWND Ts_CreateL2List(HWND hParent, HINSTANCE hInst) {
+static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
         WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
@@ -107,10 +109,16 @@ static HWND Ts_CreateL2List(HWND hParent, HINSTANCE hInst) {
     for (int i = 0; i < L2_COL_COUNT; ++i) {
         lvc.cx = l2Cols[i].width; lvc.pszText = (LPSTR)l2Cols[i].header; lvc.fmt = l2Cols[i].fmt;
         ListView_InsertColumn(hList, i, &lvc);
+        if (i == 0) {
+            LVCOLUMN lvcUpdate = { 0 };
+            lvcUpdate.mask = LVCF_FMT;
+            lvcUpdate.fmt = l2Cols[i].fmt; 
+            ListView_SetColumn(hList, i, &lvcUpdate);
+        }
     }
     return hList;
 }
-static HWND Ts_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
+static HWND Market_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
         WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
@@ -127,14 +135,13 @@ static HWND Ts_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     return hList;
 }
 
-static void Ts_InsertTick(HWND hList, double price, double size, const std::string& time, const std::string& exchange) {
+static void Market_InsertTick(HWND hList, double price, double size, const std::string& time) {
     char buf[32]; snprintf(buf, sizeof(buf), "%.2f", price);
     LVITEMA lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = 0; lvi.pszText = buf;
     ListView_InsertItem(hList, &lvi);
     snprintf(buf, sizeof(buf), "%.0f", size);
     ListView_SetItemText(hList, 0, 1, buf);
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
-    ListView_SetItemText(hList, 0, 3, (LPSTR)exchange.c_str());
 
     int count = ListView_GetItemCount(hList);
     if (count > 500) ListView_DeleteItem(hList, count - 1);
@@ -145,7 +152,7 @@ static void Ts_InsertTick(HWND hList, double price, double size, const std::stri
 //   HEADER_H px  : painted header (stats bar + L1 quote block)
 //                  Filter checkbox is positioned top-right in the stats bar row
 //   remaining    : L2 panel (left, L2_W wide) | T&S panel(s) (right)
-static void Ts_Layout(HWND hWnd, TsState* state) {
+static void Market_Layout(HWND hWnd, TsState* state) {
     if (!state || !state->hTsList) return;
     RECT rc; GetClientRect(hWnd, &rc);
 
@@ -156,10 +163,13 @@ static void Ts_Layout(HWND hWnd, TsState* state) {
 
     // ── Filter checkbox: top-right corner of header (stats row) ──────────────
     const int chkW = 16, chkH = 16;
-    if (state->hTsFilterCheck)
+    if (state->hTsFilterCheck) {
+        int spX = rc.right / 2 - 26;
+        int spY = 23 + 10 + 22 + 10;
         SetWindowPos(state->hTsFilterCheck, NULL,
-            rc.right - chkW - 4, 6, chkW, chkH,
+            spX, spY, chkW, chkH,
             SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 
     // ── Speaker button: in the L1 quote area ─────────────────────────────────
     if (state->hSpeakerBtn) {
@@ -298,17 +308,6 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 }
 
 void StartMarketSearch() {
-    static bool registered = false;
-    if (!registered) {
-        WNDCLASS wc = { 0 };
-        wc.lpfnWndProc = WndProcTsSearch;
-        wc.hInstance = GetModuleHandle(NULL);
-        wc.lpszClassName = MARKET_SEARCH_CLASS_NAME;
-        wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-        wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-        RegisterClass(&wc);
-        registered = true;
-    }
     HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol", 
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, 
         (GetSystemMetrics(SM_CXSCREEN) - 268) / 2, (GetSystemMetrics(SM_CYSCREEN) - 255) / 2, 268, 255, 
@@ -323,7 +322,7 @@ HWND StartMarket(const std::string& symbol, int conId) {
     }
     std::string key = MARKET_CLASS_NAME + std::string("_") + symbol;
     TsInitData* data = new TsInitData{symbol, conId};
-    return StartGenericWindow(MARKET_CLASS_NAME, ("Market: " + symbol).c_str(), L"IBKRGatewayClient.Market", 380, 500, NULL, key, data);
+    return StartGenericWindow(MARKET_CLASS_NAME, ("Market: " + symbol).c_str(), L"IBKRGatewayClient.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
@@ -353,15 +352,15 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
-static std::string Ts_Fmt(double v, int dec = 2) {
+static std::string Market_Fmt(double v, int dec = 2) {
     if (v == 0.0) return "--";
     char buf[32]; snprintf(buf, sizeof(buf), "%.*f", dec, v); return buf;
 }
-static std::string Ts_FmtSigned(double v, int dec = 2) {
+static std::string Market_FmtSigned(double v, int dec = 2) {
     if (v == 0.0) return "--";
     char buf[32]; snprintf(buf, sizeof(buf), "%+.*f", dec, v); return buf;
 }
-static std::string Ts_FmtQty(double v) {
+static std::string Market_FmtQty(double v) {
     if (v == 0.0) return "--";
     if (v == (long long)v) { char b[32]; snprintf(b,sizeof(b),"%lld",(long long)v); return b; }
     char b[32]; snprintf(b,sizeof(b),"%.2f",v); return b;
@@ -371,7 +370,7 @@ static std::string Ts_FmtQty(double v) {
 // Rebuilds all rows from the latest book snapshot.
 // Each row shows a paired bid+ask level side by side (merged table):
 //   col0=B.Sz  col1=Bid  col2=Ask  col3=A.Sz
-static void Ts_RefreshL2(HWND hWnd, TsState* state) {
+static void Market_RefreshL2(HWND hWnd, TsState* state) {
     if (!state || !state->hL2List) return;
 
     std::vector<TradingAPI::Level2Entry> bids, asks;
@@ -390,13 +389,13 @@ static void Ts_RefreshL2(HWND hWnd, TsState* state) {
         int hasAsk = (i < (int)asks.size()) ? 2 : 0;
         lvi.lParam  = (LPARAM)(hasBid | hasAsk);
         lvi.iItem   = i;
-        std::string bidSzStr = hasBid ? Ts_FmtQty(bids[i].size) : "";
+        std::string bidSzStr = hasBid ? Market_FmtQty(bids[i].size) : "";
         lvi.pszText = (LPSTR)bidSzStr.c_str();
         ListView_InsertItem(hList, &lvi);
 
-        std::string bidStr = hasBid ? Ts_Fmt(bids[i].price) : "";
-        std::string askStr = hasAsk ? Ts_Fmt(asks[i].price) : "";
-        std::string askSzStr = hasAsk ? Ts_FmtQty(asks[i].size) : "";
+        std::string bidStr = hasBid ? Market_Fmt(bids[i].price) : "";
+        std::string askStr = hasAsk ? Market_Fmt(asks[i].price) : "";
+        std::string askSzStr = hasAsk ? Market_FmtQty(asks[i].size) : "";
         ListView_SetItemText(hList, i, 1, (LPSTR)bidStr.c_str());
         ListView_SetItemText(hList, i, 2, (LPSTR)askStr.c_str());
         ListView_SetItemText(hList, i, 3, (LPSTR)askSzStr.c_str());
@@ -408,7 +407,7 @@ static void Ts_RefreshL2(HWND hWnd, TsState* state) {
 // ── Header paint ──────────────────────────────────────────────────────────────
 // Paints the HEADER_H px band at the top of the market window.
 //
-// Row 1 (28px) — stats bar (larger font, colored values):
+// Row 1 (30px) — stats bar (larger font, colored values):
 //   O: xxx  C: xxx  H: xxx  L: xxx  Pos: xxx  AvgPr: xxx
 //   [checkbox top-right]
 //
@@ -421,7 +420,7 @@ static void Ts_RefreshL2(HWND hWnd, TsState* state) {
 //           Bid  price x size  (blue)
 //
 // Separator (1px)
-static void Ts_PaintHeader(HWND hWnd, TsState* state) {
+static void Market_PaintHeader(HWND hWnd, TsState* state) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hWnd, &ps);
 
@@ -431,9 +430,6 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
     const COLORREF textColor  = dark ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
     const COLORREF labelColor = dark ? RGB(160,160,160) : RGB(100,100,100);
     const COLORREF sepColor   = dark ? RGB(60,60,60) : RGB(200,200,200);
-    const COLORREF redColor   = RGB(220, 70, 70);
-    const COLORREF greenColor = RGB(80, 200, 120);
-    const COLORREF blueColor  = RGB(80, 160, 255);
 
     // ── Fill background ───────────────────────────────────────────────────────
     RECT hdrRc = { 0, 0, rc.right, HEADER_H };
@@ -447,14 +443,13 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── Row 1: stats bar (0..27) — draw label+value pairs with individual colors ──
     // Reserve right edge for checkbox (20px)
-    const int statsRowH = 28;
-    const int statsRight = rc.right - 22;  // leave room for checkbox
-
+    const int statsRowH = 30;
+    
     HFONT hOldFont = (HFONT)SelectObject(hdc, state->hStatFont);
     SetTextColor(hdc, textColor);
 
     // We draw each label+value pair individually so values can be colored.
-    // Layout: O C H L Pos AvgPr — evenly spaced across statsRight
+    // Layout: O C H L Pos AvgPr — evenly spaced across rc.right
     struct StatItem { const char* label; std::string value; COLORREF color; };
 
     double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
@@ -468,25 +463,25 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
     // AvgPr:   green if last > avgPrice, red if last < avgPrice
     COLORREF openColor   = textColor;
     if (displayLast > 0.0 && L1.open > 0.0) {
-        openColor = (displayLast >= L1.open) ? greenColor : redColor;
+        openColor = (displayLast >= L1.open) ? COINS_CLR_GREEN : COINS_CLR_RED;
     }
-    COLORREF highColor   = (L1.high > 0.0) ? greenColor : textColor;
-    COLORREF lowColor    = (L1.low  > 0.0) ? redColor   : textColor;
-    COLORREF posColor    = (state->position > 0.0) ? greenColor
-                         : (state->position < 0.0) ? redColor
+    COLORREF highColor   = (L1.high > 0.0) ? COINS_CLR_GREEN : textColor;
+    COLORREF lowColor    = (L1.low  > 0.0) ? COINS_CLR_RED   : textColor;
+    COLORREF posColor    = (state->position > 0.0) ? COINS_CLR_GREEN
+                         : (state->position < 0.0) ? COINS_CLR_RED
                          : textColor;
     COLORREF avgPrColor  = textColor;
     if (displayLast > 0.0 && state->avgPrice > 0.0) {
-        avgPrColor = (displayLast >= state->avgPrice) ? greenColor : redColor;
+        avgPrColor = (displayLast >= state->avgPrice) ? COINS_CLR_GREEN : COINS_CLR_RED;
     }
 
     StatItem stats[] = {
-        { "O:",    Ts_Fmt(L1.open),           openColor   },
-        { "C:",    Ts_Fmt(L1.prevClose),       textColor   },
-        { "H:",    Ts_Fmt(L1.high),            highColor   },
-        { "L:",    Ts_Fmt(L1.low),             lowColor    },
-        { "Pos:",  Ts_FmtQty(state->position), posColor    },
-        { "Ap:",   Ts_Fmt(state->avgPrice),    avgPrColor  },
+        { "O:",    Market_Fmt(L1.open),           openColor   },
+        { "C:",    Market_Fmt(L1.prevClose),       textColor   },
+        { "H:",    Market_Fmt(L1.high),            highColor   },
+        { "L:",    Market_Fmt(L1.low),             lowColor    },
+        { "Pos:",  Market_FmtQty(state->position), posColor    },
+        { "Avg:",  Market_Fmt(state->avgPrice),    avgPrColor  },
     };
     const int nStats = 6;
 
@@ -502,7 +497,7 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
         totalW += sz.cx;
     }
     // Distribute gap evenly
-    int gap = (nStats > 1) ? std::max(4, (statsRight - 8 - totalW) / (nStats - 1)) : 0;
+    int gap = (nStats > 1) ? std::max(4, ((int)rc.right - 8 - totalW) / (nStats - 1)) : 0;
 
     int cx = 8;
     for (int i = 0; i < nStats; i++) {
@@ -534,7 +529,7 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
 
     // Left half: large last price + speaker icon to its right + change below
     SelectObject(hdc, state->hBigFont);
-    std::string lastStr = Ts_Fmt(displayLast);
+    std::string lastStr = Market_Fmt(displayLast);
     SetTextColor(hdc, textColor);
     // last price rect: from left up to midpoint minus a margin for speaker icon
     RECT lastRc = { 10, quoteY + 4, rc.right / 2 - 30, quoteY + quoteH / 2 + 4 };
@@ -546,7 +541,7 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
     double chgPct = L1.changePct();
     if (L1.last > 0.0 && (chg != 0.0 || L1.prevClose > 0.0)) {
         char buf[64]; snprintf(buf, sizeof(buf), "%.2f  %.2f%%", chg, chgPct);
-        COLORREF chgColor = (chg >= 0.0) ? greenColor : redColor;
+        COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
         SetTextColor(hdc, chgColor);
         RECT chgRc = { 10, quoteY + quoteH / 2 + 4, rc.right / 2 - 30, quoteY + quoteH };
         DrawTextA(hdc, buf, -1, &chgRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -560,34 +555,34 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
 
     // Ask row (red)
     {
-        SetTextColor(hdc, redColor);
+        SetTextColor(hdc, COINS_CLR_RED);
         RECT lblRc = { rX, quoteY + 2, rX + 28, quoteY + rowH };
         DrawTextA(hdc, "Ask", -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hBigFont);
-        std::string priceStr = Ts_Fmt(L1.ask);
+        std::string priceStr = Market_Fmt(L1.ask);
         RECT pRc = { rX + 30, quoteY + 2, rX + 30 + 80, quoteY + rowH };
         DrawTextA(hdc, priceStr.c_str(), -1, &pRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hSmFont);
-        snprintf(buf, sizeof(buf), "x %s", Ts_FmtQty(L1.askSize).c_str());
+        SelectObject(hdc, state->hStatFont);
+        snprintf(buf, sizeof(buf), "x %s", Market_FmtQty(L1.askSize).c_str());
         RECT szRc = { rX + 115, quoteY + 2, rX + rW, quoteY + rowH };
         DrawTextA(hdc, buf, -1, &szRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
     // Bid row (blue)
     {
-        SetTextColor(hdc, blueColor);
+        SetTextColor(hdc, COINS_CLR_BLUE);
         RECT lblRc = { rX, quoteY + rowH + 2, rX + 28, quoteY + quoteH };
         DrawTextA(hdc, "Bid", -1, &lblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hBigFont);
-        std::string priceStr = Ts_Fmt(L1.bid);
+        std::string priceStr = Market_Fmt(L1.bid);
         RECT pRc = { rX + 30, quoteY + rowH + 2, rX + 30 + 80, quoteY + quoteH };
         DrawTextA(hdc, priceStr.c_str(), -1, &pRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hSmFont);
-        snprintf(buf, sizeof(buf), "x %s", Ts_FmtQty(L1.bidSize).c_str());
+        SelectObject(hdc, state->hStatFont);
+        snprintf(buf, sizeof(buf), "x %s", Market_FmtQty(L1.bidSize).c_str());
         RECT szRc = { rX + 115, quoteY + rowH + 2, rX + rW, quoteY + quoteH };
         DrawTextA(hdc, buf, -1, &szRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -605,7 +600,7 @@ static void Ts_PaintHeader(HWND hWnd, TsState* state) {
 // ── Market TTS helpers ────────────────────────────────────────────────────────
 static const wchar_t TS_SPEAKER_GLYPH[] = L"\uE767";   // Segoe MDL2 Assets volume-on
 
-static bool Ts_InitVoice(TsState* state) {
+static bool Market_InitVoice(TsState* state) {
     if (state->hTtsVoice) return true;
     if (!state->ttsComInit) {
         HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
@@ -617,7 +612,7 @@ static bool Ts_InitVoice(TsState* state) {
     return true;
 }
 
-static void Ts_SpeakLast(TsState* state) {
+static void Market_SpeakLast(TsState* state) {
     if (!state->hTtsVoice) return;
     double displayLast = (state->l1Info.last > 0.0) ? state->l1Info.last : state->l1Info.prevClose;
     if (displayLast <= 0.0) return;
@@ -629,22 +624,21 @@ static void Ts_SpeakLast(TsState* state) {
     state->hTtsVoice->Speak(ws.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
 }
 
-static void Ts_ToggleTTS(HWND hWnd, TsState* state) {
+static void Market_ToggleTTS(HWND hWnd, TsState* state) {
     state->ttsOn = !state->ttsOn;
     if (state->ttsOn) {
-        if (!Ts_InitVoice(state)) { state->ttsOn = false; return; }
+        if (!Market_InitVoice(state)) { state->ttsOn = false; return; }
         // Color speaker bright
         if (state->hSpeakerBtn)
-            SetCtrlColor(state->hSpeakerBtn,
-                Settings_DarkMode() ? RGB(220,220,220) : RGB(30,30,30));
+            SetCtrlColor(state->hSpeakerBtn, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);
         SetTimer(hWnd, TIMER_TS_SPEAKER, 21000, NULL);
-        Ts_SpeakLast(state);   // speak immediately
+        Market_SpeakLast(state);   // speak immediately
     } else {
         KillTimer(hWnd, TIMER_TS_SPEAKER);
         if (state->hTtsVoice)
             state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
         if (state->hSpeakerBtn)
-            SetCtrlColor(state->hSpeakerBtn, RGB(120,120,120));
+            SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
     }
     if (state->hSpeakerBtn) InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
 }
@@ -673,11 +667,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hBigFont = CreateFontA(-22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-        state->hSmFont  = CreateFontA(-11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        state->hSmFont  = CreateFontA(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
         // Stats bar font — slightly larger (fits single row within HEADER_H)
-        state->hStatFont = CreateFontA(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        state->hStatFont = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
         // Speaker icon font (Segoe MDL2 Assets)
@@ -697,10 +691,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         // ── Lists (font size 14) ──────────────────────────────────────────────
-        state->hL2List      = Ts_CreateL2List(hWnd, hInst);
-        state->hTsList      = Ts_CreateListView(hWnd, ID_TS_LIST,       hInst);
-        state->hTsListF100  = Ts_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
-        state->hTsListF1000 = Ts_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
+        state->hL2List      = Market_CreateL2List(hWnd, hInst);
+        state->hTsList      = Market_CreateListView(hWnd, ID_TS_LIST,       hInst);
+        state->hTsListF100  = Market_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
+        state->hTsListF1000 = Market_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
 
         // Apply font-14 to all three T&S lists and the L2 list
         {
@@ -744,16 +738,20 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
             0, 0, 22, 22, hWnd, (HMENU)ID_TS_SPEAKER, hInst, NULL);
         SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
-        SetCtrlColor(state->hSpeakerBtn, RGB(120, 120, 120));  // dim = inactive
+        SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);  // dim = inactive
 
         // Restore splitter positions and filter state
         if (!state->symbol.empty()) {
             Settings_LoadMarketSplitter(state->symbol, state->splitX, state->splitY);
             char filterKey[256];
             sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
+            RECT rc; GetWindowRect(hWnd, &rc);
             if (Settings_Load(filterKey, 0)) {
                 state->tsFilteredView = true;
                 SendMessage(state->hTsFilterCheck, BM_SETCHECK, BST_CHECKED, 0);
+                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth + 181, windowMarketHeight, TRUE);
+            } else {
+                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth, windowMarketHeight, TRUE);
             }
         }
 
@@ -764,12 +762,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
     
     case WM_SIZE:
-        Ts_Layout(hWnd, state);
+        Market_Layout(hWnd, state);
         InvalidateRect(hWnd, NULL, FALSE);   // repaint header on resize
         return 0;
 
     case WM_PAINT:
-        if (state) Ts_PaintHeader(hWnd, state);
+        if (state) Market_PaintHeader(hWnd, state);
         else { PAINTSTRUCT ps; BeginPaint(hWnd, &ps); EndPaint(hWnd, &ps); }
         return 0;
 
@@ -815,7 +813,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_MARKET_L2:
-        if (state) Ts_RefreshL2(hWnd, state);
+        if (state) Market_RefreshL2(hWnd, state);
         break;
 
     // ── Watchlist / historical-data tick ─────────────────────────────────────
@@ -865,29 +863,33 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_TS_FILTER_CHECK && HIWORD(wParam) == BN_CLICKED && state) {
             state->tsFilteredView = (SendMessage(state->hTsFilterCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            RECT rc; GetWindowRect(hWnd, &rc);
             if (state->tsFilteredView) {
                 ListView_DeleteAllItems(state->hTsListF100); ListView_DeleteAllItems(state->hTsListF1000);
+                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth + 181, windowMarketHeight, TRUE);
+            } else {
+                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth, windowMarketHeight, TRUE);
             }
             if (!state->symbol.empty()) {
                 char filterKey[256];
                 sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
                 Settings_Save(filterKey, state->tsFilteredView ? 1 : 0);
             }
-            Ts_Layout(hWnd, state);
+            Market_Layout(hWnd, state);
         }
         // Speaker icon or last-price area toggles TTS
         if ((LOWORD(wParam) == ID_TS_SPEAKER) && HIWORD(wParam) == STN_CLICKED && state)
-            Ts_ToggleTTS(hWnd, state);
+            Market_ToggleTTS(hWnd, state);
         break;
 
     case WM_TIMER:
         if (wParam == TIMER_TS_SPEAKER && state && state->ttsOn)
-            Ts_SpeakLast(state);
+            Market_SpeakLast(state);
         break;
 
     case WM_TTS_VOICE_CHANGED: {
         if (!state) break;
-        // Release the current voice so the next Ts_InitVoice call re-creates
+        // Release the current voice so the next Market_InitVoice call re-creates
         // it with the newly saved token from the registry.
         if (state->hTtsVoice) {
             state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
@@ -897,13 +899,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // If TTS is active, re-initialise and restart the timer immediately.
         if (state->ttsOn) {
             KillTimer(hWnd, TIMER_TS_SPEAKER);
-            if (Ts_InitVoice(state)) {
+            if (Market_InitVoice(state)) {
                 SetTimer(hWnd, TIMER_TS_SPEAKER, 21000, NULL);
-                Ts_SpeakLast(state); // speak now with the new voice
+                Market_SpeakLast(state); // speak now with the new voice
             } else {
                 state->ttsOn = false;
                 if (state->hSpeakerBtn) {
-                    SetCtrlColor(state->hSpeakerBtn, RGB(120, 120, 120));
+                    SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
                     InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
                 }
             }
@@ -914,10 +916,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            Ts_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->exchange);
+            Market_InsertTick(state->hTsList, tick->price, tick->size, tick->time);
             if (state->tsFilteredView) {
-                if (tick->size >= 100.0)  Ts_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->exchange);
-                if (tick->size >= 1000.0) Ts_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->exchange);
+                if (tick->size >= 100.0)  Market_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
+                if (tick->size >= 1000.0) Market_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
             }
 
             // ── Update L1 header on every T&S tick ───────────────────────────
@@ -985,15 +987,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     bool dark = Settings_DarkMode();
                     COLORREF rowBg = dark
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
-                        : (cd->nmcd.dwItemSpec % 2 == 0 ? RGB(245,245,245) : RGB(255,255,255));
+                        : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     int col = cd->iSubItem;
                     // Bid side: cols 0-1 → blue tint text
                     // Ask side: cols 2-3 → red tint text
                     if (col <= 1) {
-                        cd->clrText   = RGB(80, 160, 255);
+                        cd->clrText   = COINS_CLR_BLUE;
                         cd->clrTextBk = rowBg;
                     } else {
-                        cd->clrText   = RGB(220, 70, 70);
+                        cd->clrText   = COINS_CLR_RED;
                         cd->clrTextBk = rowBg;
                     }
                     return CDRF_DODEFAULT;
@@ -1057,7 +1059,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             RECT rc2; GetClientRect(hWnd, &rc2);
             RECT lastPriceRc = { 10, quoteY, rc2.right / 2 - 30, quoteY + quoteH };
             if (PtInRect(&lastPriceRc, { x, y }))
-                Ts_ToggleTTS(hWnd, state);
+                Market_ToggleTTS(hWnd, state);
 
             if (state->tsFilteredView) {
                 state->dragMode = HitTestSplitter(hWnd, state, x, y);
@@ -1088,7 +1090,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (newSplit > 0.9f) newSplit = 0.9f;
                 state->splitY = newSplit;
             }
-            Ts_Layout(hWnd, state);
+            Market_Layout(hWnd, state);
             InvalidateRect(hWnd, NULL, TRUE);
         }
         break;

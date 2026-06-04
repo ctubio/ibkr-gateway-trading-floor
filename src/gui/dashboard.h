@@ -1,9 +1,9 @@
 #pragma once
 
-int windowWidth  = 250;
-int windowHeight = 450;
+int windowDashboardWidth      = 250;
+int windowDashboardHeight = 450;
 
-void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", windowWidth, windowHeight, hInst); }
+void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
 #define WM_TRAYICON (WM_APP + 100)
 
@@ -32,14 +32,6 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_MARKET_MAX   100
 
 bool shouldBeConnected = true;
-
-// ─── Colors ───────────────────────────────────────────────────────────────────
-#define COINS_CLR_GREEN   RGB(  0, 138,  69)
-#define COINS_CLR_RED     RGB(220,  55,  55)
-#define COINS_CLR_WHITE   RGB(220, 220, 220)
-#define COINS_CLR_BLACK   RGB(30,  30,  30)
-#define COINS_CLR_GRAY    RGB(150, 150, 150)
-#define COINS_CLR_PURPLE  RGB(185, 105, 225)
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 static HFONT hFontCoins_NetLiq  = NULL;
@@ -156,11 +148,7 @@ static void Coins_ToggleTTS(HWND hWnd) {
             g_coinsTtsOn = false;
             return;
         }
-        if (Settings_DarkMode()) {
-            SetCtrlColor(hCoin_Speaker, COINS_CLR_WHITE);   // bright = active
-        } else {
-            SetCtrlColor(hCoin_Speaker, COINS_CLR_BLACK);   // bright = active
-        }
+        SetCtrlColor(hCoin_Speaker, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);   // bright = active
         SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
         Coins_SpeakDailyPnL();                          // speak immediately
     } else {
@@ -513,9 +501,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             RECT windowRect; 
             GetWindowRect(hWnd, &windowRect);
             if (LOWORD(wParam) != WA_INACTIVE) {
-                MoveWindow(hWnd, windowRect.left, windowRect.top, windowWidth, windowHeight     , TRUE);
+                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
             } else {
-                MoveWindow(hWnd, windowRect.left, windowRect.top, windowWidth, windowHeight - 40, TRUE);
+                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40, TRUE);
             }
             break;
         }

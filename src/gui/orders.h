@@ -318,6 +318,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 lvc.pszText = (LPSTR)orderCols[i].header;
                 lvc.fmt     = orderCols[i].fmt;
                 ListView_InsertColumn(hList, i, &lvc);
+                if (i == 0) {
+                    LVCOLUMN lvcUpdate = { 0 };
+                    lvcUpdate.mask = LVCF_FMT;
+                    lvcUpdate.fmt = orderCols[i].fmt; 
+                    ListView_SetColumn(hList, i, &lvcUpdate);
+                }
             }
 
             api.setOrdersWindow(hWnd);
