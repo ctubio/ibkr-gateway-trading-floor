@@ -107,6 +107,7 @@ public:
         double ask       = 0.0;
         double high      = 0.0;
         double low       = 0.0;
+        double vwap      = 0.0;  // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
 
         // ── Size ticks (tickSize) ────────────────────────────────────────────
         long long volume = 0;
@@ -155,6 +156,8 @@ public:
         double bidSize   = 0.0;
         double ask       = 0.0;   // ASK  tick (field 2)
         double askSize   = 0.0;
+        long long volume = 0;     // VOLUME tick (field 8)
+        double vwap      = 0.0;   // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
         double change()    const { return prevClose > 0 ? last - prevClose : 0.0; }
         double changePct() const { return prevClose > 0 ? (last - prevClose) / prevClose * 100.0 : 0.0; }
     };

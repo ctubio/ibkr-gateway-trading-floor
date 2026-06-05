@@ -56,12 +56,12 @@ enum DiamondColIdx {
     DCOL_ASKSIZE,
     DCOL_ASK,
     DCOL_LAST,
-    DCOL_OPEN,
-    DCOL_CLOSE,
     DCOL_BID,
     DCOL_BIDSIZE,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
+    DCOL_OPEN,
+    DCOL_CLOSE,
     DCOL_UNREALIZED_PL,
     DCOL_UNREALIZED_PL_PCT,
     DCOL_MKTVAL,
@@ -81,26 +81,31 @@ static bool g_DiamondsSortAsc = true;
 
 struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
-    { "Instrument",        90, LVCFMT_LEFT  },
-    { "Position",          70, LVCFMT_RIGHT },
+    { "Symbol",            90, LVCFMT_LEFT  },
+    { "Position",          75, LVCFMT_RIGHT },
     { "Avg Price",         80, LVCFMT_RIGHT },
     { "Ask Size",          70, LVCFMT_RIGHT },
     { "Ask",               70, LVCFMT_RIGHT },
     { "Last",              70, LVCFMT_RIGHT },
-    { "Open",              70, LVCFMT_RIGHT },
-    { "Close",             70, LVCFMT_RIGHT },
     { "Bid",               70, LVCFMT_RIGHT },
     { "Bid Size",          70, LVCFMT_RIGHT },
-    { "Daily P&L",         85, LVCFMT_RIGHT },
+    { "Daily P&L",         70, LVCFMT_RIGHT },
     { "Change %",          70, LVCFMT_RIGHT },
-    { "Unrealized P&L",    95, LVCFMT_RIGHT },
-    { "Unrealized P&L %",  95, LVCFMT_RIGHT },
-    { "Market Value",      85, LVCFMT_RIGHT },
-    { "% of Net Liq",      85, LVCFMT_RIGHT },
-    { "Div Yield %",       80, LVCFMT_RIGHT },
-    { "Div Date",          85, LVCFMT_RIGHT },
-    { "Div Amount",        80, LVCFMT_RIGHT },
-    { "Annual Div",        80, LVCFMT_RIGHT },
+    { "Open",              85, LVCFMT_RIGHT }, // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
+    { "Close",             70, LVCFMT_RIGHT }, // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Unrealized P&L",    95, LVCFMT_RIGHT }, // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
+    { "Unrealized P&L %",  95, LVCFMT_RIGHT }, // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
+    { "Market Value",      85, LVCFMT_RIGHT }, // {"fix_tag":80,"name":"Unrealized P&L %","description":"Unrealized profit or loss. Value is calculated with realtime valuation of financial instruments. (even when delayed data is displayed in other columns).","groups":["G2"],"id":"UNREALIZED_PL_PCT"}
+    { "% of Net Liq",      85, LVCFMT_RIGHT }, // {"fix_tag":77,"name":"Unrealized P&L","description":"Unrealized profit or loss. Right-click on the column header to toggle between displaying the P&L as an absolute value or a percentage or both. Value is calculated with realtime valuation of financial instruments. (even when delayed data is displayed in other columns).","groups":["G2"],"id":"UNREALIZED_PL"}
+    { "Div Yield %",       80, LVCFMT_RIGHT }, // {"fix_tag":73,"name":"Market Value","description":"The current market value of your position in the security. Value is calculated with realtime valuation of financial instruments. (even when delayed data is displayed in other columns).","groups":["G2"],"id":"MARKET_VALUE"}
+    { "Div Date",          85, LVCFMT_RIGHT }, // {"fix_tag":7639,"name":"% of Net Liq","description":"Displays the market value of the contract as a percentage of the Net Liquidation Value of the account. Value is calculated with realtime valuation of financial instruments. (even when delayed data is displayed in other columns).","groups":["G2"],"id":"PCT_MARKET_VALUE"}
+    { "Div Amount",        80, LVCFMT_RIGHT }, // {"fix_tag":7287,"name":"Dividend Yield %","description":"This value is the total of the expected dividend payments over the next twelve months per share divided by the Current Price and is expressed as a percentage. For derivatives, this displays the total of the expected dividend payments over the expiry date.","groups":["G14"],"id":"DIV_YIELD"}
+    { "Annual Div",        80, LVCFMT_RIGHT }, // {"fix_tag":7288,"name":"Dividend Date","description":"Displays the ex-date of the dividend","groups":["G14"],"id":"DIV_DATE"}
+    // {"fix_tag":7286,"name":"Dividend Amount","description":"Displays the amount of the next dividend","groups":["G14"],"id":"DIV_AMT"}
+    // {"fix_tag":7671,"name":"Annual Dividends","description":"This value is the total of the expected dividend payments over the next twelve months per share.","groups":["G14"],"id":"DIVIDENDS"}
+    // {"fix_tag":7290,"name":"P/E excluding extraordinary items","description":"This ratio is calculated by dividing the current Price by the sum of the Diluted Earnings Per Share from continuing operations BEFORE Extraordinary Items and Accounting Changes over the last four interim periods.","groups":["G15"],"id":"PE"}
+    // {"fix_tag":7281,"name":"Category","description":"Displays a more detailed level of description within the industry under which the underlying company can be categorized.","groups":["G-3"],"id":"CATEGORY"}
+    // {"fix_tag":7289,"name":"Market capitalization","description":"This value is calculated by multiplying the current Price by the current number of Shares Outstanding.","groups":["G15"],"id":"MKT_CAP"}
 };
 static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
               "diamondCols count must match DiamondColIdx::DCOL_COUNT");
@@ -460,11 +465,6 @@ static void Diamonds_Repopulate(HWND hWnd) {
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
 
-    // ── Checkboxes show when active, hide when inactive ───────────────────────
-    case WM_ACTIVATE:
-        Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
-        return 0;
-
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
@@ -525,6 +525,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_Layout(hWnd);
         break;
     }
+
+    // ── Checkboxes show when active, hide when inactive ───────────────────────
+    case WM_ACTIVATE:
+        Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
+        return 0;
 
     case WM_COMMAND: {
         WORD id = LOWORD(wParam);

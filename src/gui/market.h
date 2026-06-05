@@ -1,17 +1,10 @@
 #pragma once
 
-#include <map>
-#include <string>
-#include <vector>
-
-// Payload passed during HWND creation
-struct TsInitData { std::string symbol; int conId; };
-
 int windowMarketWidth = 414;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
-HWND StartMarket(const std::string& symbol = "", int conId = 0);
+void StartMarket(const std::string& symbol = "", int conId = 0);
 
 #define ID_TS_LIST          6003
 #define ID_TS_FILTER_CHECK  6004
@@ -325,14 +318,14 @@ void StartMarketSearch() {
     ApplyDarkMode(hWnd);
 }
 
-HWND StartMarket(const std::string& symbol, int conId) {
+void StartMarket(const std::string& symbol, int conId) {
     if (symbol.empty() || conId == 0) {
         StartMarketSearch();
-        return NULL;
+        return;
     }
     std::string key = MARKET_CLASS_NAME + std::string("_") + symbol;
-    TsInitData* data = new TsInitData{symbol, conId};
-    return StartGenericWindow(MARKET_CLASS_NAME, ("Market: " + symbol).c_str(), L"IBKRGatewayClient.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+    MarketInitData* data = new MarketInitData{symbol, conId, key};
+    StartGenericWindow(MARKET_CLASS_NAME, symbol.c_str(), L"IBKRGatewayClient.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
@@ -443,6 +436,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     COLORREF openColor  = textColor;
     if (displayLast > 0.0 && L1.open > 0.0)
         openColor = (displayLast >= L1.open) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    COLORREF vwapColor  = COINS_CLR_ORANGE;
     COLORREF highColor = (L1.high > 0.0) ? COINS_CLR_GREEN : textColor;
     COLORREF lowColor  = (L1.low  > 0.0) ? COINS_CLR_RED   : textColor;
     COLORREF posColor  = (state->position > 0.0) ? COINS_CLR_GREEN
@@ -502,14 +496,16 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     struct StatItem { const char* label; std::string value; COLORREF color; };
     StatItem row1[] = {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
-        { "O:", Market_Fmt(L1.open),      openColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
-        { "L:", Market_Fmt(L1.low),       lowColor   },
+        { "W:", Market_Fmt(L1.vwap),      vwapColor  },
     };
     // Row 2: Pos  Avg
     StatItem row2[] = {
-        { "Pos:", Market_FmtQty(state->position), posColor   },
-        { "Avg:", Market_Fmt(state->avgPrice),     avgPrColor },
+        { "O:", Market_Fmt(L1.open),      openColor  },
+        { "L:", Market_Fmt(L1.low),       lowColor   },
+        { "V:", Market_FmtQty(L1.volume),    textColor  },
+        //{ "Pos:", Market_FmtQty(state->position), posColor   },
+        //{ "Avg:", Market_Fmt(state->avgPrice),     avgPrColor },
     };
 
     // Helper: draw a row of stat pairs starting at (startX, y0).
@@ -538,8 +534,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         return cx;
     };
 
-    drawStatRow(row1, 4, STATS_X, 0,    rowH);
-    drawStatRow(row2, 2, STATS_X, rowH, HEADER_H - 1);
+    drawStatRow(row1, 3, STATS_X, 0,    rowH);
+    drawStatRow(row2, 3, STATS_X, rowH, HEADER_H - 1);
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
     // We measure both pieces then right-justify them to RB_X - 10.
@@ -648,7 +644,18 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
     }
     if (state->hSpeakerBtn) InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
 }
-
+void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
+    if (!state) return;
+    std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
+    auto& pm = api.getPortfolioMap();
+    auto it = pm.find(state->symbol);
+    if (it != pm.end()) {
+        state->position = it->second.shares;
+        state->avgPrice = it->second.avgCost;
+        
+        SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
+    }
+}
 // ── Window procedure ──────────────────────────────────────────────────────────
 LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
@@ -660,12 +667,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     switch (message) {
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-        TsInitData* data = (TsInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
+        MarketInitData* data = (MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
         state = new TsState();
         if (data) {
             state->symbol = data->symbol;
             state->conId  = data->conId;
-            delete data;
         }
         tsStates[hWnd] = state;
 
@@ -685,13 +691,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         // ── Snapshot position + avg price ─────────────────────────────────────
         if (!state->symbol.empty()) {
-            std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
-            auto& pm = api.getPortfolioMap();
-            auto it = pm.find(state->symbol);
-            if (it != pm.end()) {
-                state->position = it->second.shares;
-                state->avgPrice = it->second.avgCost;
-            }
+            Market_RefreshPositionAndAvg(hWnd, state);
         }
 
         // ── Lists ─────────────────────────────────────────────────────────────
@@ -790,16 +790,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (wi.prevClose > 0.0 && state->l1Info.prevClose == 0.0) state->l1Info.prevClose = wi.prevClose;
             if (wi.high      > 0.0 && state->l1Info.high      == 0.0) state->l1Info.high      = wi.high;
             if (wi.low       > 0.0 && state->l1Info.low       == 0.0) state->l1Info.low       = wi.low;
+            if (wi.vwap      > 0.0 && state->l1Info.vwap      == 0.0) state->l1Info.vwap      = wi.vwap;
         }
-        {
-            std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
-            auto& pm = api.getPortfolioMap();
-            auto it = pm.find(state->symbol);
-            if (it != pm.end()) {
-                state->position = it->second.shares;
-                state->avgPrice = it->second.avgCost;
-            }
-        }
+        Market_RefreshPositionAndAvg(hWnd, state);
         RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
         InvalidateRect(hWnd, &hdrRc, FALSE);
         break;
@@ -829,14 +822,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
                         if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
                         if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
+                        if (wi.volume    > 0)   state->l1Info.volume    = wi.volume;
+                        if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
 
-                        std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
-                        auto& pm = api.getPortfolioMap();
-                        auto pit = pm.find(state->symbol);
-                        if (pit != pm.end()) {
-                            state->position = pit->second.shares;
-                            state->avgPrice = pit->second.avgCost;
-                        }
+                        Market_RefreshPositionAndAvg(hWnd, state);
                     }
                     RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                     InvalidateRect(hWnd, &hdrRc, FALSE);
@@ -905,9 +894,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
                 if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
             }
-            state->l1Info.last = tick->price;
             TradingAPI::WatchlistInfo wi;
             if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+                state->l1Info.last      = wi.last;
                 state->l1Info.open      = wi.open;
                 state->l1Info.prevClose = wi.prevClose;
                 state->l1Info.high      = wi.high;
@@ -916,15 +905,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->l1Info.ask       = wi.ask;
                 state->l1Info.bidSize   = wi.bidSize;
                 state->l1Info.askSize   = wi.askSize;
+                state->l1Info.volume    = wi.volume;
             }
             {
-                std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
-                auto& pm = api.getPortfolioMap();
-                auto pit = pm.find(state->symbol);
-                if (pit != pm.end()) {
-                    state->position = pit->second.shares;
-                    state->avgPrice = pit->second.avgCost;
-                }
+                Market_RefreshPositionAndAvg(hWnd, state);
             }
             RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
             InvalidateRect(hWnd, &hdrRc, FALSE);
@@ -1048,6 +1032,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_DESTROY:
         api.unsetMarketWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);
+        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        if (data) delete data;
         if (state) {
             if (state->ttsOn) KillTimer(hWnd, TIMER_TS_SPEAKER);
             if (state->hTtsVoice) {

@@ -35,12 +35,15 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
 }
 
 // Rebuilds the entire ListView from the current snapshot.
-static void Orders_Repopulate(HWND hList) {
+static void Orders_Repopulate(HWND hWnd) {
+    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+    if (!hList) return;
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
 
     auto orders = api.getOrdersSorted();
-
+    int submitted = 0;
+    int filled = 0;
     for (int i = 0; i < (int)orders.size(); ++i) {
         const auto& o = orders[i];
         char buf[64];
@@ -72,7 +75,12 @@ static void Orders_Repopulate(HWND hList) {
         ListView_SetItemText(hList, i, col++, (LPSTR)fullTypeStr.c_str());
 
         // ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
-    }
+
+        if (o.status == "Submitted" || o.status == "PreSubmitted") submitted++;
+        if (o.status == "Filled") filled++;
+    }   
+
+    SetWindowTextA(hWnd, ("Orders: " + std::to_string(submitted) + " Submitted | " + std::to_string(filled) + " Filled").c_str());
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
@@ -341,8 +349,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         case WM_ORDERS_UPDATE: {
-            HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-            if (hList) Orders_Repopulate(hList);
+            Orders_Repopulate(hWnd);
             break;
         }
 
@@ -440,13 +447,11 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
 
         case WM_API_UPDATE: {
-            HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-            if (hList) {
-                if (api.isMarketDataConnected() && api.isTradingConnected()) {
-                    Orders_Repopulate(hList);
-                } else {
-                    ListView_DeleteAllItems(hList);
-                }
+            if (api.isMarketDataConnected() && api.isTradingConnected()) {
+                Orders_Repopulate(hWnd);
+            } else {
+                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                if (hList) ListView_DeleteAllItems(hList);
             }
             break;
         }

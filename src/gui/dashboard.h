@@ -775,7 +775,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         });
                          int index = LOWORD(wParam) - ID_M_MARKET_BASE;
                         if (index >= 0 && index < (int)tsWindows.size()) {
-                            ToggleMarketAlwaysOnTop(tsWindows[index].symbol);
+                            ToggleMarketAlwaysOnTop(tsWindows[index].hWnd, tsWindows[index].symbol);
                         }
                     }
                     break;

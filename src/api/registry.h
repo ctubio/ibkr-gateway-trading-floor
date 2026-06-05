@@ -31,6 +31,9 @@ HBRUSH hDarkBrush2 = NULL;
 
 static std::vector<std::string> debugBuffer; // stores messages when window is closed
 
+// Payload passed during HWND creation
+struct MarketInitData { std::string symbol; int conId; std::string winKey; };
+
 void LogDebug(const std::string& msg) {
     time_t now = time(0);
     char tstr[26] = {};
@@ -227,19 +230,20 @@ void SaveWinPosition(HWND hWnd) {
     DWORD w = (DWORD)(wp.rcNormalPosition.right - wp.rcNormalPosition.left);
     DWORD h = (DWORD)(wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
     
-    HKEY hKey;
-    HANDLE hProp = GetPropA(hWnd, "WinPositionKey");
     std::string winKey;
-    if (hProp) {
-        winKey = *(std::string*)hProp; 
-    } else {
+    MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    if (!data) {
         char className[256] = {};
         GetClassNameA(hWnd, className, sizeof(className));
         winKey = className;
+    } else {
+        winKey = data->winKey;
     }
+
     char fullPath[256];
     wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, winKey.c_str());
 
+    HKEY hKey;
     if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath, 0, NULL, 
         REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) 
     {
@@ -455,11 +459,156 @@ void ApplyDarkMode(HWND hWnd) {
     }
 }
 
-void Session_AddWindow(HWND hWnd) {
+
+// Check if a window is currently set to Always On Top
+// For single-instance windows (classNameOnly = true), checks the first window of that class
+// For multi-instance windows (classNameOnly = false), checks the window with the specific title/identifier
+HWND IsWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
+    HWND hWnd = windowIdentifier ? 
+        FindWindowA(windowClassName, windowIdentifier) : 
+        FindWindowA(windowClassName, NULL);
+    
+    if (!hWnd) {
+        return NULL; // Window not found
+    }
+
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    
+    if (exStyle & WS_EX_TOPMOST) {
+        return hWnd;
+    }
+    return NULL;
+}
+
+// Toggle Always On Top state for a window and save the preference
+// For single-instance windows: className only
+// For Market windows: className and symbol (e.g., "MSFT")
+void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
+    HWND hWnd = windowIdentifier ? 
+        FindWindowA(windowClassName, windowIdentifier) : 
+        FindWindowA(windowClassName, NULL);
+    
+    if (!hWnd) {
+        return; // Window not found
+    }
+    
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
+    
+    if (isCurrentlyOnTop) {
+        // Currently always on top, remove it
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        // Save state: not on top
+        char key[256];
+        if (windowIdentifier && strlen(windowIdentifier) > 0) {
+            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
+        } else {
+            sprintf(key, "%s", windowClassName);
+        }
+        Settings_AlwaysOnTop_Save(key, 0);
+    } else {
+        // Not always on top, make it so
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        // Save state: on top
+        char key[256];
+        if (windowIdentifier && strlen(windowIdentifier) > 0) {
+            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
+        } else {
+            sprintf(key, "%s", windowClassName);
+        }
+        if (IsIconic(hWnd)) {
+            ShowWindow(hWnd, SW_RESTORE);
+        } else {
+            ShowWindow(hWnd, SW_SHOW);
+        }
+        Settings_AlwaysOnTop_Save(key, 1);
+    }
+}
+
+// Enumerate all open Market windows and extract their symbols
+struct MarketWindowInfo {
+    HWND hWnd;
+    std::string symbol;
+};
+
+static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
+    std::vector<MarketWindowInfo> result;
+    
+    HWND hWnd = FindWindowA(MARKET_CLASS_NAME, NULL);
+    while (hWnd) {
+        std::string symbol;
+        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        if (data && !data->symbol.empty()) {
+            result.push_back({hWnd, data->symbol});
+        }
+        
+        // Find next window of the same class with a different title
+        hWnd = FindWindowExA(NULL, hWnd, MARKET_CLASS_NAME, NULL);
+    }
+    
+    return result;
+}
+
+// Check if a specific Market window is set to Always On Top
+bool IsMarketAlwaysOnTop(const std::string& symbol) {
+    char key[256];
+    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    return Settings_AlwaysOnTop_Load(key, 0) != 0;
+}
+
+// Toggle Always On Top for a specific Market window by symbol
+// Uses consistent registry key format based on symbol only
+void ToggleMarketAlwaysOnTop(HWND hWnd, const std::string& symbol) {
+    if (!hWnd) {
+        return; // Window not found
+    }
+    
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
+    
+    char key[256];
+    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    
+    if (isCurrentlyOnTop) {
+        // Currently always on top, remove it
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        Settings_AlwaysOnTop_Save(key, 0);
+    } else {
+        // Not always on top, make it so
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        Settings_AlwaysOnTop_Save(key, 1);
+    }
+}
+
+// Set Always On Top state for a Market window using its HWND directly.
+// Called at restore time — avoids a FindWindowA-by-title race where the window
+// title may not yet be set when StartMarket() returns.
+void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
+    if (!hWnd) return;
+    SetWindowPos(hWnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+void Session_AddWindow(HWND hWnd, LPARAM lParam) {
     ApplyDarkMode(hWnd);
 
     char className[256] = {};
     GetClassNameA(hWnd, className, sizeof(className));
+
+    std::string winKey;
+    MarketInitData* data = (MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
+    if (data) {
+        LogDebug(std::string("Adding window: ") + className + " with key " + data->winKey);
+        winKey = data->winKey;
+    } else {
+        winKey = className;
+    }
+
+    if (Settings_AlwaysOnTop_Load(winKey.c_str(), 0)) {
+        if (strcmp(className, MARKET_CLASS_NAME) == 0)
+            SetMarketAlwaysOnTop(hWnd, true);
+        else ToggleWindowAlwaysOnTop(winKey.c_str());                        
+    }
 
     if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) return; // Dashboard is always open on boot, no need to track in registry
     
@@ -612,144 +761,6 @@ void Settings_NewList_Save(const char* newName) {
         RegSetValueExA(hKey, newName, 0, REG_MULTI_SZ, (const BYTE*)empty, 2);
         RegCloseKey(hKey);
     }
-}
-
-// Check if a window is currently set to Always On Top
-// For single-instance windows (classNameOnly = true), checks the first window of that class
-// For multi-instance windows (classNameOnly = false), checks the window with the specific title/identifier
-HWND IsWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
-    HWND hWnd = windowIdentifier ? 
-        FindWindowA(windowClassName, windowIdentifier) : 
-        FindWindowA(windowClassName, NULL);
-    
-    if (!hWnd) {
-        return NULL; // Window not found
-    }
-
-    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
-    
-    if (exStyle & WS_EX_TOPMOST) {
-        return hWnd;
-    }
-    return NULL;
-}
-
-// Toggle Always On Top state for a window and save the preference
-// For single-instance windows: className only
-// For Market windows: className and symbol (e.g., "MSFT")
-void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIdentifier = nullptr) {
-    HWND hWnd = windowIdentifier ? 
-        FindWindowA(windowClassName, windowIdentifier) : 
-        FindWindowA(windowClassName, NULL);
-    
-    if (!hWnd) {
-        return; // Window not found
-    }
-    
-    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
-    bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
-    
-    if (isCurrentlyOnTop) {
-        // Currently always on top, remove it
-        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        // Save state: not on top
-        char key[256];
-        if (windowIdentifier && strlen(windowIdentifier) > 0) {
-            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
-        } else {
-            sprintf(key, "%s", windowClassName);
-        }
-        Settings_AlwaysOnTop_Save(key, 0);
-    } else {
-        // Not always on top, make it so
-        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        // Save state: on top
-        char key[256];
-        if (windowIdentifier && strlen(windowIdentifier) > 0) {
-            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
-        } else {
-            sprintf(key, "%s", windowClassName);
-        }
-        if (IsIconic(hWnd)) {
-            ShowWindow(hWnd, SW_RESTORE);
-        } else {
-            ShowWindow(hWnd, SW_SHOW);
-        }
-        Settings_AlwaysOnTop_Save(key, 1);
-    }
-}
-
-// Enumerate all open Market windows and extract their symbols
-struct MarketWindowInfo {
-    HWND hWnd;
-    std::string symbol;
-};
-
-static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
-    std::vector<MarketWindowInfo> result;
-    
-    HWND hWnd = FindWindowA(MARKET_CLASS_NAME, NULL);
-    while (hWnd) {
-        // Get the window title
-        char title[256] = {};
-        GetWindowTextA(hWnd, title, sizeof(title));
-        
-        // Extract symbol from title (format: "Market: SYMBOL")
-        std::string titleStr = title;
-        std::string winTitle = "Market: ";
-        size_t pos = titleStr.find(winTitle);
-        if (pos != std::string::npos) {
-            std::string symbol = titleStr.substr(pos + winTitle.length());
-            result.push_back({hWnd, symbol});
-        }
-        
-        // Find next window of the same class with a different title
-        hWnd = FindWindowExA(NULL, hWnd, MARKET_CLASS_NAME, NULL);
-    }
-    
-    return result;
-}
-
-// Check if a specific Market window is set to Always On Top
-bool IsMarketAlwaysOnTop(const std::string& symbol) {
-    char key[256];
-    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
-    return Settings_AlwaysOnTop_Load(key, 0) != 0;
-}
-
-// Toggle Always On Top for a specific Market window by symbol
-// Uses consistent registry key format based on symbol only
-void ToggleMarketAlwaysOnTop(const std::string& symbol) {
-    std::string fullTitle = "Market: " + symbol;
-    HWND hWnd = FindWindowA(MARKET_CLASS_NAME, fullTitle.c_str());
-    
-    if (!hWnd) {
-        return; // Window not found
-    }
-    
-    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
-    bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
-    
-    char key[256];
-    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
-    
-    if (isCurrentlyOnTop) {
-        // Currently always on top, remove it
-        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_AlwaysOnTop_Save(key, 0);
-    } else {
-        // Not always on top, make it so
-        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_AlwaysOnTop_Save(key, 1);
-    }
-}
-
-// Set Always On Top state for a Market window using its HWND directly.
-// Called at restore time — avoids a FindWindowA-by-title race where the window
-// title may not yet be set when StartMarket() returns.
-void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
-    if (!hWnd) return;
-    SetWindowPos(hWnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
 // ── Market splitter persistence ───────────────────────────────────────────
@@ -948,7 +959,7 @@ void Session_RestoreWindows(
     const std::function<void()>& StartDiamonds,
     const std::function<void()>& StartNews,
     const std::function<void()>& StartSettings,
-    const std::function<HWND(const std::string&, int)>& StartMarket,
+    const std::function<void(const std::string&, int)>& StartMarket,
     const std::function<void()>& StartWatchlist,
     const std::function<void()>& StartOrders,
     const std::function<void()>& StartDebugLog
@@ -965,55 +976,26 @@ void Session_RestoreWindows(
     std::vector<char> buf(size);
     RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, (LPBYTE)buf.data(), &size);
     RegCloseKey(hKey);
-    { 
-        char key[256];
-        sprintf(key, "%s", DASHBOARD_CLASS_NAME);
-        if(Settings_AlwaysOnTop_Load(DASHBOARD_CLASS_NAME, 0)) {
-            ToggleWindowAlwaysOnTop(DASHBOARD_CLASS_NAME); 
-        }
-    }
     const char* p = buf.data();
     while (*p) {
         std::string cls = p;
         if (cls == DIAMONDS_CLASS_NAME)  { 
             StartDiamonds(); 
-            char key[256];
-            sprintf(key, "%s", DIAMONDS_CLASS_NAME);
-            if(Settings_AlwaysOnTop_Load(DIAMONDS_CLASS_NAME, 0))
-                ToggleWindowAlwaysOnTop(DIAMONDS_CLASS_NAME); 
         }
         else if (cls == NEWS_CLASS_NAME)      { 
             StartNews(); 
-            char key[256];
-            sprintf(key, "%s", NEWS_CLASS_NAME);
-            if(Settings_AlwaysOnTop_Load(NEWS_CLASS_NAME, 0)) 
-                ToggleWindowAlwaysOnTop(NEWS_CLASS_NAME); 
         }
         else if (cls == SETTINGS_CLASS_NAME)  { 
             StartSettings(); 
-            char key[256];
-            sprintf(key, "%s", SETTINGS_CLASS_NAME);
-            if(Settings_AlwaysOnTop_Load(SETTINGS_CLASS_NAME, 0)) 
-                ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME); 
         }
         else if (cls == WATCHLIST_CLASS_NAME)    { 
             StartWatchlist(); 
-            char key[256];
-            sprintf(key, "%s", WATCHLIST_CLASS_NAME);
-            if(Settings_AlwaysOnTop_Load(WATCHLIST_CLASS_NAME, 0)) 
-                ToggleWindowAlwaysOnTop(WATCHLIST_CLASS_NAME); 
         }
         else if (cls == ORDERS_CLASS_NAME)    { 
             StartOrders(); 
-            char key[256];
-            sprintf(key, "%s", ORDERS_CLASS_NAME);
-            if(Settings_AlwaysOnTop_Load(ORDERS_CLASS_NAME, 0)) 
-                ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME); 
         }
         else if (cls == DEBUGLOG_CLASS_NAME)  { 
             StartDebugLog(); 
-            if(Settings_AlwaysOnTop_Load(DEBUGLOG_CLASS_NAME, 0)) 
-                ToggleWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME); 
         }
         else if (cls == MARKET_CLASS_NAME) {
             std::string tsSaved = Settings_LoadString("OpenWindows_Market");
@@ -1029,15 +1011,7 @@ void Session_RestoreWindows(
                     if (dot != std::string::npos) {
                         int cid = std::stoi(token.substr(0, dot));
                         std::string sym = token.substr(dot + 1);
-                        HWND tsHwnd = StartMarket(sym, cid);
-
-                        // Restore AlwaysOnTop using the HWND we just got — avoids a
-                        // FindWindowA-by-title race where the title may not be set yet.
-                        char key[256];
-                        sprintf(key, "%s_%s", MARKET_CLASS_NAME, sym.c_str());
-                        if (Settings_AlwaysOnTop_Load(key, 0)) {
-                            SetMarketAlwaysOnTop(tsHwnd, true);
-                        }
+                        StartMarket(sym, cid);
                     }
                     start = end + 1;
                 }
