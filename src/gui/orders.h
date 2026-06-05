@@ -1,6 +1,6 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 726, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 646, 240); }
 
 #define ID_ORDERS_LIST          9003
 
@@ -15,7 +15,7 @@ static const OrderCol orderCols[] = {
     { "Quote",        135,  LVCFMT_RIGHT },
     { "Avg Filled",   135,  LVCFMT_RIGHT },
     { "Status",       225,  LVCFMT_CENTER},
-    { "Time",          80,  LVCFMT_CENTER},
+    // { "Time",          80,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ static void Orders_Repopulate(HWND hList) {
         std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
         ListView_SetItemText(hList, i, col++, (LPSTR)fullTypeStr.c_str());
 
-        ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
+        // ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
     }
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
