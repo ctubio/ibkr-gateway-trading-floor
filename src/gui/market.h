@@ -281,7 +281,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     Market_Layout(hWnd, state);
     SetFocus(state->hOrderPrice);
     int len = GetWindowTextLengthA(state->hOrderPrice);
-    SendMessageA(state->hOrderPrice, EM_SETSEL, 0, len);
+    SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
 }
 
 void Market_Layout_HideBar(HWND hWnd, TsState* state) {
@@ -323,6 +323,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             if (st) {
                 HWND hNext = (hWnd == st->hOrderPrice) ? st->hOrderQty : st->hOrderPrice;
                 SetFocus(hNext);
+                // Place caret at end, no selection
                 int len = GetWindowTextLengthA(hNext);
                 SendMessageA(hNext, EM_SETSEL, len, len);
             }
