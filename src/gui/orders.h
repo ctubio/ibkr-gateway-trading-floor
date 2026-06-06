@@ -60,7 +60,7 @@ static void Orders_Repopulate(HWND hWnd) {
         ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
 
         if (o.price > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f %d", o.totalQty, o.price, o.orderId);
+            snprintf(buf, sizeof(buf), "%.0f @ %.2f %d", o.totalQty, o.price);
         else
             snprintf(buf, sizeof(buf), "%.0f @ MKT", o.totalQty);
         ListView_SetItemText(hList, i, col++, buf);

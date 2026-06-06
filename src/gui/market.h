@@ -324,8 +324,11 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 char pBuf[32] = {}, qBuf[32] = {};
                 GetWindowTextA(st->hOrderPrice, pBuf, sizeof(pBuf));
                 GetWindowTextA(st->hOrderQty,   qBuf, sizeof(qBuf));
-                LogDebug(std::string("OrderBar ") + st->orderSide
-                         + " Price=" + pBuf + " Qty=" + qBuf);
+                double price = std::atof(pBuf);
+                double qty = std::atof(qBuf);
+                if (price > 0 && qty > 0) {
+                    api.submitOrder(st->conId, st->symbol, st->orderSide, qty, price);
+                }
                 ShowWindow(st->hOrderLabel, SW_HIDE);
                 ShowWindow(st->hOrderPrice, SW_HIDE);
                 ShowWindow(st->hOrderQty,   SW_HIDE);
