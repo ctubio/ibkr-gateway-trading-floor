@@ -906,6 +906,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->l1Info.bidSize   = wi.bidSize;
                 state->l1Info.askSize   = wi.askSize;
                 state->l1Info.volume    = wi.volume;
+                state->l1Info.vwap      = wi.vwap;
             }
             {
                 Market_RefreshPositionAndAvg(hWnd, state);

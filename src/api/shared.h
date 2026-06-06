@@ -486,7 +486,7 @@ void EnsureGatewayRunning(HWND hParent) {
     alreadyEnsureGatewayRunning = true;
     std::string path = GetGatewayPath();
     if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        MessageBoxA(hParent, "TWS or IB Gateway not found. Please locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
+        MessageBoxA(hParent, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
         path = AskGatewayPath(hParent);
         if (path.empty()) return; 
         SaveGatewayPath(path);
