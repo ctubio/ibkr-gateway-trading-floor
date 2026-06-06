@@ -896,17 +896,17 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             TradingAPI::WatchlistInfo wi;
             if (api.getWatchlistData(state->conId, state->symbol, wi)) {
-                state->l1Info.last      = wi.last;
-                state->l1Info.open      = wi.open;
-                state->l1Info.prevClose = wi.prevClose;
-                state->l1Info.high      = wi.high;
-                state->l1Info.low       = wi.low;
-                state->l1Info.bid       = wi.bid;
-                state->l1Info.ask       = wi.ask;
-                state->l1Info.bidSize   = wi.bidSize;
-                state->l1Info.askSize   = wi.askSize;
-                state->l1Info.volume    = wi.volume;
-                state->l1Info.vwap      = wi.vwap;
+                if (wi.last      > 0.0) state->l1Info.last      = wi.last;
+                if (wi.open      > 0.0) state->l1Info.open      = wi.open;
+                if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
+                if (wi.high      > 0.0) state->l1Info.high      = wi.high;
+                if (wi.low       > 0.0) state->l1Info.low       = wi.low;
+                if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
+                if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
+                if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
+                if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
+                if (wi.volume    > 0)   state->l1Info.volume    = wi.volume;
+                if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
             }
             {
                 Market_RefreshPositionAndAvg(hWnd, state);
