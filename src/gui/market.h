@@ -279,6 +279,15 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     int len = GetWindowTextLengthA(state->hOrderPrice);
     SendMessageA(state->hOrderPrice, EM_SETSEL, 0, len);
 }
+
+void Market_Layout_HideBar(HWND hWnd, TsState* state) {
+    ShowWindow(state->hOrderLabel, SW_HIDE);
+    ShowWindow(state->hOrderPrice, SW_HIDE);
+    ShowWindow(state->hOrderQty,   SW_HIDE);
+    state->orderBarVisible = false;
+    Market_Layout(hWnd, state);
+}
+
 // Subclass for the order-bar price and qty edit controls.
 // uIdSubclass == 1 → price (step 0.01, 2 dec)
 // uIdSubclass == 2 → qty   (step 1,    0 dec)
@@ -302,11 +311,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
 
         if (wParam == VK_ESCAPE) {
             if (st) {
-                ShowWindow(st->hOrderLabel, SW_HIDE);
-                ShowWindow(st->hOrderPrice, SW_HIDE);
-                ShowWindow(st->hOrderQty,   SW_HIDE);
-                st->orderBarVisible = false;
-                Market_Layout(hMarket, st);
+                api.cancelOrders(st->conId);
             }
             return 0;
         }
@@ -329,11 +334,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 if (price > 0 && qty > 0) {
                     api.submitOrder(st->conId, st->symbol, st->orderSide, qty, price);
                 }
-                ShowWindow(st->hOrderLabel, SW_HIDE);
-                ShowWindow(st->hOrderPrice, SW_HIDE);
-                ShowWindow(st->hOrderQty,   SW_HIDE);
-                st->orderBarVisible = false;
-                Market_Layout(hMarket, st);
+                Market_Layout_HideBar(hMarket, st);
             }
             return 0;
         }
@@ -354,9 +355,17 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
         if (wParam == VK_CONTROL) {
             bool isRight = (lParam & (1 << 24)) != 0;
             if (isRight) {
-                OrderBar_Show(hMarket, st, "SELL");
+                if (st->orderBarVisible && st->orderSide == "SELL") {
+                    Market_Layout_HideBar(hMarket, st);
+                } else {
+                    OrderBar_Show(hMarket, st, "SELL");
+                }
             } else {
-                OrderBar_Show(hMarket, st, "BUY");
+                if (st->orderBarVisible && st->orderSide == "BUY") {
+                    Market_Layout_HideBar(hMarket, st);
+                } else {
+                    OrderBar_Show(hMarket, st, "BUY");
+                }
             }
         }
     }
@@ -712,7 +721,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     }
 
     // Total width of the last+change block
-    int lcBlockW = std::max(lastSz.cx, (showChg ? chgSz.cx : 0)) + 4;
+    int lcBlockW = std::max(lastSz.cx, (showChg ? chgSz.cx : 0)) + 7;
 
     // Left edge of the block: right-justified to LC_RIGHT, but no further left
     // than STATS_X (so it never overlaps the stats when window is very narrow).
@@ -723,18 +732,18 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         // Draw large last price (vertically centred, full header height)
         SelectObject(hdc, state->hBigFont);
         SetTextColor(hdc, textColor);
-        RECT lastRc = { lcX, 0, lcX + lastSz.cx + 2, HEADER_H - 7 };
-        DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        RECT lastRc = { lcX, 0, LC_RIGHT - 7, HEADER_H - 7 };
+        DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        // Draw change/pct% in smaller font immediately to the right
+        // Draw change/pct% in smaller font immediately to below
         if (showChg) {
             COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
             SelectObject(hdc, state->hSmallFont);
             SetTextColor(hdc, chgColor);
             int chgX = lcX;
             if (chgX < LC_RIGHT) {
-                RECT chgRc = { chgX, 0, LC_RIGHT, HEADER_H - 3 };
-                DrawTextA(hdc, chgBuf, -1, &chgRc, DT_LEFT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
+                RECT chgRc = { chgX, 0, LC_RIGHT - 7, HEADER_H - 3 };
+                DrawTextA(hdc, chgBuf, -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
             }
         }
     }
@@ -807,6 +816,7 @@ void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
         SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
     }
 }
+
 // ── Window procedure ──────────────────────────────────────────────────────────
 LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
@@ -950,12 +960,26 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_KEYDOWN: {
         if (!state) break;
+        if (wParam == VK_ESCAPE) {
+            if (state) {
+                api.cancelOrders(state->conId);
+            }
+            return 0;
+        }
         if (wParam == VK_CONTROL) {
             bool isRight = (lParam & (1 << 24)) != 0;
             if (isRight) {
-                OrderBar_Show(hWnd, state, "SELL");
+                if (state->orderBarVisible && state->orderSide == "SELL") {
+                    Market_Layout_HideBar(hWnd, state);
+                } else {
+                    OrderBar_Show(hWnd, state, "SELL");
+                }
             } else {
-                OrderBar_Show(hWnd, state, "BUY");
+                if (state->orderBarVisible && state->orderSide == "BUY") {
+                    Market_Layout_HideBar(hWnd, state);
+                } else {
+                    OrderBar_Show(hWnd, state, "BUY");
+                }
             }
         }
         break;

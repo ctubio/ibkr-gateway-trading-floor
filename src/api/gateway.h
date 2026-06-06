@@ -210,6 +210,7 @@ public:
 
     void setOrdersWindow(HWND hWnd);
     void unsetOrdersWindow();
+    void cancelOrders(int coinId);
     std::vector<OrderInfo> getOrdersSorted();
 
     // Transmit a cancel request for the given order.

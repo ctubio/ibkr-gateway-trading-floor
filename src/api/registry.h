@@ -598,17 +598,18 @@ void Session_AddWindow(HWND hWnd, LPARAM lParam) {
     if (strcmp(className, MARKET_CLASS_NAME) == 0) {
         MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data) {
-            LogDebug(std::string("Adding window: ") + className + " with key " + data->winKey);
             winKey = data->winKey;
         }
     } else {
         winKey = className;
     }
 
-    if (Settings_AlwaysOnTop_Load(winKey.c_str(), 0)) {
-        if (strcmp(className, MARKET_CLASS_NAME) == 0)
-            SetMarketAlwaysOnTop(hWnd, true);
-        else ToggleWindowAlwaysOnTop(winKey.c_str());                        
+    if (!winKey.empty()) {
+        if (Settings_AlwaysOnTop_Load(winKey.c_str(), 0)) {
+            if (strcmp(className, MARKET_CLASS_NAME) == 0)
+                SetMarketAlwaysOnTop(hWnd, true);
+            else ToggleWindowAlwaysOnTop(winKey.c_str());                        
+        }
     }
 
     if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) return; // Dashboard is always open on boot, no need to track in registry
