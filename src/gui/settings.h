@@ -208,10 +208,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 int len = GetWindowTextLength(hEdit);
                 int qty = 0;
                 if (len > 0) {
-                    char* buffer = new char[len + 1];
-                    GetWindowTextA(hEdit, buffer, len + 1);
-                    qty = atoi(buffer);
-                    delete[] buffer;
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    qty = atoi(buf);
                 }
                 Settings_Save("OrderQty", qty);
             }

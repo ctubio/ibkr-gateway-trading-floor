@@ -81,7 +81,7 @@ static LRESULT CALLBACK Market_ListForwardCtrlProc(
     HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
 {
-    if (msg == WM_KEYDOWN && wParam == VK_CONTROL)
+    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE))
         SendMessage(GetParent(hList), WM_KEYDOWN, wParam, lParam);
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hList, Market_ListForwardCtrlProc, uIdSubclass);
@@ -264,13 +264,15 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     if (side == "BUY"  && state->l1Info.ask > 0.0) suggestedPrice = state->l1Info.ask;
     else if (side == "SELL" && state->l1Info.bid > 0.0) suggestedPrice = state->l1Info.bid;
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
-
+    else if (state->l1Info.prevClose > 0.0) suggestedPrice = state->l1Info.prevClose;
+    
     char buf[32];
     snprintf(buf, sizeof(buf), "%.2f", suggestedPrice);
     SetWindowTextA(state->hOrderPrice, buf);
+    char buqty[32];
     int qty = (int)Settings_Load("OrderQty", 100);
-    snprintf(buf, sizeof(buf), "%d", qty);
-    SetWindowTextA(state->hOrderQty, buf);
+    snprintf(buqty, sizeof(buqty), "%d", qty);
+    SetWindowTextA(state->hOrderQty, buqty);
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
     ShowWindow(state->hOrderPrice, SW_SHOW);
