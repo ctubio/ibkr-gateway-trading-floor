@@ -253,6 +253,32 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     }
 }
 
+static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
+    if (!state || !state->hOrderLabel) return;
+    state->orderSide = side;
+    state->orderBarVisible = true;
+    SetWindowTextA(state->hOrderLabel, side.c_str());
+
+    // Pre-fill price from current last / bid / ask
+    double suggestedPrice = 0.0;
+    if (side == "BUY"  && state->l1Info.ask > 0.0) suggestedPrice = state->l1Info.ask;
+    else if (side == "SELL" && state->l1Info.bid > 0.0) suggestedPrice = state->l1Info.bid;
+    else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%.2f", suggestedPrice);
+    SetWindowTextA(state->hOrderPrice, buf);
+    SetWindowTextA(state->hOrderQty,   "1");
+
+    ShowWindow(state->hOrderLabel, SW_SHOW);
+    ShowWindow(state->hOrderPrice, SW_SHOW);
+    ShowWindow(state->hOrderQty,   SW_SHOW);
+
+    Market_Layout(hWnd, state);
+    SetFocus(state->hOrderPrice);
+    int len = GetWindowTextLengthA(state->hOrderPrice);
+    SendMessageA(state->hOrderPrice, EM_SETSEL, 0, len);
+}
 // Subclass for the order-bar price and qty edit controls.
 // uIdSubclass == 1 → price (step 0.01, 2 dec)
 // uIdSubclass == 2 → qty   (step 1,    0 dec)
@@ -321,37 +347,19 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             SendMessageA(hWnd, EM_SETSEL, len, len);
             return 0;
         }
+        
+        if (wParam == VK_CONTROL) {
+            bool isRight = (lParam & (1 << 24)) != 0;
+            if (isRight) {
+                OrderBar_Show(hMarket, st, "SELL");
+            } else {
+                OrderBar_Show(hMarket, st, "BUY");
+            }
+        }
     }
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hWnd, OrderBar_EditSubclassProc, uIdSubclass);
     return DefSubclassProc(hWnd, msg, wParam, lParam);
-}
-
-static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
-    if (!state || !state->hOrderLabel) return;
-    state->orderSide = side;
-    state->orderBarVisible = true;
-    SetWindowTextA(state->hOrderLabel, side.c_str());
-
-    // Pre-fill price from current last / bid / ask
-    double suggestedPrice = 0.0;
-    if (side == "BUY"  && state->l1Info.ask > 0.0) suggestedPrice = state->l1Info.ask;
-    else if (side == "SELL" && state->l1Info.bid > 0.0) suggestedPrice = state->l1Info.bid;
-    else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%.2f", suggestedPrice);
-    SetWindowTextA(state->hOrderPrice, buf);
-    SetWindowTextA(state->hOrderQty,   "1");
-
-    ShowWindow(state->hOrderLabel, SW_SHOW);
-    ShowWindow(state->hOrderPrice, SW_SHOW);
-    ShowWindow(state->hOrderQty,   SW_SHOW);
-
-    Market_Layout(hWnd, state);
-    SetFocus(state->hOrderPrice);
-    int len = GetWindowTextLengthA(state->hOrderPrice);
-    SendMessageA(state->hOrderPrice, EM_SETSEL, 0, len);
 }
 
 // ── Search Popup ──────────────────────────────────────────────────────────────
@@ -942,26 +950,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (wParam == VK_CONTROL) {
             bool isRight = (lParam & (1 << 24)) != 0;
             if (isRight) {
-                if (state->orderBarVisible && state->orderSide == "BUY") {
-                    // toggle off
-                    ShowWindow(state->hOrderLabel, SW_HIDE);
-                    ShowWindow(state->hOrderPrice, SW_HIDE);
-                    ShowWindow(state->hOrderQty,   SW_HIDE);
-                    state->orderBarVisible = false;
-                    Market_Layout(hWnd, state);
-                } else {
-                    OrderBar_Show(hWnd, state, "BUY");
-                }
+                OrderBar_Show(hWnd, state, "SELL");
             } else {
-                if (state->orderBarVisible && state->orderSide == "SELL") {
-                    ShowWindow(state->hOrderLabel, SW_HIDE);
-                    ShowWindow(state->hOrderPrice, SW_HIDE);
-                    ShowWindow(state->hOrderQty,   SW_HIDE);
-                    state->orderBarVisible = false;
-                    Market_Layout(hWnd, state);
-                } else {
-                    OrderBar_Show(hWnd, state, "SELL");
-                }
+                OrderBar_Show(hWnd, state, "BUY");
             }
         }
         break;
