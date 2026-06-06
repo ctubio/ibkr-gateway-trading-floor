@@ -268,7 +268,9 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%.2f", suggestedPrice);
     SetWindowTextA(state->hOrderPrice, buf);
-    SetWindowTextA(state->hOrderQty,   "1");
+    int qty = (int)Settings_Load("OrderQty", 100);
+    snprintf(buf, sizeof(buf), "%d", qty);
+    SetWindowTextA(state->hOrderQty, buf);
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
     ShowWindow(state->hOrderPrice, SW_SHOW);

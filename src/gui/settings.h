@@ -1,6 +1,6 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 276, 275); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 276, 300); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 790, 240); }
 
@@ -10,6 +10,7 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IB
 #define ID_SETTINGS_AUTO_GATEWAY 4004
 #define ID_SETTINGS_DEBUG_LOG    4005
 #define ID_SETTINGS_VOICE_COMBO  4006
+#define ID_SETTINGS_QTY_VALUE    4007
 
 static HWND hDebugEdit = NULL;
 static std::vector<TtsVoiceEntry> g_settingsVoices; // populated once on WM_CREATE
@@ -146,9 +147,23 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (!g_settingsVoices.empty())
                 SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
 
+            CreateWindowA("STATIC", "Order Qty:",
+                WS_CHILD | WS_VISIBLE,
+                margin, margin + 167, 75, 20,
+                hWnd, NULL, hInst, NULL);
+
+            HWND hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_NUMBER,
+                margin + 80, margin + 164, 162, 26,
+                hWnd, (HMENU)ID_SETTINGS_QTY_VALUE, hInst, NULL);
+
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%d", (int)Settings_Load("OrderQty", 100));
+            SetWindowTextA(hQtyEdit, buf);
+
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                margin, margin + 164, 250, 24,
+                margin, margin + 200, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
 
             ApplyDarkMode(hWnd);
@@ -187,6 +202,18 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 // Force full repaint of this window and all children
                 InvalidateRect(hWnd, NULL, TRUE);
                 RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_QTY_VALUE) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
+                int len = GetWindowTextLength(hEdit);
+                int qty = 0;
+                if (len > 0) {
+                    char* buffer = new char[len + 1];
+                    GetWindowTextA(hEdit, buffer, len + 1);
+                    qty = atoi(buffer);
+                    delete[] buffer;
+                }
+                Settings_Save("OrderQty", qty);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);
