@@ -1,4 +1,4 @@
-# 💼 IBKR Gateway: Trading Floor
+# 💼 TWS API: Trading Floor
 
 A lightweight Windows tray application that connects to Interactive Brokers Gateway and surfaces live account, market, and trading data in a compact, portable Windows GUI.
 
@@ -21,7 +21,7 @@ This application is a modern desktop trading companion built on the Interactive 
 ## Key Highlights
 
 - **Tray-Centric Design**: Runs primarily from the system tray with dynamic status icons (Connected/Disconnected) and a context menu for quick window management.
-- **Auto-Connect Watchdog**: A dedicated background timer monitors the connection to `127.0.0.1:4001` and automatically restores the session if the Gateway drops.
+- **Auto-Connect Watchdog**: A dedicated background timer monitors the connection to `127.0.0.1:4001` or `127.0.0.1:7496` and automatically restores the session if the Gateway drops.
 - **Modular Window Architecture**: A "Trading Floor" layout where 10+ independent windows (Dashboard, Coins, Diamonds, Orders, Watchlist, News, Market, Settings, Debug Log) can be arranged, persisted, and restored.
 - **Advanced Watchlists**: Create and manage named symbol lists directly in the Watchlist window, which are then shared across News and Market.
 - **Accessibility & Alerts**: Integrated Windows SAPI for NetLiq voice alerts and custom sound notifications for critical trading events.
@@ -127,7 +127,7 @@ Runtime diagnostics and transparency for deeper troubleshooting:
 ### Software
 
 - Windows 10 or 11 (x86_64)
-- IBKR Gateway
+- Trader Workstation or IBKR Gateway
 - IBKR account with market data permissions
 
 ### System
