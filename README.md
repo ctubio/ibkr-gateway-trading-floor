@@ -15,6 +15,7 @@ This application is a modern desktop trading companion built on the Interactive 
 - **Order Execution Tracking**: Real-time order status monitoring with intuitive color-coding, in-place modifications, and quick cancellation.
 - **Information Hub**: Symbol-specific news headlines with provider filtering, HTML-to-RTF article preview, and a centralized watchlist manager with auto-complete.
 - **User-Friendly UI**: Font zoom support for ListViews, dynamic split-panel Market, and intelligent auto-complete symbol entry in Watchlist.
+- **Rapid Trading**: Integrated quick-order entry bars in Market windows for high-speed execution.
 - **Robust Infrastructure**: Auto-reconnecting watchdog, persistent registry-based settings, asynchronous audio notifications, and a system-tray-first design.
 
 ## Key Highlights
@@ -88,6 +89,8 @@ High-frequency trade monitoring with Level 2 depth and dynamic splitter panels:
 - **Tick-by-Tick Feed**: Live trade price, size, time, and exchange for the active symbol on the right side.
 - **Filtered Views**: Toggle between full trades, top 100, and top 1000 size filters to focus on significant activity.
 - **Interactive Splitters**: Customize your view with **draggable vertical and horizontal splitters**. The application remembers your preferred layout for each symbol.
+- **Quick Order Entry**: Press `Left Ctrl` or `Right Ctrl` in the Market window to reveal a rapid order entry bar, pre-filled with the current best bid/ask and your default order quantity.
+- **Market TTS**: Optional voice announcements of the last price for the active symbol, controllable via a speaker icon in the header.
 - **Multi-Window Support**: Open many Market sessions at once for different instruments.
 - **Market Search**: A dedicated search dialog with auto-complete and keyboard navigation (`Arrows` + `Enter`) to quickly find and launch new market windows.
 - **Persistent Preferences**: Filter states, splitter positions, and sort preferences are saved to the registry and restored automatically.
