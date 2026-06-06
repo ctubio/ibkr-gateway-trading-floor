@@ -29,7 +29,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
 static const int L2_W     = 224;  // Fixed width of the Level 2 depth panel
-static const int ORDER_BAR_H = 32;
+static const int ORDER_BAR_H = 38;
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
 
@@ -54,6 +54,7 @@ struct TsState {
     // ── Cached fonts ──────────────────────────────────────────────────────────
     HFONT hBigFont     = NULL;   // ~22pt bold — large last price
     HFONT hStatusFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
+    HFONT hOrderFont       = NULL;   // ~20pt bold — order entry controls
     HFONT hSmallFont = NULL;   // ~13pt regular — smaller stats below change
     HFONT hSpeakerFont = NULL;   // Segoe MDL2 Assets — speaker glyph
 
@@ -242,7 +243,7 @@ static void Market_Layout(HWND hWnd, TsState* state) {
         const int lblY  = rc.bottom - ORDER_BAR_H + (ORDER_BAR_H - 18) / 2;
         int availW = rc.right - m * 3 - lblW;
         int priceW = availW / 2;
-        int qtyW   = availW - priceW;
+        int qtyW   = availW - priceW - 1;
 
         SetWindowPos(state->hOrderLabel, NULL, m, lblY, lblW, 18,
                      SWP_NOZORDER | SWP_NOACTIVATE);
@@ -845,6 +846,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hBigFont = CreateFontA(-22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        state->hOrderFont = CreateFontA(-20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
         state->hStatusFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
@@ -912,7 +916,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // ── Order entry bar (hidden until Ctrl key pressed) ───────────────────
         state->hOrderLabel = CreateWindowA("STATIC", "BUY",
             WS_CHILD | SS_CENTER | SS_CENTERIMAGE,
-            0, 0, 42, 20, hWnd, NULL, hInst, NULL);
+            0, 0, 42, 26, hWnd, NULL, hInst, NULL);
 
         state->hOrderPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
             WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
@@ -925,10 +929,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
 
         // Apply font to order bar controls
-        if (state->hStatusFont) {
-            SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
-            SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
-            SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
+        if (state->hOrderFont) {
+            SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
+            SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
+            SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
         }
 
         // Restore splitter + filter
@@ -1277,6 +1281,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             if (state->hBigFont)     DeleteObject(state->hBigFont);
             if (state->hStatusFont)      DeleteObject(state->hStatusFont);
+            if (state->hOrderFont)       DeleteObject(state->hOrderFont);
             if (state->hSmallFont)      DeleteObject(state->hSmallFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
