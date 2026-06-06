@@ -479,7 +479,6 @@ void StartMarketSearch() {
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
         (GetSystemMetrics(SM_CXSCREEN) - 268) / 2, (GetSystemMetrics(SM_CYSCREEN) - 255) / 2, 268, 255,
         NULL, NULL, GetModuleHandle(NULL), NULL);
-    ApplyDarkMode(hWnd);
 }
 
 void StartMarket(const std::string& symbol, int conId) {

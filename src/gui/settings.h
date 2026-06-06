@@ -165,8 +165,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                 margin, margin + 200, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
-
-            ApplyDarkMode(hWnd);
             break;
         }
 

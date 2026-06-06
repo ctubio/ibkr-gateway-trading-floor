@@ -401,7 +401,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         case WM_SIZE:
         case WM_MOVE:
             SaveWinPosition(hWnd);
-            return 0;
+            return DefWindowProc(hWnd, message, wParam, lParam);
         case WM_DESTROY:
             SaveWinPosition(hWnd);
             if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
