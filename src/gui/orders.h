@@ -165,10 +165,6 @@ static LRESULT CALLBACK WndProcEditOrder(HWND hWnd, UINT message, WPARAM wParam,
             ctx = (EditOrderCtx*)((LPCREATESTRUCT)lParam)->lpCreateParams;
             SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
 
-            // Dark title bar (Windows 10 20H1+).
-            BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
-            DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-
             HINSTANCE hInst = GetModuleHandle(NULL);
             int lx = 17, ex = 90, ew = 112, fh = 30;
 
