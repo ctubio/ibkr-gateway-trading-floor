@@ -24,7 +24,7 @@ static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]
 static COLORREF Orders_StatusColor(const std::string& orderType, const std::string& status, bool dark) {
     if (status == "Filled")                           return RGB(196, 110, 43);
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
-    if (status == "Cancelled" || status == "Inactive")
+    if (status == "Cancelled" || status == "Inactive" || status == "PendingCancel")
         return dark ? RGB(130, 130, 130) : RGB(160, 160, 160);
     if (status == "Submitted" || status == "PreSubmitted") {
         if (orderType == "BUY") return RGB(80, 200, 120);
@@ -60,7 +60,7 @@ static void Orders_Repopulate(HWND hWnd) {
         ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
 
         if (o.price > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.totalQty, o.price);
+            snprintf(buf, sizeof(buf), "%.0f @ %.2f %d", o.totalQty, o.price, o.orderId);
         else
             snprintf(buf, sizeof(buf), "%.0f @ MKT", o.totalQty);
         ListView_SetItemText(hList, i, col++, buf);
@@ -156,7 +156,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
 
 static HWND s_hEditOrderPopup = NULL;   // at most one popup at a time
 
-static LRESULT CALLBACK EditOrderProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK WndProcEditOrder(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     EditOrderCtx* ctx = (EditOrderCtx*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
     switch (message) {
@@ -240,22 +240,10 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
         SetForegroundWindow(s_hEditOrderPopup);
         return;
     }
+
     // Don't allow editing orders that are already terminal.
     const std::string& st = order.status;
-    if (st == "Filled" || st == "Cancelled" || st == "Inactive") return;
-
-    // Register the popup class once.
-    static bool s_classReg = false;
-    if (!s_classReg) {
-        WNDCLASSA wc      = {};
-        wc.lpfnWndProc    = EditOrderProc;
-        wc.hInstance      = GetModuleHandle(NULL);
-        wc.lpszClassName  = ORDERS_EDIT_CLASS_NAME;
-        wc.hbrBackground  = (HBRUSH)(COLOR_BTNFACE + 1);
-        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
-        RegisterClassA(&wc);
-        s_classReg = true;
-    }
+    if (st == "Filled" || st == "Cancelled" || st == "Inactive" || st == "PendingCancel") return;
 
     auto* ctx    = new EditOrderCtx{};
     ctx->orderId     = order.orderId;
@@ -357,8 +345,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
-
-            // ── DEL on selected row → cancel that order ───────────────────────
             if (hdr->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
                 if (kd->wVKey == VK_DELETE) {
@@ -366,39 +352,50 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                     if (sel >= 0) {
                         LVITEMA lvi = {};
-                        lvi.mask    = LVIF_PARAM;
-                        lvi.iItem   = sel;
-                        if (ListView_GetItem(hList, &lvi))
+                        lvi.mask  = LVIF_PARAM;
+                        lvi.iItem = sel;
+                        if (ListView_GetItem(hList, &lvi)) {
                             api.cancelOrder((int)lvi.lParam);
-                    }
-                }
-                break;
-            }
-
-            // ── Double-click → edit price / qty ──────────────────────────────
-            if (hdr->code == NM_DBLCLK || hdr->code == NM_RETURN) {
-                NMITEMACTIVATE* ia = (NMITEMACTIVATE*)lParam;
-                if (ia->iItem >= 0) {
-                    // Retrieve orderId stored in lParam by Orders_Repopulate.
-                    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                    LVITEMA lvi = {};
-                    lvi.mask    = LVIF_PARAM;
-                    lvi.iItem   = ia->iItem;
-                    if (ListView_GetItem(hList, &lvi)) {
-                        int orderId = (int)lvi.lParam;
-                        // Find the matching OrderInfo snapshot.
-                        auto orders = api.getOrdersSorted();
-                        for (const auto& o : orders) {
-                            if (o.orderId == orderId) {
-                                Orders_ShowEditPopup(hWnd, o);
-                                break;
-                            }
                         }
                     }
                 }
-                break;
+                return 0;  // ← was: break (fell through, but also swallowed return value)
             }
 
+            // NM_DBLCLK sends NMITEMACTIVATE; NM_RETURN sends only NMHDR — handle separately
+            if (hdr->code == NM_DBLCLK) {
+                NMITEMACTIVATE* ia = (NMITEMACTIVATE*)lParam;
+                if (ia->iItem < 0) break;
+                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                LVITEMA lvi = {};
+                lvi.mask  = LVIF_PARAM;
+                lvi.iItem = ia->iItem;
+                if (ListView_GetItem(hList, &lvi)) {
+                    int orderId = (int)lvi.lParam;
+                    auto orders = api.getOrdersSorted();
+                    for (const auto& o : orders)
+                        if (o.orderId == orderId) { Orders_ShowEditPopup(hWnd, o); break; }
+                }
+                return 0;
+            }
+
+            if (hdr->code == NM_RETURN) {
+                // NM_RETURN gives us only NMHDR — get selection manually
+                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+                if (sel >= 0) {
+                    LVITEMA lvi = {};
+                    lvi.mask  = LVIF_PARAM;
+                    lvi.iItem = sel;
+                    if (ListView_GetItem(hList, &lvi)) {
+                        int orderId = (int)lvi.lParam;
+                        auto orders = api.getOrdersSorted();
+                        for (const auto& o : orders)
+                            if (o.orderId == orderId) { Orders_ShowEditPopup(hWnd, o); break; }
+                    }
+                }
+                return 0;
+            }
             if (hdr->code == NM_CUSTOMDRAW) {
                 NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
                 bool dark = Settings_DarkMode();

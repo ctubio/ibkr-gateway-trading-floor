@@ -16,6 +16,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
 
     RegisterWindowClass(hInst, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
     RegisterWindowClass(hInst, WndProcOrders,      ORDERS_CLASS_NAME,             103);
+    RegisterWindowClass(hInst, WndProcEditOrder,   ORDERS_EDIT_CLASS_NAME,        103);
     RegisterWindowClass(hInst, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
     RegisterWindowClass(hInst, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);
     RegisterWindowClass(hInst, WndProcNewList,     WATCHLIST_NEW_LIST_CLASS_NAME, 105);

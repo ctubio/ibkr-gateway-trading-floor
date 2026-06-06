@@ -256,7 +256,7 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     wc.lpszClassName = className;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0 || strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) == 0 || strcmp(className, MARKET_SEARCH_CLASS_NAME) == 0) {
+    if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0 || strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) == 0 || strcmp(className, MARKET_SEARCH_CLASS_NAME) == 0 || strcmp(className, ORDERS_EDIT_CLASS_NAME) == 0) {
         wc.hInstance = GetModuleHandle(NULL);
     } else {
         wc.hInstance = hInst;

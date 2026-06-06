@@ -29,6 +29,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
 static const int L2_W     = 224;  // Fixed width of the Level 2 depth panel
+static const int ORDER_BAR_H = 32;
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
 
@@ -66,8 +67,26 @@ struct TsState {
     float splitX = 0.5f;
     float splitY = 0.5f;
     int dragMode = 0;
+
+    // ── Order entry bar ───────────────────────────────────────────────────────
+    HWND  hOrderLabel    = NULL;
+    HWND  hOrderPrice    = NULL;
+    HWND  hOrderQty      = NULL;
+    bool  orderBarVisible = false;
+    std::string orderSide;   // "BUY" or "SELL"
 };
 static std::map<HWND, TsState*> tsStates;
+
+static LRESULT CALLBACK Market_ListForwardCtrlProc(
+    HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
+    UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
+{
+    if (msg == WM_KEYDOWN && wParam == VK_CONTROL)
+        SendMessage(GetParent(hList), WM_KEYDOWN, wParam, lParam);
+    if (msg == WM_NCDESTROY)
+        RemoveWindowSubclass(hList, Market_ListForwardCtrlProc, uIdSubclass);
+    return DefSubclassProc(hList, msg, wParam, lParam);
+}
 
 static void UpdateMarketRegistry() {
     std::vector<std::string> sessions;
@@ -166,7 +185,8 @@ static void Market_Layout(HWND hWnd, TsState* state) {
 
     const int hdrH  = HEADER_H;
     const int bodyY = hdrH;
-    const int bodyH = rc.bottom - hdrH;
+    const int barH  = (state->orderBarVisible) ? ORDER_BAR_H : 0;
+    const int bodyH = rc.bottom - hdrH - barH;
     const int bodyW = rc.right;
 
     // ── Speaker button: far left, vertically centred in top half of header ───
@@ -212,6 +232,126 @@ static void Market_Layout(HWND hWnd, TsState* state) {
         ShowWindow(state->hTsList,      SW_SHOW);
         MoveWindow(state->hTsList, tsX, bodyY, tsW, bodyH, TRUE);
     }
+
+    // ── Order entry bar ───────────────────────────────────────────────────────
+    if (state->hOrderLabel && state->hOrderPrice && state->hOrderQty) {
+        const int m    = 8;
+        const int lblW = 42;
+        const int editH = ORDER_BAR_H - 6;
+        const int editY = rc.bottom - ORDER_BAR_H + (ORDER_BAR_H - editH) / 2;
+        const int lblY  = rc.bottom - ORDER_BAR_H + (ORDER_BAR_H - 18) / 2;
+        int availW = rc.right - m * 3 - lblW;
+        int priceW = availW / 2;
+        int qtyW   = availW - priceW;
+
+        SetWindowPos(state->hOrderLabel, NULL, m, lblY, lblW, 18,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderPrice, NULL, m + lblW + m, editY, priceW, editH,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderQty, NULL, m + lblW + m + priceW + m, editY, qtyW, editH,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+// Subclass for the order-bar price and qty edit controls.
+// uIdSubclass == 1 → price (step 0.01, 2 dec)
+// uIdSubclass == 2 → qty   (step 1,    0 dec)
+static LRESULT CALLBACK OrderBar_EditSubclassProc(
+    HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam,
+    UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
+{
+    if (msg == WM_GETDLGCODE)
+        return DefSubclassProc(hWnd, msg, wParam, lParam)
+               | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
+
+    if (msg == WM_CHAR) {
+        if (wParam == VK_ESCAPE || wParam == VK_TAB || wParam == VK_RETURN)
+            return 0;
+    }
+
+    if (msg == WM_KEYDOWN) {
+        HWND hMarket = GetParent(hWnd);
+        auto it = tsStates.find(hMarket);
+        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
+
+        if (wParam == VK_ESCAPE) {
+            if (st) {
+                ShowWindow(st->hOrderLabel, SW_HIDE);
+                ShowWindow(st->hOrderPrice, SW_HIDE);
+                ShowWindow(st->hOrderQty,   SW_HIDE);
+                st->orderBarVisible = false;
+                Market_Layout(hMarket, st);
+            }
+            return 0;
+        }
+        if (wParam == VK_TAB) {
+            if (st) {
+                HWND hNext = (hWnd == st->hOrderPrice) ? st->hOrderQty : st->hOrderPrice;
+                SetFocus(hNext);
+                int len = GetWindowTextLengthA(hNext);
+                SendMessageA(hNext, EM_SETSEL, len, len);
+            }
+            return 0;
+        }
+        if (wParam == VK_RETURN) {
+            if (st) {
+                char pBuf[32] = {}, qBuf[32] = {};
+                GetWindowTextA(st->hOrderPrice, pBuf, sizeof(pBuf));
+                GetWindowTextA(st->hOrderQty,   qBuf, sizeof(qBuf));
+                LogDebug(std::string("OrderBar ") + st->orderSide
+                         + " Price=" + pBuf + " Qty=" + qBuf);
+                ShowWindow(st->hOrderLabel, SW_HIDE);
+                ShowWindow(st->hOrderPrice, SW_HIDE);
+                ShowWindow(st->hOrderQty,   SW_HIDE);
+                st->orderBarVisible = false;
+                Market_Layout(hMarket, st);
+            }
+            return 0;
+        }
+        if (wParam == VK_UP || wParam == VK_DOWN) {
+            char buf[32] = {};
+            GetWindowTextA(hWnd, buf, sizeof(buf));
+            double val  = atof(buf);
+            double step = (uIdSubclass == 1) ? 0.01 : 1.0;
+            val += (wParam == VK_UP) ? step : -step;
+            if (val < 0.0) val = 0.0;
+            snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
+            SetWindowTextA(hWnd, buf);
+            int len = GetWindowTextLengthA(hWnd);
+            SendMessageA(hWnd, EM_SETSEL, len, len);
+            return 0;
+        }
+    }
+    if (msg == WM_NCDESTROY)
+        RemoveWindowSubclass(hWnd, OrderBar_EditSubclassProc, uIdSubclass);
+    return DefSubclassProc(hWnd, msg, wParam, lParam);
+}
+
+static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
+    if (!state || !state->hOrderLabel) return;
+    state->orderSide = side;
+    state->orderBarVisible = true;
+    SetWindowTextA(state->hOrderLabel, side.c_str());
+
+    // Pre-fill price from current last / bid / ask
+    double suggestedPrice = 0.0;
+    if (side == "BUY"  && state->l1Info.ask > 0.0) suggestedPrice = state->l1Info.ask;
+    else if (side == "SELL" && state->l1Info.bid > 0.0) suggestedPrice = state->l1Info.bid;
+    else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%.2f", suggestedPrice);
+    SetWindowTextA(state->hOrderPrice, buf);
+    SetWindowTextA(state->hOrderQty,   "1");
+
+    ShowWindow(state->hOrderLabel, SW_SHOW);
+    ShowWindow(state->hOrderPrice, SW_SHOW);
+    ShowWindow(state->hOrderQty,   SW_SHOW);
+
+    Market_Layout(hWnd, state);
+    SetFocus(state->hOrderPrice);
+    int len = GetWindowTextLengthA(state->hOrderPrice);
+    SendMessageA(state->hOrderPrice, EM_SETSEL, 0, len);
 }
 
 // ── Search Popup ──────────────────────────────────────────────────────────────
@@ -668,6 +808,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         MarketInitData* data = (MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
+        SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
         state = new TsState();
         if (data) {
             state->symbol = data->symbol;
@@ -699,6 +840,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hTsList      = TimeSales_CreateListView(hWnd, ID_TS_LIST,       hInst);
         state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
         state->hTsListF1000 = TimeSales_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
+        SetWindowSubclass(state->hTsList,      Market_ListForwardCtrlProc, 10, 0);
+        SetWindowSubclass(state->hTsListF100,  Market_ListForwardCtrlProc, 11, 0);
+        SetWindowSubclass(state->hTsListF1000, Market_ListForwardCtrlProc, 12, 0);
+        SetWindowSubclass(state->hL2List,      Market_ListForwardCtrlProc, 13, 0);
 
         {
             HFONT hListFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
@@ -739,6 +884,28 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
         SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
 
+        // ── Order entry bar (hidden until Ctrl key pressed) ───────────────────
+        state->hOrderLabel = CreateWindowA("STATIC", "BUY",
+            WS_CHILD | SS_CENTER | SS_CENTERIMAGE,
+            0, 0, 42, 20, hWnd, NULL, hInst, NULL);
+
+        state->hOrderPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+        SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
+
+        state->hOrderQty = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "1",
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+        SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
+
+        // Apply font to order bar controls
+        if (state->hStatusFont) {
+            SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
+            SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
+            SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
+        }
+
         // Restore splitter + filter
         if (!state->symbol.empty()) {
             Settings_LoadMarketSplitter(state->symbol, state->splitX, state->splitY);
@@ -769,6 +936,36 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state) Market_PaintHeader(hWnd, state);
         else { PAINTSTRUCT ps; BeginPaint(hWnd, &ps); EndPaint(hWnd, &ps); }
         return 0;
+
+    case WM_KEYDOWN: {
+        if (!state) break;
+        if (wParam == VK_CONTROL) {
+            bool isRight = (lParam & (1 << 24)) != 0;
+            if (isRight) {
+                if (state->orderBarVisible && state->orderSide == "BUY") {
+                    // toggle off
+                    ShowWindow(state->hOrderLabel, SW_HIDE);
+                    ShowWindow(state->hOrderPrice, SW_HIDE);
+                    ShowWindow(state->hOrderQty,   SW_HIDE);
+                    state->orderBarVisible = false;
+                    Market_Layout(hWnd, state);
+                } else {
+                    OrderBar_Show(hWnd, state, "BUY");
+                }
+            } else {
+                if (state->orderBarVisible && state->orderSide == "SELL") {
+                    ShowWindow(state->hOrderLabel, SW_HIDE);
+                    ShowWindow(state->hOrderPrice, SW_HIDE);
+                    ShowWindow(state->hOrderQty,   SW_HIDE);
+                    state->orderBarVisible = false;
+                    Market_Layout(hWnd, state);
+                } else {
+                    OrderBar_Show(hWnd, state, "SELL");
+                }
+            }
+        }
+        break;
+    }
 
     case WM_MARKET_L1: {
         if (!state) break;
@@ -1030,6 +1227,20 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
+    case WM_CTLCOLORSTATIC: {
+        if (!state) break;
+        HWND hCtrl = (HWND)lParam;
+        if (hCtrl == state->hOrderLabel) {
+            HDC hdc = (HDC)wParam;
+            COLORREF clr = (state->orderSide == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED;
+            SetTextColor(hdc, clr);
+            SetBkMode(hdc, TRANSPARENT);
+            SetBkColor(hdc, Settings_DarkMode() ? DM_BG : GetSysColor(COLOR_BTNFACE));
+            return (LRESULT)(Settings_DarkMode() ? hDarkBrush : GetSysColorBrush(COLOR_BTNFACE));
+        }
+        break;  // fall through to HandleCommonMessages
+    }
+
     case WM_DESTROY:
         api.unsetMarketWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);
@@ -1046,6 +1257,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hStatusFont)      DeleteObject(state->hStatusFont);
             if (state->hSmallFont)      DeleteObject(state->hSmallFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
+            // Order bar controls are children and destroyed with the window,
+            // but null the pointers so nothing uses them after destruction.
+            state->hOrderLabel = state->hOrderPrice = state->hOrderQty = NULL;
             delete state;
             tsStates.erase(hWnd);
         }

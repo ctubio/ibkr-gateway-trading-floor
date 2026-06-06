@@ -231,13 +231,13 @@ void SaveWinPosition(HWND hWnd) {
     DWORD h = (DWORD)(wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
     
     std::string winKey;
-    MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-    if (!data) {
-        char className[256] = {};
-        GetClassNameA(hWnd, className, sizeof(className));
-        winKey = className;
-    } else {
+    char className[256] = {};
+    GetClassNameA(hWnd, className, sizeof(className));
+    if (strcmp(className, MARKET_CLASS_NAME) == 0) {
+        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         winKey = data->winKey;
+    } else {
+        winKey = className;
     }
 
     char fullPath[256];
@@ -595,11 +595,12 @@ void Session_AddWindow(HWND hWnd, LPARAM lParam) {
     GetClassNameA(hWnd, className, sizeof(className));
 
     std::string winKey;
-    MarketInitData* data = (MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
-    SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
-    if (data) {
-        LogDebug(std::string("Adding window: ") + className + " with key " + data->winKey);
-        winKey = data->winKey;
+    if (strcmp(className, MARKET_CLASS_NAME) == 0) {
+        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        if (data) {
+            LogDebug(std::string("Adding window: ") + className + " with key " + data->winKey);
+            winKey = data->winKey;
+        }
     } else {
         winKey = className;
     }
