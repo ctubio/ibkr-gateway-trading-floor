@@ -1,12 +1,12 @@
-# 💼 TWS API: Trading Floor
+# 💰 TWS API: Trading Floor
 
-A lightweight Windows tray application that connects to Interactive Brokers Gateway and surfaces live account, market, and trading data in a compact, portable Windows GUI.
+A lightweight Windows tray application that connects to the Interactive Brokers TWS API and surfaces live account, market, and trading data in a compact, portable Windows GUI.
 
-> System Tray Icon: 💼
+> System Tray Icon: 💰
 
 ## Overview
 
-This application is a modern desktop trading companion built on the Interactive Brokers C++ API. It is designed to work with **TWS** or **IB Gateway** (not Trader Workstation) and provides a modular, multi-window environment for professional traders.
+This application is a modern desktop trading companion built on the Interactive Brokers C++ API. It is designed to work with **TWS** or **IB Gateway** and provides a modular, multi-window environment for professional traders.
 
 ### Core Capabilities:
 - **Real-time Market Data**: Live quotes, tick-by-tick Market, and symbol watchlists with advanced filtering and customizable layouts.
@@ -22,31 +22,39 @@ This application is a modern desktop trading companion built on the Interactive 
 
 - **Tray-Centric Design**: Runs primarily from the system tray with dynamic status icons (Connected/Disconnected) and a context menu for quick window management.
 - **Auto-Connect Watchdog**: A dedicated background timer monitors the connection to `127.0.0.1:4001` or `127.0.0.1:7496` and automatically restores the session if the Gateway drops.
-- **Modular Window Architecture**: A "Trading Floor" layout where 10+ independent windows (Dashboard, Coins, Diamonds, Orders, Watchlist, News, Market, Settings, Debug Log) can be arranged, persisted, and restored.
+- **Modular Window Architecture**: A "Trading Floor" layout where 8 independent windows (Dashboard with integrated Coins, Diamonds, Orders, Watchlist, News, Market, Settings, Debug Log) can be arranged, persisted, and restored.
 - **Advanced Watchlists**: Create and manage named symbol lists directly in the Watchlist window, which are then shared across News and Market.
 - **Accessibility & Alerts**: Integrated Windows SAPI for NetLiq voice alerts and custom sound notifications for critical trading events.
 - **Visual Customization**: Full Dark Mode support, list view font zooming, and high-contrast color-coding for P&L and order statuses.
 
 ## Core Modules
 
-### 💼 Dashboard
-The central command hub of the application:
+### 💰 Dashboard (Account Summary & Window Launcher)
+The primary tray window combining account metrics with centralized window management:
+
+**Account Summary Display:**
+- **Net Liquidation Value**: Prominent display with live currency detection (EUR/USD/Multi-currency).
+- **Daily P&L with TTS**: Large, color-coded daily profit/loss with optional **clickable speaker icon** for voice announcements using Windows SAPI text-to-speech. Automatically speaks on account updates (configurable voice).
+- **Daily P&L %**: Percentage return relative to Net Liquidation Value.
+- **Account Metrics Table**: Comprehensive live data including:
+  - Unrealized & Realized P&L (green/red color-coded)
+  - Dividends accrued
+  - Gross Position Value
+  - Buying Power & Maintenance Margin
+  - Cash Balances (Total, EUR, USD) with automatic currency suffix
+
+**Window Launcher & Tray Features:**
 - **Connection Status**: Real-time monitoring of Market Data and Trading sessions via tray tooltip and icon. Icon changes color based on connection state.
-- **Quick Launch**: One-click buttons to open any module in the suite (Coins, Orders, Watchlist, Market, News, Diamonds, Settings).
+- **Quick Launch Buttons**: One-click access to Orders, Diamonds, Watchlist, Market, News, and Settings windows.
+- **Always-On-Top Indicator**: Tray context menu shows **[ ★ ]** marker for windows pinned above others, making it easy to see which are topmost.
 - **Sticky Tray Menu**: Right-click the tray icon to open a context menu with:
   - Window toggles (show/hide all windows without losing focus)
-  - Always On Top mode for each window (pin windows above others)
+  - Always On Top mode for each window (toggle with **[ ★ ]** indicator)
   - Quick access to Settings and Debug Log
 - **Session Control**: Toggle between manual and automatic connection watchdog. Auto-reconnect monitors the connection to `127.0.0.1:4001` and automatically restores the session if the Gateway drops.
 - **Instance Management**: Ensures a single running instance; launching a new one replaces the old process.
 
-### 💰 Coins (Account Summary)
-High-level financial health monitoring with voice alerts:
-- **Net Liquidation Value**: Prominent display with optional **clickable speaker icon for voice announcements** of rapid value changes. Uses the voice selected in Settings.
-- **Liquidity Metrics**: Live Buying Power, Available Funds, and Excess Liquidity with color-coded formatting.
-- **Margin Tracking**: Real-time Initial and Maintenance Margin requirements.
-- **P&L Suite**: Daily, Unrealized, and Realized P&L with green/red color-coding for instant recognition.
-- **TTS Alerts**: On account summary updates, automatically announce key metrics using Windows SAPI text-to-speech if enabled.
+
 
 ### 📝 Orders
 Precision order tracking and management with live updates:
@@ -89,11 +97,11 @@ High-frequency trade monitoring with Level 2 depth and dynamic splitter panels:
 - **Tick-by-Tick Feed**: Live trade price, size, time, and exchange for the active symbol on the right side.
 - **Filtered Views**: Toggle between full trades, top 100, and top 1000 size filters to focus on significant activity.
 - **Interactive Splitters**: Customize your view with **draggable vertical and horizontal splitters**. The application remembers your preferred layout for each symbol.
-- **Quick Order Entry**: Press `Left Ctrl` or `Right Ctrl` in the Market window to reveal a rapid order entry bar, pre-filled with the current best bid/ask and your default order quantity.
-- **Market TTS**: Optional voice announcements of the last price for the active symbol, controllable via a speaker icon in the header.
-- **Multi-Window Support**: Open many Market sessions at once for different instruments.
+- **Quick Order Entry**: Press `Left Ctrl` or `Right Ctrl` in the Market window to reveal a rapid order entry bar, pre-filled with the current best bid/ask and your configured default quantity (set in Settings).
+- **Per-Window TTS**: Optional voice announcements of the **Last Price** for the active symbol, controllable via a **speaker icon** in the market header. Each Market window maintains independent TTS state.
+- **Multi-Window Support**: Open many Market sessions at once for different instruments with independent splitter layouts and TTS toggles.
 - **Market Search**: A dedicated search dialog with auto-complete and keyboard navigation (`Arrows` + `Enter`) to quickly find and launch new market windows.
-- **Persistent Preferences**: Filter states, splitter positions, and sort preferences are saved to the registry and restored automatically.
+- **Persistent Preferences**: Filter states, splitter positions, and sort preferences are saved to the registry per symbol and restored automatically.
 - **Visual Indicators**: Sort column headers display arrows (↑↓) to show current sort direction.
 
 ### 📰 News
@@ -108,12 +116,13 @@ Contextual market intelligence with provider filtering and rich article preview:
 
 ### ⚙️ Settings
 Personalized application configuration with immediate feedback:
-- **Gateway Automation**: Auto-start TWWS or IB Gateway on launch and optionally kill it on exit.
+- **Gateway Automation**: Auto-start TWS or IB Gateway on launch and optionally kill it on exit. Prompts for gateway executable path if not found.
 - **Dark Mode**: Applies instantly across all windows with a full repaint for UI consistency.
 - **Asynchronous Audio**: Toggle global event sounds. Audio is processed via a dedicated **async sound queue** to ensure zero impact on UI responsiveness.
-- **TTS Voice Selection**: Choose from all available system voices for announcements. Voices are enumerated from Windows SAPI, with a smart default (Catalan/Herena if available).
-- **Debug Log Access**: Open the live debug console directly from Settings.
-- **Registry Backed**: Saves Dark Mode, sound, voice preference, auto-gateway, and kill-on-exit settings to the registry.
+- **Default Order Quantity**: Configure the default quantity pre-filled in rapid order entry bars across all Market windows.
+- **TTS Voice Selection**: Choose from all available system voices for announcements and dashboard P&L alerts. Voices are enumerated from Windows SAPI with smart defaults.
+- **Debug Log Access**: Open the live debug console directly from Settings for real-time diagnostics.
+- **Registry Backed**: All settings (Dark Mode, sound toggle, TTS voice, auto-gateway, kill-on-exit, default quantity) are persisted to the Windows Registry.
 
 ### 🐞 Debug Log
 Runtime diagnostics and transparency for deeper troubleshooting:
@@ -155,13 +164,13 @@ HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor
 
 **Persisted settings include:**
 
-- **Settings/**: Dark Mode, Sound toggle, TTS voice selection, Auto-gateway, Kill-gateway flags, Gateway path
-- **Per-Window Keys** (Dashboard, Orders, Coins, etc.): Window position/size, sort column, always-on-top state
+- **Settings/**: Dark Mode, Sound toggle, TTS voice selection, Auto-gateway, Kill-on-exit flags, Default order quantity, Gateway executable path
+- **Per-Window Keys** (Dashboard, Orders, Diamonds, Market, Watchlist, News, Settings, Debug Log): Window position/size, sort column, always-on-top state, zoom level
 - **Watchlist/**: Open watchlist names and members
-- **Diamonds/**: Tab assignments (Growth, Dividends, Quarantine), custom symbol colors
-- **Market/**: Per-symbol splitter positions, filter state, session list
+- **Diamonds/**: Tab assignments (Growth, Dividends, Quarantine), custom symbol colors, tab visibility state
+- **Market/**: Per-symbol splitter positions, filter state, session list, per-window TTS state
 - **News/**: Last selected watchlist, symbol, provider filter
-- **Zoom Settings**: Font size per window (Zoom_Diamonds, Zoom_Orders, etc.)
+- **Zoom Settings**: Font size per window (Zoom_Market, Zoom_Diamonds, Zoom_Orders, Zoom_Watchlist, Zoom_News)
 
 The executable is portable and can be placed anywhere on disk. There is no required installation folder. `Trading-Floor.exe` may be run from any directory.
 
@@ -220,8 +229,7 @@ src/api/gateway.h         # TradingAPI class: IBKR connection logic & data model
 src/api/registry.h        # Registry helpers: generic DWORD/string get/set/delete
 src/api/shared.h          # Shared UI components: dark mode, fonts, layout, dialogs
 src/api/sound.h           # Async sound queue for notifications
-src/gui/dashboard.h       # Main tray window + TTS voice alerts
-src/gui/coins.h           # Account summary with margin/P&L
+src/gui/dashboard.h       # Main tray window + integrated Coins + TTS voice alerts
 src/gui/orders.h          # Order tracking with in-place editing
 src/gui/diamonds.h        # Portfolio with dividends, grouping, colors
 src/gui/watchlist.h       # Named symbol lists with auto-complete
@@ -247,10 +255,10 @@ src/gui/settings.h        # Preferences UI with voice selector
 
 ## Usage
 
-- Use the tray icon to show/hide the main dashboard.
-- Open windows for account, positions, orders, market quotes, news, and Market.
+- Use the tray icon to show/hide the main Dashboard (which displays live account metrics, Net Liquidation, Daily P&L, and quick-launch buttons).
+- Open specialized windows for positions (Diamonds), orders (Orders), watchlists (Watchlist), market depth (Market), and headlines (News).
 - Manage watchlists directly in the Watchlist window and reuse them in News and Market.
-- Use the Settings window to tune app behavior.
+- Use the Settings window to tune app behavior and select TTS voice for account announcements.
 - Open Debug Log for live diagnostics.
 
 ## Keyboard Shortcuts & Tips
@@ -269,11 +277,14 @@ src/gui/settings.h        # Preferences UI with voice selector
 
 ### Market Window
 - **Arrows + Enter**: In Market Search dialog, navigate symbol list and press Enter to open.
-- **Drag Splitters**: Resize the Level 2 depth panel (left) and tick data (right) by dragging the vertical divider.
+- **Drag Splitters**: Resize the Level 2 depth panel (left) and tick data (right) by dragging the vertical divider. Layout is saved per symbol.
+- **Click Speaker Icon** (Market header): Announce current Last Price via text-to-speech. Each Market window has independent TTS control.
+- **Ctrl/Mouse Filter**: Use filter checkbox to toggle between full trades, top 100, and top 1000 size tiers.
 
 ### General
-- **Right-Click** on tray icon: Open context menu with window toggles and Always On Top controls.
-- **Click Speaker Icon** (on Coins window): Announce current account metrics via text-to-speech.
+- **Right-Click** on tray icon: Open context menu with window toggles and Always On Top controls (marked with **[ ★ ]** when active).
+- **Click Speaker Icon** on Dashboard: Announce current Daily P&L and account summary via text-to-speech.
+- **Left Ctrl / Right Ctrl**: Press in any Market window to toggle rapid order entry bar.
 
 ## Troubleshooting
 

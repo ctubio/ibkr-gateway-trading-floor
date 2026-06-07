@@ -299,9 +299,7 @@ LRESULT CALLBACK RichEditColorScrollSubclass(HWND hWnd, UINT uMsg, WPARAM wParam
     switch (uMsg) {
         case WM_NCPAINT: {
             if (!Settings_DarkMode()) return DefSubclassProc(hWnd, uMsg, wParam, lParam);
-            // 1. Let the OS perform its default rendering pass first
-
-            // 2. Obtain the non-client Device Context
+            
             HDC hdc = GetWindowDC(hWnd);
             if (hdc) {
                 RECT rcWindow;
@@ -311,7 +309,7 @@ LRESULT CALLBACK RichEditColorScrollSubclass(HWND hWnd, UINT uMsg, WPARAM wParam
                 int winWidth  = rcWindow.right - rcWindow.left;
                 int winHeight = rcWindow.bottom - rcWindow.top;
 
-                // 3. Target the Vertical Scrollbar territory 
+                // Target the Vertical Scrollbar territory 
                 // (Usually sits on the right side, wide as GetSystemMetrics(SM_CXVSCROLL))
                 int scrollWidth = GetSystemMetrics(SM_CXVSCROLL);
                 RECT rcScroll = { winWidth - scrollWidth, 0, winWidth, winHeight };
