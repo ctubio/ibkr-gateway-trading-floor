@@ -54,8 +54,6 @@ The primary tray window combining account metrics with centralized window manage
 - **Session Control**: Toggle between manual and automatic connection watchdog. Auto-reconnect monitors the connection to `127.0.0.1:4001` and automatically restores the session if the Gateway drops.
 - **Instance Management**: Ensures a single running instance; launching a new one replaces the old process.
 
-
-
 ### 📝 Orders
 Precision order tracking and management with live updates:
 - **Visual Status**: Color-coded rows for instant recognition:
@@ -92,17 +90,32 @@ Real-time quote monitoring with saved watchlists, fast table navigation, and cro
 - **Keyboard-Friendly Editing**: Press `Delete` to remove selected watchlists or individual list items.
 
 ### 🏦 Market
-High-frequency trade monitoring with Level 2 depth and dynamic splitter panels:
-- **Level 2 Depth Book**: Real-time bid/ask ladder with size at each price level on the left panel for instant market structure visibility.
-- **Tick-by-Tick Feed**: Live trade price, size, time, and exchange for the active symbol on the right side.
-- **Filtered Views**: Toggle between full trades, top 100, and top 1000 size filters to focus on significant activity.
-- **Interactive Splitters**: Customize your view with **draggable vertical and horizontal splitters**. The application remembers your preferred layout for each symbol.
-- **Quick Order Entry**: Press `Left Ctrl` or `Right Ctrl` in the Market window to reveal a rapid order entry bar, pre-filled with the current best bid/ask and your configured default quantity (set in Settings).
-- **Per-Window TTS**: Optional voice announcements of the **Last Price** for the active symbol, controllable via a **speaker icon** in the market header. Each Market window maintains independent TTS state.
-- **Multi-Window Support**: Open many Market sessions at once for different instruments with independent splitter layouts and TTS toggles.
+High-frequency trade monitoring with Level 2 depth, portfolio snapshot, and dynamic splitter panels:
+
+**Header Metrics:**
+- **Left Controls**: Speaker icon for per-window TTS + filter checkbox for trade size tiers (full/top 100/top 1000).
+- **OHLC Stats**: Open, Close, High, Low prices displayed in the header row 1.
+- **Portfolio Snapshot**: Position size and average purchase price (Pos / Avg) in header row 2, updated in real-time.
+- **Quote Block**: Large Last Price with change amount and percentage (color-coded green/red). Current Bid/Ask with sizes displayed on the right.
+- **PnL Display**: Daily and Unrealized P&L shown in the header when available (account position data).
+
+**Level 2 Depth & Tick Feed:**
+- **Level 2 Depth Book** (left panel): Real-time bid/ask ladder with size at each price level for instant market structure visibility. Fixed width panel with bid prices, sizes, ask prices, and sizes in a four-column layout.
+- **Tick-by-Tick Feed** (right panel): Live trade price, size, time, and exchange for the active symbol. Sortable by price, size, and time.
+- **Filtered Views**: Toggle between full trades, top 100, and top 1000 size filters to focus on significant activity via the header filter checkbox.
+
+**Interactive Layout:**
+- **Draggable Splitters**: Customize your view with **vertical and horizontal splitters** separating Level 2 (left) from Tick-by-Tick (right) and header from data. Layout is saved per symbol to the registry.
+- **Font Zoom**: Use `Ctrl + Mouse Wheel` to zoom the Tick-by-Tick list for readability. Zoom level persists per Market window.
+
+**Order Entry & TTS:**
+- **Quick Order Entry**: Press `Left Ctrl` or `Right Ctrl` to reveal a rapid order entry bar, pre-filled with the current best bid/ask and your configured default quantity (set in Settings). Entry bar shows the selected side (BUY/SELL) for clarity.
+- **Per-Window TTS**: Optional voice announcements of the **Last Price** controllable via a **speaker icon** in the header. Each Market window maintains independent TTS state (21-second update intervals).
+
+**Multi-Window & Search:**
+- **Multi-Window Support**: Open many Market sessions at once for different instruments with independent splitter layouts, TTS states, and filter preferences.
 - **Market Search**: A dedicated search dialog with auto-complete and keyboard navigation (`Arrows` + `Enter`) to quickly find and launch new market windows.
-- **Persistent Preferences**: Filter states, splitter positions, and sort preferences are saved to the registry per symbol and restored automatically.
-- **Visual Indicators**: Sort column headers display arrows (↑↓) to show current sort direction.
+- **Persistent Preferences**: Filter states, splitter positions, zoom levels, and TTS state are saved per symbol to the registry and restored automatically.
 
 ### 📰 News
 Contextual market intelligence with provider filtering and rich article preview:
@@ -178,12 +191,15 @@ The executable is portable and can be placed anywhere on disk. There is no requi
 
 - **UI Responsiveness**: Audio notifications run on a dedicated worker thread; zero blocking on the main GUI thread.
 - **ListView Efficiency**: 
-  - `LVS_EX_DOUBLEBUFFER` prevents flicker during rapid updates.
+  - `LVS_EX_DOUBLEBUFFER` prevents flicker during rapid updates in Tick-by-Tick, Level 2, Orders, Diamonds, and Watchlist.
   - Custom draw with `NM_CUSTOMDRAW` eliminates per-row allocation overhead.
   - Batch updates (suspend redraw, insert/update all items, resume redraw) for bulk operations.
-- **Memory Management**: Smart use of C++ move semantics, minimal allocations in hot paths (tick handling, market data updates).
+- **Memory Management**: Smart use of C++ move semantics, minimal allocations in hot paths (tick handling, market data updates, order updates).
 - **Registry Caching**: Settings are read once at startup; frequent lookups use in-memory caches.
-- **Market Data Optimization**: Level 2 and tick-by-tick data are deduplicated and rate-limited to prevent UI saturation.
+- **Market Data Optimization**: 
+  - Level 2 depth and tick-by-tick data are deduplicated to prevent UI saturation.
+  - Per-symbol splitter and filter state caching reduces registry lookups on each Market window.
+  - TTS updates use 21-second intervals to avoid excessive voice synthesis.
 
 ## Build Instructions
 
@@ -256,10 +272,13 @@ src/gui/settings.h        # Preferences UI with voice selector
 ## Usage
 
 - Use the tray icon to show/hide the main Dashboard (which displays live account metrics, Net Liquidation, Daily P&L, and quick-launch buttons).
-- Open specialized windows for positions (Diamonds), orders (Orders), watchlists (Watchlist), market depth (Market), and headlines (News).
-- Manage watchlists directly in the Watchlist window and reuse them in News and Market.
-- Use the Settings window to tune app behavior and select TTS voice for account announcements.
-- Open Debug Log for live diagnostics.
+- Open **Market** windows for each symbol to monitor Level 2 depth, tick-by-tick trades, position snapshot (size & avg price), and P&L metrics.
+- Open **Diamonds** for portfolio-wide positions analysis with dividends, P&L, and color-coded grouping.
+- Open **Orders** for real-time order tracking with in-place editing and quick cancellation.
+- Open **Watchlist** to create and manage named symbol lists, then reuse them in News and Market windows.
+- Open **News** to fetch and read headlines for symbols from your watchlists.
+- Use the **Settings** window to tune app behavior, select TTS voice, configure default order quantity, and manage Gateway automation.
+- Open **Debug Log** for live diagnostics of API callbacks and internal events.
 
 ## Keyboard Shortcuts & Tips
 
@@ -277,14 +296,15 @@ src/gui/settings.h        # Preferences UI with voice selector
 
 ### Market Window
 - **Arrows + Enter**: In Market Search dialog, navigate symbol list and press Enter to open.
-- **Drag Splitters**: Resize the Level 2 depth panel (left) and tick data (right) by dragging the vertical divider. Layout is saved per symbol.
-- **Click Speaker Icon** (Market header): Announce current Last Price via text-to-speech. Each Market window has independent TTS control.
-- **Ctrl/Mouse Filter**: Use filter checkbox to toggle between full trades, top 100, and top 1000 size tiers.
+- **Drag Splitters**: Resize the Level 2 depth panel (left) and tick data (right) by dragging the vertical divider. Resize header area by dragging the horizontal splitter. Layout is saved per symbol.
+- **Ctrl + Mouse Wheel**: Zoom the Tick-by-Tick list in/out for readability. Zoom level persists per Market window.
+- **Filter Checkbox** (header, left side): Toggle between full trades, top 100, and top 1000 size tiers.
+- **Click Speaker Icon** (header, left side): Announce current Last Price via text-to-speech. Each Market window has independent TTS control (21-second update intervals).
 
 ### General
 - **Right-Click** on tray icon: Open context menu with window toggles and Always On Top controls (marked with **[ ★ ]** when active).
 - **Click Speaker Icon** on Dashboard: Announce current Daily P&L and account summary via text-to-speech.
-- **Left Ctrl / Right Ctrl**: Press in any Market window to toggle rapid order entry bar.
+- **Left Ctrl / Right Ctrl**: Press in any Market window to toggle rapid order entry bar (pre-filled with current best bid/ask and default quantity).
 
 ## Troubleshooting
 
