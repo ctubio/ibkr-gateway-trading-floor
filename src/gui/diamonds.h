@@ -60,8 +60,8 @@ enum DiamondColIdx {
     DCOL_BIDSIZE,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
-    DCOL_OPEN,
     DCOL_CLOSE,
+    DCOL_OPEN,
     DCOL_UNREALIZED_PL,
     DCOL_UNREALIZED_PL_PCT,
     DCOL_MKTVAL,
@@ -96,8 +96,8 @@ static const DiamondCol diamondCols[] = {
     { "Bid Size",          70, LVCFMT_RIGHT },
     { "Daily P&L",         80, LVCFMT_RIGHT },
     { "Change %",          80, LVCFMT_RIGHT },
-    { "Open",              85, LVCFMT_RIGHT }, // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Close",             80, LVCFMT_RIGHT }, // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Close",             85, LVCFMT_RIGHT }, // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
+    { "Open",              80, LVCFMT_RIGHT }, // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "Unrealized P&L",    95, LVCFMT_RIGHT }, // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     { "Unrealized P&L %",  95, LVCFMT_RIGHT }, // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Market Value",      85, LVCFMT_RIGHT }, // {"fix_tag":80,"name":"Unrealized P&L %","description":"Unrealized profit or loss. Value is calculated with realtime valuation of financial instruments. (even when delayed data is displayed in other columns).","groups":["G2"],"id":"UNREALIZED_PL_PCT"}
