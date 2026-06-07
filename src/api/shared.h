@@ -22,6 +22,10 @@ static HWND     gClrHwnd[160]  = {};
 static COLORREF gClrColor[160] = {};
 static int      gClrCount      = 0;
 
+// Force the MinGW linker to keep riched20.dll when compiling with -static
+extern "C" __declspec(dllimport) long __stdcall CreateTextServices(void*, void*, void*);
+static const void* force_riched20_link = (void*)CreateTextServices;
+
 static void SetCtrlColor(HWND hw, COLORREF c) {
     for (int i = 0; i < gClrCount; i++)
         if (gClrHwnd[i] == hw) { gClrColor[i] = c; return; }

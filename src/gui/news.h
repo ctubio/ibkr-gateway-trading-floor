@@ -147,10 +147,7 @@ void FlushArticleBuffer() {
 LRESULT CALLBACK WndProcNewsArticle(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
-            // RICHEDIT20A lives in riched20.dll — must be loaded before CreateWindowExA.
-            LoadLibraryA("riched20.dll");
-
-            hNewsArticleEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "RICHEDIT20A", "",
+            hNewsArticleEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "RichEdit20A", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL |
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
                 0, 0, 0, 0, hWnd, NULL, GetModuleHandle(NULL), NULL);

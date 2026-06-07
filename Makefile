@@ -22,7 +22,7 @@ bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	    -static -static-libgcc -static-libstdc++ \
 	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
-	    -lshlwapi -lwininet -lcomctl32 -luxtheme \
+	    -lshlwapi -lwininet -lcomctl32 -luxtheme -lriched20 \
 		-s -o bin/Trading-Floor.exe
 	@echo "OK"
 	@ls -la bin/Trading-Floor.exe
