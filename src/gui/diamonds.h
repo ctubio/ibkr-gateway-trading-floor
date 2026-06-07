@@ -77,6 +77,11 @@ enum DiamondColIdx {
 static int  g_DiamondsSortCol = DCOL_SYMBOL;
 static bool g_DiamondsSortAsc = true;
 
+// ── Live PnL cache (populated by WM_PNL_SINGLE) ───────────────────────────────
+// Keyed by conId.  Updated on the UI thread only (PostMessage guarantees this),
+// so no additional locking is needed when reading from WndProcDiamonds.
+static std::map<int, TradingAPI::PnlSinglePayload> g_DiamondsPnlCache;
+
 // ── Column definitions ────────────────────────────────────────────────────────
 
 struct DiamondCol { const char* header; int width; int fmt; };
@@ -85,14 +90,14 @@ static const DiamondCol diamondCols[] = {
     { "Position",          75, LVCFMT_RIGHT },
     { "Avg Price",         80, LVCFMT_RIGHT },
     { "Ask Size",          70, LVCFMT_RIGHT },
-    { "Ask",               70, LVCFMT_RIGHT },
-    { "Last",              70, LVCFMT_RIGHT },
-    { "Bid",               70, LVCFMT_RIGHT },
+    { "Ask",               80, LVCFMT_RIGHT },
+    { "Last",              80, LVCFMT_RIGHT },
+    { "Bid",               80, LVCFMT_RIGHT },
     { "Bid Size",          70, LVCFMT_RIGHT },
-    { "Daily P&L",         70, LVCFMT_RIGHT },
-    { "Change %",          70, LVCFMT_RIGHT },
+    { "Daily P&L",         80, LVCFMT_RIGHT },
+    { "Change %",          80, LVCFMT_RIGHT },
     { "Open",              85, LVCFMT_RIGHT }, // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Close",             70, LVCFMT_RIGHT }, // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Close",             80, LVCFMT_RIGHT }, // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "Unrealized P&L",    95, LVCFMT_RIGHT }, // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     { "Unrealized P&L %",  95, LVCFMT_RIGHT }, // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Market Value",      85, LVCFMT_RIGHT }, // {"fix_tag":80,"name":"Unrealized P&L %","description":"Unrealized profit or loss. Value is calculated with realtime valuation of financial instruments. (even when delayed data is displayed in other columns).","groups":["G2"],"id":"UNREALIZED_PL_PCT"}
@@ -327,11 +332,12 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
     }
 
     // ── Columns that require Last > 0 ─────────────────────────────────────────
+    double displayLast = (t.last > 0.0) ? t.last : t.prevClose;
     // When the market is closed, reqMktData may return Last == 0.
     // In that case the gateway falls back to reqHistoricalData to populate
     // prevClose (and Last itself if still 0 after the live subscription).
     // Until a valid Last is available we show "--" to avoid misleading values.
-    if (t.last <= 0.0) {
+    if (displayLast <= 0.0) {
         setNA(DCOL_LAST);
         setNA(DCOL_DAILYPNL);
         setNA(DCOL_CHGPCT);
@@ -342,11 +348,18 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
         return;
     }
 
-    // Last is valid — proceed with normal calculations.
-    snprintf(buf, sizeof(buf), "%.2f", t.last);
+    // Last is valid — paint it and compute the market-price-based columns.
+    snprintf(buf, sizeof(buf), "%.2f", displayLast);
     ListView_SetItemText(hList, row, DCOL_LAST, buf);
 
-    // Retrieve portfolio data under the portfolio mutex.
+    // ── Retrieve the conId for this row (stored in lParam) ───────────────────
+    LVITEMA lviQ = {};
+    lviQ.mask  = LVIF_PARAM;
+    lviQ.iItem = row;
+    ListView_GetItem(hList, &lviQ);
+    int conId = (int)lviQ.lParam;
+
+    // ── Portfolio data (shares / avgCost) for market-value columns ───────────
     char symBuf[64];
     ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
     std::string symbol = symBuf;
@@ -367,29 +380,59 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
         try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
     }
 
-    // Only compute daily P&L when we have a valid prevClose to diff against.
-    double mktVal     = shares * t.last;
-    double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
-    double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
-                        ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-    double pctNetLiq  = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
+    double mktVal    = shares * t.last;
+    double pctNetLiq = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
 
-    // Daily P&L / Change %: only meaningful when prevClose is available.
-    // Use setNumAlways so that a zero change (price unchanged from close) still
-    // displays as "+0.00" rather than a blank cell that looks like missing data.
-    if (t.prevClose > 0.0) {
-        double dailyPnL = shares * t.change();
-        setNumAlways(DCOL_DAILYPNL, dailyPnL, "%+.2f");
-        setNumAlways(DCOL_CHGPCT,   t.changePct(), "%+.2f%%");
-    } else {
-        setNA(DCOL_DAILYPNL);
+    // ── Change % — still price-derived, not from PnL stream ──────────────────
+    if (t.prevClose > 0.0)
+        setNumAlways(DCOL_CHGPCT, t.changePct(), "%+.2f%%");
+    else
         setNA(DCOL_CHGPCT);
+
+    // ── Daily PnL and Unrealized PnL — sourced from live reqPnLSingle stream ──
+    // g_DiamondsPnlCache is populated by the WM_PNL_SINGLE handler on the UI
+    // thread, so reading it here (also UI thread) requires no additional locking.
+    auto pnlIt = g_DiamondsPnlCache.find(conId);
+    if (pnlIt != g_DiamondsPnlCache.end()) {
+        const auto& p = pnlIt->second;
+
+        // Daily PnL — TWS value supersedes the local price-diff estimate.
+        if (p.has_daily)
+            setNumAlways(DCOL_DAILYPNL, p.dailyPnL, "%+.2f");
+        else if (t.prevClose > 0.0)
+            setNumAlways(DCOL_DAILYPNL, shares * t.change(), "%+.2f");
+        else
+            setNA(DCOL_DAILYPNL);
+
+        // Unrealized PnL — use TWS value; fall back to local estimate when absent.
+        if (p.has_unrealized) {
+            setNumAlways(DCOL_UNREALIZED_PL, p.unrealizedPnL, "%+.2f");
+            double unrlPct = (avgCost > 0.0 && t.last > 0.0)
+                             ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
+            setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPct, "%+.2f%%");
+        } else {
+            double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
+            double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
+                                ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
+            setNumAlways(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
+            setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
+        }
+    } else {
+        // No PnL stream data yet — use locally computed estimates.
+        if (t.prevClose > 0.0)
+            setNumAlways(DCOL_DAILYPNL, shares * t.change(), "%+.2f");
+        else
+            setNA(DCOL_DAILYPNL);
+
+        double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
+        double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
+                            ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
+        setNumAlways(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
+        setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
     }
 
-    setNumAlways(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
-    setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
-    setNum(DCOL_MKTVAL,            mktVal,     "%.2f");
-    setNum(DCOL_PCT_NETLIQ,        pctNetLiq,  "%.2f%%");
+    setNum(DCOL_MKTVAL,     mktVal,    "%.2f");
+    setNum(DCOL_PCT_NETLIQ, pctNetLiq, "%.2f%%");
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
@@ -572,6 +615,73 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
         }
         delete key;
+        break;
+    }
+
+    // ── Live per-position PnL update (reqPnLSingle stream) ───────────────────
+    // Posted by Impl::pnlSingle() on the API thread via PostMessage.
+    //   wParam = conId (fast row-lookup key, no pointer deref needed)
+    //   lParam = heap-allocated TradingAPI::PnlSinglePayload* — we own it, must delete.
+    case WM_PNL_SINGLE: {
+        auto* payload = reinterpret_cast<TradingAPI::PnlSinglePayload*>(lParam);
+        if (!payload) break;
+
+        int conId = static_cast<int>(wParam);
+
+        // Upsert cache — only overwrite fields that TWS actually provided.
+        auto& cached = g_DiamondsPnlCache[conId];
+        cached.conId = conId;
+        if (payload->has_daily)      { cached.dailyPnL      = payload->dailyPnL;      cached.has_daily      = true; }
+        if (payload->has_unrealized) { cached.unrealizedPnL = payload->unrealizedPnL; cached.has_unrealized = true; }
+        if (payload->has_realized)   { cached.realizedPnL   = payload->realizedPnL;   cached.has_realized   = true; }
+        delete payload;
+
+        // Locate the matching row by conId (stored in lParam of the list item).
+        HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+        if (!hList) break;
+        int row = Diamonds_FindRow(hList, conId);
+        if (row < 0) break;
+
+        // Update only the three PnL cells directly — avoid a full row repaint.
+        const auto& p = g_DiamondsPnlCache[conId];
+        char buf[64];
+
+        if (p.has_daily) {
+            snprintf(buf, sizeof(buf), "%+.2f", p.dailyPnL);
+            ListView_SetItemText(hList, row, DCOL_DAILYPNL, buf);
+        }
+        if (p.has_unrealized) {
+            snprintf(buf, sizeof(buf), "%+.2f", p.unrealizedPnL);
+            ListView_SetItemText(hList, row, DCOL_UNREALIZED_PL, buf);
+
+            // Recompute the % column using avgCost from the portfolio map.
+            char symBuf[64] = {};
+            ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
+            double avgCost = 0.0, last = 0.0;
+            {
+                std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
+                auto& pmap = api.getPortfolioMap();
+                auto pit = pmap.find(symBuf);
+                if (pit != pmap.end()) avgCost = pit->second.avgCost;
+            }
+            // Read last from the watchlist cache (no lock needed — WatchlistInfo
+            // is written on the API thread but we're reading a double atomically).
+            TradingAPI::WatchlistInfo wInfo;
+            if (api.getWatchlistData(conId, symBuf, wInfo)) last = wInfo.last;
+
+            if (avgCost > 0.0 && last > 0.0) {
+                double pct = (last - avgCost) / avgCost * 100.0;
+                snprintf(buf, sizeof(buf), "%+.2f%%", pct);
+            } else {
+                snprintf(buf, sizeof(buf), "--");
+            }
+            ListView_SetItemText(hList, row, DCOL_UNREALIZED_PL_PCT, buf);
+        }
+
+        // Force a visual refresh of the affected row so the green/red colouring
+        // from NM_CUSTOMDRAW picks up the new values immediately.
+        ListView_RedrawItems(hList, row, row);
+        UpdateWindow(hList);
         break;
     }
 
@@ -818,8 +928,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_DESTROY:
-        api.unsetDiamondsWindow();   // cancels market data subscriptions + positions
+        // unsetDiamondsWindow calls cancelPnlSingleForWindow internally, which
+        // sends cancelPnLSingle for every active reqId and clears the maps in
+        // private.cpp.  We also clear our local cache so a future window
+        // instance starts clean (stale cached values from a closed session
+        // would briefly flash in the new window before the first TWS update).
+        api.unsetDiamondsWindow();   // cancels market data + PnL + position subs
         api.removeApiUpdateWindow(hWnd);
+        g_DiamondsPnlCache.clear();
         if (DiamondsZoomData.hFont) {
             DeleteObject(DiamondsZoomData.hFont);
         }

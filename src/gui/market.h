@@ -50,6 +50,11 @@ struct TsState {
     // ── Portfolio snapshot ────────────────────────────────────────────────────
     double position = 0.0;
     double avgPrice = 0.0;
+    
+    // ── PnL State ─────────────────────────────────────────────────────────────
+    double dailyPnL = 0.0;
+    double unrealizedPnL = 0.0;
+    bool hasPnL = false;
 
     // ── Cached fonts ──────────────────────────────────────────────────────────
     HFONT hBigFont     = NULL;   // ~22pt bold — large last price
@@ -75,6 +80,7 @@ struct TsState {
     HWND  hOrderQty      = NULL;
     bool  orderBarVisible = false;
     std::string orderSide;   // "BUY" or "SELL"
+    
 };
 static std::map<HWND, TsState*> tsStates;
 
@@ -654,6 +660,31 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     const int STATS_X = LC_MARGIN + LC_ICON_W + LC_MARGIN;
 
     SelectObject(hdc, state->hStatusFont);
+    
+    // Calculate PnL (Fallback to local calculation if TWS hasn't sent a stream update yet)
+    double dPnL = 0.0, uPnL = 0.0;
+    if (state->hasPnL) {
+        dPnL = state->dailyPnL;
+        uPnL = state->unrealizedPnL;
+    } else {
+        dPnL = state->position * (displayLast - L1.prevClose);
+        uPnL = state->position * (displayLast - state->avgPrice);
+    }
+
+    // Format Strings (Only show if we hold a position, else "--")
+    char bufD[32], bufU[32];
+    if (state->position != 0.0) {
+        snprintf(bufD, sizeof(bufD), "%+.2f", dPnL);
+        snprintf(bufU, sizeof(bufU), "%+.2f", uPnL);
+    } else {
+        strcpy(bufD, "--");
+        strcpy(bufU, "--");
+    }
+
+    // Determine Colors
+    COLORREF dPnlColor = (dPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    COLORREF uPnlColor = (uPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    if (state->position == 0.0) { dPnlColor = textColor; uPnlColor = textColor; }
 
     // Row 1: O  C  H  L
     struct StatItem { const char* label; std::string value; COLORREF color; };
@@ -661,12 +692,14 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", Market_Fmt(L1.vwap),      vwapColor  },
+        { "D-PnL:", bufD,                 dPnlColor  },
     };
     // Row 2: Pos  Avg
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),      openColor  },
         { "L:", Market_Fmt(L1.low),       lowColor   },
         { "V:", Market_FmtQty(L1.volume),    textColor  },
+        { "U-PnL:", bufU,                 uPnlColor  },
         //{ "Pos:", Market_FmtQty(state->position), posColor   },
         //{ "Avg:", Market_Fmt(state->avgPrice),    avgPrColor },
     };
@@ -697,8 +730,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
             }
             return cx;
         };
-        drawStatRow(row1, 3, STATS_X, 0,    rowH);
-        drawStatRow(row2, 3, STATS_X, rowH, HEADER_H - 1);
+        drawStatRow(row1, 4, STATS_X, 0,    rowH);
+        drawStatRow(row2, 4, STATS_X, rowH, HEADER_H - 1);
     }
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
@@ -948,6 +981,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         api.setMarketWindow(hWnd, state->conId, state->symbol);
+        api.subscribePositionPnL(hWnd, state->conId);
         api.addApiUpdateWindow(hWnd);
         UpdateMarketRegistry();
         break;
@@ -1138,6 +1172,21 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
+    case WM_PNL_SINGLE: {
+        auto* payload = reinterpret_cast<TradingAPI::PnlSinglePayload*>(lParam);
+        if (state && payload) {
+            if (payload->has_daily)      state->dailyPnL      = payload->dailyPnL;
+            if (payload->has_unrealized) state->unrealizedPnL = payload->unrealizedPnL;
+            state->hasPnL = true;
+            
+            // Only invalidate the header to avoid flickering the lists
+            RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+            InvalidateRect(hWnd, &hdrRc, FALSE);
+        }
+        if (payload) delete payload;
+        break;
+    }
+
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->code != NM_CUSTOMDRAW) break;
@@ -1253,6 +1302,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     
     case WM_DESTROY:
         api.unsetMarketWindow(hWnd);
+        api.unsubscribePositionPnL(hWnd);
         api.removeApiUpdateWindow(hWnd);
         MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data) delete data;

@@ -40,6 +40,10 @@
 #define WM_MARKET_L1        (WM_USER + 13)   // Level 1 quote tick — handler calls getLevel1Data()
 #define WM_MARKET_L2        (WM_USER + 14)   // Level 2 depth change — handler calls getLevel2Snapshot()
 
+// Per-position PnL update — posted by pnlSingle() to the subscribed window.
+// wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
+#define WM_PNL_SINGLE       (WM_USER + 15)
+
 class TradingAPI {
 public:
 
@@ -172,6 +176,21 @@ public:
         double      size  = 0.0;
     };
 
+    // ── Per-position live PnL payload ─────────────────────────────────────────
+    // Heap-allocated by pnlSingle(); posted via WM_PNL_SINGLE.
+    //   wParam = conId (int cast)
+    //   lParam = PnlSinglePayload*  — the UI handler owns it and must delete it.
+    // Only fields whose value != UNSET_DOUBLE are valid; check the has_* guards.
+    struct PnlSinglePayload {
+        int    conId          = 0;
+        double dailyPnL       = 0.0;
+        double unrealizedPnL  = 0.0;
+        double realizedPnL    = 0.0;
+        bool   has_daily      = false;
+        bool   has_unrealized = false;
+        bool   has_realized   = false;
+    };
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     TradingAPI();
@@ -231,6 +250,15 @@ public:
     void reqDiamondsWatchlist();   // call after reconnect to re-subscribe market data
     std::mutex& getPortfolioMutex();
     std::map<std::string, PositionInfo>& getPortfolioMap();
+
+    // ── Per-position live PnL streaming ──────────────────────────────────────
+    // Subscribe one position: posts WM_PNL_SINGLE to hWnd whenever TWS
+    // sends a pnlSingle update for conId.  Safe to call from the UI thread.
+    void subscribePositionPnL(HWND hWnd, int conId);
+
+    // Cancel every pnlSingle subscription registered for hWnd and remove them
+    // from the internal map.  Call from WM_DESTROY before the HWND is gone.
+    void unsubscribePositionPnL(HWND hWnd);
 
     // ── Time and Sales ────────────────────────────────────────────────────────
 
