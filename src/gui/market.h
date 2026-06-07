@@ -259,6 +259,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     state->orderSide = side;
     state->orderBarVisible = true;
     SetWindowTextA(state->hOrderLabel, side.c_str());
+    SetCtrlColor(state->hOrderLabel, (state->orderSide == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED);
 
     // Pre-fill price from current last / bid / ask
     double suggestedPrice = 0.0;
@@ -604,12 +605,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     COLORREF vwapColor  = COINS_CLR_ORANGE;
     COLORREF highColor = (L1.high > 0.0) ? COINS_CLR_GREEN : textColor;
     COLORREF lowColor  = (L1.low  > 0.0) ? COINS_CLR_RED   : textColor;
-    COLORREF posColor  = (state->position > 0.0) ? COINS_CLR_GREEN
-                       : (state->position < 0.0) ? COINS_CLR_RED
-                       : textColor;
-    COLORREF avgPrColor = textColor;
-    if (displayLast > 0.0 && state->avgPrice > 0.0)
-        avgPrColor = (displayLast >= state->avgPrice) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    // COLORREF posColor  = (state->position > 0.0) ? COINS_CLR_GREEN : (state->position < 0.0) ? COINS_CLR_RED : textColor;
+    // COLORREF avgPrColor = textColor;
+    // if (displayLast > 0.0 && state->avgPrice > 0.0) avgPrColor = (displayLast >= state->avgPrice) ? COINS_CLR_GREEN : COINS_CLR_RED;
 
     // ── RIGHT BLOCK: Ask / Bid ────────────────────────────────────────────────
     // Anchored to right edge, two rows.
@@ -766,8 +764,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 }
 
 // ── Market TTS helpers ────────────────────────────────────────────────────────
-static const wchar_t TS_SPEAKER_GLYPH[] = L"\uE767";
-
 static bool Market_InitVoice(TsState* state) {
     if (state->hTtsVoice) return true;
     if (!state->ttsComInit) {
@@ -907,7 +903,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         // ── Speaker button (far left, top half) ───────────────────────────────
-        state->hSpeakerBtn = CreateWindowW(L"STATIC", TS_SPEAKER_GLYPH,
+        state->hSpeakerBtn = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
             0, 0, 22, 22, hWnd, (HMENU)ID_TS_SPEAKER, hInst, NULL);
         SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
@@ -1252,21 +1248,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         break;
     }
-
-    case WM_CTLCOLORSTATIC: {
-        if (!state) break;
-        HWND hCtrl = (HWND)lParam;
-        if (hCtrl == state->hOrderLabel) {
-            HDC hdc = (HDC)wParam;
-            COLORREF clr = (state->orderSide == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SetTextColor(hdc, clr);
-            SetBkMode(hdc, TRANSPARENT);
-            SetBkColor(hdc, Settings_DarkMode() ? DM_BG : GetSysColor(COLOR_BTNFACE));
-            return (LRESULT)(Settings_DarkMode() ? hDarkBrush : GetSysColorBrush(COLOR_BTNFACE));
-        }
-        break;  // fall through to HandleCommonMessages
-    }
-
+    
     case WM_DESTROY:
         api.unsetMarketWindow(hWnd);
         api.removeApiUpdateWindow(hWnd);

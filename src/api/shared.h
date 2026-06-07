@@ -14,6 +14,9 @@ NOTIFYICONDATAW nid = { 0 };
 // Sentinel: no custom color – let HandleDarkModeMessages / system theme paint this control
 #define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
 
+// Speaker glyph: E767 = volume on (Segoe MDL2 Assets)
+static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
+
 // ─── Per-control color table ──────────────────────────────────────────────────
 static HWND     gClrHwnd[160]  = {};
 static COLORREF gClrColor[160] = {};
@@ -284,7 +287,7 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             char className[256] = {};
             GetClassNameA(hWnd, className, sizeof(className));
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
+            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0) {
                 COLORREF clr = GetCtrlColor((HWND)lParam);
                 if (clr != COLOR_THEME) {
                     SetTextColor((HDC)wParam, clr);

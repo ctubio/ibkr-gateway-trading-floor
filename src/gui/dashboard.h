@@ -77,9 +77,6 @@ static ISpVoice* g_pCoinsVoice  = nullptr;
 static bool      g_coinsTtsOn   = false;
 static bool      g_coinsComInit = false;
 
-// Speaker glyph: E767 = volume on (Segoe MDL2 Assets)
-static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
-
 // ─── Row data ─────────────────────────────────────────────────────────────────
 struct CoinRow { const char* label; const char* key; int colorType; bool isSeparator; };
 
