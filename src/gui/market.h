@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 414;
+int windowMarketWidth = 418;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
@@ -211,13 +211,13 @@ static void Market_Layout(HWND hWnd, TsState* state) {
         MoveWindow(state->hL2List, 0, bodyY, L2_W, bodyH, TRUE);
 
     // ── T&S area ──────────────────────────────────────────────────────────────
-    const int tsX = L2_W;
+    const int splitThick = 4;   
+    const int tsX = L2_W + splitThick;
     const int tsW = bodyW - L2_W;
 
     if (state->tsFilteredView) {
-        const int splitThick = 6;
         int leftW  = (int)(tsW * state->splitX) - splitThick / 2;
-        int rightW = tsW - leftW - splitThick;
+        int rightW = tsW - leftW - splitThick * 2;
         int topH   = (int)(bodyH * state->splitY) - splitThick / 2;
         int botH   = bodyH - topH - splitThick;
 
@@ -231,7 +231,7 @@ static void Market_Layout(HWND hWnd, TsState* state) {
         ShowWindow(state->hTsListF100,  SW_HIDE);
         ShowWindow(state->hTsListF1000, SW_HIDE);
         ShowWindow(state->hTsList,      SW_SHOW);
-        MoveWindow(state->hTsList, tsX, bodyY, tsW, bodyH, TRUE);
+        MoveWindow(state->hTsList, tsX, bodyY, tsW - splitThick, bodyH, TRUE);
     }
 
     // ── Order entry bar ───────────────────────────────────────────────────────
@@ -501,7 +501,7 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     const int bodyH      = rc.bottom - HEADER_H;
     const int tsX        = L2_W;
     const int tsW        = rc.right - L2_W;
-    const int splitThick = 6;
+    const int splitThick = 4;
 
     int relX = x - tsX;
     int relY = y - HEADER_H;
@@ -511,7 +511,7 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     int splitYPos = (int)(bodyH * state->splitY);
 
     if (relX >= splitXPos - splitThick && relX <= splitXPos + splitThick)
-        return 1;
+        return 0; // 1;
     if (relX > splitXPos + splitThick && relY >= splitYPos - splitThick && relY <= splitYPos + splitThick)
         return 2;
 
@@ -668,37 +668,38 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "L:", Market_Fmt(L1.low),       lowColor   },
         { "V:", Market_FmtQty(L1.volume),    textColor  },
         //{ "Pos:", Market_FmtQty(state->position), posColor   },
-        //{ "Avg:", Market_Fmt(state->avgPrice),     avgPrColor },
+        //{ "Avg:", Market_Fmt(state->avgPrice),    avgPrColor },
     };
 
-    // Helper: draw a row of stat pairs starting at (startX, y0).
-    // Returns the x position after the last pair.
-    auto drawStatRow = [&](StatItem* items, int count, int startX, int y0, int y1) -> int {
-        int cx = startX;
-        const int GAP = 8;
-        for (int i = 0; i < count; i++) {
-            // label
-            char labBuf[16]; snprintf(labBuf, sizeof(labBuf), "%s ", items[i].label);
-            SIZE lblSz;
-            GetTextExtentPoint32A(hdc, labBuf, (int)strlen(labBuf), &lblSz);
-            SetTextColor(hdc, labelColor);
-            RECT lr = { cx, y0, cx + lblSz.cx, y1 };
-            DrawTextA(hdc, labBuf, -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-            cx += lblSz.cx;
+    if (state->tsFilteredView) {
+        // Helper: draw a row of stat pairs starting at (startX, y0).
+        // Returns the x position after the last pair.
+        auto drawStatRow = [&](StatItem* items, int count, int startX, int y0, int y1) -> int {
+            int cx = startX;
+            const int GAP = 8;
+            for (int i = 0; i < count; i++) {
+                // label
+                char labBuf[16]; snprintf(labBuf, sizeof(labBuf), "%s ", items[i].label);
+                SIZE lblSz;
+                GetTextExtentPoint32A(hdc, labBuf, (int)strlen(labBuf), &lblSz);
+                SetTextColor(hdc, labelColor);
+                RECT lr = { cx, y0, cx + lblSz.cx, y1 };
+                DrawTextA(hdc, labBuf, -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                cx += lblSz.cx;
 
-            // value
-            SIZE valSz;
-            GetTextExtentPoint32A(hdc, items[i].value.c_str(), (int)items[i].value.size(), &valSz);
-            SetTextColor(hdc, items[i].color);
-            RECT vr = { cx, y0, cx + valSz.cx + 2, y1 };
-            DrawTextA(hdc, items[i].value.c_str(), -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-            cx += valSz.cx + GAP;
-        }
-        return cx;
-    };
-
-    drawStatRow(row1, 3, STATS_X, 0,    rowH);
-    drawStatRow(row2, 3, STATS_X, rowH, HEADER_H - 1);
+                // value
+                SIZE valSz;
+                GetTextExtentPoint32A(hdc, items[i].value.c_str(), (int)items[i].value.size(), &valSz);
+                SetTextColor(hdc, items[i].color);
+                RECT vr = { cx, y0, cx + valSz.cx + 2, y1 };
+                DrawTextA(hdc, items[i].value.c_str(), -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                cx += valSz.cx + GAP;
+            }
+            return cx;
+        };
+        drawStatRow(row1, 3, STATS_X, 0,    rowH);
+        drawStatRow(row2, 3, STATS_X, rowH, HEADER_H - 1);
+    }
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
     // We measure both pieces then right-justify them to RB_X - 10.

@@ -192,7 +192,7 @@ static LRESULT CALLBACK WndProcEditOrder(HWND hWnd, UINT message, WPARAM wParam,
 
             EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersZoomData.hFont);
             SetFocus(ctx->hPriceEdit);
-            return 0;
+            break;
         }
 
         case WM_KEYDOWN: {
