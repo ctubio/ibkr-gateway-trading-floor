@@ -293,6 +293,53 @@ BOOL CALLBACK FindEnumWindowsProc(HWND hwnd, LPARAM lParam) {
 
     return TRUE; // Continue enumerating
 }
+LRESULT CALLBACK RichEditColorScrollSubclass(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, 
+                                             UINT_PTR uIdSubclass, DWORD_PTR dwRefData) 
+{
+    switch (uMsg) {
+        case WM_NCPAINT: {
+            if (!Settings_DarkMode()) return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            // 1. Let the OS perform its default rendering pass first
+
+            // 2. Obtain the non-client Device Context
+            HDC hdc = GetWindowDC(hWnd);
+            if (hdc) {
+                RECT rcWindow;
+                GetWindowRect(hWnd, &rcWindow);
+                
+                // Translate coordinates to relative 0,0 window space
+                int winWidth  = rcWindow.right - rcWindow.left;
+                int winHeight = rcWindow.bottom - rcWindow.top;
+
+                // 3. Target the Vertical Scrollbar territory 
+                // (Usually sits on the right side, wide as GetSystemMetrics(SM_CXVSCROLL))
+                int scrollWidth = GetSystemMetrics(SM_CXVSCROLL);
+                RECT rcScroll = { winWidth - scrollWidth, 0, winWidth, winHeight };
+
+                // 4. Paint over it with your custom theme color brush
+                HBRUSH hCustomBrush = CreateSolidBrush(RGB(45, 45, 45)); // Dark palette
+                FillRect(hdc, &rcScroll, hCustomBrush);
+
+                // Clean up GDI assets
+                DeleteObject(hCustomBrush);
+                ReleaseDC(hWnd, hdc);
+            }
+            return 0; // Signify message handled
+        }
+
+        // To prevent flashes, you must also intercept mouse interactions on the bar
+        case WM_NCMOUSEMOVE:
+        case WM_NCLBUTTONDOWN:
+        case WM_NCLBUTTONUP:
+            // Force redraw immediately when clicked or hovered so blue highlights don't overwrite
+            InvalidateRect(hWnd, NULL, FALSE);
+            break;
+        case WM_NCDESTROY:
+            RemoveWindowSubclass(hWnd, RichEditColorScrollSubclass, uIdSubclass);
+            break;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
 
 LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (msg == WM_NOTIFY) {
@@ -402,6 +449,17 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
     return DefSubclassProc(hWnd, msg, wParam, lParam);
 }
 
+void ApplyDarkModeToRichEdits(HWND hEdit, bool dark) {
+    SetWindowSubclass(hEdit, RichEditColorScrollSubclass, 888, 0);
+    if (dark) {
+        // Theme scrollbars
+        SetWindowTheme(hEdit, L"DarkMode_Explorer", L"ScrollBar");
+    } else {
+        // Revert to default light mode themes
+        SetWindowTheme(hEdit, L"Explorer", L"ScrollBar");
+    }
+}
+
 // Applies dark theme to a specific SysListView32
 void ApplyDarkModeToLists(HWND hList, bool dark) {
     // Safely attach our Custom Draw subclass (SetWindowSubclass ignores duplicate calls automatically)
@@ -436,14 +494,28 @@ BOOL CALLBACK EnumChildProcForLists(HWND hwnd, LPARAM lParam) {
     }
     return TRUE;
 }
+BOOL CALLBACK EnumChildProcForRichEdits(HWND hwnd, LPARAM lParam) {
+    char className[256];
+    if (GetClassNameA(hwnd, className, sizeof(className))) {
+        if (StrStrIA(className, "EDIT") != NULL) {
+            LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+            if ((style & ES_MULTILINE) == ES_MULTILINE) {
+                bool dark = (bool)lParam;
+                ApplyDarkModeToRichEdits(hwnd, dark);
+            }
+        }
+    }
+    return TRUE;
+}
 
 void ApplyDarkMode(HWND hWnd) {
     BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
 
-    // Automatically find and theme any ListViews inside this window
+    // Automatically find and theme any ListViews and RichEdit inside this window
     EnumChildWindows(hWnd, EnumChildProcForLists, (LPARAM)dark);
-    
+    EnumChildWindows(hWnd, EnumChildProcForRichEdits, (LPARAM)dark);
+
     DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
     DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
     

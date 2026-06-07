@@ -115,7 +115,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
 
     if (strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) != 0)
         SetWindowTaskbarId(hWnd, taskbarId);
-
+        
     return hWnd;
 }
 

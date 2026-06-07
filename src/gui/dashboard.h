@@ -450,7 +450,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (coinRows[i].isSeparator) {
                     CreateWindowA("STATIC", "",
                         WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
-                        m, y + 4, rW, 2, hWnd, NULL, hInst, NULL);
+                        m, y + 5, rW, 2, hWnd, NULL, hInst, NULL);
                     y += 16;
                     continue;
                 }
