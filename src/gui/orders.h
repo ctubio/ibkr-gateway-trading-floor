@@ -401,6 +401,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         return CDRF_NOTIFYITEMDRAW;
 
                     case CDDS_ITEMPREPAINT:
+                        cd->nmcd.uItemState &= ~CDIS_SELECTED;
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
@@ -423,10 +424,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 0, buf, sizeof(buf));
                             size_t len = strlen(buf);
                             std::string orderType;
-                            if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)
-                                orderType = "BUY";
-                            else if (len >= 4 && strcmp(buf + len - 4, "SELL") == 0)
-                                orderType = "SELL";
+                            if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)       orderType = "BUY";
+                            else if (len >= 4 && strcmp(buf + len - 4, "SELL") == 0) orderType = "SELL";
                             cd->clrText = Orders_StatusColor(orderType, statusStr, dark);
                             if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             return CDRF_NEWFONT;

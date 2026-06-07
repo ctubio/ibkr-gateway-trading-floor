@@ -1148,6 +1148,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             switch (cd->nmcd.dwDrawStage) {
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT:
+                    cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                     cd->clrText   = DM_TEXT;
                     return CDRF_DODEFAULT;

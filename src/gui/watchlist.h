@@ -871,6 +871,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         return CDRF_NOTIFYITEMDRAW;
 
                 case CDDS_ITEMPREPAINT:
+                    cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     if (dark) {
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         cd->clrText   = DM_TEXT;
