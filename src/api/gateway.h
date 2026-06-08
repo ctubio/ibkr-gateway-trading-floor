@@ -79,6 +79,7 @@ public:
 
     // lParam of WM_MARKET_TICK — handler owns and must delete.
     struct TsTickEntry {
+        COLORREF    side;
         double      price    = 0.0;
         double      size     = 0.0;
         std::string time;

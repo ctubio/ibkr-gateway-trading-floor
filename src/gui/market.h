@@ -1,21 +1,21 @@
 #pragma once
 
-int windowMarketWidth = 418;
+int windowMarketWidth = 625;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
 void StartMarket(const std::string& symbol = "", int conId = 0);
 
-#define ID_TS_LIST          6003
-#define ID_TS_FILTER_CHECK  6004
-#define ID_TS_LIST_F100     6005
-#define ID_TS_LIST_F1000    6006
-#define ID_TS_SEARCH_INPUT  6007
-#define ID_TS_SEARCH_LIST   6008
-#define ID_TS_L2_LIST       6009   // Level 2 depth SysListView32 (left panel)
-#define ID_TS_SPEAKER       6010   // Speaker icon for TTS
+#define ID_MARKET_STOP_ORDER           6003
+#define ID_MARKET_TIMESALES_LIST_F0001 6004
+#define ID_MARKET_TIMESALES_LIST_F0100 6005
+#define ID_MARKET_TIMESALES_LIST_F1000 6006
+#define ID_MARKET_SEARCH_INPUT         6007
+#define ID_MARKET_SEARCH_LIST          6008
+#define ID_MARKET_L2_LIST              6009   // Level 2 depth SysListView32 (left panel)
+#define ID_MARKET_SPEAKER              6010   // Speaker icon for TTS
 
-#define TIMER_TS_SPEAKER    0xC020  // WM_TIMER id for per-market TTS (21s)
+#define TIMER_MARKET_SPEAKER    0xC020  // WM_TIMER id for per-market TTS (21s)
 
 // ── Layout constants ─────────────────────────────────────────────────────────
 // Header layout (left → right):
@@ -38,9 +38,9 @@ struct TsState {
     HWND hTsList = NULL;
     HWND hTsListF100 = NULL;
     HWND hTsListF1000 = NULL;
-    HWND hTsFilterCheck = NULL;
+    HWND hStopOrderCheck = NULL;
     HWND hL2List = NULL;
-    bool tsFilteredView = false;
+    bool attachStopOrder = false;
     std::string symbol;
     int conId = 0;
 
@@ -109,7 +109,7 @@ static void UpdateMarketRegistry() {
 struct TsCol { const char* header; int width; int fmt; };
 static const TsCol tsCols[] = {
     { "Price",    60, LVCFMT_RIGHT },
-    { "Size",     40, LVCFMT_RIGHT },
+    { "Size",     45, LVCFMT_RIGHT },
     { "Time",     70, LVCFMT_LEFT  },
 };
 static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
@@ -128,7 +128,7 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
         WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
-        0, 0, L2_W, 100, hParent, (HMENU)(intptr_t)ID_TS_L2_LIST, hInst, NULL);
+        0, 0, L2_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_L2_LIST, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
     lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
@@ -205,9 +205,9 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     }
 
     // ── Filter checkbox: far left, centred in bottom half of header ──────────
-    if (state->hTsFilterCheck) {
+    if (state->hStopOrderCheck) {
         int chkY = hdrH / 2 + (hdrH / 2 - 16) / 2;
-        SetWindowPos(state->hTsFilterCheck, NULL,
+        SetWindowPos(state->hStopOrderCheck, NULL,
                      LC_MARGIN + (LC_ICON_W - 16) / 2, chkY, 16, 16,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
@@ -221,24 +221,17 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     const int tsX = L2_W + splitThick;
     const int tsW = bodyW - L2_W;
 
-    if (state->tsFilteredView) {
-        int leftW  = (int)(tsW * state->splitX) - splitThick / 2;
-        int rightW = tsW - leftW - splitThick * 2;
-        int topH   = (int)(bodyH * state->splitY) - splitThick / 2;
-        int botH   = bodyH - topH - splitThick;
+    int leftW  = (int)(tsW * state->splitX) - splitThick / 2;
+    int rightW = tsW - leftW - splitThick * 2;
+    int topH   = (int)(bodyH * state->splitY) - splitThick / 2;
+    int botH   = bodyH - topH - splitThick;
 
-        ShowWindow(state->hTsList,      SW_SHOW);
-        ShowWindow(state->hTsListF100,  SW_SHOW);
-        ShowWindow(state->hTsListF1000, SW_SHOW);
-        MoveWindow(state->hTsList,      tsX,                        bodyY,                     leftW,  bodyH, TRUE);
-        MoveWindow(state->hTsListF100,  tsX + leftW + splitThick,   bodyY,                     rightW, topH,  TRUE);
-        MoveWindow(state->hTsListF1000, tsX + leftW + splitThick,   bodyY + topH + splitThick, rightW, botH,  TRUE);
-    } else {
-        ShowWindow(state->hTsListF100,  SW_HIDE);
-        ShowWindow(state->hTsListF1000, SW_HIDE);
-        ShowWindow(state->hTsList,      SW_SHOW);
-        MoveWindow(state->hTsList, tsX, bodyY, tsW - splitThick, bodyH, TRUE);
-    }
+    ShowWindow(state->hTsList,      SW_SHOW);
+    ShowWindow(state->hTsListF100,  SW_SHOW);
+    ShowWindow(state->hTsListF1000, SW_SHOW);
+    MoveWindow(state->hTsList,      tsX,                        bodyY,                     leftW,  bodyH, TRUE);
+    MoveWindow(state->hTsListF100,  tsX + leftW + splitThick,   bodyY,                     rightW, topH,  TRUE);
+    MoveWindow(state->hTsListF1000, tsX + leftW + splitThick,   bodyY + topH + splitThick, rightW, botH,  TRUE);
 
     // ── Order entry bar ───────────────────────────────────────────────────────
     if (state->hOrderLabel && state->hOrderPrice && state->hOrderQty) {
@@ -266,6 +259,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     state->orderBarVisible = true;
     SetWindowTextA(state->hOrderLabel, side.c_str());
     SetCtrlColor(state->hOrderLabel, (state->orderSide == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED);
+    InvalidateRect(state->hOrderLabel, NULL, TRUE);
 
     // Pre-fill price from current last / bid / ask
     double suggestedPrice = 0.0;
@@ -392,7 +386,7 @@ static std::vector<std::string> tsSearchResults;
 
 LRESULT CALLBACK TsSearchEditSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (msg == WM_KEYDOWN) {
-        HWND hTsSearchList = GetDlgItem(GetParent(hWnd), ID_TS_SEARCH_LIST);
+        HWND hTsSearchList = GetDlgItem(GetParent(hWnd), ID_MARKET_SEARCH_LIST);
         bool vis = IsWindowVisible(hTsSearchList);
         if (wParam == VK_DOWN && vis) {
             int count = SendMessage(hTsSearchList, LB_GETCOUNT, 0, 0);
@@ -450,24 +444,24 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-            HWND hTsSearchEdit = CreateWindowA("EDIT", "", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_UPPERCASE | ES_AUTOHSCROLL, 10, 10, 240, 24, hWnd, (HMENU)ID_TS_SEARCH_INPUT, hInst, NULL);
+            HWND hTsSearchEdit = CreateWindowA("EDIT", "", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_UPPERCASE | ES_AUTOHSCROLL, 10, 10, 240, 24, hWnd, (HMENU)ID_MARKET_SEARCH_INPUT, hInst, NULL);
             SetWindowSubclass(hTsSearchEdit, TsSearchEditSubclass, 1, 0);
-            HWND hTsSearchList = CreateWindowA("LISTBOX", "", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY, 10, 40, 240, 180, hWnd, (HMENU)ID_TS_SEARCH_LIST, hInst, NULL);
+            HWND hTsSearchList = CreateWindowA("LISTBOX", "", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY, 10, 40, 240, 180, hWnd, (HMENU)ID_MARKET_SEARCH_LIST, hInst, NULL);
             SetWindowSubclass(hTsSearchList, TsSearchListSubclass, 2, 0);
             ApplyListViewFont(hTsSearchList, MarketZoomData.hFont, MarketZoomData.hBoldFont, MarketZoomData.fontSize);
             SetFocus(hTsSearchEdit);
             break;
         }
         case WM_COMMAND:
-            if (LOWORD(wParam) == ID_TS_SEARCH_INPUT && HIWORD(wParam) == EN_CHANGE) {
-                char t[256] = {}; GetWindowTextA(GetDlgItem(hWnd, ID_TS_SEARCH_INPUT), t, sizeof(t));
+            if (LOWORD(wParam) == ID_MARKET_SEARCH_INPUT && HIWORD(wParam) == EN_CHANGE) {
+                char t[256] = {}; GetWindowTextA(GetDlgItem(hWnd, ID_MARKET_SEARCH_INPUT), t, sizeof(t));
                 if (strlen(t) > 0) { api.setSymbolSearchWindow(hWnd); api.searchSymbols(t); }
-                else { SendMessage(GetDlgItem(hWnd, ID_TS_SEARCH_LIST), LB_RESETCONTENT, 0, 0); tsSearchResults.clear(); }
+                else { SendMessage(GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST), LB_RESETCONTENT, 0, 0); tsSearchResults.clear(); }
             }
             break;
         case WM_SYMBOL_RESULTS: {
             tsSearchResults = api.getSymbolResults();
-            HWND hTsSearchList = GetDlgItem(hWnd, ID_TS_SEARCH_LIST);
+            HWND hTsSearchList = GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST);
             SendMessage(hTsSearchList, LB_RESETCONTENT, 0, 0);
             for (const auto& r : tsSearchResults) {
                 auto d = r.find('.');
@@ -501,8 +495,6 @@ void StartMarket(const std::string& symbol, int conId) {
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
-    if (!state->tsFilteredView) return 0;
-
     RECT rc; GetClientRect(hWnd, &rc);
     const int bodyH      = rc.bottom - HEADER_H;
     const int tsX        = L2_W;
@@ -692,47 +684,45 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", Market_Fmt(L1.vwap),      vwapColor  },
-        { "D-PnL:", bufD,                 dPnlColor  },
+        { "D:", bufD,                 dPnlColor  },
     };
     // Row 2: Pos  Avg
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),      openColor  },
         { "L:", Market_Fmt(L1.low),       lowColor   },
         { "V:", Market_FmtQty(L1.volume),    textColor  },
-        { "U-PnL:", bufU,                 uPnlColor  },
+        { "U:", bufU,                 uPnlColor  },
         //{ "Pos:", Market_FmtQty(state->position), posColor   },
         //{ "Avg:", Market_Fmt(state->avgPrice),    avgPrColor },
     };
 
-    if (state->tsFilteredView) {
-        // Helper: draw a row of stat pairs starting at (startX, y0).
-        // Returns the x position after the last pair.
-        auto drawStatRow = [&](StatItem* items, int count, int startX, int y0, int y1) -> int {
-            int cx = startX;
-            const int GAP = 8;
-            for (int i = 0; i < count; i++) {
-                // label
-                char labBuf[16]; snprintf(labBuf, sizeof(labBuf), "%s ", items[i].label);
-                SIZE lblSz;
-                GetTextExtentPoint32A(hdc, labBuf, (int)strlen(labBuf), &lblSz);
-                SetTextColor(hdc, labelColor);
-                RECT lr = { cx, y0, cx + lblSz.cx, y1 };
-                DrawTextA(hdc, labBuf, -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-                cx += lblSz.cx;
+    // Helper: draw a row of stat pairs starting at (startX, y0).
+    // Returns the x position after the last pair.
+    auto drawStatRow = [&](StatItem* items, int count, int startX, int y0, int y1) -> int {
+        int cx = startX;
+        const int GAP = 8;
+        for (int i = 0; i < count; i++) {
+            // label
+            char labBuf[16]; snprintf(labBuf, sizeof(labBuf), "%s ", items[i].label);
+            SIZE lblSz;
+            GetTextExtentPoint32A(hdc, labBuf, (int)strlen(labBuf), &lblSz);
+            SetTextColor(hdc, labelColor);
+            RECT lr = { cx, y0, cx + lblSz.cx, y1 };
+            DrawTextA(hdc, labBuf, -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            cx += lblSz.cx;
 
-                // value
-                SIZE valSz;
-                GetTextExtentPoint32A(hdc, items[i].value.c_str(), (int)items[i].value.size(), &valSz);
-                SetTextColor(hdc, items[i].color);
-                RECT vr = { cx, y0, cx + valSz.cx + 2, y1 };
-                DrawTextA(hdc, items[i].value.c_str(), -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-                cx += valSz.cx + GAP;
-            }
-            return cx;
-        };
-        drawStatRow(row1, 4, STATS_X, 0,    rowH);
-        drawStatRow(row2, 4, STATS_X, rowH, HEADER_H - 1);
-    }
+            // value
+            SIZE valSz;
+            GetTextExtentPoint32A(hdc, items[i].value.c_str(), (int)items[i].value.size(), &valSz);
+            SetTextColor(hdc, items[i].color);
+            RECT vr = { cx, y0, cx + valSz.cx + 2, y1 };
+            DrawTextA(hdc, items[i].value.c_str(), -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            cx += valSz.cx + GAP;
+        }
+        return cx;
+    };
+    drawStatRow(row1, 4, STATS_X, 0,    rowH);
+    drawStatRow(row2, 4, STATS_X, rowH, HEADER_H - 1);
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
     // We measure both pieces then right-justify them to RB_X - 10.
@@ -828,10 +818,10 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
         if (!Market_InitVoice(state)) { state->ttsOn = false; return; }
         if (state->hSpeakerBtn)
             SetCtrlColor(state->hSpeakerBtn, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);
-        SetTimer(hWnd, TIMER_TS_SPEAKER, 21000, NULL);
+        SetTimer(hWnd, TIMER_MARKET_SPEAKER, 21000, NULL);
         Market_SpeakLast(state);
     } else {
-        KillTimer(hWnd, TIMER_TS_SPEAKER);
+        KillTimer(hWnd, TIMER_MARKET_SPEAKER);
         if (state->hTtsVoice)
             state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
         if (state->hSpeakerBtn)
@@ -896,9 +886,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hL2List      = Market_CreateL2List(hWnd, hInst);
-        state->hTsList      = TimeSales_CreateListView(hWnd, ID_TS_LIST,       hInst);
-        state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_TS_LIST_F100,  hInst);
-        state->hTsListF1000 = TimeSales_CreateListView(hWnd, ID_TS_LIST_F1000, hInst);
+        state->hTsList      = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0001,       hInst);
+        state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0100,  hInst);
+        state->hTsListF1000 = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F1000, hInst);
         SetWindowSubclass(state->hTsList,      Market_ListForwardCtrlProc, 10, 0);
         SetWindowSubclass(state->hTsListF100,  Market_ListForwardCtrlProc, 11, 0);
         SetWindowSubclass(state->hTsListF1000, Market_ListForwardCtrlProc, 12, 0);
@@ -918,9 +908,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         ShowWindow(state->hL2List, SW_SHOW);
 
         // ── Filter checkbox (far left, below speaker) ─────────────────────────
-        state->hTsFilterCheck = CreateWindowA("BUTTON", "",
+        state->hStopOrderCheck = CreateWindowA("BUTTON", "",
             WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-            0, 0, 16, 16, hWnd, (HMENU)ID_TS_FILTER_CHECK, hInst, NULL);
+            0, 0, 16, 16, hWnd, (HMENU)ID_MARKET_STOP_ORDER, hInst, NULL);
 
         {
             HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
@@ -931,15 +921,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             ti.cbSize   = sizeof(ti);
             ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
             ti.hwnd     = hWnd;
-            ti.uId      = (UINT_PTR)state->hTsFilterCheck;
-            ti.lpszText = (LPSTR)"Filter Size x 100 and 1000";
+            ti.uId      = (UINT_PTR)state->hStopOrderCheck;
+            ti.lpszText = (LPSTR)"Attach Stop Order";
             SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
         }
 
         // ── Speaker button (far left, top half) ───────────────────────────────
         state->hSpeakerBtn = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-            0, 0, 22, 22, hWnd, (HMENU)ID_TS_SPEAKER, hInst, NULL);
+            0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_SPEAKER, hInst, NULL);
         SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
         SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
 
@@ -949,12 +939,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 42, 26, hWnd, NULL, hInst, NULL);
 
         state->hOrderPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
 
         state->hOrderQty = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "1",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
 
@@ -968,12 +958,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Restore splitter + filter
         if (!state->symbol.empty()) {
             Settings_LoadMarketSplitter(state->symbol, state->splitX, state->splitY);
-            char filterKey[256];
-            sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
+            char windowKey[256];
+            sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
             RECT rc; GetWindowRect(hWnd, &rc);
-            if (Settings_Load(filterKey, 0)) {
-                state->tsFilteredView = true;
-                SendMessage(state->hTsFilterCheck, BM_SETCHECK, BST_CHECKED, 0);
+            if (Settings_StopOrder_Load(windowKey, 0)) {
+                state->attachStopOrder = true;
+                SendMessage(state->hStopOrderCheck, BM_SETCHECK, BST_CHECKED, 0);
                 MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth + 181, windowMarketHeight, TRUE);
             } else {
                 MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth, windowMarketHeight, TRUE);
@@ -1091,29 +1081,21 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == ID_TS_FILTER_CHECK && HIWORD(wParam) == BN_CLICKED && state) {
-            state->tsFilteredView = (SendMessage(state->hTsFilterCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
-            RECT rc; GetWindowRect(hWnd, &rc);
-            if (state->tsFilteredView) {
-                ListView_DeleteAllItems(state->hTsListF100);
-                ListView_DeleteAllItems(state->hTsListF1000);
-                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth + 181, windowMarketHeight, TRUE);
-            } else {
-                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth, windowMarketHeight, TRUE);
-            }
+        if (LOWORD(wParam) == ID_MARKET_STOP_ORDER && HIWORD(wParam) == BN_CLICKED && state) {
+            state->attachStopOrder = (SendMessage(state->hStopOrderCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
             if (!state->symbol.empty()) {
-                char filterKey[256];
-                sprintf(filterKey, "TsFilterSize_%s", state->symbol.c_str());
-                Settings_Save(filterKey, state->tsFilteredView ? 1 : 0);
+                char windowKey[256];
+                sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
+                Settings_StopOrder_Save(windowKey, state->attachStopOrder ? 1 : 0);
             }
             Market_Layout(hWnd, state);
         }
-        if (LOWORD(wParam) == ID_TS_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)
+        if (LOWORD(wParam) == ID_MARKET_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)
             Market_ToggleTTS(hWnd, state);
         break;
 
     case WM_TIMER:
-        if (wParam == TIMER_TS_SPEAKER && state && state->ttsOn)
+        if (wParam == TIMER_MARKET_SPEAKER && state && state->ttsOn)
             Market_SpeakLast(state);
         break;
 
@@ -1125,9 +1107,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             state->hTtsVoice = nullptr;
         }
         if (state->ttsOn) {
-            KillTimer(hWnd, TIMER_TS_SPEAKER);
+            KillTimer(hWnd, TIMER_MARKET_SPEAKER);
             if (Market_InitVoice(state)) {
-                SetTimer(hWnd, TIMER_TS_SPEAKER, 21000, NULL);
+                SetTimer(hWnd, TIMER_MARKET_SPEAKER, 21000, NULL);
                 Market_SpeakLast(state);
             } else {
                 state->ttsOn = false;
@@ -1143,11 +1125,18 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time);
-            if (state->tsFilteredView) {
-                if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
-                if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
+            tick->side = COLOR_THEME;
+            if (state->l1Info.bid > 0) {
+                if (tick->price == state->l1Info.bid) tick->side = COINS_CLR_GREEN;
+                else if (tick->price < state->l1Info.bid) tick->side = COINS_CLR_GREEN_LIGHT;
             }
+            if (state->l1Info.ask > 0) {
+                if (tick->price == state->l1Info.ask) tick->side = COINS_CLR_RED;
+                else if (tick->price > state->l1Info.ask) tick->side = COINS_CLR_RED_LIGHT;
+            }
+            TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time);
+            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
+            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
             TradingAPI::WatchlistInfo wi;
             if (api.getWatchlistData(state->conId, state->symbol, wi)) {
                 if (wi.last      > 0.0) state->l1Info.last      = wi.last;
@@ -1191,7 +1180,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->code != NM_CUSTOMDRAW) break;
 
-        if (hdr->idFrom == ID_TS_LIST || hdr->idFrom == ID_TS_LIST_F100 || hdr->idFrom == ID_TS_LIST_F1000) {
+        if (hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0001 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0100 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F1000) {
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
             if (!Settings_DarkMode()) break;
             switch (cd->nmcd.dwDrawStage) {
@@ -1205,7 +1194,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
 
-        if (hdr->idFrom == ID_TS_L2_LIST) {
+        if (hdr->idFrom == ID_MARKET_L2_LIST) {
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
             switch (cd->nmcd.dwDrawStage) {
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
@@ -1244,11 +1233,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_SETCURSOR: {
         int id = GetDlgCtrlID((HWND)wParam);
-        if (id == ID_TS_SPEAKER) {
+        if (id == ID_MARKET_SPEAKER) {
             SetCursor(LoadCursor(NULL, IDC_HAND));
             return TRUE;
         }
-        if (state && state->tsFilteredView && LOWORD(lParam) == HTCLIENT) {
+        if (state && LOWORD(lParam) == HTCLIENT) {
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
             if (hit == 1) { SetCursor(LoadCursor(NULL, IDC_SIZEWE)); return TRUE; }
@@ -1261,10 +1250,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state) {
             int x = (short)LOWORD(lParam);
             int y = (short)HIWORD(lParam);
-            if (state->tsFilteredView) {
-                state->dragMode = HitTestSplitter(hWnd, state, x, y);
-                if (state->dragMode != 0) SetCapture(hWnd);
-            }
+            state->dragMode = HitTestSplitter(hWnd, state, x, y);
+            if (state->dragMode != 0) SetCapture(hWnd);
         }
         break;
     }
@@ -1307,7 +1294,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data) delete data;
         if (state) {
-            if (state->ttsOn) KillTimer(hWnd, TIMER_TS_SPEAKER);
+            if (state->ttsOn) KillTimer(hWnd, TIMER_MARKET_SPEAKER);
             if (state->hTtsVoice) {
                 state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
                 state->hTtsVoice->Release();

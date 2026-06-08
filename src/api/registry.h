@@ -196,6 +196,14 @@ DWORD Settings_Load(const char* key, DWORD defaultValue) {
     return RegGetDword("Settings", key, defaultValue);
 }
 
+DWORD Settings_StopOrder_Load(const char* windowClassKey, DWORD defaultValue) {
+    return RegGetDword(windowClassKey, "StopOrder", defaultValue);
+}
+
+void Settings_StopOrder_Save(const char* windowClassKey, DWORD value) {
+    RegSetDword(windowClassKey, "StopOrder", value);
+}
+
 void Settings_AlwaysOnTop_Save(const char* windowClassKey, DWORD value) {
     RegSetDword(windowClassKey, "AlwaysOnTop", value);
 }
