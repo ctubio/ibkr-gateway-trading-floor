@@ -13,19 +13,19 @@
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     MutexGatewayInstance();
-
+    
     RegisterWindowClass(hInst, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
     RegisterWindowClass(hInst, WndProcOrders,      ORDERS_CLASS_NAME,             103);
-    RegisterWindowClass(hInst, WndProcEditOrder,   ORDERS_EDIT_CLASS_NAME,        103);
+    RegisterWindowClass(hInst, WndProcEditOrder,   ORDERS_EDIT_CLASS_NAME,        103, true);
     RegisterWindowClass(hInst, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
     RegisterWindowClass(hInst, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);
-    RegisterWindowClass(hInst, WndProcNewList,     WATCHLIST_NEW_LIST_CLASS_NAME, 105);
+    RegisterWindowClass(hInst, WndProcNewList,     WATCHLIST_NEW_LIST_CLASS_NAME, 105, true);
     RegisterWindowClass(hInst, WndProcMarket,      MARKET_CLASS_NAME,             106);
-    RegisterWindowClass(hInst, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      106);
+    RegisterWindowClass(hInst, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      106, true);
     RegisterWindowClass(hInst, WndProcNews,        NEWS_CLASS_NAME,               107);
     RegisterWindowClass(hInst, WndProcNewsArticle, NEWS_ARTICLE_CLASS_NAME,       107);
     RegisterWindowClass(hInst, WndProcSettings,    SETTINGS_CLASS_NAME,           108);
-    RegisterWindowClass(hInst, WndProcDebugLog,    DEBUGLOG_CLASS_NAME,           109);
+    RegisterWindowClass(hInst, WndProcDebugLog,    DEBUGLOG_CLASS_NAME,           109, true);
 	StartDashboard(hInst);
 
     INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_USEREX_CLASSES };

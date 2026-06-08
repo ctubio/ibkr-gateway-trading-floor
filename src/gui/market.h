@@ -497,7 +497,7 @@ void StartMarket(const std::string& symbol, int conId) {
     }
     std::string key = MARKET_CLASS_NAME + std::string("_") + symbol;
     MarketInitData* data = new MarketInitData{symbol, conId, key};
-    StartGenericWindow(MARKET_CLASS_NAME, symbol.c_str(), L"IBKRGatewayClient.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+    StartGenericWindow(MARKET_CLASS_NAME, symbol.c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {

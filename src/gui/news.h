@@ -1,8 +1,8 @@
 #pragma once
 
-void StartNews() { StartGenericWindow(NEWS_CLASS_NAME, "News", L"IBKRGatewayClient.News", 830, 250); }
+void StartNews() { StartGenericWindow(NEWS_CLASS_NAME, "News", L"TWSAPIClientTradingFloor.News", 830, 250); }
 
-void StartNewsArticle() { StartGenericWindow(NEWS_ARTICLE_CLASS_NAME, "News Article", L"IBKRGatewayClient.NewsArticle", 600, 500); }
+void StartNewsArticle() { StartGenericWindow(NEWS_ARTICLE_CLASS_NAME, "News Article", L"TWSAPIClientTradingFloor.NewsArticle", 600, 500); }
 
 #define ID_NEWS_LIST_COMBO     3001
 #define ID_NEWS_SYM_COMBO      3002

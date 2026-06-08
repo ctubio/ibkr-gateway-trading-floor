@@ -253,7 +253,7 @@ LRESULT CALLBACK ListViewZoomProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM l
 std::unordered_map<std::string, HICON> offlineIcons;
 std::unordered_map<std::string, HICON> onlineIcons;
 
-void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className, int iconId) {
+void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className, int iconId, bool isPopup = false) {
     HICON& offlineIcon = offlineIcons[std::string(className)];
     HICON& onlineIcon  = onlineIcons[std::string(className)];
     onlineIcon  = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
@@ -263,12 +263,8 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     wc.lpszClassName = className;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0 || strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) == 0 || strcmp(className, MARKET_SEARCH_CLASS_NAME) == 0 || strcmp(className, ORDERS_EDIT_CLASS_NAME) == 0) {
-        wc.hInstance = GetModuleHandle(NULL);
-    } else {
-        wc.hInstance = hInst;
-    }
-    wc.hIcon = onlineIcon;
+    wc.hInstance     = isPopup ? GetModuleHandle(NULL) : hInst;
+    wc.hIcon         = onlineIcon;
     RegisterClass(&wc);
 }
 
@@ -411,12 +407,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             return DefWindowProc(hWnd, message, wParam, lParam);
         case WM_DESTROY:
             SaveWinPosition(hWnd);
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
-                api.removeApiUpdateWindow(hWnd);
-                api.clearApiErrorWindow(hWnd);
-                Shell_NotifyIconW(NIM_DELETE, &nid);
-                PostQuitMessage(0);
-            } else {
+            if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) {
                 Session_RemoveWindow(hWnd);
             }
             return 0;
@@ -475,13 +466,29 @@ void SaveGatewayPath(const std::string& path) {
 std::string AskGatewayPath(HWND hParent) {
     OPENFILENAMEA ofn = {};
     char path[MAX_PATH] = "";
+    char folder[MAX_PATH] = "C:\\";
+    
+    std::string gatewayPath = GetGatewayPath();
+    if (!gatewayPath.empty()) {
+        auto systemPath = std::filesystem::path(gatewayPath);
+        std::string filename = systemPath.filename().string();
+        std::string pathname = systemPath.remove_filename().string();
+        if (!filename.empty()) {
+            strncpy(path, filename.c_str(), sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+        }
+        if (!pathname.empty()) {
+            strncpy(folder, pathname.c_str(), sizeof(folder) - 1);
+            folder[sizeof(folder) - 1] = '\0';
+        }
+    }
     ofn.lStructSize     = sizeof(ofn);
     ofn.hwndOwner       = hParent;
     ofn.lpstrFilter     = "Executable\0*.exe\0All Files\0*.*\0";
     ofn.lpstrFile       = path;
     ofn.nMaxFile        = sizeof(path);
     ofn.lpstrTitle      = "Locate ibgateway.exe or tws.exe";
-    ofn.lpstrInitialDir = "C:\\Program Files\\IBKR";
+    ofn.lpstrInitialDir = folder;
     ofn.Flags           = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
     if (GetOpenFileNameA(&ofn)) return std::string(path);
     return "";
@@ -521,6 +528,27 @@ void KillGateway() {
         } while (Process32Next(hSnap, &pe));
     }
     CloseHandle(hSnap);
+}
+
+void MutexGatewayInstance() {
+    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
+        if (existingWnd) {
+            DWORD processId;
+            GetWindowThreadProcessId(existingWnd, &processId);
+            HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processId);
+            if (hProcess) {
+                TerminateProcess(hProcess, 0);
+                CloseHandle(hProcess);
+            }
+        }
+        
+        if (hMutex) CloseHandle(hMutex);
+        // Re-create to own the mutex for this instance
+        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+    }
 }
 
 std::string FormatWithCommas(double value) {

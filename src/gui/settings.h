@@ -1,18 +1,21 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"IBKRGatewayClient.Settings", 276, 300); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 323); }
 
-void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"IBKRGatewayClient.DebugLog", 790, 240); }
+void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
-#define ID_SETTINGS_KILL_GATEWAY 4001
-#define ID_SETTINGS_DARK_MODE    4002
-#define ID_SETTINGS_PLAY_SOUNDS  4003
-#define ID_SETTINGS_AUTO_GATEWAY 4004
-#define ID_SETTINGS_DEBUG_LOG    4005
-#define ID_SETTINGS_VOICE_COMBO  4006
-#define ID_SETTINGS_QTY_VALUE    4007
+#define ID_SETTINGS_KILL_GATEWAY      4001
+#define ID_SETTINGS_DARK_MODE         4002
+#define ID_SETTINGS_PLAY_SOUNDS       4003
+#define ID_SETTINGS_AUTO_GATEWAY      4004
+#define ID_SETTINGS_DEBUG_LOG         4005
+#define ID_SETTINGS_VOICE_COMBO       4006
+#define ID_SETTINGS_QTY_VALUE         4007
+#define ID_SETTINGS_GATEWAY_PATH      4010
+#define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
 
 static HWND hDebugEdit = NULL;
+static HWND hGatewayEdit = NULL;
 static std::vector<TtsVoiceEntry> g_settingsVoices; // populated once on WM_CREATE
 
 // ─── Debug Log ────────────────────────────────────────────────────────────────
@@ -94,16 +97,29 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (Settings_KillGatewayOnExit())
                 SendMessage(hChkKill, BM_SETCHECK, BST_CHECKED, 0);
 
+            HWND hBtnGatewayPath = CreateWindowA("BUTTON", "Change executable path",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+                margin, margin + 64, 250, 24,
+                hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH, hInst, NULL);
+
+            hGatewayEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_READONLY,
+                margin, margin + 94, 250, 20,
+                hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
+
+            std::string path = GetGatewayPath();
+            SetWindowTextA(hGatewayEdit, path.c_str());
+
             HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                margin, margin + 64, 250, 24,
+                margin, margin + 124, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
             if (Settings_DarkMode())
                 SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
 
             HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                margin, margin + 96, 250, 24,
+                margin, margin + 156, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
             if (Settings_Load("PlaySounds", 0))
                 SendMessage(hChkSounds, BM_SETCHECK, BST_CHECKED, 0);
@@ -111,12 +127,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── TTS Voice selector ────────────────────────────────────────────
             CreateWindowA("STATIC", "Voice:",
                 WS_CHILD | WS_VISIBLE,
-                margin, margin + 128, 44, 20,
+                margin, margin + 188, 44, 20,
                 hWnd, NULL, hInst, NULL);
 
             HWND hVoiceCombo = CreateWindowA("COMBOBOX", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-                margin + 48, margin + 126, 202, 200,
+                margin + 48, margin + 186, 202, 200,
                 hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
 
             // Enumerate all system voices and fill the combo
@@ -149,21 +165,21 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             CreateWindowA("STATIC", "Order Qty:",
                 WS_CHILD | WS_VISIBLE,
-                margin, margin + 167, 75, 20,
+                margin, margin + 220, 75, 20,
                 hWnd, NULL, hInst, NULL);
 
             HWND hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_NUMBER,
-                margin + 80, margin + 164, 162, 26,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                margin + 80, margin + 217, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_QTY_VALUE, hInst, NULL);
 
             char buf[32];
             snprintf(buf, sizeof(buf), "%d", (int)Settings_Load("OrderQty", 100));
             SetWindowTextA(hQtyEdit, buf);
-
+            
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                margin, margin + 200, 250, 24,
+                margin, margin + 253, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
             break;
         }
@@ -228,6 +244,16 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             PostMessage(hw, WM_TTS_VOICE_CHANGED, 0, 0);
                         return TRUE;
                     }, 0);
+                }
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
+                HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);   
+                if (hPathEdit != NULL) {
+                    std::string path = AskGatewayPath(hWnd);
+                    if (!path.empty()) {
+                        SaveGatewayPath(path);
+                        SetWindowTextA(hPathEdit, path.c_str());
+                    }
                 }
             }
             break;

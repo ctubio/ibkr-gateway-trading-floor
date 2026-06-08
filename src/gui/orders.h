@@ -1,6 +1,6 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"IBKRGatewayClient.Orders", 646, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 646, 240); }
 
 #define ID_ORDERS_LIST          9003
 

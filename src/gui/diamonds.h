@@ -1,7 +1,7 @@
 #pragma once
 // Requires <windowsx.h> for GET_X_LPARAM / GET_Y_LPARAM (include before this header).
 
-void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"IBKRGatewayClient.Diamonds", 1476, 420); }
+void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", 1476, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
 #define ID_DIAMONDS_CHK_0        7002   // "Growth"

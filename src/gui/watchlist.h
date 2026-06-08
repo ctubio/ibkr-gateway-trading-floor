@@ -1,6 +1,6 @@
 #pragma once
 
-void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"IBKRGatewayClient.Watchlist", 1000, 400); }
+void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"TWSAPIClientTradingFloor.Watchlist", 1000, 400); }
 
 
 #define ID_WATCHLIST_LIST_COMBO       8001
@@ -636,7 +636,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (sel == 0) {
                 // Sentinel selected — open "New Watchlist" dialog, then re-select previous.
                 std::string prev = watchlistCurrentListName;
-                StartGenericWindow(WATCHLIST_NEW_LIST_CLASS_NAME, "New Watchlist Name", L"IBKRGatewayClient.WatchlistNewList", 260, 75);
+                StartGenericWindow(WATCHLIST_NEW_LIST_CLASS_NAME, "New Watchlist Name", L"TWSAPIClientTradingFloor.WatchlistNewList", 260, 75);
                 // Restore selection (new list will arrive via WM_WATCHLIST_LISTS_CHANGED).
                 if (!prev.empty()) {
                     int idx = (int)SendMessageA(hCB, CB_FINDSTRINGEXACT, -1, (LPARAM)prev.c_str());

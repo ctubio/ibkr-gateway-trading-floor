@@ -1,9 +1,9 @@
 #pragma once
 
-int windowDashboardWidth      = 250;
+int windowDashboardWidth  = 250;
 int windowDashboardHeight = 450;
 
-void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "IBKR Gateway: Offline", L"IBKRGatewayClient.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
+void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor: Offline", L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
 #define WM_TRAYICON (WM_APP + 100)
 
@@ -693,8 +693,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
         }
 
-
-
         case WM_COMMAND: {
             WORD id  = LOWORD(wParam);
             WORD evt = HIWORD(wParam);
@@ -780,6 +778,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
         }
         case WM_DESTROY:
+            api.removeApiUpdateWindow(hWnd);
+            api.clearApiErrorWindow(hWnd);
+            api.unsetCoinWindow();
+            Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
             if (g_coinsTtsOn) KillTimer(hWnd, TIMER_COINS_SPEAKER);
             if (g_pCoinsVoice) {
@@ -802,29 +804,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             memset(hCoinVal, 0, sizeof(hCoinVal));
             gClrCount = 0;
 
-            api.unsetCoinWindow();
+            PostQuitMessage(0);
             break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
-}
-
-void MutexGatewayInstance() {
-    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\IBKRGatewayClientMutex_17072025");
-
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
-        if (existingWnd) {
-            DWORD processId;
-            GetWindowThreadProcessId(existingWnd, &processId);
-            HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processId);
-            if (hProcess) {
-                TerminateProcess(hProcess, 0);
-                CloseHandle(hProcess);
-            }
-        }
-        
-        if (hMutex) CloseHandle(hMutex);
-        // Re-create to own the mutex for this instance
-        CreateMutex(NULL, TRUE, "Global\\IBKRGatewayClientMutex_17072025");
-    }
 }

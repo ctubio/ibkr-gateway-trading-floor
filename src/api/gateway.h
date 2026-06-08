@@ -39,10 +39,7 @@
 #define WM_WATCHLIST_UPDATE (WM_USER + 12)
 #define WM_MARKET_L1        (WM_USER + 13)   // Level 1 quote tick — handler calls getLevel1Data()
 #define WM_MARKET_L2        (WM_USER + 14)   // Level 2 depth change — handler calls getLevel2Snapshot()
-
-// Per-position PnL update — posted by pnlSingle() to the subscribed window.
-// wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
-#define WM_PNL_SINGLE       (WM_USER + 15)
+#define WM_PNL_SINGLE       (WM_USER + 15)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
 
 class TradingAPI {
 public:

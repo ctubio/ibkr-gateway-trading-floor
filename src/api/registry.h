@@ -3,17 +3,17 @@
 constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
-static const char* SETTINGS_CLASS_NAME           = "Settings";
-static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
-static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
+static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
 static const char* ORDERS_CLASS_NAME             = "Orders";
 static const char* ORDERS_EDIT_CLASS_NAME        = "Orders_Edit";
-static const char* NEWS_CLASS_NAME               = "News";
-static const char* NEWS_ARTICLE_CLASS_NAME       = "NewsArticle";
-static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
 static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
+static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
 static const char* MARKET_CLASS_NAME             = "Market";
 static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
+static const char* NEWS_CLASS_NAME               = "News";
+static const char* NEWS_ARTICLE_CLASS_NAME       = "NewsArticle";
+static const char* SETTINGS_CLASS_NAME           = "Settings";
+static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
 
 // Dark mode colors
 #define DM_BG        RGB(30,  30,  30)   // Slightly darker, flatter background
@@ -492,7 +492,8 @@ BOOL CALLBACK EnumChildProcForLists(HWND hwnd, LPARAM lParam) {
     }
     return TRUE;
 }
-BOOL CALLBACK EnumChildProcForRichEdits(HWND hwnd, LPARAM lParam) {
+
+BOOL CALLBACK EnumChildProcForEdits(HWND hwnd, LPARAM lParam) {
     char className[256];
     if (GetClassNameA(hwnd, className, sizeof(className))) {
         if (StrStrIA(className, "EDIT") != NULL) {
@@ -512,21 +513,21 @@ void ApplyDarkMode(HWND hWnd) {
 
     // Automatically find and theme any ListViews and RichEdit inside this window
     EnumChildWindows(hWnd, EnumChildProcForLists, (LPARAM)dark);
-    EnumChildWindows(hWnd, EnumChildProcForRichEdits, (LPARAM)dark);
+    EnumChildWindows(hWnd, EnumChildProcForEdits, (LPARAM)dark);
 
     DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
     DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
     
-    char className[256] = {};
-    GetClassNameA(hWnd, className, sizeof(className));
-    if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
-        // Set backdrop type
-        // DWMSBT_MAINWINDOW    = Mica
-        // DWMSBT_TABBEDWINDOW  = Mica Alt (a darker/more intense version)
-        // DWMSBT_TRANSIENTWINDOW = Acrylic
-        DWM_SYSTEMBACKDROP_TYPE backdropType = DWMSBT_TRANSIENTWINDOW;
-        DwmSetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdropType, sizeof(backdropType));
-    }
+    //char className[256] = {};
+    //GetClassNameA(hWnd, className, sizeof(className));
+    //if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
+    // Set backdrop type
+    // DWMSBT_MAINWINDOW    = Mica
+    // DWMSBT_TABBEDWINDOW  = Mica Alt (a darker/more intense version)
+    // DWMSBT_TRANSIENTWINDOW = Acrylic
+    DWM_SYSTEMBACKDROP_TYPE backdropType = DWMSBT_TRANSIENTWINDOW;
+    DwmSetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdropType, sizeof(backdropType));
+    //}
 }
 
 
@@ -658,32 +659,7 @@ void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
     SetWindowPos(hWnd, onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
-void Session_AddWindow(HWND hWnd, LPARAM lParam) {
-    ApplyDarkMode(hWnd);
-
-    char className[256] = {};
-    GetClassNameA(hWnd, className, sizeof(className));
-
-    std::string winKey;
-    if (strcmp(className, MARKET_CLASS_NAME) == 0) {
-        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-        if (data) {
-            winKey = data->winKey;
-        }
-    } else {
-        winKey = className;
-    }
-
-    if (!winKey.empty()) {
-        if (Settings_AlwaysOnTop_Load(winKey.c_str(), 0)) {
-            if (strcmp(className, MARKET_CLASS_NAME) == 0)
-                SetMarketAlwaysOnTop(hWnd, true);
-            else ToggleWindowAlwaysOnTop(winKey.c_str());                        
-        }
-    }
-
-    if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) return; // Dashboard is always open on boot, no need to track in registry
-    
+void Save_OpenWindows(const char* className) {
     HKEY hKey;
     char fullPath[256];
     wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
@@ -715,6 +691,35 @@ void Session_AddWindow(HWND hWnd, LPARAM lParam) {
         RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
             (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
         RegCloseKey(hKey);
+    }
+}
+
+void Session_AddWindow(HWND hWnd, LPARAM lParam) {
+    ApplyDarkMode(hWnd);
+
+    char className[256] = {};
+    GetClassNameA(hWnd, className, sizeof(className));
+
+    std::string winKey;
+    if (strcmp(className, MARKET_CLASS_NAME) == 0) {
+        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        if (data) {
+            winKey = data->winKey;
+        }
+    } else {
+        winKey = className;
+    }
+
+    if (!winKey.empty()) {
+        if (Settings_AlwaysOnTop_Load(winKey.c_str(), 0)) {
+            if (strcmp(className, MARKET_CLASS_NAME) == 0)
+                SetMarketAlwaysOnTop(hWnd, true);
+            else ToggleWindowAlwaysOnTop(winKey.c_str());                        
+        }
+
+        if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) { // Dashboard is always open on boot, no need to track in registry
+            Save_OpenWindows(className);
+        }
     }
 }
 
