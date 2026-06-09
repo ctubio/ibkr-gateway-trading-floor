@@ -160,9 +160,13 @@ static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     return hList;
 }
 
-static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time) {
+static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time, COLORREF color) {
     char buf[32]; snprintf(buf, sizeof(buf), "%.2f", price);
-    LVITEMA lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = 0; lvi.pszText = buf;
+    LVITEMA lvi = {};
+    lvi.mask = LVIF_TEXT | LVIF_PARAM;
+    lvi.iItem = 0;
+    lvi.pszText = buf; 
+    lvi.lParam = (LPARAM)color;
     ListView_InsertItem(hList, &lvi);
     snprintf(buf, sizeof(buf), "%.0f", size);
     ListView_SetItemText(hList, 0, 1, buf);
@@ -1125,18 +1129,18 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            tick->side = COLOR_THEME;
+            tick->side = 0;
             if (state->l1Info.bid > 0) {
-                if (tick->price == state->l1Info.bid) tick->side = COINS_CLR_GREEN;
-                else if (tick->price < state->l1Info.bid) tick->side = COINS_CLR_GREEN_LIGHT;
+                if (tick->price == state->l1Info.bid) tick->side = COINS_CLR_RED;
+                else if (tick->price < state->l1Info.bid) tick->side = COINS_CLR_RED_DARK;
             }
             if (state->l1Info.ask > 0) {
-                if (tick->price == state->l1Info.ask) tick->side = COINS_CLR_RED;
-                else if (tick->price > state->l1Info.ask) tick->side = COINS_CLR_RED_LIGHT;
+                if (tick->price == state->l1Info.ask) tick->side = COINS_CLR_GREEN;
+                else if (tick->price > state->l1Info.ask) tick->side = COINS_CLR_GREEN_DARK;
             }
-            TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time);
-            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time);
-            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time);
+            TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
+            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
+            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
             TradingAPI::WatchlistInfo wi;
             if (api.getWatchlistData(state->conId, state->symbol, wi)) {
                 if (wi.last      > 0.0) state->l1Info.last      = wi.last;
@@ -1151,9 +1155,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (wi.volume    > 0)   state->l1Info.volume    = wi.volume;
                 if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
             }
-            {
-                Market_RefreshPositionAndAvg(hWnd, state);
-            }
+            Market_RefreshPositionAndAvg(hWnd, state);
             RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
             InvalidateRect(hWnd, &hdrRc, FALSE);
         }
@@ -1182,13 +1184,18 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         if (hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0001 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0100 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F1000) {
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
-            if (!Settings_DarkMode()) break;
             switch (cd->nmcd.dwDrawStage) {
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
-                    cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                    cd->clrText   = DM_TEXT;
+                    BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
+                    if (dark)
+                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                    COLORREF rowColor = (COLORREF)cd->nmcd.lItemlParam;
+                    if (rowColor)
+                        cd->clrText = rowColor;
+                    else if (dark)
+                        cd->clrText = DM_TEXT;
                     return CDRF_DODEFAULT;
             }
             break;
