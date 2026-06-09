@@ -177,7 +177,7 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
     ListView_SetItemText(hList, 0, 1, buf);
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
     int count = ListView_GetItemCount(hList);
-    if (count > 500) ListView_DeleteItem(hList, count - 1);
+    if (count > 50) ListView_DeleteItem(hList, count - 1);
 }
 
 // ── Right block geometry (shared by paint and layout) ────────────────────────
