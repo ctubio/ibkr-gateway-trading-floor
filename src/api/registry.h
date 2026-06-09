@@ -196,12 +196,12 @@ DWORD Settings_Load(const char* key, DWORD defaultValue) {
     return RegGetDword("Settings", key, defaultValue);
 }
 
-DWORD Settings_StopOrder_Load(const char* windowClassKey, DWORD defaultValue) {
-    return RegGetDword(windowClassKey, "StopOrder", defaultValue);
+DWORD Settings_Overnight_Load(const char* windowClassKey, DWORD defaultValue) {
+    return RegGetDword(windowClassKey, "OVERNIGHT", defaultValue);
 }
 
-void Settings_StopOrder_Save(const char* windowClassKey, DWORD value) {
-    RegSetDword(windowClassKey, "StopOrder", value);
+void Settings_Overnight_Save(const char* windowClassKey, DWORD value) {
+    RegSetDword(windowClassKey, "OVERNIGHT", value);
 }
 
 void Settings_AlwaysOnTop_Save(const char* windowClassKey, DWORD value) {
@@ -849,34 +849,28 @@ void Settings_NewList_Save(const char* newName) {
 }
 
 // ── Market splitter persistence ───────────────────────────────────────────
-// splitX / splitY are stored as DWORD scaled ×10000 so floats survive REG_DWORD.
+// splitY are stored as DWORD scaled ×10000 so floats survive REG_DWORD.
 // Keys are per-symbol so multiple open windows never collide.
 
-void Settings_SaveMarketSplitter(const std::string& symbol, float splitX, float splitY) {
-    char keyX[256], keyY[256];
-    sprintf(keyX, "TsSplitX_%s", symbol.c_str());
-    sprintf(keyY, "TsSplitY_%s", symbol.c_str());
-    Settings_Save(keyX, (DWORD)(splitX * 10000.0f));
-    Settings_Save(keyY, (DWORD)(splitY * 10000.0f));
+void Settings_SaveMarketSplitter(const std::string& symbol, float splitY) {
+    char windowKey[256];
+    sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    RegSetDword(windowKey, "SplitY", (DWORD)(splitY * 10000.0f));
 }
 
-bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitX, float& splitY) {
-    char keyX[256], keyY[256];
-    sprintf(keyX, "TsSplitX_%s", symbol.c_str());
-    sprintf(keyY, "TsSplitY_%s", symbol.c_str());
+bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitY) {
+    char windowKey[256];
+    sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
 
     // Use sentinel 0xFFFFFFFF to detect "not saved yet"
-    DWORD dx = Settings_Load(keyX, 0xFFFFFFFF);
-    DWORD dy = Settings_Load(keyY, 0xFFFFFFFF);
-    if (dx == 0xFFFFFFFF || dy == 0xFFFFFFFF) return false;
+    DWORD dx = RegGetDword(windowKey, "SplitY", 0xFFFFFFFF);
+    if (dx == 0xFFFFFFFF) return false;
 
     float fx = (float)dx / 10000.0f;
-    float fy = (float)dy / 10000.0f;
     // Clamp defensively in case of corrupted registry data
-    if (fx < 0.1f || fx > 0.9f || fy < 0.1f || fy > 0.9f) return false;
+    if (fx < 0.1f || fx > 0.9f) return false;
 
-    splitX = fx;
-    splitY = fy;
+    splitY = fx;
     return true;
 }
 

@@ -1,12 +1,12 @@
 #pragma once
 
-int windowMarketWidth = 625;
+int windowMarketWidth = 644;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
 void StartMarket(const std::string& symbol = "", int conId = 0);
 
-#define ID_MARKET_STOP_ORDER           6003
+#define ID_MARKET_OVERNIGHT            6003
 #define ID_MARKET_TIMESALES_LIST_F0001 6004
 #define ID_MARKET_TIMESALES_LIST_F0100 6005
 #define ID_MARKET_TIMESALES_LIST_F1000 6006
@@ -29,7 +29,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
 static const int L2_W     = 224;  // Fixed width of the Level 2 depth panel
-static const int ORDER_BAR_H = 38;
+static const int ORDER_BAR_H = 80;
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
 
@@ -38,9 +38,9 @@ struct TsState {
     HWND hTsList = NULL;
     HWND hTsListF100 = NULL;
     HWND hTsListF1000 = NULL;
-    HWND hStopOrderCheck = NULL;
+    HWND hOvernightCheck = NULL;
     HWND hL2List = NULL;
-    bool attachStopOrder = false;
+    bool isOvernight = false;
     std::string symbol;
     int conId = 0;
 
@@ -59,6 +59,7 @@ struct TsState {
     // ── Cached fonts ──────────────────────────────────────────────────────────
     HFONT hBigFont     = NULL;   // ~22pt bold — large last price
     HFONT hStatusFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
+    HFONT hValuesFont      = NULL;   // ~16pt regular — change / bid-ask labels / stats
     HFONT hOrderFont       = NULL;   // ~20pt bold — order entry controls
     HFONT hSmallFont = NULL;   // ~13pt regular — smaller stats below change
     HFONT hSpeakerFont = NULL;   // Segoe MDL2 Assets — speaker glyph
@@ -70,15 +71,16 @@ struct TsState {
     HWND      hSpeakerBtn  = NULL;
 
     // ── Splitter state ────────────────────────────────────────────────────────
-    float splitX = 0.5f;
     float splitY = 0.5f;
     int dragMode = 0;
 
     // ── Order entry bar ───────────────────────────────────────────────────────
-    HWND  hOrderLabel    = NULL;
-    HWND  hOrderPrice    = NULL;
-    HWND  hOrderQty      = NULL;
-    bool  orderBarVisible = false;
+    HWND  hOrderLabel       = NULL;
+    HWND  hOrderPrice       = NULL;
+    HWND  hOrderStopPrice   = NULL;
+    HWND  hOrderProfitPrice = NULL;
+    HWND  hOrderQty         = NULL;
+    bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
     
 };
@@ -117,10 +119,10 @@ static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 // ── L2 column definitions ─────────────────────────────────────────────────────
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
-    { "Size",  46, LVCFMT_RIGHT },
-    { "Bid",   64, LVCFMT_RIGHT },
-    { "Ask",   64, LVCFMT_RIGHT },
-    { "Size",  46, LVCFMT_RIGHT },
+    { "Size",  46, LVCFMT_CENTER },
+    { "Ask",   64, LVCFMT_CENTER },
+    { "Bid",   64, LVCFMT_CENTER },
+    { "Size",  46, LVCFMT_CENTER },
 };
 static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 
@@ -196,7 +198,7 @@ static void Market_Layout(HWND hWnd, TsState* state) {
 
     const int hdrH  = HEADER_H;
     const int bodyY = hdrH;
-    const int barH  = (state->orderBarVisible) ? ORDER_BAR_H : 0;
+    const int barH  = (state->orderBarVisible) ? ORDER_BAR_H / (state->isOvernight ? 2 : 1) : 0;
     const int bodyH = rc.bottom - hdrH - barH;
     const int bodyW = rc.right;
 
@@ -209,9 +211,9 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     }
 
     // ── Filter checkbox: far left, centred in bottom half of header ──────────
-    if (state->hStopOrderCheck) {
+    if (state->hOvernightCheck) {
         int chkY = hdrH / 2 + (hdrH / 2 - 16) / 2;
-        SetWindowPos(state->hStopOrderCheck, NULL,
+        SetWindowPos(state->hOvernightCheck, NULL,
                      LC_MARGIN + (LC_ICON_W - 16) / 2, chkY, 16, 16,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
@@ -223,10 +225,10 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     // ── T&S area ──────────────────────────────────────────────────────────────
     const int splitThick = 4;   
     const int tsX = L2_W + splitThick;
-    const int tsW = bodyW - L2_W;
+    const int tsW = bodyW - L2_W - splitThick;
 
-    int leftW  = (int)(tsW * state->splitX) - splitThick / 2;
-    int rightW = tsW - leftW - splitThick * 2;
+    int leftW  = (int)((tsW - splitThick) / 2);
+    int rightW = leftW;
     int topH   = (int)(bodyH * state->splitY) - splitThick / 2;
     int botH   = bodyH - topH - splitThick;
 
@@ -238,22 +240,24 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     MoveWindow(state->hTsListF1000, tsX + leftW + splitThick,   bodyY + topH + splitThick, rightW, botH,  TRUE);
 
     // ── Order entry bar ───────────────────────────────────────────────────────
-    if (state->hOrderLabel && state->hOrderPrice && state->hOrderQty) {
+    if (state->hOrderLabel && state->hOrderPrice && state->hOrderStopPrice && state->hOrderProfitPrice && state->hOrderQty) {
         const int m    = 8;
-        const int lblW = 42;
-        const int editH = ORDER_BAR_H - 6;
-        const int editY = rc.bottom - ORDER_BAR_H + (ORDER_BAR_H - editH) / 2;
-        const int lblY  = rc.bottom - ORDER_BAR_H + (ORDER_BAR_H - 18) / 2;
+        const int lblW = 100;
+        int BAR_H = (state->isOvernight ? ORDER_BAR_H / 2 : ORDER_BAR_H);
+        const int editH = (BAR_H - 6) / (state->isOvernight ? 1 : 2);
+        const int editY = rc.bottom - BAR_H + (BAR_H - editH * (state->isOvernight ? 1 : 2)) / 2;
+        const int lblY  = rc.bottom - BAR_H + (BAR_H - 18) / 2;
         int availW = rc.right - m * 3 - lblW;
         int priceW = availW / 2;
         int qtyW   = availW - priceW - 1;
 
-        SetWindowPos(state->hOrderLabel, NULL, m, lblY, lblW, 18,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderPrice, NULL, m + lblW + m, editY, priceW, editH,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderQty, NULL, m + lblW + m + priceW + m, editY, qtyW, editH,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderLabel,       NULL, m,                                  lblY,   lblW,    18, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderPrice,       NULL, m + lblW + m,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderQty,         NULL, m + lblW + m + priceW + m,         editY,   qtyW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        if (!state->isOvernight) {
+            SetWindowPos(state->hOrderStopPrice,   NULL, m + lblW + m,              editY + editH + 4, priceW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderProfitPrice, NULL, m + lblW + m + priceW + m, editY + editH + 4, priceW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
     }
 }
 
@@ -261,8 +265,13 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     if (!state || !state->hOrderLabel) return;
     state->orderSide = side;
     state->orderBarVisible = true;
-    SetWindowTextA(state->hOrderLabel, side.c_str());
-    SetCtrlColor(state->hOrderLabel, (state->orderSide == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED);
+    char bufLabel[32];
+    if (state->isOvernight)
+        snprintf(bufLabel, sizeof(bufLabel), "OVN %s", side.c_str());
+    else
+        snprintf(bufLabel, sizeof(bufLabel), "%s", side.c_str());
+    SetWindowTextA(state->hOrderLabel, bufLabel);
+    SetCtrlColor(state->hOrderLabel, side == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
     InvalidateRect(state->hOrderLabel, NULL, TRUE);
 
     // Pre-fill price from current last / bid / ask
@@ -284,6 +293,15 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hOrderPrice, SW_SHOW);
     ShowWindow(state->hOrderQty,   SW_SHOW);
 
+    ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
+    char sbuf[32];
+    snprintf(sbuf, sizeof(sbuf), "%.2f", state->isOvernight ? 0.0 : 1.0);
+    SetWindowTextA(state->hOrderStopPrice, sbuf);
+    char pbuf[32];
+    snprintf(pbuf, sizeof(pbuf), "%.2f", state->isOvernight ? 0.0 : 2.0);
+    SetWindowTextA(state->hOrderProfitPrice, pbuf);
+
     Market_Layout(hWnd, state);
     SetFocus(state->hOrderPrice);
     int len = GetWindowTextLengthA(state->hOrderPrice);
@@ -294,6 +312,8 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hOrderLabel, SW_HIDE);
     ShowWindow(state->hOrderPrice, SW_HIDE);
     ShowWindow(state->hOrderQty,   SW_HIDE);
+    ShowWindow(state->hOrderStopPrice, SW_HIDE);
+    ShowWindow(state->hOrderProfitPrice, SW_HIDE);
     state->orderBarVisible = false;
     Market_Layout(hWnd, state);
 }
@@ -337,13 +357,19 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
         }
         if (wParam == VK_RETURN) {
             if (st) {
-                char pBuf[32] = {}, qBuf[32] = {};
-                GetWindowTextA(st->hOrderPrice, pBuf, sizeof(pBuf));
-                GetWindowTextA(st->hOrderQty,   qBuf, sizeof(qBuf));
+                char pBuf[32] = {}, qBuf[32] = {}, psBuf[32] = {}, ppBuf[32] = {};
+                GetWindowTextA(st->hOrderPrice,       pBuf, sizeof(pBuf));
+                GetWindowTextA(st->hOrderQty,         qBuf, sizeof(qBuf));
+                GetWindowTextA(st->hOrderStopPrice,   psBuf, sizeof(psBuf));
+                GetWindowTextA(st->hOrderProfitPrice, ppBuf, sizeof(ppBuf));
                 double price = std::atof(pBuf);
                 double qty = std::atof(qBuf);
+                double stopPrice = std::atof(psBuf);
+                double profitPrice = std::atof(ppBuf);
                 if (price > 0 && qty > 0) {
-                    api.submitOrder(st->conId, st->symbol, st->orderSide, qty, price);
+                    if (stopPrice < 10.0) stopPrice = 0.0;
+                    if (profitPrice < 10.0) profitPrice = 0.0;
+                    api.submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, profitPrice);
                 }
                 Market_Layout_HideBar(hMarket, st);
             }
@@ -509,13 +535,13 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     int relY = y - HEADER_H;
     if (relX < 0 || relY < 0 || relY > bodyH) return 0;
 
-    int splitXPos = (int)(tsW * state->splitX);
+    int splitXPos = (int)(tsW / 2);
     int splitYPos = (int)(bodyH * state->splitY);
 
-    if (relX >= splitXPos - splitThick && relX <= splitXPos + splitThick)
-        return 0; // 1;
+    // if (relX >= splitXPos - splitThick && relX <= splitXPos + splitThick)
+    //     return 2;
     if (relX > splitXPos + splitThick && relY >= splitYPos - splitThick && relY <= splitYPos + splitThick)
-        return 2;
+        return 1;
 
     return 0;
 }
@@ -550,14 +576,14 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
         lvi.lParam  = (LPARAM)(hasBid | hasAsk);
         lvi.iItem   = i;
         std::string bidSzStr = hasBid ? Market_FmtQty(bids[i].size) : "";
-        lvi.pszText = (LPSTR)bidSzStr.c_str();
-        ListView_InsertItem(hList, &lvi);
         std::string bidStr   = hasBid ? Market_Fmt(bids[i].price) : "";
         std::string askStr   = hasAsk ? Market_Fmt(asks[i].price) : "";
         std::string askSzStr = hasAsk ? Market_FmtQty(asks[i].size) : "";
-        ListView_SetItemText(hList, i, 1, (LPSTR)bidStr.c_str());
-        ListView_SetItemText(hList, i, 2, (LPSTR)askStr.c_str());
-        ListView_SetItemText(hList, i, 3, (LPSTR)askSzStr.c_str());
+        lvi.pszText = (LPSTR)askSzStr.c_str();
+        ListView_InsertItem(hList, &lvi);
+        ListView_SetItemText(hList, i, 1, (LPSTR)askStr.c_str());
+        ListView_SetItemText(hList, i, 2, (LPSTR)bidStr.c_str());
+        ListView_SetItemText(hList, i, 3, (LPSTR)bidSzStr.c_str());
     }
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     InvalidateRect(hList, NULL, FALSE);
@@ -615,10 +641,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Anchored to right edge, two rows.
     const int RB_X = rc.right - RB_TOTAL - RB_MARGIN;
 
-    HFONT hOldFont = (HFONT)SelectObject(hdc, state->hStatusFont);
-
     // Ask (top row, red)
     {
+        SelectObject(hdc, state->hStatusFont);
         SetTextColor(hdc, COINS_CLR_RED);
         RECT lr = { RB_X, 1, RB_X + RB_LABEL_W, rowH };
         DrawTextA(hdc, "Ask", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -628,7 +653,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT pr = { RB_X + RB_LABEL_W, 1, RB_X + RB_LABEL_W + RB_PRICE_W, rowH };
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, state->hValuesFont);
         char szBuf[32]; snprintf(szBuf, sizeof(szBuf), " x %s", Market_FmtQty(L1.askSize).c_str());
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
         DrawTextA(hdc, szBuf, -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -636,6 +661,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Bid (bottom row, blue)
     {
+        SelectObject(hdc, state->hStatusFont);
         SetTextColor(hdc, COINS_CLR_BLUE);
         RECT lr = { RB_X, rowH, RB_X + RB_LABEL_W, HEADER_H - 1 };
         DrawTextA(hdc, "Bid", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -645,7 +671,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT pr = { RB_X + RB_LABEL_W, rowH, RB_X + RB_LABEL_W + RB_PRICE_W, HEADER_H - 1 };
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, state->hValuesFont);
         char szBuf[32]; snprintf(szBuf, sizeof(szBuf), " x %s", Market_FmtQty(L1.bidSize).c_str());
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
         DrawTextA(hdc, szBuf, -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -688,13 +714,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", Market_Fmt(L1.vwap),      vwapColor  },
-        { "D:", bufD,                 dPnlColor  },
     };
     // Row 2: Pos  Avg
     StatItem row2[] = {
-        { "O:", Market_Fmt(L1.open),      openColor  },
-        { "L:", Market_Fmt(L1.low),       lowColor   },
-        { "V:", Market_FmtQty(L1.volume),    textColor  },
+        { "O:", Market_Fmt(L1.open),  openColor  },
+        { "L:", Market_Fmt(L1.low),   lowColor   },
+        { "D:", bufD,                 dPnlColor  },
         { "U:", bufU,                 uPnlColor  },
         //{ "Pos:", Market_FmtQty(state->position), posColor   },
         //{ "Avg:", Market_Fmt(state->avgPrice),    avgPrColor },
@@ -725,7 +750,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         }
         return cx;
     };
-    drawStatRow(row1, 4, STATS_X, 0,    rowH);
+    drawStatRow(row1, 3, STATS_X, 0,    rowH);
     drawStatRow(row2, 4, STATS_X, rowH, HEADER_H - 1);
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
@@ -780,7 +805,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     }
 
     // ── Bottom separator ──────────────────────────────────────────────────────
-    SelectObject(hdc, hOldFont);
+    SelectObject(hdc, state->hStatusFont);
     HPEN hSepPen = CreatePen(PS_SOLID, 1, sepColor);
     HPEN hOldPen = (HPEN)SelectObject(hdc, hSepPen);
     MoveToEx(hdc, 0, HEADER_H - 1, NULL);
@@ -876,6 +901,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hStatusFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        state->hValuesFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
         state->hSmallFont = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
@@ -911,10 +939,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         ShowWindow(state->hTsList, SW_SHOW);
         ShowWindow(state->hL2List, SW_SHOW);
 
-        // ── Filter checkbox (far left, below speaker) ─────────────────────────
-        state->hStopOrderCheck = CreateWindowA("BUTTON", "",
+        // ── Overnight checkbox (far left, below speaker) ─────────────────────────
+        state->hOvernightCheck = CreateWindowA("BUTTON", "",
             WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-            0, 0, 16, 16, hWnd, (HMENU)ID_MARKET_STOP_ORDER, hInst, NULL);
+            0, 0, 16, 16, hWnd, (HMENU)ID_MARKET_OVERNIGHT, hInst, NULL);
 
         {
             HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
@@ -925,8 +953,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             ti.cbSize   = sizeof(ti);
             ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
             ti.hwnd     = hWnd;
-            ti.uId      = (UINT_PTR)state->hStopOrderCheck;
-            ti.lpszText = (LPSTR)"Attach Stop Order";
+            ti.uId      = (UINT_PTR)state->hOvernightCheck;
+            ti.lpszText = (LPSTR)"OVERNIGHT";
             SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
         }
 
@@ -951,26 +979,34 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
+        
+        state->hOrderStopPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+        SetWindowSubclass(state->hOrderStopPrice, OrderBar_EditSubclassProc, 1, 0);
+        
+        state->hOrderProfitPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+        SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 
         // Apply font to order bar controls
         if (state->hOrderFont) {
             SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
             SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
+            SendMessage(state->hOrderStopPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
+            SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
             SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
         }
 
         // Restore splitter + filter
         if (!state->symbol.empty()) {
-            Settings_LoadMarketSplitter(state->symbol, state->splitX, state->splitY);
+            Settings_LoadMarketSplitter(state->symbol, state->splitY);
             char windowKey[256];
             sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
-            RECT rc; GetWindowRect(hWnd, &rc);
-            if (Settings_StopOrder_Load(windowKey, 0)) {
-                state->attachStopOrder = true;
-                SendMessage(state->hStopOrderCheck, BM_SETCHECK, BST_CHECKED, 0);
-                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth + 181, windowMarketHeight, TRUE);
-            } else {
-                MoveWindow(hWnd, rc.left, rc.top, windowMarketWidth, windowMarketHeight, TRUE);
+            if (Settings_Overnight_Load(windowKey, 0)) {
+                state->isOvernight = true;
+                SendMessage(state->hOvernightCheck, BM_SETCHECK, BST_CHECKED, 0);
             }
         }
 
@@ -1070,7 +1106,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
                         if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
                         if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
-                        if (wi.volume    > 0)   state->l1Info.volume    = wi.volume;
                         if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
 
                         Market_RefreshPositionAndAvg(hWnd, state);
@@ -1085,14 +1120,18 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == ID_MARKET_STOP_ORDER && HIWORD(wParam) == BN_CLICKED && state) {
-            state->attachStopOrder = (SendMessage(state->hStopOrderCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
+        if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == BN_CLICKED && state) {
+            state->isOvernight = (SendMessage(state->hOvernightCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
             if (!state->symbol.empty()) {
                 char windowKey[256];
                 sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
-                Settings_StopOrder_Save(windowKey, state->attachStopOrder ? 1 : 0);
+                Settings_Overnight_Save(windowKey, state->isOvernight ? 1 : 0);
             }
-            Market_Layout(hWnd, state);
+            if (state->orderBarVisible) {
+                Market_Layout_HideBar(hWnd, state);
+                OrderBar_Show(hWnd, state, state->orderSide);
+            }
+            SetFocus(hWnd);
         }
         if (LOWORD(wParam) == ID_MARKET_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)
             Market_ToggleTTS(hWnd, state);
@@ -1152,7 +1191,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
                 if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
                 if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
-                if (wi.volume    > 0)   state->l1Info.volume    = wi.volume;
                 if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
             }
             Market_RefreshPositionAndAvg(hWnd, state);
@@ -1212,7 +1250,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     cd->clrTextBk = rowBg;
-                    cd->clrText   = (cd->iSubItem <= 1) ? COINS_CLR_BLUE : COINS_CLR_RED;
+                    cd->clrText   = (cd->iSubItem <= 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
                     return CDRF_DODEFAULT;
                 }
             }
@@ -1247,8 +1285,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state && LOWORD(lParam) == HTCLIENT) {
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
-            if (hit == 1) { SetCursor(LoadCursor(NULL, IDC_SIZEWE)); return TRUE; }
-            if (hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
+            if (hit == 1) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
         }
         break;
     }
@@ -1272,9 +1309,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             int y = (short)HIWORD(lParam) - HEADER_H;
 
             if (state->dragMode == 1) {
-                float ns = (tsW > 0) ? (float)x / (float)tsW : 0.5f;
-                state->splitX = std::max(0.1f, std::min(0.9f, ns));
-            } else if (state->dragMode == 2) {
                 float ns = (bodyH > 0) ? (float)y / (float)bodyH : 0.5f;
                 state->splitY = std::max(0.1f, std::min(0.9f, ns));
             }
@@ -1289,7 +1323,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             state->dragMode = 0;
             ReleaseCapture();
             if (!state->symbol.empty())
-                Settings_SaveMarketSplitter(state->symbol, state->splitX, state->splitY);
+                Settings_SaveMarketSplitter(state->symbol, state->splitY);
         }
         break;
     }
@@ -1309,12 +1343,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             if (state->hBigFont)     DeleteObject(state->hBigFont);
             if (state->hStatusFont)      DeleteObject(state->hStatusFont);
+            if (state->hValuesFont)      DeleteObject(state->hValuesFont);
             if (state->hOrderFont)       DeleteObject(state->hOrderFont);
             if (state->hSmallFont)      DeleteObject(state->hSmallFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
-            state->hOrderLabel = state->hOrderPrice = state->hOrderQty = NULL;
+            state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = NULL;
             delete state;
             tsStates.erase(hWnd);
         }

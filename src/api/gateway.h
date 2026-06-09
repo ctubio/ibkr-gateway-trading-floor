@@ -112,7 +112,6 @@ public:
         double vwap      = 0.0;  // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
 
         // ── Size ticks (tickSize) ────────────────────────────────────────────
-        long long volume = 0;
         double bidSize   = 0.0;
         double askSize   = 0.0;
 
@@ -158,7 +157,6 @@ public:
         double bidSize   = 0.0;
         double ask       = 0.0;   // ASK  tick (field 2)
         double askSize   = 0.0;
-        long long volume = 0;     // VOLUME tick (field 8)
         double vwap      = 0.0;   // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
         double change()    const { return prevClose > 0 ? last - prevClose : 0.0; }
         double changePct() const { return prevClose > 0 ? (last - prevClose) / prevClose * 100.0 : 0.0; }
@@ -234,7 +232,7 @@ public:
     void cancelOrder(int orderId);
 
     // Submit a new limit order
-    void submitOrder(int conId, const std::string& symbol, const std::string& action, double qty, double price);
+    void submitOrder(int conId, const std::string& symbol, const std::string& action, const bool isOvernight, double qty, double price, double stopPrice, double profitPrice);
 
     // Resubmit an existing order with a new limit price and quantity while
     // keeping all other order fields (type, action, exchange, …) intact.
