@@ -50,7 +50,7 @@ The primary tray window combining account metrics with centralized window manage
 ### 📝 Orders (Precision Execution)
 Real-time order tracking with an emphasis on speed and accuracy.
 *   **Visual Status**: 🟢 Filled | 🟡 Partially Filled | 🔵 Submitted | ⚪ Cancelled/Inactive.
-*   **In-Place Editing**: Double-click Price/Quantity $\rightarrow$ use `Tab` to switch $\rightarrow$ `Enter` to submit.
+*   **Modify Orders**: Quick-update limit prices and quantities for active orders.
 *   **Rapid Action**: Press `Delete` or `Esc` on a selected order for immediate cancellation.
 
 ### 💎 Diamonds (Portfolio Analysis)
@@ -67,10 +67,13 @@ Real-time quote monitoring with cross-window synchronization.
 
 ### 🏦 Market (High-Frequency Data)
 The core data engine for active trading.
+*   **Infinite Instances**: Support for multiple concurrent market windows.
+*   **Level 1 Data**: Real-time streaming quotes (Last, Bid, Ask, High, Low, Volume, VWAP).
 *   **Level 2 Depth**: Real-time bid/ask ladder (left panel).
-*   **Tick-by-Tick Feed**: Live trade stream with size and exchange filters (right panel).
+*   **Time & Sales**: Real-time tick-by-tick streams, filtered for size (All, 100+, 1000+).
 *   **Dynamic Layout**: Vertical and horizontal draggable splitters to customize your view per symbol.
-*   **Quick Trade**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask).
+*   **Quick Order**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask).
+*   **Bracket Orders**: Optionally attach Stop-Loss and Take-Profit orders to entry trades.
 *   **Audio Alerts**: Independent per-window TTS for price announcements.
 
 ### 📰 News (Intelligence Hub)
