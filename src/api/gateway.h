@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <deque>
 #include <mutex>
 #include <memory>
 #include <unordered_map>

@@ -186,7 +186,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, NULL, hInst, NULL);
 
             HWND hStopEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 margin + 80, margin + 250, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_STOP_VALUE, hInst, NULL);
 
@@ -201,7 +201,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, NULL, hInst, NULL);
 
             HWND hProfitEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 margin + 80, margin + 283, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_PROFIT_VALUE, hInst, NULL);
 

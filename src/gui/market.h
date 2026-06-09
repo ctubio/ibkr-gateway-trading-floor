@@ -988,7 +988,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 42, 26, hWnd, NULL, hInst, NULL);
 
         state->hOrderPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
 
@@ -998,12 +998,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
         
         state->hOrderStopPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderStopPrice, OrderBar_EditSubclassProc, 1, 0);
         
         state->hOrderProfitPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 

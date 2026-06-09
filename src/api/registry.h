@@ -29,7 +29,7 @@ static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
 HBRUSH hDarkBrush = NULL;
 HBRUSH hDarkBrush2 = NULL;
 
-static std::vector<std::string> debugBuffer; // stores messages when window is closed
+static std::deque<std::string> debugBuffer; // stores messages when window is closed
 
 // Payload passed during HWND creation
 struct MarketInitData { std::string symbol; int conId; std::string winKey; };
@@ -43,6 +43,9 @@ void LogDebug(const std::string& msg) {
 
     std::string fullMsg = "[" + timestamp + "] " + msg + "\r\n";
     debugBuffer.push_back(fullMsg);
+    if (debugBuffer.size() > 50) {
+        debugBuffer.pop_front();
+    }
 
     HWND hLogWnd = FindWindowA(DEBUGLOG_CLASS_NAME, NULL);
     if (hLogWnd && IsWindow(hLogWnd)) {

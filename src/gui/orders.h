@@ -175,7 +175,7 @@ static LRESULT CALLBACK WndProcEditOrder(HWND hWnd, UINT message, WPARAM wParam,
             CreateWindowA("STATIC", "Price:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 lx, y + 3, 45, 25, hWnd, NULL, hInst, NULL);
             ctx->hPriceEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 ex, y, ew, fh, hWnd, (HMENU)1, hInst, NULL);
 
             // Row 2 — Qty (omitted for Partially Filled orders)
