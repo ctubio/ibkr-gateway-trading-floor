@@ -82,6 +82,8 @@ struct TsState {
     HWND  hOrderQty         = NULL;
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
+    double lastBidPrice;
+    double lastAskPrice;
     
 };
 static std::map<HWND, TsState*> tsStates;
@@ -296,10 +298,10 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
     char sbuf[32];
-    snprintf(sbuf, sizeof(sbuf), "%.2f", state->isOvernight ? 0.0 : 1.0);
+    snprintf(sbuf, sizeof(sbuf), "%.2f", state->isOvernight ? 0.0 : (double)(int)Settings_Load("StopPrice", 1));
     SetWindowTextA(state->hOrderStopPrice, sbuf);
     char pbuf[32];
-    snprintf(pbuf, sizeof(pbuf), "%.2f", state->isOvernight ? 0.0 : 2.0);
+    snprintf(pbuf, sizeof(pbuf), "%.2f", state->isOvernight ? 0.0 : (double)(int)Settings_Load("ProfitPrice", 2));
     SetWindowTextA(state->hOrderProfitPrice, pbuf);
 
     Market_Layout(hWnd, state);
@@ -580,6 +582,10 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
     ListView_DeleteAllItems(hList);
 
     int rows = (int)std::max(bids.size(), asks.size());
+    if (rows > 0) {
+        state->lastBidPrice = bids[0].price;
+        state->lastAskPrice = asks[0].price;
+    }
     for (int i = 0; i < rows; ++i) {
         LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
         int hasBid = (i < (int)bids.size()) ? 1 : 0;
@@ -1180,13 +1186,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
             tick->side = 0;
-            if (state->l1Info.bid > 0) {
-                if (tick->price == state->l1Info.bid) tick->side = COINS_CLR_RED;
-                else if (tick->price < state->l1Info.bid) tick->side = COINS_CLR_RED_DARK;
+            if (state->lastBidPrice > 0) {
+                if (tick->price == state->lastBidPrice) tick->side = COINS_CLR_RED;
+                else if (tick->price < state->lastBidPrice) tick->side = COINS_CLR_RED_DARK;
             }
-            if (state->l1Info.ask > 0) {
-                if (tick->price == state->l1Info.ask) tick->side = COINS_CLR_GREEN;
-                else if (tick->price > state->l1Info.ask) tick->side = COINS_CLR_GREEN_DARK;
+            if (state->lastAskPrice > 0) {
+                if (tick->price == state->lastAskPrice) tick->side = COINS_CLR_GREEN;
+                else if (tick->price > state->lastAskPrice) tick->side = COINS_CLR_GREEN_DARK;
             }
             TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);

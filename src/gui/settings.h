@@ -1,6 +1,6 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 323); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 395); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
@@ -11,6 +11,8 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_DEBUG_LOG         4005
 #define ID_SETTINGS_VOICE_COMBO       4006
 #define ID_SETTINGS_QTY_VALUE         4007
+#define ID_SETTINGS_STOP_VALUE        4008
+#define ID_SETTINGS_PROFIT_VALUE      4009
 #define ID_SETTINGS_GATEWAY_PATH      4010
 #define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
 
@@ -177,9 +179,40 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             snprintf(buf, sizeof(buf), "%d", (int)Settings_Load("OrderQty", 100));
             SetWindowTextA(hQtyEdit, buf);
             
+            
+            CreateWindowA("STATIC", "Stop:",
+                WS_CHILD | WS_VISIBLE,
+                margin, margin + 253, 75, 20,
+                hWnd, NULL, hInst, NULL);
+
+            HWND hStopEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                margin + 80, margin + 250, 80, 26,
+                hWnd, (HMENU)ID_SETTINGS_STOP_VALUE, hInst, NULL);
+
+            char ssbuf[32];
+            snprintf(ssbuf, sizeof(ssbuf), "%d", (int)Settings_Load("StopPrice", 1));
+            SetWindowTextA(hStopEdit, ssbuf);
+
+            
+            CreateWindowA("STATIC", "Profit:",
+                WS_CHILD | WS_VISIBLE,
+                margin, margin + 286, 75, 20,
+                hWnd, NULL, hInst, NULL);
+
+            HWND hProfitEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                margin + 80, margin + 283, 80, 26,
+                hWnd, (HMENU)ID_SETTINGS_PROFIT_VALUE, hInst, NULL);
+
+            char ppbuf[32];
+            snprintf(ppbuf, sizeof(ppbuf), "%d", (int)Settings_Load("ProfitPrice", 2));
+            SetWindowTextA(hProfitEdit, ppbuf);
+
+
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                margin, margin + 253, 250, 24,
+                margin, margin + 319, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
             break;
         }
@@ -227,6 +260,28 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     qty = atoi(buf);
                 }
                 Settings_Save("OrderQty", qty);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_STOP_VALUE) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
+                int len = GetWindowTextLength(hEdit);
+                int price = 0;
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    price = atoi(buf);
+                }
+                Settings_Save("StopPrice", price);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_PROFIT_VALUE) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_PROFIT_VALUE);
+                int len = GetWindowTextLength(hEdit);
+                int price = 0;
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    price = atoi(buf);
+                }
+                Settings_Save("ProfitPrice", price);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);
