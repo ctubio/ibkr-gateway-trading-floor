@@ -272,6 +272,7 @@ static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& orde
     // Pre-fill fields.
     char buf[32];
     if (order.price > 0) snprintf(buf, sizeof(buf), "%.2f", order.price);
+    else if (order.auxPrice > 0) snprintf(buf, sizeof(buf), "%.2f", order.auxPrice);
     else                  snprintf(buf, sizeof(buf), "0.00");
     SetWindowTextA(ctx->hPriceEdit, buf);
 
