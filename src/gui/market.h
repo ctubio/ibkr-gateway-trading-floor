@@ -347,11 +347,22 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
         }
         if (wParam == VK_TAB) {
             if (st) {
-                HWND hNext = (hWnd == st->hOrderPrice) ? st->hOrderQty : st->hOrderPrice;
-                SetFocus(hNext);
-                // Place caret at end, no selection
-                int len = GetWindowTextLengthA(hNext);
-                SendMessageA(hNext, EM_SETSEL, len, len);
+                HWND order[] = { st->hOrderPrice, st->hOrderStopPrice, st->hOrderProfitPrice, st->hOrderQty };
+                HWND hNext = nullptr;
+
+                for (int i = 0; i < 4; ++i) {
+                    if (hWnd == order[i]) {
+                        // Find next index, wrap around to 0
+                        hNext = order[(i + 1) % 4];
+                        break;
+                    }
+                }
+
+                if (hNext) {
+                    SetFocus(hNext);
+                    int len = GetWindowTextLengthA(hNext);
+                    SendMessageA(hNext, EM_SETSEL, len, len);
+                }
             }
             return 0;
         }
@@ -367,8 +378,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 double stopPrice = std::atof(psBuf);
                 double profitPrice = std::atof(ppBuf);
                 if (price > 0 && qty > 0) {
-                    if (stopPrice < 10.0) stopPrice = 0.0;
-                    if (profitPrice < 10.0) profitPrice = 0.0;
+                    if (stopPrice < 0.1) stopPrice = 0.0;
+                    if (profitPrice < 0.1) profitPrice = 0.0;
                     api.submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, profitPrice);
                 }
                 Market_Layout_HideBar(hMarket, st);
@@ -907,7 +918,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hSmallFont = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-        state->hSpeakerFont = CreateFontW(-11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 
