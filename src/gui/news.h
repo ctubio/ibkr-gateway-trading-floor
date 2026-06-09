@@ -325,7 +325,7 @@ void News_RequestForSymbol(HWND hWnd, const std::string& fullEntry) {
         SendMessage(hNewsProviderCombo, CB_SETCURSEL, 0, 0);
     }
 
-    api.reqNewsForSymbol(std::stoi(conIdStr), symbol);
+    api().reqNewsForSymbol(std::stoi(conIdStr), symbol);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -388,7 +388,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         ListView_InsertColumn(hNewsResults, 2, &lvc);
 
 
-        api.setNewsWindow(hWnd);
+        api().setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News");
 
         std::string lastList     = Settings_News_Load("LastList");
@@ -402,7 +402,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 News_RequestForSymbol(hWnd, newsSymEntries[sel]);
         }
 
-        api.addApiUpdateWindow(hWnd);
+        api().addApiUpdateWindow(hWnd);
 
         break;
     }
@@ -541,7 +541,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     if (sep != std::string::npos) {
                         std::string provider  = rowId->substr(0, sep);
                         std::string articleId = rowId->substr(sep + 1);
-                        api.reqNewsArticle(provider, articleId);
+                        api().reqNewsArticle(provider, articleId);
                     }
                 }
             }
@@ -571,7 +571,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
     }
 
     case WM_API_UPDATE:
-        if (api.isMarketDataConnected() && api.isTradingConnected()) {
+        if (api().isMarketDataConnected() && api().isTradingConnected()) {
             int sel = (int)SendMessage(hNewsSymCombo, CB_GETCURSEL, 0, 0);
             if (sel != CB_ERR && sel < (int)newsSymEntries.size())
                 News_RequestForSymbol(hWnd, newsSymEntries[sel]);
@@ -602,7 +602,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 delete reinterpret_cast<std::string*>(lvi.lParam);
             }
         }
-        api.setNewsWindow(NULL);
+        api().setNewsWindow(NULL);
         hNewsListCombo     = NULL;
         hNewsSymCombo      = NULL;
         hNewsProviderCombo = NULL;
@@ -616,7 +616,7 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         if (NewsZoomData.hBoldFont) {
             DeleteObject(NewsZoomData.hBoldFont);
         }
-        api.removeApiUpdateWindow(hWnd);
+        api().removeApiUpdateWindow(hWnd);
         break;
     }
 

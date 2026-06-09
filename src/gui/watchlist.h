@@ -271,7 +271,7 @@ static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
     }
 
     SetWindowTextA(hWnd, ("Watchlist: " + listName).c_str());
-    api.setWatchlistWindow(hWnd, entries);
+    api().setWatchlistWindow(hWnd, entries);
     Watchlist_ApplySort(hWnd);
 }
 
@@ -612,7 +612,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
         }
 
-        api.addApiUpdateWindow(hWnd);
+        api().addApiUpdateWindow(hWnd);
 
         // Load sort settings.
         g_WatchlistSortCol = (int)Settings_Sort_Load(WATCHLIST_CLASS_NAME, "SortCol", TCOL_SYMBOL);
@@ -658,7 +658,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (dot != std::string::npos) query = query.substr(0, dot);
             HWND hAC = (HWND)GetPropA(hWnd, "hWLAutoComplete");
             if (query.size() >= 1) {
-                if (!api.isConnected()) {
+                if (!api().isConnected()) {
                     wl_showingOffline = true;
                     SendMessage(hAC, LB_RESETCONTENT, 0, 0);
                     SendMessageA(hAC, LB_ADDSTRING, 0, (LPARAM)"Gateway is disconnected!");
@@ -669,8 +669,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     EnableWindow(hAC, FALSE);
                 } else {
                     wl_showingOffline = false;
-                    api.setSymbolSearchWindow(hWnd);
-                    api.searchSymbols(query);
+                    api().setSymbolSearchWindow(hWnd);
+                    api().searchSymbols(query);
                 }
             } else {
                 ShowWindow(hAC, SW_HIDE);
@@ -694,7 +694,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         char text[256] = {};
         GetWindowTextA(GetDlgItem(hWnd, ID_WATCHLIST_EDIT), text, sizeof(text));
         std::string query = text;
-        auto results = api.getSymbolResults();
+        auto results = api().getSymbolResults();
         if (query.find('.') != std::string::npos) {
             std::string upper = query;
             for (auto& c : upper) c = (char)toupper((unsigned char)c);
@@ -723,7 +723,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int conId          = std::stoi(key->substr(0, dot));
             std::string symbol = key->substr(dot + 1);
             TradingAPI::WatchlistInfo info;
-            if (api.getWatchlistData(conId, symbol, info)) {
+            if (api().getWatchlistData(conId, symbol, info)) {
                 int row = Watchlist_FindRow(hWnd, symbol, conId);
                 if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
             }
@@ -747,9 +747,9 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     }
 
     case WM_API_UPDATE:
-        if (api.isMarketDataConnected() && api.isTradingConnected()) {
+        if (api().isMarketDataConnected() && api().isTradingConnected()) {
             // Re-subscribe after reconnect with the same entries.
-            api.reqWatchlist();
+            api().reqWatchlist();
         } else {
             // Clear data but keep the symbol rows visible (just blank the values).
             HWND hWatchlistList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
@@ -842,7 +842,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                             delete rd;
                             ListView_DeleteItem(hList, row);
                             watchlistCurrentEntries = entries;
-                            api.setWatchlistWindow(hWnd, watchlistCurrentEntries);
+                            api().setWatchlistWindow(hWnd, watchlistCurrentEntries);
                         }
                     }
                 }
@@ -914,8 +914,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     }
 
     case WM_DESTROY:
-        api.unsetWatchlistWindow();
-        api.removeApiUpdateWindow(hWnd);
+        api().unsetWatchlistWindow();
+        api().removeApiUpdateWindow(hWnd);
         Watchlist_ClearList(hWnd);
         watchlistCurrentEntries.clear();
         watchlistCurrentListName.clear();

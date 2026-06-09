@@ -344,7 +344,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
 
         if (wParam == VK_ESCAPE) {
             if (st) {
-                api.cancelOrders(st->conId);
+                api().cancelOrders(st->conId);
             }
             return 0;
         }
@@ -383,7 +383,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 if (price > 0 && qty > 0) {
                     if (stopPrice < 0.1) stopPrice = 0.0;
                     if (profitPrice < 0.1) profitPrice = 0.0;
-                    api.submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, profitPrice);
+                    api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, profitPrice);
                 }
                 Market_Layout_HideBar(hMarket, st);
             }
@@ -499,12 +499,12 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         case WM_COMMAND:
             if (LOWORD(wParam) == ID_MARKET_SEARCH_INPUT && HIWORD(wParam) == EN_CHANGE) {
                 char t[256] = {}; GetWindowTextA(GetDlgItem(hWnd, ID_MARKET_SEARCH_INPUT), t, sizeof(t));
-                if (strlen(t) > 0) { api.setSymbolSearchWindow(hWnd); api.searchSymbols(t); }
+                if (strlen(t) > 0) { api().setSymbolSearchWindow(hWnd); api().searchSymbols(t); }
                 else { SendMessage(GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST), LB_RESETCONTENT, 0, 0); tsSearchResults.clear(); }
             }
             break;
         case WM_SYMBOL_RESULTS: {
-            tsSearchResults = api.getSymbolResults();
+            tsSearchResults = api().getSymbolResults();
             HWND hTsSearchList = GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST);
             SendMessage(hTsSearchList, LB_RESETCONTENT, 0, 0);
             for (const auto& r : tsSearchResults) {
@@ -515,7 +515,7 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
         }
         case WM_DESTROY:
-            api.setSymbolSearchWindow(NULL);
+            api().setSymbolSearchWindow(NULL);
             break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
@@ -576,7 +576,7 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
     if (!state || !state->hL2List) return;
 
     std::vector<TradingAPI::Level2Entry> bids, asks;
-    api.getLevel2Snapshot(hWnd, bids, asks);
+    api().getLevel2Snapshot(hWnd, bids, asks);
 
     HWND hList = state->hL2List;
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
@@ -584,8 +584,8 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
 
     int rows = (int)std::max(bids.size(), asks.size());
     if (rows > 0) {
-        state->lastBidPrice = bids[0].price;
-        state->lastAskPrice = asks[0].price;
+        if (!bids.empty()) state->lastBidPrice = bids[0].price;
+        if (!asks.empty()) state->lastAskPrice = asks[0].price;
     }
     for (int i = 0; i < rows; ++i) {
         LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
@@ -903,8 +903,8 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
 
 void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
     if (!state) return;
-    std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
-    auto& pm = api.getPortfolioMap();
+    std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
+    auto& pm = api().getPortfolioMap();
     auto it = pm.find(state->symbol);
     if (it != pm.end()) {
         state->position = it->second.shares;
@@ -1057,9 +1057,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
         }
 
-        api.setMarketWindow(hWnd, state->conId, state->symbol);
-        api.subscribePositionPnL(hWnd, state->conId);
-        api.addApiUpdateWindow(hWnd);
+        api().setMarketWindow(hWnd, state->conId, state->symbol);
+        api().subscribePositionPnL(hWnd, state->conId);
+        api().addApiUpdateWindow(hWnd);
         UpdateMarketRegistry();
         break;
     }
@@ -1078,7 +1078,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (!state) break;
         if (wParam == VK_ESCAPE) {
             if (state) {
-                api.cancelOrders(state->conId);
+                api().cancelOrders(state->conId);
             }
             return 0;
         }
@@ -1104,7 +1104,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_L1: {
         if (!state) break;
         TradingAPI::Level1Info fresh;
-        if (api.getLevel1Data(hWnd, fresh)) {
+        if (api().getLevel1Data(hWnd, fresh)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
             if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
             if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
@@ -1116,7 +1116,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.askSize   > 0.0) state->l1Info.askSize   = fresh.askSize;
         }
         TradingAPI::WatchlistInfo wi;
-        if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+        if (api().getWatchlistData(state->conId, state->symbol, wi)) {
             //if (wi.open      > 0.0 && state->l1Info.open      == 0.0) state->l1Info.open      = wi.open;
             //if (wi.prevClose > 0.0 && state->l1Info.prevClose == 0.0) state->l1Info.prevClose = wi.prevClose;
             //if (wi.high      > 0.0 && state->l1Info.high      == 0.0) state->l1Info.high      = wi.high;
@@ -1143,7 +1143,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 std::string updSym   = key->substr(dot + 1);
                 if (updConId == state->conId && updSym == state->symbol) {
                     TradingAPI::WatchlistInfo wi;
-                    if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+                    if (api().getWatchlistData(state->conId, state->symbol, wi)) {
                         //if (wi.last      > 0.0) state->l1Info.last      = wi.last;
                         //if (wi.open      > 0.0) state->l1Info.open      = wi.open;
                         //if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
@@ -1218,7 +1218,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
             TradingAPI::WatchlistInfo wi;
-            if (api.getWatchlistData(state->conId, state->symbol, wi)) {
+            if (api().getWatchlistData(state->conId, state->symbol, wi)) {
                 //if (wi.last      > 0.0) state->l1Info.last      = wi.last;
                 //if (wi.open      > 0.0) state->l1Info.open      = wi.open;
                 //if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
@@ -1298,8 +1298,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_API_UPDATE: {
         if (state) {
-            if (api.isMarketDataConnected() && api.isTradingConnected()) {
-                api.setMarketWindow(hWnd, state->conId, state->symbol);
+            if (api().isMarketDataConnected() && api().isTradingConnected()) {
+                api().setMarketWindow(hWnd, state->conId, state->symbol);
             } else {
                 ListView_DeleteAllItems(state->hTsList);
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
@@ -1366,9 +1366,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
     
     case WM_DESTROY:
-        api.unsetMarketWindow(hWnd);
-        api.unsubscribePositionPnL(hWnd);
-        api.removeApiUpdateWindow(hWnd);
+        api().unsetMarketWindow(hWnd);
+        api().unsubscribePositionPnL(hWnd);
+        api().removeApiUpdateWindow(hWnd);
         MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data) delete data;
         if (state) {

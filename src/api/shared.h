@@ -31,6 +31,13 @@ static int      gClrCount      = 0;
 extern "C" __declspec(dllimport) long __stdcall CreateTextServices(void*, void*, void*);
 static const void* force_riched20_link = (void*)CreateTextServices;
 
+// ── Global TWS API instance ───────────────────────────────────────────────────────────
+TradingAPI& api() {
+    static TradingAPI* TWS_API = new TradingAPI();
+    return *TWS_API;
+}
+
+// ── Label Colors ───────────────────────────────────────────────────────────
 static void SetCtrlColor(HWND hw, COLORREF c) {
     for (int i = 0; i < gClrCount; i++)
         if (gClrHwnd[i] == hw) { gClrColor[i] = c; return; }
@@ -394,7 +401,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
     switch (message) {
         case WM_CREATE: {
-            HICON hIcon = api.isConnected() ? onlineIcons[std::string(className)] : offlineIcons[std::string(className)];
+            HICON hIcon = api().isConnected() ? onlineIcons[std::string(className)] : offlineIcons[std::string(className)];
             SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             SendMessage(hWnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
             Session_AddWindow(hWnd, lParam);

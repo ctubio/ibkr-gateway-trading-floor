@@ -41,7 +41,7 @@ static void Orders_Repopulate(HWND hWnd) {
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
 
-    auto orders = api.getOrdersSorted();
+    auto orders = api().getOrdersSorted();
     int submitted = 0;
     int filled = 0;
     for (int i = 0; i < (int)orders.size(); ++i) {
@@ -90,7 +90,7 @@ static void Orders_Repopulate(HWND hWnd) {
 
 // ── Edit-Order popup ──────────────────────────────────────────────────────────
 // A lightweight non-modal popup with two edit boxes (Price / Qty).
-// ENTER confirms and calls api.modifyOrder(); ESCAPE closes without action.
+// ENTER confirms and calls api().modifyOrder(); ESCAPE closes without action.
 // Only one popup may be open at a time.
 
 struct EditOrderCtx {
@@ -215,7 +215,7 @@ static LRESULT CALLBACK WndProcEditOrder(HWND hWnd, UINT message, WPARAM wParam,
                     qty = ctx->originalQty;   // Partially Filled: keep existing qty
                 }
                 if (qty > 0)
-                    api.modifyOrder(ctx->orderId, price, qty);
+                    api().modifyOrder(ctx->orderId, price, qty);
                 DestroyWindow(hWnd);
                 return 0;
             }
@@ -321,8 +321,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 }
             }
 
-            api.setOrdersWindow(hWnd);
-            api.addApiUpdateWindow(hWnd);
+            api().setOrdersWindow(hWnd);
+            api().addApiUpdateWindow(hWnd);
             break;
         }
 
@@ -354,7 +354,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         lvi.mask  = LVIF_PARAM;
                         lvi.iItem = sel;
                         if (ListView_GetItem(hList, &lvi)) {
-                            api.cancelOrder((int)lvi.lParam);
+                            api().cancelOrder((int)lvi.lParam);
                         }
                     }
                 }
@@ -371,7 +371,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 lvi.iItem = ia->iItem;
                 if (ListView_GetItem(hList, &lvi)) {
                     int orderId = (int)lvi.lParam;
-                    auto orders = api.getOrdersSorted();
+                    auto orders = api().getOrdersSorted();
                     for (const auto& o : orders)
                         if (o.orderId == orderId) { Orders_ShowEditPopup(hWnd, o); break; }
                 }
@@ -388,7 +388,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     lvi.iItem = sel;
                     if (ListView_GetItem(hList, &lvi)) {
                         int orderId = (int)lvi.lParam;
-                        auto orders = api.getOrdersSorted();
+                        auto orders = api().getOrdersSorted();
                         for (const auto& o : orders)
                             if (o.orderId == orderId) { Orders_ShowEditPopup(hWnd, o); break; }
                     }
@@ -442,7 +442,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
 
         case WM_API_UPDATE: {
-            if (api.isMarketDataConnected() && api.isTradingConnected()) {
+            if (api().isMarketDataConnected() && api().isTradingConnected()) {
                 Orders_Repopulate(hWnd);
             } else {
                 HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
@@ -454,8 +454,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_DESTROY:
             if (s_hEditOrderPopup && IsWindow(s_hEditOrderPopup))
                 DestroyWindow(s_hEditOrderPopup);
-            api.unsetOrdersWindow();
-            api.removeApiUpdateWindow(hWnd);
+            api().unsetOrdersWindow();
+            api().removeApiUpdateWindow(hWnd);
             if (OrdersZoomData.hFont) {
                 DeleteObject(OrdersZoomData.hFont);
             }   

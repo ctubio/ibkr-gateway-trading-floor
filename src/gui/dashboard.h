@@ -216,16 +216,16 @@ void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
     std::string title;
     bool connected = false;
 
-    if (!api.isConnected()) {
+    if (!api().isConnected()) {
         title    = "Offline";
         tooltip += title;
     } else {
-        std::string acc = api.getAccountNumber();
+        std::string acc = api().getAccountNumber();
         if (acc.empty()) {
             title    = "Connecting..";
             tooltip += title;
         } else {
-            connected = api.isMarketDataConnected() && api.isTradingConnected();
+            connected = api().isMarketDataConnected() && api().isTradingConnected();
             tooltip = acc + " | " + currency + " | " + (connected ? "Connected" : "Disconnected");
             title   = acc;
         }
@@ -248,10 +248,10 @@ void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
 // ─── Labels update ─────────────────────────────────────────────────────────────
 
 void Coins_UpdateLabels(HWND hWnd) {
-    auto   summary    = api.getAccountSummary();
-    double daily      = api.getDailyPnL();
-    double unrealized = api.getUnrealizedPnL();
-    double realized   = api.getRealizedPnL();
+    auto   summary    = api().getAccountSummary();
+    double daily      = api().getDailyPnL();
+    double unrealized = api().getUnrealizedPnL();
+    double realized   = api().getRealizedPnL();
 
     std::string currency = "???";
     double netLiq = 0.0;
@@ -471,7 +471,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 y += rowH;
             }
 
-            api.setCoinWindow(hWnd);
+            api().setCoinWindow(hWnd);
             y += 12;
             int steps = 1;
             int stepz = 0;
@@ -484,8 +484,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             addButtons(hWnd, hInst, "Settings",  14 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_SETTINGS,  108);
 
-            api.addApiUpdateWindow(hWnd);
-            api.setApiErrorWindow(hWnd);
+            api().addApiUpdateWindow(hWnd);
+            api().setApiErrorWindow(hWnd);
 
             BindTrayIcon(hWnd);
                     
@@ -507,8 +507,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         case WM_API_UPDATE:
             UpdateTrayIcon(hWnd);
-            if (api.isMarketDataConnected() && api.isTradingConnected()) {
-                api.setCoinWindow(hWnd);
+            if (api().isMarketDataConnected() && api().isTradingConnected()) {
+                api().setCoinWindow(hWnd);
             } else {
                 if (hCoin_NetLiq) SetWindowTextA(hCoin_NetLiq, "--");
                 if (hCoin_BigPnL) SetWindowTextA(hCoin_BigPnL, "--");
@@ -542,14 +542,12 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (wParam == TIMER_COINS_SPEAKER) // 21000
                 Coins_SpeakDailyPnL();
             if (wParam == TIMER_WATCHDOG) { // 10000
-                if (shouldBeConnected && !api.isConnected()) {
+                if (shouldBeConnected && !api().isConnected()) {
                     EnsureGatewayRunning(hWnd);
-                    if (!api.connect(IsProcessRunning("ibgateway.exe") ? 4001 : 7496)) {
-                        api.disconnect();
-                    }
+                    api().connect(IsProcessRunning("ibgateway.exe") ? 4001 : 7496);
                     UpdateTrayIcon(hWnd);
-                } else if (!shouldBeConnected && api.isConnected()) {
-                    api.disconnect();
+                } else if (!shouldBeConnected && api().isConnected()) {
+                    api().disconnect();
                     UpdateTrayIcon(hWnd);
                 }
             }
@@ -604,8 +602,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     HMENU hMenu = CreatePopupMenu();
                     
                     // Determine flags based on current API state
-                    if (api.isConnected()) {
-                        std::wstring accText = std::wstring(L"Account: ") + StringToWide(api.getAccountNumber()); 
+                    if (api().isConnected()) {
+                        std::wstring accText = std::wstring(L"Account: ") + StringToWide(api().getAccountNumber()); 
                         AppendMenuW(hMenu, (MF_STRING | MF_GRAYED), 0, accText.c_str());
                         AppendMenuW(hMenu, MF_STRING, ID_M_DISCONNECT, L"Disconnect");
                     } else {
@@ -712,7 +710,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
 
                 case ID_M_EXIT:
-                    api.disconnect();
+                    api().disconnect();
                     if (Settings_KillGatewayOnExit())
                         KillGateway();
                     Shell_NotifyIconW(NIM_DELETE, &nid); // Remove icon from tray
@@ -776,9 +774,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
         }
         case WM_DESTROY:
-            api.removeApiUpdateWindow(hWnd);
-            api.clearApiErrorWindow(hWnd);
-            api.unsetCoinWindow();
+            api().removeApiUpdateWindow(hWnd);
+            api().clearApiErrorWindow(hWnd);
+            api().unsetCoinWindow();
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
             if (g_coinsTtsOn) KillTimer(hWnd, TIMER_COINS_SPEAKER);

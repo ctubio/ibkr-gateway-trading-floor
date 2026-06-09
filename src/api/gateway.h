@@ -299,6 +299,3 @@ private:
     struct Impl;
     std::unique_ptr<Impl> pImpl;
 };
-
-// ── Global instance — defined in Trading-Floor-Gateway.a ─────────────────────
-extern TradingAPI api;

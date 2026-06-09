@@ -366,8 +366,8 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
 
     double shares = 0.0, avgCost = 0.0;
     {
-        std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
-        auto& pmap = api.getPortfolioMap();
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        auto& pmap = api().getPortfolioMap();
         if (pmap.count(symbol)) {
             shares  = pmap[symbol].shares;
             avgCost = pmap[symbol].avgCost;
@@ -375,7 +375,7 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
     }
 
     double netLiq = 0.0;
-    auto summary = api.getAccountSummary();
+    auto summary = api().getAccountSummary();
     if (summary.count("NetLiquidation")) {
         try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
     }
@@ -446,8 +446,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     std::vector<TradingAPI::PositionInfo> rows;
     {
-        std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
-        for (auto const& [sym, info] : api.getPortfolioMap()) {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        for (auto const& [sym, info] : api().getPortfolioMap()) {
             // Show item if its assigned group's bit is set in g_DiamondsCheckedTabs.
             auto it = g_DiamondsTabMap.find(info.conId);
             int  assignedTab = (it != g_DiamondsTabMap.end()) ? it->second : DTAB_ALL;
@@ -485,7 +485,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
         // ── Market data columns — pre-fill from cache if already available ───
         TradingAPI::WatchlistInfo tickInfo;
-        if (api.getWatchlistData(pos.conId, pos.symbol, tickInfo))
+        if (api().getWatchlistData(pos.conId, pos.symbol, tickInfo))
             Diamonds_UpdateMarketCols(hList, i, tickInfo);
     }
 
@@ -543,8 +543,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessage(hChk, BM_SETCHECK, BST_CHECKED, 0);
         }
 
-        api.setDiamondsWindow(hWnd);
-        api.addApiUpdateWindow(hWnd);
+        api().setDiamondsWindow(hWnd);
+        api().addApiUpdateWindow(hWnd);
 
         // Load saved tab assignments, checkbox state, sort settings, and symbol colors.
         Diamonds_LoadTabMap();
@@ -607,7 +607,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             std::string symbol = key->substr(dot + 1);
 
             TradingAPI::WatchlistInfo info;
-            if (api.getWatchlistData(conId, symbol, info)) {
+            if (api().getWatchlistData(conId, symbol, info)) {
                 HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                 int row = Diamonds_FindRow(hList, conId);
                 if (row >= 0)
@@ -659,15 +659,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
             double avgCost = 0.0, last = 0.0;
             {
-                std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
-                auto& pmap = api.getPortfolioMap();
+                std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+                auto& pmap = api().getPortfolioMap();
                 auto pit = pmap.find(symBuf);
                 if (pit != pmap.end()) avgCost = pit->second.avgCost;
             }
             // Read last from the watchlist cache (no lock needed — WatchlistInfo
             // is written on the API thread but we're reading a double atomically).
             TradingAPI::WatchlistInfo wInfo;
-            if (api.getWatchlistData(conId, symBuf, wInfo)) last = wInfo.last;
+            if (api().getWatchlistData(conId, symBuf, wInfo)) last = wInfo.last;
 
             if (avgCost > 0.0 && last > 0.0) {
                 double pct = (last - avgCost) / avgCost * 100.0;
@@ -689,9 +689,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_API_UPDATE: {
         HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
         if (!hList) break;
-        if (api.isMarketDataConnected() && api.isTradingConnected()) {
+        if (api().isMarketDataConnected() && api().isTradingConnected()) {
             // Re-request positions (market data re-subscribed in positionEnd()).
-            api.setDiamondsWindow(hWnd);
+            api().setDiamondsWindow(hWnd);
         } else {
             // Clear everything — positions and prices are stale.
             ListView_DeleteAllItems(hList);
@@ -749,8 +749,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 // Build the full registry entry string for this symbol.
                 std::string exchange;
                 {
-                    std::lock_guard<std::mutex> lock(api.getPortfolioMutex());
-                    auto& pmap = api.getPortfolioMap();
+                    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+                    auto& pmap = api().getPortfolioMap();
                     auto pit = pmap.find(sym);
                     if (pit != pmap.end()) exchange = pit->second.exchange;
                 }
@@ -933,8 +933,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // private.cpp.  We also clear our local cache so a future window
         // instance starts clean (stale cached values from a closed session
         // would briefly flash in the new window before the first TWS update).
-        api.unsetDiamondsWindow();   // cancels market data + PnL + position subs
-        api.removeApiUpdateWindow(hWnd);
+        api().unsetDiamondsWindow();   // cancels market data + PnL + position subs
+        api().removeApiUpdateWindow(hWnd);
         g_DiamondsPnlCache.clear();
         if (DiamondsZoomData.hFont) {
             DeleteObject(DiamondsZoomData.hFont);
