@@ -37,12 +37,12 @@ static ListViewZoomData WatchlistAutocompleteZoomData = { NULL, NULL, 14, "Zoom_
 
 enum WatchlistColIdx {
     TCOL_SYMBOL = 0,
+    TCOL_ASKSIZE,
+    TCOL_ASK,
     TCOL_LAST,
-    TCOL_CHGPCT,
     TCOL_BID,
     TCOL_BIDSIZE,
-    TCOL_ASK,
-    TCOL_ASKSIZE,
+    TCOL_CHGPCT,
     TCOL_DIV_YIELD,
     TCOL_DIV_DATE,
     TCOL_DIV_AMT,
@@ -58,12 +58,12 @@ static HWND g_WatchlistListForSort = NULL;
 struct WatchlistCol { const char* header; int width; int fmt; };
 static const WatchlistCol watchlistCols[] = {
     { "Instrument",   90, LVCFMT_LEFT  },
+    { "Ask Size",     75, LVCFMT_RIGHT },
+    { "Ask",          75, LVCFMT_RIGHT },
     { "Last",         75, LVCFMT_RIGHT },
-    { "Change %",     75, LVCFMT_RIGHT },
     { "Bid",          75, LVCFMT_RIGHT },
     { "Bid Size",     75, LVCFMT_RIGHT },
-    { "Ask",          75, LVCFMT_RIGHT },
-    { "Ask Size",     75, LVCFMT_RIGHT },
+    { "Change %",     75, LVCFMT_RIGHT },
     { "Div Yield %",  80, LVCFMT_RIGHT },
     { "Div Date",     85, LVCFMT_RIGHT },
     { "Div Amount",   80, LVCFMT_RIGHT },

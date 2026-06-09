@@ -55,7 +55,7 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
     HDC hdc = GetDC(NULL);
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
     ReleaseDC(NULL, hdc);
-    return CreateFontW(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    return CreateFontW(h, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 }

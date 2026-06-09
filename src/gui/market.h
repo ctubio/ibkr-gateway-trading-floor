@@ -56,11 +56,12 @@ struct TsState {
     bool hasPnL = false;
 
     // ── Cached fonts ──────────────────────────────────────────────────────────
-    HFONT hBigFont     = NULL;   // ~22pt bold — large last price
+    HFONT hBigFont     = NULL;   // ~22pt bold — bid ask
+    HFONT hExtraFont     = NULL;   // ~26pt bold — large last price
     HFONT hStatusFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
+    HFONT hStatusNormalFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
     HFONT hValuesFont      = NULL;   // ~16pt regular — change / bid-ask labels / stats
     HFONT hOrderFont       = NULL;   // ~20pt bold — order entry controls
-    HFONT hSmallFont = NULL;   // ~13pt regular — smaller stats below change
     HFONT hSpeakerFont = NULL;   // Segoe MDL2 Assets — speaker glyph
 
     // ── TTS state ─────────────────────────────────────────────────────────────
@@ -656,11 +657,11 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── RIGHT BLOCK: Ask / Bid ────────────────────────────────────────────────
     // Anchored to right edge, two rows.
-    const int RB_X = rc.right - RB_TOTAL - RB_MARGIN;
+    const int RB_X = rc.right - RB_TOTAL - RB_MARGIN - 2;
 
     // Ask (top row, red)
     {
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, state->hStatusNormalFont);
         SetTextColor(hdc, COINS_CLR_RED);
         RECT lr = { RB_X, 1, RB_X + RB_LABEL_W, rowH };
         DrawTextA(hdc, "Ask", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -678,7 +679,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Bid (bottom row, blue)
     {
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, state->hStatusNormalFont);
         SetTextColor(hdc, COINS_CLR_BLUE);
         RECT lr = { RB_X, rowH, RB_X + RB_LABEL_W, HEADER_H - 1 };
         DrawTextA(hdc, "Bid", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -778,7 +779,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     double chgPct = L1.changePct();
 
     // Measure large last price
-    SelectObject(hdc, state->hBigFont);
+    SelectObject(hdc, state->hExtraFont);
     std::string lastStr = Market_Fmt(displayLast);
     SIZE lastSz = {};
     GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
@@ -789,7 +790,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     bool showChg = (L1.last > 0.0 && (chg != 0.0 || L1.prevClose > 0.0));
     if (showChg) {
         snprintf(chgBuf, sizeof(chgBuf), " %.2f  %.2f%%", chg, chgPct);
-        SelectObject(hdc, state->hSmallFont);
+        SelectObject(hdc, state->hStatusFont);
         GetTextExtentPoint32A(hdc, chgBuf, (int)strlen(chgBuf), &chgSz);
     }
 
@@ -803,15 +804,15 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     if (lcX < LC_RIGHT) {
         // Draw large last price (vertically centred, full header height)
-        SelectObject(hdc, state->hBigFont);
+        SelectObject(hdc, state->hExtraFont);
         SetTextColor(hdc, textColor);
         RECT lastRc = { lcX, 0, LC_RIGHT - 7, HEADER_H - 7 };
-        DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
         // Draw change/pct% in smaller font immediately to below
         if (showChg) {
             COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SelectObject(hdc, state->hSmallFont);
+            SelectObject(hdc, state->hStatusFont);
             SetTextColor(hdc, chgColor);
             int chgX = lcX;
             if (chgX < LC_RIGHT) {
@@ -937,19 +938,22 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hBigFont = CreateFontA(-22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-        state->hOrderFont = CreateFontA(-20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        state->hExtraFont = CreateFontA(-26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-        state->hStatusFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        state->hOrderFont = CreateFontA(-20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
         state->hValuesFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-        state->hSmallFont = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        state->hStatusFont = CreateFontA(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-        state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        state->hStatusNormalFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 
@@ -1113,10 +1117,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         TradingAPI::WatchlistInfo wi;
         if (api.getWatchlistData(state->conId, state->symbol, wi)) {
-            if (wi.open      > 0.0 && state->l1Info.open      == 0.0) state->l1Info.open      = wi.open;
-            if (wi.prevClose > 0.0 && state->l1Info.prevClose == 0.0) state->l1Info.prevClose = wi.prevClose;
-            if (wi.high      > 0.0 && state->l1Info.high      == 0.0) state->l1Info.high      = wi.high;
-            if (wi.low       > 0.0 && state->l1Info.low       == 0.0) state->l1Info.low       = wi.low;
+            //if (wi.open      > 0.0 && state->l1Info.open      == 0.0) state->l1Info.open      = wi.open;
+            //if (wi.prevClose > 0.0 && state->l1Info.prevClose == 0.0) state->l1Info.prevClose = wi.prevClose;
+            //if (wi.high      > 0.0 && state->l1Info.high      == 0.0) state->l1Info.high      = wi.high;
+            //if (wi.low       > 0.0 && state->l1Info.low       == 0.0) state->l1Info.low       = wi.low;
             if (wi.vwap      > 0.0 && state->l1Info.vwap      == 0.0) state->l1Info.vwap      = wi.vwap;
         }
         Market_RefreshPositionAndAvg(hWnd, state);
@@ -1140,15 +1144,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (updConId == state->conId && updSym == state->symbol) {
                     TradingAPI::WatchlistInfo wi;
                     if (api.getWatchlistData(state->conId, state->symbol, wi)) {
-                        if (wi.last      > 0.0) state->l1Info.last      = wi.last;
-                        if (wi.open      > 0.0) state->l1Info.open      = wi.open;
-                        if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
-                        if (wi.high      > 0.0) state->l1Info.high      = wi.high;
-                        if (wi.low       > 0.0) state->l1Info.low       = wi.low;
-                        if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
-                        if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
-                        if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
-                        if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
+                        //if (wi.last      > 0.0) state->l1Info.last      = wi.last;
+                        //if (wi.open      > 0.0) state->l1Info.open      = wi.open;
+                        //if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
+                        //if (wi.high      > 0.0) state->l1Info.high      = wi.high;
+                        //if (wi.low       > 0.0) state->l1Info.low       = wi.low;
+                        //if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
+                        //if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
+                        //if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
+                        //if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
                         if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
 
                         Market_RefreshPositionAndAvg(hWnd, state);
@@ -1215,15 +1219,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
             TradingAPI::WatchlistInfo wi;
             if (api.getWatchlistData(state->conId, state->symbol, wi)) {
-                if (wi.last      > 0.0) state->l1Info.last      = wi.last;
-                if (wi.open      > 0.0) state->l1Info.open      = wi.open;
-                if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
-                if (wi.high      > 0.0) state->l1Info.high      = wi.high;
-                if (wi.low       > 0.0) state->l1Info.low       = wi.low;
-                if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
-                if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
-                if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
-                if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
+                //if (wi.last      > 0.0) state->l1Info.last      = wi.last;
+                //if (wi.open      > 0.0) state->l1Info.open      = wi.open;
+                //if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
+                //if (wi.high      > 0.0) state->l1Info.high      = wi.high;
+                //if (wi.low       > 0.0) state->l1Info.low       = wi.low;
+                //if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
+                //if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
+                //if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
+                //if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
                 if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
             }
             Market_RefreshPositionAndAvg(hWnd, state);
@@ -1375,10 +1379,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->hTtsVoice = nullptr;
             }
             if (state->hBigFont)     DeleteObject(state->hBigFont);
+            if (state->hExtraFont)     DeleteObject(state->hExtraFont);
             if (state->hStatusFont)      DeleteObject(state->hStatusFont);
+            if (state->hStatusNormalFont)      DeleteObject(state->hStatusNormalFont);
             if (state->hValuesFont)      DeleteObject(state->hValuesFont);
             if (state->hOrderFont)       DeleteObject(state->hOrderFont);
-            if (state->hSmallFont)      DeleteObject(state->hSmallFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
