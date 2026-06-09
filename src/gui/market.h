@@ -38,7 +38,6 @@ struct TsState {
     HWND hTsList = NULL;
     HWND hTsListF100 = NULL;
     HWND hTsListF1000 = NULL;
-    HWND hOvernightCheck = NULL;
     HWND hL2List = NULL;
     bool isOvernight = false;
     std::string symbol;
@@ -69,6 +68,7 @@ struct TsState {
     bool      ttsOn        = false;
     bool      ttsComInit   = false;
     HWND      hSpeakerBtn  = NULL;
+    HWND      hOVNButton   = NULL;
 
     // ── Splitter state ────────────────────────────────────────────────────────
     float splitY = 0.5f;
@@ -213,10 +213,10 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     }
 
     // ── Filter checkbox: far left, centred in bottom half of header ──────────
-    if (state->hOvernightCheck) {
+    if (state->hOVNButton) {
         int chkY = hdrH / 2 + (hdrH / 2 - 16) / 2;
-        SetWindowPos(state->hOvernightCheck, NULL,
-                     LC_MARGIN + (LC_ICON_W - 16) / 2, chkY, 16, 16,
+        SetWindowPos(state->hOVNButton, NULL,
+                     LC_MARGIN, chkY - 1, LC_ICON_W, 21,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
@@ -255,9 +255,9 @@ static void Market_Layout(HWND hWnd, TsState* state) {
 
         SetWindowPos(state->hOrderLabel,       NULL, m,                                  lblY,   lblW,    18, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hOrderPrice,       NULL, m + lblW + m,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderQty,         NULL, m + lblW + m + priceW + m,         editY,   qtyW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderQty,         NULL, m + lblW + m + priceW + m,         editY,   qtyW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         if (!state->isOvernight) {
-            SetWindowPos(state->hOrderStopPrice,   NULL, m + lblW + m,              editY + editH + 4, priceW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderStopPrice,   NULL, m + lblW + m,              editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
             SetWindowPos(state->hOrderProfitPrice, NULL, m + lblW + m + priceW + m, editY + editH + 4, priceW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
@@ -875,6 +875,31 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
     }
     if (state->hSpeakerBtn) InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
 }
+
+static void Market_ToggleOVN(HWND hWnd, TsState* state) {
+    state->isOvernight = !state->isOvernight;
+    if (state->isOvernight) {
+        if (state->hOVNButton)
+            SetCtrlColor(state->hOVNButton, COINS_CLR_YELLOW);
+    } else {
+        if (state->hOVNButton)
+            SetCtrlColor(state->hOVNButton, COINS_CLR_GRAY);
+    }
+    
+    if (state->hOVNButton) InvalidateRect(state->hOVNButton, NULL, TRUE);
+    
+    if (!state->symbol.empty()) {
+        char windowKey[256];
+        sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
+        Settings_Overnight_Save(windowKey, state->isOvernight ? 1 : 0);
+    }
+    if (state->orderBarVisible) {
+        Market_Layout_HideBar(hWnd, state);
+        OrderBar_Show(hWnd, state, state->orderSide);
+    }
+    SetFocus(hWnd);
+}
+
 void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
     if (!state) return;
     std::lock_guard<std::mutex> lk(api.getPortfolioMutex());
@@ -957,10 +982,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         ShowWindow(state->hL2List, SW_SHOW);
 
         // ── Overnight checkbox (far left, below speaker) ─────────────────────────
-        state->hOvernightCheck = CreateWindowA("BUTTON", "",
-            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-            0, 0, 16, 16, hWnd, (HMENU)ID_MARKET_OVERNIGHT, hInst, NULL);
-
+        state->hOVNButton = CreateWindowW(L"STATIC", MOON_GLYPH,
+            WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
+            0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_OVERNIGHT, hInst, NULL);
+        SendMessage(state->hOVNButton, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
+        SetCtrlColor(state->hOVNButton, COINS_CLR_GRAY);
         {
             HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
                 WS_POPUP | TTS_ALWAYSTIP,
@@ -970,7 +996,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             ti.cbSize   = sizeof(ti);
             ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
             ti.hwnd     = hWnd;
-            ti.uId      = (UINT_PTR)state->hOvernightCheck;
+            ti.uId      = (UINT_PTR)state->hOVNButton;
             ti.lpszText = (LPSTR)"OVERNIGHT";
             SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
         }
@@ -1022,8 +1048,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             char windowKey[256];
             sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
             if (Settings_Overnight_Load(windowKey, 0)) {
-                state->isOvernight = true;
-                SendMessage(state->hOvernightCheck, BM_SETCHECK, BST_CHECKED, 0);
+                state->isOvernight = false;
+                Market_ToggleOVN(hWnd, state);
             }
         }
 
@@ -1138,17 +1164,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == BN_CLICKED && state) {
-            state->isOvernight = (SendMessage(state->hOvernightCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
-            if (!state->symbol.empty()) {
-                char windowKey[256];
-                sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
-                Settings_Overnight_Save(windowKey, state->isOvernight ? 1 : 0);
-            }
-            if (state->orderBarVisible) {
-                Market_Layout_HideBar(hWnd, state);
-                OrderBar_Show(hWnd, state, state->orderSide);
-            }
-            SetFocus(hWnd);
+            Market_ToggleOVN(hWnd, state);
         }
         if (LOWORD(wParam) == ID_MARKET_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)
             Market_ToggleTTS(hWnd, state);
@@ -1295,7 +1311,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_SETCURSOR: {
         int id = GetDlgCtrlID((HWND)wParam);
-        if (id == ID_MARKET_SPEAKER) {
+        if (id == ID_MARKET_SPEAKER || id == ID_MARKET_OVERNIGHT) {
             SetCursor(LoadCursor(NULL, IDC_HAND));
             return TRUE;
         }

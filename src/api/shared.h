@@ -13,11 +13,14 @@ NOTIFYICONDATAW nid = { 0 };
 #define COINS_CLR_BLUE        RGB(80, 160, 255)
 #define COINS_CLR_PURPLE      RGB(185, 105, 225)
 #define COINS_CLR_ORANGE      RGB(255, 165, 0)
+#define COINS_CLR_YELLOW      RGB(201, 183, 41)
 // Sentinel: no custom col or – let HandleDarkModeMessages / system theme paint this control
 #define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
 
-// Speaker glyph: E767 = volume on (Segoe MDL2 Assets)
+// Speaker glyph: E767 = Volume on (Segoe MDL2 Assets)
 static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
+// Speaker glyph: E708 = QuietHours on (Segoe MDL2 Assets)
+static const wchar_t MOON_GLYPH[] = L"\uE708";
 
 // ─── Per-control color table ──────────────────────────────────────────────────
 static HWND     gClrHwnd[160]  = {};
