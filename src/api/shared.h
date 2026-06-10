@@ -542,6 +542,41 @@ void KillGateway() {
     CloseHandle(hSnap);
 }
 
+LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
+    DWORD code = exceptionInfo->ExceptionRecord->ExceptionCode;
+    std::string errorType = "UNKNOWN CRITICAL EXCEPTION";
+    
+    switch (code) {
+        case EXCEPTION_ACCESS_VIOLATION:
+            errorType = "EXCEPTION_ACCESS_VIOLATION (Null pointer dereference or invalid memory access)";
+            break;
+        case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+            errorType = "EXCEPTION_ARRAY_BOUNDS_EXCEEDED (Out of bounds array access)";
+            break;
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+            errorType = "EXCEPTION_INT_DIVIDE_BY_ZERO (Division by zero)";
+            break;
+        case EXCEPTION_STACK_OVERFLOW:
+            errorType = "EXCEPTION_STACK_OVERFLOW (Infinite recursion or exhausted stack space)";
+            break;
+        case 0xE06D7363: // Magical Microsoft C++ Exception Code
+            errorType = "Unhandled C++ Exception (thrown via throw keyword, missed by try/catch)";
+            break;
+    }
+
+    std::stringstream ss;
+    ss << "!!! CRITICAL APPLICATION CRASH !!!\n\n"
+       << "Exception Code: 0x" << std::hex << code << "\n"
+       << "Description: " << errorType << "\n"
+       << "Fault Address: 0x" << exceptionInfo->ExceptionRecord->ExceptionAddress << "\n\n";
+
+    // Alert the developer instantly via Windows Pop-up
+    MessageBoxA(NULL, ss.str().c_str(), "Gateway Gateway Fatal Error", MB_ICONERROR | MB_OK);
+
+    // Tell Windows to close the application cleanly now that we handled it
+    return EXCEPTION_EXECUTE_HANDLER; 
+}
+
 void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
 

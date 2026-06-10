@@ -775,8 +775,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // We measure both pieces then right-justify them to RB_X - 10.
     const int LC_RIGHT = RB_X - 10;   // right edge for the last+change block
 
-    double chg    = L1.change();
-    double chgPct = L1.changePct();
+    double chg    = 0.0;
+    double chgPct = 0.0;
+    if (L1.last > 0.0) {
+        chg    = L1.change();
+        chgPct = L1.changePct();
+    }
 
     // Measure large last price
     SelectObject(hdc, state->hExtraFont);
@@ -787,15 +791,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Measure change text (smaller font)
     char chgBuf[48] = {};
     SIZE chgSz = {};
-    bool showChg = (L1.last > 0.0 && (chg != 0.0 || L1.prevClose > 0.0));
-    if (showChg) {
-        snprintf(chgBuf, sizeof(chgBuf), " %.2f  %.2f%%", chg, chgPct);
-        SelectObject(hdc, state->hStatusFont);
-        GetTextExtentPoint32A(hdc, chgBuf, (int)strlen(chgBuf), &chgSz);
-    }
+    snprintf(chgBuf, sizeof(chgBuf), " %.2f  %.2f%%", chg, chgPct);
+    SelectObject(hdc, state->hStatusFont);
+    GetTextExtentPoint32A(hdc, chgBuf, (int)strlen(chgBuf), &chgSz);
 
     // Total width of the last+change block
-    int lcBlockW = std::max(lastSz.cx, (showChg ? chgSz.cx : 0)) + 7;
+    int lcBlockW = std::max(lastSz.cx, chgSz.cx) + 7;
 
     // Left edge of the block: right-justified to LC_RIGHT, but no further left
     // than STATS_X (so it never overlaps the stats when window is very narrow).
@@ -810,15 +811,13 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
         // Draw change/pct% in smaller font immediately to below
-        if (showChg) {
-            COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SelectObject(hdc, state->hStatusFont);
-            SetTextColor(hdc, chgColor);
-            int chgX = lcX;
-            if (chgX < LC_RIGHT) {
-                RECT chgRc = { chgX, 0, LC_RIGHT - 7, HEADER_H - 3 };
-                DrawTextA(hdc, chgBuf, -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
-            }
+        COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+        SelectObject(hdc, state->hStatusFont);
+        SetTextColor(hdc, chgColor);
+        int chgX = lcX;
+        if (chgX < LC_RIGHT) {
+            RECT chgRc = { chgX, 0, LC_RIGHT - 7, HEADER_H - 3 };
+            DrawTextA(hdc, chgBuf, -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
         }
     }
 
@@ -1060,6 +1059,19 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api().setMarketWindow(hWnd, state->conId, state->symbol);
         api().subscribePositionPnL(hWnd, state->conId);
         api().addApiUpdateWindow(hWnd);
+        // Seed L1 from watchlist cache so VWAP (and other ticks) are
+        // immediately visible before the first L1 update fires
+        TradingAPI::WatchlistInfo wl;
+        if (api().getWatchlistData(state->conId, state->symbol, wl)) {
+            if (wl.vwap      > 0.0) state->l1Info.vwap      = wl.vwap;
+            //if (wl.last      > 0.0) state->l1Info.last      = wl.last;
+            //if (wl.open      > 0.0) state->l1Info.open      = wl.open;
+            //if (wl.prevClose > 0.0) state->l1Info.prevClose = wl.prevClose;
+            //if (wl.high      > 0.0) state->l1Info.high      = wl.high;
+            //if (wl.low       > 0.0) state->l1Info.low       = wl.low;
+            //if (wl.bid       > 0.0) state->l1Info.bid       = wl.bid;
+            //if (wl.ask       > 0.0) state->l1Info.ask       = wl.ask;
+        }
         UpdateMarketRegistry();
         break;
     }
@@ -1114,14 +1126,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.ask       > 0.0) state->l1Info.ask       = fresh.ask;
             if (fresh.bidSize   > 0.0) state->l1Info.bidSize   = fresh.bidSize;
             if (fresh.askSize   > 0.0) state->l1Info.askSize   = fresh.askSize;
-        }
-        TradingAPI::WatchlistInfo wi;
-        if (api().getWatchlistData(state->conId, state->symbol, wi)) {
-            //if (wi.open      > 0.0 && state->l1Info.open      == 0.0) state->l1Info.open      = wi.open;
-            //if (wi.prevClose > 0.0 && state->l1Info.prevClose == 0.0) state->l1Info.prevClose = wi.prevClose;
-            //if (wi.high      > 0.0 && state->l1Info.high      == 0.0) state->l1Info.high      = wi.high;
-            //if (wi.low       > 0.0 && state->l1Info.low       == 0.0) state->l1Info.low       = wi.low;
-            if (wi.vwap      > 0.0 && state->l1Info.vwap      == 0.0) state->l1Info.vwap      = wi.vwap;
+            if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
         }
         Market_RefreshPositionAndAvg(hWnd, state);
         RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
@@ -1132,39 +1137,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_L2:
         if (state) Market_RefreshL2(hWnd, state);
         break;
-
-    case WM_WATCHLIST_UPDATE: {
-        auto* key = reinterpret_cast<std::string*>(lParam);
-        if (!key) break;
-        if (state) {
-            auto dot = key->find('.');
-            if (dot != std::string::npos) {
-                int         updConId = std::stoi(key->substr(0, dot));
-                std::string updSym   = key->substr(dot + 1);
-                if (updConId == state->conId && updSym == state->symbol) {
-                    TradingAPI::WatchlistInfo wi;
-                    if (api().getWatchlistData(state->conId, state->symbol, wi)) {
-                        //if (wi.last      > 0.0) state->l1Info.last      = wi.last;
-                        //if (wi.open      > 0.0) state->l1Info.open      = wi.open;
-                        //if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
-                        //if (wi.high      > 0.0) state->l1Info.high      = wi.high;
-                        //if (wi.low       > 0.0) state->l1Info.low       = wi.low;
-                        //if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
-                        //if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
-                        //if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
-                        //if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
-                        if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
-
-                        Market_RefreshPositionAndAvg(hWnd, state);
-                    }
-                    RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
-                    InvalidateRect(hWnd, &hdrRc, FALSE);
-                }
-            }
-        }
-        delete key;
-        break;
-    }
 
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == BN_CLICKED && state) {
@@ -1217,19 +1189,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
-            TradingAPI::WatchlistInfo wi;
-            if (api().getWatchlistData(state->conId, state->symbol, wi)) {
-                //if (wi.last      > 0.0) state->l1Info.last      = wi.last;
-                //if (wi.open      > 0.0) state->l1Info.open      = wi.open;
-                //if (wi.prevClose > 0.0) state->l1Info.prevClose = wi.prevClose;
-                //if (wi.high      > 0.0) state->l1Info.high      = wi.high;
-                //if (wi.low       > 0.0) state->l1Info.low       = wi.low;
-                //if (wi.bid       > 0.0) state->l1Info.bid       = wi.bid;
-                //if (wi.ask       > 0.0) state->l1Info.ask       = wi.ask;
-                //if (wi.bidSize   > 0.0) state->l1Info.bidSize   = wi.bidSize;
-                //if (wi.askSize   > 0.0) state->l1Info.askSize   = wi.askSize;
-                if (wi.vwap      > 0.0) state->l1Info.vwap      = wi.vwap;
-            }
             Market_RefreshPositionAndAvg(hWnd, state);
             RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
             InvalidateRect(hWnd, &hdrRc, FALSE);

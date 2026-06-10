@@ -13,7 +13,7 @@ all: bin/Trading-Floor.exe
 bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	@echo -n "please wait, building Trading-Floor.exe.. "
 	@rm -f bin/Trading-Floor.exe
-	@$(CXX) -g \
+	@$(CXX) \
 	    src/main.cpp \
 	    lib/Trading-Floor-Assets.res \
 	    lib/Trading-Floor-Gateway.a \
@@ -23,7 +23,7 @@ bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
 	    -lshlwapi -lwininet -lcomctl32 -luxtheme -lriched20 \
-		-o bin/Trading-Floor.exe
+		-s -o bin/Trading-Floor.exe
 	@echo "OK"
 	@ls -la bin/Trading-Floor.exe
 

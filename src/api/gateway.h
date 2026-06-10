@@ -20,6 +20,9 @@
 #include <deque>
 #include <mutex>
 #include <memory>
+#include <exception>
+#include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include <algorithm>
 #include <functional>
@@ -244,7 +247,6 @@ public:
 
     void setDiamondsWindow(HWND hWnd);
     void unsetDiamondsWindow();
-    void reqDiamondsWatchlist();   // call after reconnect to re-subscribe market data
     std::mutex& getPortfolioMutex();
     std::map<std::string, PositionInfo>& getPortfolioMap();
 
@@ -294,7 +296,7 @@ public:
     void setNewsWindow(HWND hWnd);
     void reqNewsForSymbol(int conId, const std::string& symbol);
     void reqNewsArticle(const std::string& providerCode, const std::string& articleId);
-
+    
 private:
     struct Impl;
     std::unique_ptr<Impl> pImpl;
