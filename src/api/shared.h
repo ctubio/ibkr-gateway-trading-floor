@@ -719,3 +719,89 @@ public:
         graphics.DrawLines(&pen, points.data(), (INT)points.size());
     }
 };
+
+
+// ── Mini sparkline for the Position cell ─────────────────────────────────────
+// A self-contained sparkline sized to fit inside a SysListView32 sub-item cell.
+// Kept deliberately separate from the full-size Sparkline used in market.h so
+// that changes to either class don't affect the other.
+
+class MiniSparkline {
+private:
+    struct MiniSparkPoint { ULONGLONG date; double price; };
+    std::vector<MiniSparkPoint> data;
+
+    float MapScale(double value, double minD, double maxD, float minR, float maxR) const {
+        if (maxD == minD) return minR + (maxR - minR) / 2.0f;
+        return minR + (float)((value - minD) / (maxD - minD)) * (maxR - minR);
+    }
+
+public:
+    void AddPrice(double price) {
+        ULONGLONG now = GetTickCount64();
+        if (!data.empty() && data.back().price == price) return;
+        // If 2nd-to-last point is newer than 30 s ago, replace the last point.
+        if (data.size() > 1 && data[data.size() - 2].date > now - 30000)
+            data.pop_back();
+        data.push_back({ now, price });
+        if (data.size() > 21)
+            data.erase(data.begin());
+    }
+
+    // Draw the sparkline into the sub-item bounding rect.
+    // Leaves a small left margin so the text (position number) is still visible.
+    void Draw(HDC hdc, const RECT& cellRect) const {
+        if (data.size() < 2) return;
+
+        // Reserve the left portion for the numeric text; sparkline fills the rest.
+        const int leftMargin = -30;   // px gap from cell left edge
+        const int topPad     = 3;
+        const int botPad     = 3;
+
+        float W = (float)(cellRect.right - cellRect.left - leftMargin);
+        float H = (float)(cellRect.bottom - cellRect.top  - topPad     - botPad);
+        if (W < 4 || H < 4) return;
+
+        float ox = (float)(cellRect.left + leftMargin);
+        float oy = (float)(cellRect.top  + topPad);
+
+        Gdiplus::Graphics g(hdc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+
+        ULONGLONG minT = data.front().date, maxT = data.back().date;
+        double minP = data[0].price, maxP = data[0].price;
+        for (const auto& p : data) {
+            if (p.price < minP) minP = p.price;
+            if (p.price > maxP) maxP = p.price;
+        }
+        if (minT == maxT) maxT++;
+        if (minP == maxP) { minP -= 0.5; maxP += 0.5; }
+
+        std::vector<Gdiplus::PointF> pts(data.size());
+        for (size_t i = 0; i < data.size(); ++i) {
+            float x = MapScale((double)data[i].date,  (double)minT, (double)maxT, 0, W);
+            float y = MapScale(data[i].price,          minP,         maxP,         H, 1);
+            pts[i]  = Gdiplus::PointF(ox + x, oy + y);
+        }
+
+        // Gradient: green (top/recent-high) → orange → red (bottom/loss)
+        Gdiplus::LinearGradientBrush brush(
+            Gdiplus::PointF(0.f, oy),
+            Gdiplus::PointF(0.f, oy + H + 1),
+            Gdiplus::Color(200, 1, 166, 1),
+            Gdiplus::Color(200, 1, 166, 1));
+        Gdiplus::Color  cols[] = {
+            Gdiplus::Color(200,   1, 166,   1),  // green
+            Gdiplus::Color(200, 255, 165,   0),  // orange
+            Gdiplus::Color(200, 255,   0,   0)   // red
+        };
+        float stops[] = { 0.0f, 0.20f, 1.0f };
+        brush.SetInterpolationColors(cols, stops, 3);
+
+        Gdiplus::Pen pen(&brush, 3.0f);
+        pen.SetLineJoin(Gdiplus::LineJoinRound);
+        g.DrawLines(&pen, pts.data(), (INT)pts.size());
+    }
+
+    bool HasData() const { return data.size() >= 2; }
+};
