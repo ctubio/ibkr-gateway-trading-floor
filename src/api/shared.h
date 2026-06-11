@@ -629,3 +629,96 @@ std::wstring StringToWide(const std::string& str) {
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
 }
+
+struct SparkPoint {
+    ULONGLONG date; 
+    double price;
+};
+
+class Sparkline {
+private:
+    std::vector<SparkPoint> data;
+
+    // Equivalent to your d3_scale_linear
+    float MapScale(double value, double minDomain, double maxDomain, float minRange, float maxRange) {
+        if (maxDomain == minDomain) return minRange + (maxRange - minRange) / 2.0f;
+        return minRange + (float)((value - minDomain) / (maxDomain - minDomain)) * (maxRange - minRange);
+    }
+
+public:
+    void AddPrice(double price) {
+        ULONGLONG now = GetTickCount64();
+
+        // 1. If price hasn't changed, ignore (matching your JS)
+        if (!data.empty() && data.back().price == price) return;
+
+        // 2. JS Logic: if 2nd to last point is newer than 30s ago, pop the last point
+        if (data.size() > 1 && data[data.size() - 2].date > now - 30000) {
+            data.pop_back(); 
+        }
+
+        // 3. Add new data
+        data.push_back({now, price});
+
+        // 4. Max array size of 21
+        if (data.size() > 21) {
+            data.erase(data.begin()); 
+        }
+    }
+
+    void Draw(HDC hdc, RECT clientRect) {
+        if (data.size() < 2) return;
+
+        Gdiplus::Graphics graphics(hdc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+
+        // Find Min/Max Domains
+        ULONGLONG minTime = data[0].date;
+        ULONGLONG maxTime = data.back().date;
+        
+        double minPrice = data[0].price;
+        double maxPrice = data[0].price;
+        for (const auto& p : data) {
+            if (p.price < minPrice) minPrice = p.price;
+            if (p.price > maxPrice) maxPrice = p.price;
+        }
+
+        // Prevent division by zero if all prices/times are identical
+        if (minTime == maxTime) maxTime++;
+        if (minPrice == maxPrice) { minPrice -= 1.0; maxPrice += 1.0; }
+
+        float W = 360;
+        float H = 50;
+
+        // Map data to Gdiplus screen coordinates
+        std::vector<Gdiplus::PointF> points(data.size());
+        for (size_t i = 0; i < data.size(); ++i) {
+            // X spans from 0 to Width
+            float x = MapScale(data[i].date, minTime, maxTime, 0, W);
+            // Y is inverted (0 is top, H is bottom in Windows)
+            float y = MapScale(data[i].price, minPrice, maxPrice, H, 1);
+            
+            points[i] = Gdiplus::PointF(clientRect.left + x, clientRect.top + y);
+        }
+
+        // Create the Canvas Gradient (Alpha 0.7 * 255 = ~178)
+        Gdiplus::PointF pntTop(0.0f, clientRect.top);
+        Gdiplus::PointF pntBottom(0.0f, clientRect.top+H+2); 
+        Gdiplus::LinearGradientBrush brush(pntTop, pntBottom, Gdiplus::Color(255,0,0,0), Gdiplus::Color(255,0,0,0)); 
+        
+        // Match JS color stops: 0 = Green, 0.20 = Orange, 0.25 = Red
+        Gdiplus::Color colors[] = {
+            Gdiplus::Color(178, 1, 166, 1),   // Green
+            Gdiplus::Color(178, 255, 165, 0), // Orange
+            Gdiplus::Color(178, 255, 0, 0)    // Red
+        };
+        float positions[] = { 0.0f, 0.20f, 1.0f }; // Clamped red to the bottom
+        brush.SetInterpolationColors(colors, positions, 3);
+
+        // Match JS lineWidth = 3
+        Gdiplus::Pen pen(&brush, 3.0f);
+        pen.SetLineJoin(Gdiplus::LineJoinRound);
+
+        graphics.DrawLines(&pen, points.data(), (INT)points.size());
+    }
+};

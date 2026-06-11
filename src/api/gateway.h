@@ -13,6 +13,7 @@
 #include <dwmapi.h>
 #include <uxtheme.h>
 #include <commctrl.h>
+#include <gdiplus.h>
 
 #include <string>
 #include <vector>
@@ -27,7 +28,6 @@
 #include <algorithm>
 #include <functional>
 #include <cstring>
-#include <algorithm>
 #include <filesystem>
 
 #define WM_API_UPDATE       (WM_USER +  2)

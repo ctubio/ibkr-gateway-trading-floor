@@ -85,7 +85,8 @@ struct TsState {
     std::string orderSide;   // "BUY" or "SELL"
     double lastBidPrice;
     double lastAskPrice;
-    
+
+    Sparkline sparkline;
 };
 static std::map<HWND, TsState*> tsStates;
 
@@ -780,6 +781,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     if (L1.last > 0.0) {
         chg    = L1.change();
         chgPct = L1.changePct();
+        state->sparkline.AddPrice(L1.last);
     }
 
     // Measure large last price
@@ -829,6 +831,16 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     LineTo(hdc, rc.right, HEADER_H - 1);
     SelectObject(hdc, hOldPen);
     DeleteObject(hSepPen);
+
+    
+    // ── Sparkline ──────────────────────────────────────────────────────
+    // Optional: Fill background with a dark color
+    //HBRUSH bgBrush = CreateSolidBrush(RGB(15, 15, 15));
+    //FillRect(hdc, &rc, bgBrush);
+    //DeleteObject(bgBrush);
+
+    // Draw the sparkline stretched across the RECT
+    state->sparkline.Draw(hdc, rc);
 
     EndPaint(hWnd, &ps);
 }
