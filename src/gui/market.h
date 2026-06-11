@@ -733,6 +733,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", Market_Fmt(L1.vwap),      vwapColor  },
+        { "P:", (Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str(),      textColor  },
     };
     // Row 2: Pos  Avg
     StatItem row2[] = {
@@ -769,7 +770,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         }
         return cx;
     };
-    drawStatRow(row1, 3, STATS_X, 0,    rowH);
+    drawStatRow(row1, 4, STATS_X, 0,    rowH);
     drawStatRow(row2, 4, STATS_X, rowH, HEADER_H - 1);
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
@@ -921,7 +922,7 @@ void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
         state->position = it->second.shares;
         state->avgPrice = it->second.avgCost;
         
-        SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
+        // SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
     }
 }
 

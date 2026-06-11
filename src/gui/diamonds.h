@@ -46,6 +46,11 @@ static HWND g_DiamondsListForSort = NULL;
 
 static bool g_DiamondsChkVisible = false;
 
+// ── Deferred sort (prevents flicker on every tick) ────────────────────────────
+#define DIAMONDS_SORT_TIMER_ID  7010
+#define DIAMONDS_SORT_TIMER_MS   500   // re-sort at most twice per second
+static bool g_DiamondsSortPending = false;
+
 static ListViewZoomData DiamondsZoomData = { NULL, NULL, 14, "Zoom_Diamonds" };
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
@@ -280,6 +285,7 @@ static int Diamonds_FindRow(HWND hList, int conId) {
 // All columns that depend on a valid Last price display "--" when Last == 0,
 // preventing bogus P&L calculations (e.g. -100%) during market-closed hours.
 static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::WatchlistInfo& t) {
+    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     char buf[64];
 
     // Helper: format a non-zero double, or blank the cell.
@@ -437,6 +443,8 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
 
     setNum(DCOL_MKTVAL,     mktVal,    "%.2f");
     setNum(DCOL_PCT_NETLIQ, pctNetLiq, "%.2f%%");
+
+     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
@@ -528,7 +536,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&DiamondsZoomData);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-
+        
         LVCOLUMNA lvc = {};
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
         for (int i = 0; i < DCOL_COUNT; ++i) {
@@ -617,9 +625,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 int row = Diamonds_FindRow(hList, conId);
                 if (row >= 0)
                     Diamonds_UpdateMarketCols(hList, row, info);
+                // Defer sort — arm timer instead of sorting on every tick.
             }
         }
         delete key;
+        if (!g_DiamondsSortPending) {
+            g_DiamondsSortPending = true;
+            SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
+        }
         break;
     }
 
@@ -650,7 +663,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Update only the three PnL cells directly — avoid a full row repaint.
         const auto& p = g_DiamondsPnlCache[conId];
         char buf[64];
-
+        SendMessage(hList, WM_SETREDRAW, FALSE, 0);
         if (p.has_daily) {
             snprintf(buf, sizeof(buf), "%+.2f", p.dailyPnL);
             ListView_SetItemText(hList, row, DCOL_DAILYPNL, buf);
@@ -682,11 +695,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             ListView_SetItemText(hList, row, DCOL_UNREALIZED_PL_PCT, buf);
         }
-
+        SendMessage(hList, WM_SETREDRAW, TRUE, 0);
         // Force a visual refresh of the affected row so the green/red colouring
         // from NM_CUSTOMDRAW picks up the new values immediately.
         ListView_RedrawItems(hList, row, row);
-        UpdateWindow(hList);
+        // Defer sort — arm timer instead of sorting on every PnL tick.
+        if (!g_DiamondsSortPending) {
+            g_DiamondsSortPending = true;
+            SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
+        }
         break;
     }
 
@@ -958,12 +975,29 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         break;
     }
 
+    case WM_TIMER: {
+        if (wParam == DIAMONDS_SORT_TIMER_ID) {
+            KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
+            g_DiamondsSortPending = false;
+            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+            if (hList) {
+                SendMessage(hList, WM_SETREDRAW, FALSE, 0);
+                Diamonds_ApplySort(hList);
+                SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+                RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+            }
+        }
+        break;
+    }
+
     case WM_DESTROY:
         // unsetDiamondsWindow calls cancelPnlSingleForWindow internally, which
         // sends cancelPnLSingle for every active reqId and clears the maps in
         // private.cpp.  We also clear our local cache so a future window
         // instance starts clean (stale cached values from a closed session
         // would briefly flash in the new window before the first TWS update).
+        KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
+        g_DiamondsSortPending = false;
         api().unsetDiamondsWindow();   // cancels market data + PnL + position subs
         api().removeApiUpdateWindow(hWnd);
         g_DiamondsPnlCache.clear();
