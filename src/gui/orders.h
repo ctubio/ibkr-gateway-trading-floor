@@ -62,7 +62,6 @@ static void Orders_Repopulate(HWND hWnd) {
         const auto& o = orders[i];
         if (o.status == "Cancelled" || o.status == "PendingCancel") continue;
 
-        char buf[64];
 
         int col = 0;
         LVITEMA lvi  = {};
@@ -75,6 +74,7 @@ static void Orders_Repopulate(HWND hWnd) {
 
         ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
 
+        char buf[64];
         if (o.price > 0)
             snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.totalQty, o.price);
         else if (o.auxPrice > 0)
@@ -83,11 +83,12 @@ static void Orders_Repopulate(HWND hWnd) {
             snprintf(buf, sizeof(buf), "%.0f @ MKT", o.totalQty);
         ListView_SetItemText(hList, i, col++, buf);
 
-        if (o.avgFillPx > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.filledQty, o.avgFillPx);
+        char buff[64];
+        if (o.filledQty > 0)
+            snprintf(buff, sizeof(buff), "%.0f @ %.2f", o.filledQty, o.avgFillPx);
         else
-            snprintf(buf, sizeof(buf), "-- @ --");
-        ListView_SetItemText(hList, i, col++, buf);
+            snprintf(buff, sizeof(buff), "-- @ --");
+        ListView_SetItemText(hList, i, col++, buff);
         
         std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
         ListView_SetItemText(hList, i, col++, (LPSTR)fullTypeStr.c_str());

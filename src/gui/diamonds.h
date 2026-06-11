@@ -77,6 +77,94 @@ enum DiamondColIdx {
 static int  g_DiamondsSortCol = DCOL_SYMBOL;
 static bool g_DiamondsSortAsc = true;
 
+// ── Mini sparkline for the Position cell ─────────────────────────────────────
+// A self-contained sparkline sized to fit inside a SysListView32 sub-item cell.
+// Kept deliberately separate from the full-size Sparkline used in market.h so
+// that changes to either class don't affect the other.
+
+class MiniSparkline {
+private:
+    struct MiniSparkPoint { ULONGLONG date; double price; };
+    std::vector<MiniSparkPoint> data;
+
+    float MapScale(double value, double minD, double maxD, float minR, float maxR) const {
+        if (maxD == minD) return minR + (maxR - minR) / 2.0f;
+        return minR + (float)((value - minD) / (maxD - minD)) * (maxR - minR);
+    }
+
+public:
+    void AddPrice(double price) {
+        ULONGLONG now = GetTickCount64();
+        if (!data.empty() && data.back().price == price) return;
+        // If 2nd-to-last point is newer than 30 s ago, replace the last point.
+        if (data.size() > 1 && data[data.size() - 2].date > now - 30000)
+            data.pop_back();
+        data.push_back({ now, price });
+        if (data.size() > 21)
+            data.erase(data.begin());
+    }
+
+    // Draw the sparkline into the sub-item bounding rect.
+    // Leaves a small left margin so the text (position number) is still visible.
+    void Draw(HDC hdc, const RECT& cellRect) const {
+        if (data.size() < 2) return;
+
+        // Reserve the left portion for the numeric text; sparkline fills the rest.
+        const int leftMargin = -30;   // px gap from cell left edge
+        const int topPad     = 3;
+        const int botPad     = 3;
+
+        float W = (float)(cellRect.right - cellRect.left - leftMargin);
+        float H = (float)(cellRect.bottom - cellRect.top  - topPad     - botPad);
+        if (W < 4 || H < 4) return;
+
+        float ox = (float)(cellRect.left + leftMargin);
+        float oy = (float)(cellRect.top  + topPad);
+
+        Gdiplus::Graphics g(hdc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+
+        ULONGLONG minT = data.front().date, maxT = data.back().date;
+        double minP = data[0].price, maxP = data[0].price;
+        for (const auto& p : data) {
+            if (p.price < minP) minP = p.price;
+            if (p.price > maxP) maxP = p.price;
+        }
+        if (minT == maxT) maxT++;
+        if (minP == maxP) { minP -= 0.5; maxP += 0.5; }
+
+        std::vector<Gdiplus::PointF> pts(data.size());
+        for (size_t i = 0; i < data.size(); ++i) {
+            float x = MapScale((double)data[i].date,  (double)minT, (double)maxT, 0, W);
+            float y = MapScale(data[i].price,          minP,         maxP,         H, 1);
+            pts[i]  = Gdiplus::PointF(ox + x, oy + y);
+        }
+
+        // Gradient: green (top/recent-high) → orange → red (bottom/loss)
+        Gdiplus::LinearGradientBrush brush(
+            Gdiplus::PointF(0.f, oy),
+            Gdiplus::PointF(0.f, oy + H + 1),
+            Gdiplus::Color(200, 1, 166, 1),
+            Gdiplus::Color(200, 1, 166, 1));
+        Gdiplus::Color  cols[] = {
+            Gdiplus::Color(200,   1, 166,   1),  // green
+            Gdiplus::Color(200, 255, 165,   0),  // orange
+            Gdiplus::Color(200, 255,   0,   0)   // red
+        };
+        float stops[] = { 0.0f, 0.20f, 1.0f };
+        brush.SetInterpolationColors(cols, stops, 3);
+
+        Gdiplus::Pen pen(&brush, 3.0f);
+        pen.SetLineJoin(Gdiplus::LineJoinRound);
+        g.DrawLines(&pen, pts.data(), (INT)pts.size());
+    }
+
+    bool HasData() const { return data.size() >= 2; }
+};
+
+// Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
+static std::map<int, MiniSparkline> g_DiamondsSparklines;
+
 // ── Live PnL cache (populated by WM_PNL_SINGLE) ───────────────────────────────
 // Keyed by conId.  Updated on the UI thread only (PostMessage guarantees this),
 // so no additional locking is needed when reading from WndProcDiamonds.
@@ -359,6 +447,9 @@ static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::Wat
     ListView_GetItem(hList, &lviQ);
     int conId = (int)lviQ.lParam;
 
+    // ── Feed the Last price into this symbol's mini sparkline ────────────────
+    g_DiamondsSparklines[conId].AddPrice(displayLast);
+
     // ── Portfolio data (shares / avgCost) for market-value columns ───────────
     char symBuf[64];
     ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
@@ -443,6 +534,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
+    g_DiamondsSparklines.clear(); // fresh slate; prices will re-populate on next tick
 
     std::vector<TradingAPI::PositionInfo> rows;
     {
@@ -899,6 +991,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, DiamondsZoomData.hFont);
+                        // For the Position cell also request post-paint so we can
+                        // overlay the mini sparkline after the text is drawn.
+                        if (cd->iSubItem == DCOL_POSITION)
+                            return CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT;
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE    ||
@@ -922,6 +1018,28 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     return CDRF_DODEFAULT;
                 }
+
+                case CDDS_ITEMPOSTPAINT | CDDS_SUBITEM: {
+                    if (cd->iSubItem != DCOL_POSITION) return CDRF_DODEFAULT;
+
+                    // Retrieve the conId (stored in lParam of the list item).
+                    int conId = (int)cd->nmcd.lItemlParam;
+                    auto sit  = g_DiamondsSparklines.find(conId);
+                    if (sit == g_DiamondsSparklines.end() || !sit->second.HasData())
+                        return CDRF_DODEFAULT;
+
+                    // Get the sub-item bounding rect in list-view client coords.
+                    HWND hListSpark = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+                    RECT cellRc = {};
+                    cellRc.left = LVIR_BOUNDS;
+                    // Use LVM_GETSUBITEMRECT to get the exact cell rect.
+                    cellRc.top  = DCOL_POSITION;
+                    SendMessage(hListSpark, LVM_GETSUBITEMRECT,
+                                (WPARAM)cd->nmcd.dwItemSpec, (LPARAM)&cellRc);
+
+                    sit->second.Draw(cd->nmcd.hdc, cellRc);
+                    return CDRF_DODEFAULT;
+                }
             }
         }
         break;
@@ -936,6 +1054,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         api().unsetDiamondsWindow();   // cancels market data + PnL + position subs
         api().removeApiUpdateWindow(hWnd);
         g_DiamondsPnlCache.clear();
+        g_DiamondsSparklines.clear();
         if (DiamondsZoomData.hFont) {
             DeleteObject(DiamondsZoomData.hFont);
         }
