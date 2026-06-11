@@ -60,6 +60,8 @@ static void Orders_Repopulate(HWND hWnd) {
     int filled = 0;
     for (int i = 0; i < (int)orders.size(); ++i) {
         const auto& o = orders[i];
+        if (o.status == "Cancelled" || o.status == "PendingCancel") continue;
+
         char buf[64];
 
         int col = 0;

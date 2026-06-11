@@ -666,7 +666,7 @@ public:
         }
     }
 
-    void Draw(HDC hdc, RECT clientRect) {
+    void Draw(HDC hdc, RECT clientRect, float W, float H) {
         if (data.size() < 2) return;
 
         Gdiplus::Graphics graphics(hdc);
@@ -686,9 +686,6 @@ public:
         // Prevent division by zero if all prices/times are identical
         if (minTime == maxTime) maxTime++;
         if (minPrice == maxPrice) { minPrice -= 1.0; maxPrice += 1.0; }
-
-        float W = 360;
-        float H = 50;
 
         // Map data to Gdiplus screen coordinates
         std::vector<Gdiplus::PointF> points(data.size());
