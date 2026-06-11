@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 644;
+int windowMarketWidth = 660;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
@@ -28,7 +28,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Ask  182.87  x 154]       (row 1, right block)
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
-static const int L2_W     = 224;  // Fixed width of the Level 2 depth panel
+static const int L2_W     = 240;  // Fixed width of the Level 2 depth panel
 static const int ORDER_BAR_H = 80;
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
@@ -122,10 +122,10 @@ static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 // ── L2 column definitions ─────────────────────────────────────────────────────
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
-    { "Size",  46, LVCFMT_CENTER },
+    { "Size",  54, LVCFMT_CENTER },
     { "Ask",   64, LVCFMT_CENTER },
     { "Bid",   64, LVCFMT_CENTER },
-    { "Size",  46, LVCFMT_CENTER },
+    { "Size",  54, LVCFMT_CENTER },
 };
 static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 
@@ -1017,22 +1017,22 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 42, 26, hWnd, NULL, hInst, NULL);
 
         state->hOrderPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
 
         state->hOrderQty = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "1",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
         
         state->hOrderStopPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderStopPrice, OrderBar_EditSubclassProc, 1, 0);
         
         state->hOrderProfitPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER,
+            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 

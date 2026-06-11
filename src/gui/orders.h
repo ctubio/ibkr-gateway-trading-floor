@@ -3,7 +3,21 @@
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 646, 240); }
 
 #define ID_ORDERS_LIST          9003
+#define ID_ORDERS_PRICE_EDIT    9010
+#define ID_ORDERS_QTY_EDIT      9011
+#define ID_ORDERS_PRICE_LABEL   9012
+#define ID_ORDERS_QTY_LABEL     9013
+#define ID_ORDERS_HINT_LABEL    9014
 
+#define EDIT_PANEL_H  44   // height reserved at the bottom when the panel is visible
+
+struct OrdersEditState {
+    int    orderId      = -1;
+    bool   partialFill  = false;
+    double originalQty  = 0.0;
+    bool   panelVisible = false;
+};
+static OrdersEditState s_editState;
 static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -88,41 +102,47 @@ static void Orders_Repopulate(HWND hWnd) {
     RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 }
 
-// ── Edit-Order popup ──────────────────────────────────────────────────────────
-// A lightweight non-modal popup with two edit boxes (Price / Qty).
-// ENTER confirms and calls api().modifyOrder(); ESCAPE closes without action.
-// Only one popup may be open at a time.
+// ── Inline edit panel ─────────────────────────────────────────────────────────
+// Price and Qty edit fields shown at the bottom of the Orders window when an
+// editable order is selected.  Hidden (and the ListView expands to fill) when
+// no order is selected or the order is in a terminal / non-editable state.
 
-struct EditOrderCtx {
-    int    orderId;
-    HWND   hPriceEdit;
-    HWND   hQtyEdit;       // NULL when partialFill — qty row is omitted
-    bool   partialFill;    // true → show price only; use originalQty for modifyOrder
-    double originalQty;    // captured from order when partialFill is true
-};
 
-// Forward ENTER / ESC from an edit control up to the popup parent, handle TAB and Arrows.
+// Returns true if the given status string allows modification.
+static bool Orders_IsEditable(const std::string& status) {
+    return !(status == "Filled" || status == "Cancelled" ||
+             status == "Inactive" || status == "PendingCancel");
+}
+
+// Forward ENTER from an edit control up to the Orders window; handle TAB and Arrows.
 static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
                                                LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (message == WM_GETDLGCODE) {
         LRESULT res = DefSubclassProc(hWnd, message, wParam, lParam);
-        // Explicitly tell Windows this control wants to process TAB and ARROW keys
-        return res | DLGC_WANTTAB | DLGC_WANTARROWS;
+        return res | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
+    }
+
+    if (message == WM_CHAR) {
+        if (wParam == VK_TAB || wParam == VK_RETURN)
+            return 0;
     }
 
     if (message == WM_KEYDOWN) {
-        if (wParam == VK_RETURN || wParam == VK_ESCAPE) {
-            SendMessage(GetParent(hWnd), WM_KEYDOWN, wParam, lParam);
+        if (wParam == VK_RETURN) {
+            // Bubble ENTER up to the Orders window for submission.
+            SendMessage(GetParent(hWnd), WM_ORDER_EDIT, 0, 0);
             return 0;
         }
 
         if (wParam == VK_TAB) {
             HWND hParent = GetParent(hWnd);
-            EditOrderCtx* ctx = (EditOrderCtx*)GetWindowLongPtr(hParent, GWLP_USERDATA);
-            if (ctx && ctx->hQtyEdit) {
-                HWND hNext = (hWnd == ctx->hPriceEdit) ? ctx->hQtyEdit : ctx->hPriceEdit;
+            HWND hPrice  = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
+            HWND hQty    = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
+            // Only cycle between visible fields.
+            bool qtyVisible = hQty && IsWindowVisible(hQty);
+            if (qtyVisible) {
+                HWND hNext = (hWnd == hPrice) ? hQty : hPrice;
                 SetFocus(hNext);
-                // Place caret at end, no selection
                 int len = GetWindowTextLengthA(hNext);
                 SendMessageA(hNext, EM_SETSEL, len, len);
             }
@@ -132,22 +152,12 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
         if (wParam == VK_UP || wParam == VK_DOWN) {
             char buf[32] = {};
             GetWindowTextA(hWnd, buf, sizeof(buf));
-
             double val  = atof(buf);
             double step = (uIdSubclass == 1) ? 0.01 : 1.0;  // price vs qty
-            if (wParam == VK_UP) {
-                val += step;
-            } else {
-                val -= step;
-            }
-
-            // Prevent negative pricing/quantities
+            val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-
             snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
             SetWindowTextA(hWnd, buf);
-
-            // Place caret at end, no selection
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
             return 0;
@@ -156,132 +166,89 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
     return DefSubclassProc(hWnd, message, wParam, lParam);
 }
 
-static HWND s_hEditOrderPopup = NULL;   // at most one popup at a time
+// Resize ListView and show/hide the edit panel controls to fit the window.
+static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    int w = rc.right;
+    int h = rc.bottom;
 
-static LRESULT CALLBACK WndProcEditOrder(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    EditOrderCtx* ctx = (EditOrderCtx*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    HWND hList      = GetDlgItem(hWnd, ID_ORDERS_LIST);
+    HWND hPriceLbl  = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+    HWND hQtyLbl    = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
+    HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+    HWND hHint      = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
 
-    switch (message) {
+    int listH = showPanel ? h - EDIT_PANEL_H : h;
+    if (hList) MoveWindow(hList, 0, 0, w, listH, TRUE);
 
-        case WM_CREATE: {
-            ctx = (EditOrderCtx*)((LPCREATESTRUCT)lParam)->lpCreateParams;
-            SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
+    int show = showPanel ? SW_SHOW : SW_HIDE;
+    // Panel geometry — two groups side by side.
+    // [Price: |__edit__]   [Qty: |__edit__]   [↑↓ Tab  Enter]
+    int py     = listH + 6;
+    int editH  = 32;
+    int lblW   = 45;
+    int editW  = 120;
+    int gapX   = 14;
+    int startX = 18;
 
-            HINSTANCE hInst = GetModuleHandle(NULL);
-            int lx = 17, ex = 90, ew = 112, fh = 30;
-
-            // Row 1 — Price
-            int y = 14;
-            CreateWindowA("STATIC", "Price:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                lx, y + 3, 45, 25, hWnd, NULL, hInst, NULL);
-            ctx->hPriceEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                ex, y, ew, fh, hWnd, (HMENU)1, hInst, NULL);
-
-            // Row 2 — Qty (omitted for Partially Filled orders)
-            if (!ctx->partialFill) {
-                y += 38;
-                CreateWindowA("STATIC", "Qty:", WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                    lx, y + 3, 45, 25, hWnd, NULL, hInst, NULL);
-                ctx->hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                    ex, y, ew, fh, hWnd, (HMENU)2, hInst, NULL);
-                SetWindowSubclass(ctx->hQtyEdit, EditField_SubclassProc, 2, 0);
-            }
-
-            // Subclass price field; qty field only when it exists.
-            SetWindowSubclass(ctx->hPriceEdit, EditField_SubclassProc, 1, 0);
-
-            EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersZoomData.hFont);
-            SetFocus(ctx->hPriceEdit);
-            break;
-        }
-
-        case WM_KEYDOWN: {
-            if (!ctx) break;
-            if (wParam == VK_ESCAPE) {
-                DestroyWindow(hWnd);
-                return 0;
-            }
-            if (wParam == VK_RETURN) {
-                char pBuf[32] = {}, qBuf[32] = {};
-                GetWindowTextA(ctx->hPriceEdit, pBuf, sizeof(pBuf));
-                double price = atof(pBuf);
-                double qty;
-                if (ctx->hQtyEdit) {
-                    GetWindowTextA(ctx->hQtyEdit, qBuf, sizeof(qBuf));
-                    qty = atof(qBuf);
-                } else {
-                    qty = ctx->originalQty;   // Partially Filled: keep existing qty
-                }
-                if (qty > 0)
-                    api().modifyOrder(ctx->orderId, price, qty);
-                DestroyWindow(hWnd);
-                return 0;
-            }
-            break;
-        }
-
-        case WM_NCDESTROY:
-            s_hEditOrderPopup = NULL;
-            delete ctx;
-            SetFocus(GetDlgItem(GetParent(hWnd), ID_ORDERS_LIST));
-            return 0;
+    int x = startX;
+    if (hHint) {
+        MoveWindow(hHint, x, py + 3, 120, 24, TRUE);
+        ShowWindow(hHint, show);
+        x += 120 + 5;
     }
+    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 3, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
+    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); } x += editW + gapX;
 
-    return HandleCommonMessages(hWnd, message, wParam, lParam);
+    // Qty is hidden when partialFill.
+    bool showQty = showPanel && !s_editState.partialFill;
+    int  qshow   = showQty ? SW_SHOW : SW_HIDE;
+    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 3, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); } x += lblW + 5;
+    if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); } x += editW + gapX;
+    
 }
 
-static void Orders_ShowEditPopup(HWND hParent, const TradingAPI::OrderInfo& order) {
-    // Guard: only one popup at a time.
-    if (s_hEditOrderPopup && IsWindow(s_hEditOrderPopup)) {
-        SetForegroundWindow(s_hEditOrderPopup);
-        return;
-    }
+// Populate the inline edit fields from the given order and make the panel visible.
+static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order) {
+    s_editState.orderId     = order.orderId;
+    s_editState.partialFill = (order.status == "Partially Filled");
+    s_editState.originalQty = order.totalQty;
+    s_editState.panelVisible = true;
 
-    // Don't allow editing orders that are already terminal.
-    const std::string& st = order.status;
-    if (st == "Filled" || st == "Cancelled" || st == "Inactive" || st == "PendingCancel") return;
-
-    auto* ctx    = new EditOrderCtx{};
-    ctx->orderId     = order.orderId;
-    ctx->partialFill = (st == "Partially Filled");
-    ctx->originalQty = order.totalQty;
-
-    char title[80];
-    snprintf(title, sizeof(title), "Edit %s: %s %s %s", order.symbol.c_str(), order.tif.c_str(), order.orderType.c_str(), order.action.c_str());
-
-    // Center over the parent window.
-    RECT pr;
-    GetWindowRect(hParent, &pr);
-    // Partially Filled orders only show the Price row → shorter popup.
-    int w = 222, h = ctx->partialFill ? 80 : 118;
-    int x = pr.left + (pr.right  - pr.left - w) / 2;
-    int y = pr.top  + (pr.bottom - pr.top  - h) / 2;
-
-    HWND hPop = CreateWindowExA(
-        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
-        ORDERS_EDIT_CLASS_NAME, title,
-        WS_POPUP | WS_CAPTION | WS_SYSMENU,
-        x, y, w, h,
-        hParent, NULL, GetModuleHandle(NULL), ctx);
-
-    if (!hPop) { delete ctx; return; }
-    s_hEditOrderPopup = hPop;
-
-    // Pre-fill fields.
     char buf[32];
-    if (order.price > 0) snprintf(buf, sizeof(buf), "%.2f", order.price);
-    else if (order.auxPrice > 0) snprintf(buf, sizeof(buf), "%.2f", order.auxPrice);
-    else                  snprintf(buf, sizeof(buf), "0.00");
-    SetWindowTextA(ctx->hPriceEdit, buf);
+    HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+    HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+
+    if (order.price > 0)          snprintf(buf, sizeof(buf), "%.2f", order.price);
+    else if (order.auxPrice > 0)  snprintf(buf, sizeof(buf), "%.2f", order.auxPrice);
+    else                          snprintf(buf, sizeof(buf), "0.00");
+    if (hPriceEdit) SetWindowTextA(hPriceEdit, buf);
 
     snprintf(buf, sizeof(buf), "%.0f", order.totalQty);
-    if (ctx->hQtyEdit)
-        SetWindowTextA(ctx->hQtyEdit, buf);
-    
-    ShowWindow(hPop, SW_SHOW);
-    UpdateWindow(hPop);
+    if (hQtyEdit) SetWindowTextA(hQtyEdit, buf);
+
+    HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
+    if (hHint) {
+        std::string hint = order.action + " " + order.symbol;
+        SetWindowTextA(hHint, hint.c_str());
+        SetCtrlColor(hHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
+    }
+    Orders_LayoutPanel(hWnd, true);
+
+    // Focus the price field and select all.
+    if (hPriceEdit) {
+        SetFocus(hPriceEdit);
+        SendMessageA(hPriceEdit, EM_SETSEL, 0, -1);
+    }
+}
+
+// Hide the panel and let the ListView fill the window.
+static void Orders_HideInlinePanel(HWND hWnd) {
+    s_editState.orderId      = 0;
+    s_editState.panelVisible = false;
+    Orders_LayoutPanel(hWnd, false);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -316,10 +283,44 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (i == 0) {
                     LVCOLUMN lvcUpdate = { 0 };
                     lvcUpdate.mask = LVCF_FMT;
-                    lvcUpdate.fmt = orderCols[i].fmt; 
+                    lvcUpdate.fmt = orderCols[i].fmt;
                     ListView_SetColumn(hList, i, &lvcUpdate);
                 }
             }
+
+            // ── Inline edit panel controls (initially hidden) ──────────────────
+            CreateWindowA("STATIC", "Price:",
+                WS_CHILD | SS_RIGHT,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);
+            HWND hEditPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                // Added ES_MULTILINE here
+                WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE, 
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_EDIT, hInst, NULL);
+
+            CreateWindowA("STATIC", "Qty:",
+                WS_CHILD | SS_RIGHT,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_LABEL, hInst, NULL);
+            HWND hEditQty = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                // Added ES_MULTILINE here
+                WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE, 
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
+
+            CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
+
+            // Subclass edit fields to intercept keyboard navigation.
+            SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT), EditField_SubclassProc, 1, 0);
+            SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT),   EditField_SubclassProc, 2, 0);
+
+            CreateWindowA("STATIC", "",
+                WS_CHILD | SS_LEFT,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_HINT_LABEL, hInst, NULL);
+
+            // Apply font to all children.
+            EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersZoomData.hFont);
+            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
+            SendMessage(hEditQty, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
 
             api().setOrdersWindow(hWnd);
             api().addApiUpdateWindow(hWnd);
@@ -327,11 +328,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         case WM_SIZE: {
-            HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-            if (!hList) return 0;
-            RECT rc;
-            GetClientRect(hWnd, &rc);
-            MoveWindow(hList, 0, 0, rc.right, rc.bottom, TRUE);
+            Orders_LayoutPanel(hWnd, s_editState.panelVisible);
             break;
         }
 
@@ -341,9 +338,32 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         // ── Dark mode: paint the ListView background and items ────────────────────
+        case WM_ORDER_EDIT: {
+            // ENTER from a subclassed edit field → submit the pending edit.
+            if (s_editState.panelVisible && s_editState.orderId != 0) {
+                HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+                HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+                char pBuf[32] = {}, qBuf[32] = {};
+                if (hPriceEdit) GetWindowTextA(hPriceEdit, pBuf, sizeof(pBuf));
+                double price = atof(pBuf);
+                double qty;
+                if (!s_editState.partialFill && hQtyEdit) {
+                    GetWindowTextA(hQtyEdit, qBuf, sizeof(qBuf));
+                    qty = atof(qBuf);
+                } else {
+                    qty = s_editState.originalQty;
+                }
+                if (qty > 0)
+                    api().modifyOrder(s_editState.orderId, price, qty);
+                return 0;
+            }
+            break;
+        }
+
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
+
             if (hdr->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
                 if (kd->wVKey == VK_DELETE) {
@@ -358,39 +378,38 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         }
                     }
                 }
-                return 0;  // ← was: break (fell through, but also swallowed return value)
-            }
-
-            // NM_DBLCLK sends NMITEMACTIVATE; NM_RETURN sends only NMHDR — handle separately
-            if (hdr->code == NM_DBLCLK) {
-                NMITEMACTIVATE* ia = (NMITEMACTIVATE*)lParam;
-                if (ia->iItem < 0) break;
-                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                LVITEMA lvi = {};
-                lvi.mask  = LVIF_PARAM;
-                lvi.iItem = ia->iItem;
-                if (ListView_GetItem(hList, &lvi)) {
-                    int orderId = (int)lvi.lParam;
-                    auto orders = api().getOrdersSorted();
-                    for (const auto& o : orders)
-                        if (o.orderId == orderId) { Orders_ShowEditPopup(hWnd, o); break; }
-                }
                 return 0;
             }
 
-            if (hdr->code == NM_RETURN) {
-                // NM_RETURN gives us only NMHDR — get selection manually
+            // ── Selection change: update inline edit panel ────────────────────
+            if (hdr->code == LVN_ITEMCHANGED) {
+                NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
+                // Only care about a newly-selected item.
+                if (!(nmlv->uChanged & LVIF_STATE)) break;
+                if (!(nmlv->uNewState & LVIS_SELECTED)) break;
+
                 HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                 int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
-                if (sel >= 0) {
-                    LVITEMA lvi = {};
-                    lvi.mask  = LVIF_PARAM;
-                    lvi.iItem = sel;
-                    if (ListView_GetItem(hList, &lvi)) {
-                        int orderId = (int)lvi.lParam;
-                        auto orders = api().getOrdersSorted();
-                        for (const auto& o : orders)
-                            if (o.orderId == orderId) { Orders_ShowEditPopup(hWnd, o); break; }
+                if (sel < 0) {
+                    Orders_HideInlinePanel(hWnd);
+                    break;
+                }
+                LVITEMA lvi = {};
+                lvi.mask  = LVIF_PARAM;
+                lvi.iItem = sel;
+                if (!ListView_GetItem(hList, &lvi)) {
+                    Orders_HideInlinePanel(hWnd);
+                    break;
+                }
+                int orderId = (int)lvi.lParam;
+                auto orders = api().getOrdersSorted();
+                for (const auto& o : orders) {
+                    if (o.orderId == orderId) {
+                        if (Orders_IsEditable(o.status))
+                            Orders_ShowInlinePanel(hWnd, o);
+                        else
+                            Orders_HideInlinePanel(hWnd);
+                        break;
                     }
                 }
                 return 0;
@@ -452,8 +471,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         
         case WM_DESTROY:
-            if (s_hEditOrderPopup && IsWindow(s_hEditOrderPopup))
-                DestroyWindow(s_hEditOrderPopup);
             api().unsetOrdersWindow();
             api().removeApiUpdateWindow(hWnd);
             if (OrdersZoomData.hFont) {

@@ -299,7 +299,7 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             char className[256] = {};
             GetClassNameA(hWnd, className, sizeof(className));
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0) {
+            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0 || strcmp(className, ORDERS_CLASS_NAME) == 0) {
                 COLORREF clr = GetCtrlColor((HWND)lParam);
                 if (clr != COLOR_THEME) {
                     SetTextColor((HDC)wParam, clr);
@@ -540,6 +540,10 @@ void KillGateway() {
         } while (Process32Next(hSnap, &pe));
     }
     CloseHandle(hSnap);
+}
+
+void wtf() {
+    MessageBoxA(NULL, "WTF", "WTF", MB_ICONSTOP | MB_OK);
 }
 
 LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {

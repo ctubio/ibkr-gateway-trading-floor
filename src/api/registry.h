@@ -5,7 +5,6 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
 static const char* ORDERS_CLASS_NAME             = "Orders";
-static const char* ORDERS_EDIT_CLASS_NAME        = "Orders_Edit";
 static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
 static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
 static const char* MARKET_CLASS_NAME             = "Market";
