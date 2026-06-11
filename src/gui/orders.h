@@ -114,58 +114,6 @@ static bool Orders_IsEditable(const std::string& status) {
              status == "Inactive" || status == "PendingCancel");
 }
 
-// Forward ENTER from an edit control up to the Orders window; handle TAB and Arrows.
-static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
-                                               LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-    if (message == WM_GETDLGCODE) {
-        LRESULT res = DefSubclassProc(hWnd, message, wParam, lParam);
-        return res | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
-    }
-
-    if (message == WM_CHAR) {
-        if (wParam == VK_TAB || wParam == VK_RETURN)
-            return 0;
-    }
-
-    if (message == WM_KEYDOWN) {
-        if (wParam == VK_RETURN) {
-            // Bubble ENTER up to the Orders window for submission.
-            SendMessage(GetParent(hWnd), WM_ORDER_EDIT, 0, 0);
-            return 0;
-        }
-
-        if (wParam == VK_TAB) {
-            HWND hParent = GetParent(hWnd);
-            HWND hPrice  = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
-            HWND hQty    = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
-            // Only cycle between visible fields.
-            bool qtyVisible = hQty && IsWindowVisible(hQty);
-            if (qtyVisible) {
-                HWND hNext = (hWnd == hPrice) ? hQty : hPrice;
-                SetFocus(hNext);
-                int len = GetWindowTextLengthA(hNext);
-                SendMessageA(hNext, EM_SETSEL, len, len);
-            }
-            return 0;
-        }
-
-        if (wParam == VK_UP || wParam == VK_DOWN) {
-            char buf[32] = {};
-            GetWindowTextA(hWnd, buf, sizeof(buf));
-            double val  = atof(buf);
-            double step = (uIdSubclass == 1) ? 0.01 : 1.0;  // price vs qty
-            val += (wParam == VK_UP) ? step : -step;
-            if (val < 0.0) val = 0.0;
-            snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
-            SetWindowTextA(hWnd, buf);
-            int len = GetWindowTextLengthA(hWnd);
-            SendMessageA(hWnd, EM_SETSEL, len, len);
-            return 0;
-        }
-    }
-    return DefSubclassProc(hWnd, message, wParam, lParam);
-}
-
 // Resize ListView and show/hide the edit panel controls to fit the window.
 static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     RECT rc;
@@ -210,6 +158,89 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     
 }
 
+// Hide the panel and let the ListView fill the window.
+static void Orders_HideInlinePanel(HWND hWnd) {
+    s_editState.orderId      = 0;
+    s_editState.panelVisible = false;
+    Orders_LayoutPanel(hWnd, false);
+}
+
+// Forward ENTER from an edit control up to the Orders window; handle TAB and Arrows.
+static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
+                                               LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (message == WM_GETDLGCODE) {
+        LRESULT res = DefSubclassProc(hWnd, message, wParam, lParam);
+        return res | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
+    }
+
+    if (message == WM_CHAR) {
+        if (wParam == VK_TAB || wParam == VK_RETURN)
+            return 0;
+    }
+
+    if (message == WM_KEYDOWN) {
+        if (wParam == VK_ESCAPE) {
+            if (s_editState.panelVisible && s_editState.orderId != 0) {
+                api().cancelOrder(s_editState.orderId);
+                HWND hParent = GetParent(hWnd);
+                Orders_HideInlinePanel(hParent);
+            }
+            return 0;
+        }
+        if (wParam == VK_RETURN) {
+            // ENTER from a subclassed edit field → submit the pending edit.
+            if (s_editState.panelVisible && s_editState.orderId != 0) {
+                HWND hParent = GetParent(hWnd);
+                HWND hPriceEdit = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
+                HWND hQtyEdit   = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
+                char pBuf[32] = {}, qBuf[32] = {};
+                if (hPriceEdit) GetWindowTextA(hPriceEdit, pBuf, sizeof(pBuf));
+                double price = atof(pBuf);
+                double qty;
+                if (!s_editState.partialFill && hQtyEdit) {
+                    GetWindowTextA(hQtyEdit, qBuf, sizeof(qBuf));
+                    qty = atof(qBuf);
+                } else {
+                    qty = s_editState.originalQty;
+                }
+                if (qty > 0)
+                    api().modifyOrder(s_editState.orderId, price, qty);
+            }
+            return 0;
+        }
+
+        if (wParam == VK_TAB) {
+            HWND hParent = GetParent(hWnd);
+            HWND hPrice  = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
+            HWND hQty    = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
+            // Only cycle between visible fields.
+            bool qtyVisible = hQty && IsWindowVisible(hQty);
+            if (qtyVisible) {
+                HWND hNext = (hWnd == hPrice) ? hQty : hPrice;
+                SetFocus(hNext);
+                int len = GetWindowTextLengthA(hNext);
+                SendMessageA(hNext, EM_SETSEL, len, len);
+            }
+            return 0;
+        }
+
+        if (wParam == VK_UP || wParam == VK_DOWN) {
+            char buf[32] = {};
+            GetWindowTextA(hWnd, buf, sizeof(buf));
+            double val  = atof(buf);
+            double step = (uIdSubclass == 1) ? 0.01 : 1.0;  // price vs qty
+            val += (wParam == VK_UP) ? step : -step;
+            if (val < 0.0) val = 0.0;
+            snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
+            SetWindowTextA(hWnd, buf);
+            int len = GetWindowTextLengthA(hWnd);
+            SendMessageA(hWnd, EM_SETSEL, len, len);
+            return 0;
+        }
+    }
+    return DefSubclassProc(hWnd, message, wParam, lParam);
+}
+
 // Populate the inline edit fields from the given order and make the panel visible.
 static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order) {
     s_editState.orderId     = order.orderId;
@@ -242,13 +273,6 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
         SetFocus(hPriceEdit);
         SendMessageA(hPriceEdit, EM_SETSEL, 0, -1);
     }
-}
-
-// Hide the panel and let the ListView fill the window.
-static void Orders_HideInlinePanel(HWND hWnd) {
-    s_editState.orderId      = 0;
-    s_editState.panelVisible = false;
-    Orders_LayoutPanel(hWnd, false);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -337,36 +361,13 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
 
-        // ── Dark mode: paint the ListView background and items ────────────────────
-        case WM_ORDER_EDIT: {
-            // ENTER from a subclassed edit field → submit the pending edit.
-            if (s_editState.panelVisible && s_editState.orderId != 0) {
-                HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
-                HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
-                char pBuf[32] = {}, qBuf[32] = {};
-                if (hPriceEdit) GetWindowTextA(hPriceEdit, pBuf, sizeof(pBuf));
-                double price = atof(pBuf);
-                double qty;
-                if (!s_editState.partialFill && hQtyEdit) {
-                    GetWindowTextA(hQtyEdit, qBuf, sizeof(qBuf));
-                    qty = atof(qBuf);
-                } else {
-                    qty = s_editState.originalQty;
-                }
-                if (qty > 0)
-                    api().modifyOrder(s_editState.orderId, price, qty);
-                return 0;
-            }
-            break;
-        }
-
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
 
             if (hdr->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
-                if (kd->wVKey == VK_DELETE) {
+                if (kd->wVKey == VK_ESCAPE) {
                     HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                     if (sel >= 0) {
@@ -375,6 +376,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         lvi.iItem = sel;
                         if (ListView_GetItem(hList, &lvi)) {
                             api().cancelOrder((int)lvi.lParam);
+                            Orders_HideInlinePanel(hWnd);
                         }
                     }
                 }
