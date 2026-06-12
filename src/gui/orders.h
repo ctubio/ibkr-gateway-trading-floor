@@ -60,7 +60,7 @@ static void Orders_Repopulate(HWND hWnd) {
     int filled = 0;
     for (int i = 0; i < (int)orders.size(); ++i) {
         const auto& o = orders[i];
-        if (o.status == "Cancelled" || o.status == "PendingCancel") continue;
+        //if (o.status == "Cancelled" || o.status == "PendingCancel") continue;
 
 
         int col = 0;
@@ -349,18 +349,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(hEditPrice, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
             SendMessage(hEditQty, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
 
-            api().setOrdersWindow(hWnd);
-            api().addApiUpdateWindow(hWnd);
+            Orders_Repopulate(hWnd);
             break;
         }
 
         case WM_SIZE: {
             Orders_LayoutPanel(hWnd, s_editState.panelVisible);
-            break;
-        }
-
-        case WM_ORDERS_UPDATE: {
-            Orders_Repopulate(hWnd);
             break;
         }
 
@@ -476,8 +470,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         
         case WM_DESTROY:
-            api().unsetOrdersWindow();
-            api().removeApiUpdateWindow(hWnd);
             if (OrdersZoomData.hFont) {
                 DeleteObject(OrdersZoomData.hFont);
             }   

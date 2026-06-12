@@ -2,18 +2,6 @@
 
 constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
-static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
-static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
-static const char* ORDERS_CLASS_NAME             = "Orders";
-static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
-static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
-static const char* MARKET_CLASS_NAME             = "Market";
-static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
-static const char* NEWS_CLASS_NAME               = "News";
-static const char* NEWS_ARTICLE_CLASS_NAME       = "NewsArticle";
-static const char* SETTINGS_CLASS_NAME           = "Settings";
-static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
-
 // Dark mode colors
 #define DM_BG        RGB(30,  30,  30)   // Slightly darker, flatter background
 #define DM_BG2       RGB(42,  42,  42)   // Header/Alternate row background

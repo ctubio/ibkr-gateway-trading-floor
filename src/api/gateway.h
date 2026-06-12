@@ -35,7 +35,6 @@
 #define WM_API_LOG          (WM_USER +  4)
 #define WM_ACCOUNT_SUMMARY  (WM_USER +  5)
 #define WM_PNL_UPDATE       (WM_USER +  6)
-#define WM_ORDERS_UPDATE    (WM_USER +  7)
 #define WM_DIAMONDS_UPDATE  (WM_USER +  8)
 #define WM_NEWS_RESULTS     (WM_USER +  9)
 #define WM_MARKET_TICK      (WM_USER + 10)
@@ -44,6 +43,18 @@
 #define WM_MARKET_L1        (WM_USER + 13)   // Level 1 quote tick — handler calls getLevel1Data()
 #define WM_MARKET_L2        (WM_USER + 14)   // Level 2 depth change — handler calls getLevel2Snapshot()
 #define WM_PNL_SINGLE       (WM_USER + 15)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
+
+static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
+static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
+static const char* ORDERS_CLASS_NAME             = "Orders";
+static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
+static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
+static const char* MARKET_CLASS_NAME             = "Market";
+static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
+static const char* NEWS_CLASS_NAME               = "News";
+static const char* NEWS_ARTICLE_CLASS_NAME       = "NewsArticle";
+static const char* SETTINGS_CLASS_NAME           = "Settings";
+static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
 
 class TradingAPI {
 public:
@@ -227,8 +238,6 @@ public:
 
     // ── Orders ────────────────────────────────────────────────────────────────
 
-    void setOrdersWindow(HWND hWnd);
-    void unsetOrdersWindow();
     void cancelOrders(int coinId);
     std::vector<OrderInfo> getOrdersSorted();
 
