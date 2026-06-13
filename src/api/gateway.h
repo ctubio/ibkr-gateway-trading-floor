@@ -92,9 +92,6 @@ public:
         double      avgCost           = 0.0;
         double      dailyPnL          = 0.0;
         double      marketValue       = 0.0;
-        double      fiftyTwoWeekChange = 0.0;  // kept for compat; populated via WatchlistInfo now
-        double      marketCap         = 0.0;   // kept for compat; populated via WatchlistInfo now
-        bool reqMarketData = false;
     };
 
     // lParam of WM_MARKET_TICK — handler owns and must delete.
@@ -139,7 +136,6 @@ public:
         // Populated once per session; "-99999.99" sentinel is skipped.
         double fiftyTwoWeekHigh = 0.0;  // NHIGH52
         double fiftyTwoWeekLow  = 0.0;  // NLOW52
-        double marketCap        = 0.0;  // MKTCAP  (billions)
         double beta             = 0.0;  // BETA
 
         // ── Dividends (tickString field 59, generic tick "456") ──────────────
@@ -276,8 +272,8 @@ public:
 
     // ── Watchlist (watchlist) ────────────────────────────────────────────────────
 
-    void setWatchlistWindow(HWND hWnd, const std::vector<std::string>& entries);
-    void unsetWatchlistWindow();
+    void setWatchlistWindow(HWND hWnd, const std::unordered_map<int, std::string>& entries);
+    void unsetWatchlistWindow(HWND hWnd);
     bool getWatchlistData(int conId, WatchlistInfo& out);
 
     // ── Symbol search ─────────────────────────────────────────────────────────

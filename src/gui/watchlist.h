@@ -18,7 +18,7 @@ void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"
 #define WM_WATCHLIST_LISTS_CHANGED   (WM_APP + 203)
 
 static bool watchlistSelectorsVisible = false;
-static std::vector<std::string> watchlistCurrentEntries;
+static std::unordered_map<int, std::string> watchlistCurrentEntries;
 static std::string watchlistCurrentListName;
 
 // Autocomplete state
@@ -255,8 +255,7 @@ static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
     watchlistCurrentListName = listName;
 
     auto entries = Watchlist_ReadListEntries(listName.c_str());
-    watchlistCurrentEntries = entries;
-
+    watchlistCurrentEntries.clear();
     Watchlist_ClearList(hWnd);
 
     // Insert placeholder rows immediately so the user sees the symbols.
@@ -268,10 +267,18 @@ static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
         std::string symbol = (d2 != std::string::npos) ? rest.substr(0, d2) : rest;
         int conId = std::stoi(entry.substr(0, d1));
         Watchlist_InsertRow(hWnd, symbol, conId);
+
+        watchlistCurrentEntries[conId] = symbol;
+        
+        TradingAPI::WatchlistInfo info;
+        if (api().getWatchlistData(conId, info)) {
+            int row = Watchlist_FindRow(hWnd, conId);
+            if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
+        }
     }
 
     SetWindowTextA(hWnd, ("Watchlist: " + listName).c_str());
-    api().setWatchlistWindow(hWnd, entries);
+    api().setWatchlistWindow(hWnd, watchlistCurrentEntries);
     Watchlist_ApplySort(hWnd);
 }
 
@@ -711,22 +718,19 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         break;
     }
 
-    // ── Live or historical market data update for one symbol ──────────────────
+    // ── Live market data update for one symbol ──────────────────
     // lParam = new std::string("conId.symbol") — we own it and must delete.
     case WM_API_WATCHLIST_UPDATE: {
         int conId = (int)lParam;
         if (!conId) break;
-        for (const auto& entry : watchlistCurrentEntries) {
-            auto d1 = entry.find('.');
-            if (d1 == std::string::npos) continue;
-            if (conId == std::stoi(entry.substr(0, d1))) {
-                TradingAPI::WatchlistInfo info;
-                if (api().getWatchlistData(conId, info)) {
-                    int row = Watchlist_FindRow(hWnd, conId);
-                    if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
-                }
-                break;
+        auto it = watchlistCurrentEntries.find(conId);
+        if (it != watchlistCurrentEntries.end()) {
+            TradingAPI::WatchlistInfo info;
+            if (api().getWatchlistData(conId, info)) {
+                int row = Watchlist_FindRow(hWnd, conId);
+                if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
             }
+            break;
         }
         Watchlist_ApplySort(hWnd);
         break;
@@ -840,7 +844,16 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                             // Refresh: delete row from view and update our entry cache.
                             delete rd;
                             ListView_DeleteItem(hList, row);
-                            watchlistCurrentEntries = entries;
+                            watchlistCurrentEntries.clear();
+                            for (const auto& entry : entries) {
+                                auto d1 = entry.find('.');
+                                if (d1 == std::string::npos) continue;
+                                std::string rest = entry.substr(d1 + 1);
+                                auto d2 = rest.find('.');
+                                std::string symbol = (d2 != std::string::npos) ? rest.substr(0, d2) : rest;
+                                int conId = std::stoi(entry.substr(0, d1));
+                                watchlistCurrentEntries[conId] = symbol;
+                            }
                             api().setWatchlistWindow(hWnd, watchlistCurrentEntries);
                         }
                     }
@@ -913,7 +926,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     }
 
     case WM_DESTROY:
-        api().unsetWatchlistWindow();
+        api().unsetWatchlistWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         Watchlist_ClearList(hWnd);
         watchlistCurrentEntries.clear();
