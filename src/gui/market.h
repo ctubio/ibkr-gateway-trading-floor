@@ -43,8 +43,8 @@ struct TsState {
     std::string symbol;
     int conId = 0;
 
-    // ── Level 1 quote (updated via WM_MARKET_L1) ─────────────────────────────
-    TradingAPI::Level1Info l1Info;
+    // ── Level 1 quote ─────────────────────────────
+    TradingAPI::WatchlistInfo l1Info;
 
     // ── Portfolio snapshot ────────────────────────────────────────────────────
     double position = 0.0;
@@ -637,7 +637,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     DeleteObject(hBgBrush);
     SetBkMode(hdc, TRANSPARENT);
 
-    const TradingAPI::Level1Info& L1 = state->l1Info;
+    const TradingAPI::WatchlistInfo& L1 = state->l1Info;
     double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
 
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
@@ -918,8 +918,6 @@ void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
     if (it != pm.end()) {
         state->position = it->second.shares;
         state->avgPrice = it->second.avgCost;
-        
-        // SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
     }
 }
 
@@ -965,11 +963,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
-
-        // ── Snapshot position + avg price ─────────────────────────────────────
-        if (!state->symbol.empty()) {
-            Market_RefreshPositionAndAvg(hWnd, state);
-        }
 
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hL2List      = Market_CreateL2List(hWnd, hInst);
@@ -1066,21 +1059,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
         }
 
-        api().setMarketWindow(hWnd, state->conId, state->symbol);
         api().addApiUpdateWindow(hWnd);
+        api().setMarketWindow(hWnd, state->conId, state->symbol);
         // Seed L1 from watchlist cache so VWAP (and other ticks) are
         // immediately visible before the first L1 update fires
-        TradingAPI::WatchlistInfo wl;
-        if (api().getWatchlistData(state->conId, wl)) {
-            if (wl.vwap      > 0.0) state->l1Info.vwap      = wl.vwap;
-            //if (wl.last      > 0.0) state->l1Info.last      = wl.last;
-            //if (wl.open      > 0.0) state->l1Info.open      = wl.open;
-            //if (wl.prevClose > 0.0) state->l1Info.prevClose = wl.prevClose;
-            //if (wl.high      > 0.0) state->l1Info.high      = wl.high;
-            //if (wl.low       > 0.0) state->l1Info.low       = wl.low;
-            //if (wl.bid       > 0.0) state->l1Info.bid       = wl.bid;
-            //if (wl.ask       > 0.0) state->l1Info.ask       = wl.ask;
-        }
+        PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
         UpdateMarketRegistry();
         break;
     }
@@ -1123,9 +1106,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_MARKET_L1: {
-        if (!state) break;
-        TradingAPI::Level1Info fresh;
-        if (api().getLevel1Data(hWnd, fresh)) {
+        int conId = (int)lParam;
+        if (!conId || !state || state->conId != conId) break;
+        TradingAPI::WatchlistInfo fresh;
+        if (api().getWatchlistData(state->conId, fresh)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
             if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
             if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
@@ -1273,7 +1257,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
                 if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
                 if (state->hL2List)      ListView_DeleteAllItems(state->hL2List);
-                state->l1Info = TradingAPI::Level1Info{};
+                state->l1Info = TradingAPI::WatchlistInfo{};
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }

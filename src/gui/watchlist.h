@@ -269,7 +269,7 @@ static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
         Watchlist_InsertRow(hWnd, symbol, conId);
 
         watchlistCurrentEntries[conId] = symbol;
-        
+
         TradingAPI::WatchlistInfo info;
         if (api().getWatchlistData(conId, info)) {
             int row = Watchlist_FindRow(hWnd, conId);
@@ -720,7 +720,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
     // ── Live market data update for one symbol ──────────────────
     // lParam = new std::string("conId.symbol") — we own it and must delete.
-    case WM_API_WATCHLIST_UPDATE: {
+    case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId) break;
         auto it = watchlistCurrentEntries.find(conId);

@@ -611,7 +611,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     // ── Live market data update for one symbol ────────────────────────────────
     // Posted by Impl::tickPrice / tickSize / tickString / tickGeneric
     // lParam = new std::string("conId.symbol") — we own it and must delete.
-    case WM_API_WATCHLIST_UPDATE: {
+    case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId) break;
         TradingAPI::WatchlistInfo info;

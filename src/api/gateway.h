@@ -40,10 +40,9 @@
 #define WM_NEWS_RESULTS     (WM_USER +  9)
 #define WM_MARKET_TICK      (WM_USER + 10)
 #define WM_NEWS_ARTICLE     (WM_USER + 11)
-#define WM_API_WATCHLIST_UPDATE (WM_USER + 12)
-#define WM_MARKET_L1        (WM_USER + 13)   // Level 1 quote tick — handler calls getLevel1Data()
-#define WM_MARKET_L2        (WM_USER + 14)   // Level 2 depth change — handler calls getLevel2Snapshot()
-#define WM_PNL_SINGLE       (WM_USER + 15)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
+#define WM_MARKET_L1        (WM_USER + 12)
+#define WM_MARKET_L2        (WM_USER + 13)   // Level 2 depth change — handler calls getLevel2Snapshot()
+#define WM_PNL_SINGLE       (WM_USER + 14)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
@@ -112,8 +111,11 @@ public:
         std::string extraData;
     };
 
+ 
+    // ── Level 1 quote (per market window) ────────────────────────────────────
+    // Populated via reqMktData ticks; retrieved with getWatchlistData().
     // One row in the watchlist / diamonds watchlist.
-    // Posted via WM_API_WATCHLIST_UPDATE (lParam = new std::string("conId.symbol")).
+    // Posted via WM_MARKET_L1 (lParam = new std::string("conId.symbol")).
     // Handler calls getWatchlistData(conId, out) then deletes the string.
     struct WatchlistInfo {
         std::string symbol;
@@ -158,24 +160,6 @@ public:
             if (range <= 0 || last <= 0) return -999.0;
             return (last - fiftyTwoWeekLow) / range * 100.0;
         }
-    };
- 
-    // ── Level 1 quote (per market window) ────────────────────────────────────
-    // Populated via reqMktData ticks; retrieved with getLevel1Data().
-    // Posted via WM_MARKET_L1 (no lParam — call getLevel1Data to read).
-    struct Level1Info {
-        double open      = 0.0;   // OPEN tick (field 14, generic tick "221")
-        double prevClose = 0.0;   // CLOSE tick (field 9) — yesterday's close
-        double last      = 0.0;   // LAST tick (field 4)
-        double high      = 0.0;   // HIGH tick (field 6)
-        double low       = 0.0;   // LOW tick  (field 7)
-        double bid       = 0.0;   // BID  tick (field 1)
-        double bidSize   = 0.0;
-        double ask       = 0.0;   // ASK  tick (field 2)
-        double askSize   = 0.0;
-        double vwap      = 0.0;   // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
-        double change()    const { return prevClose > 0 ? last - prevClose : 0.0; }
-        double changePct() const { return prevClose > 0 ? (last - prevClose) / prevClose * 100.0 : 0.0; }
     };
 
     // ── Level 2 depth entry (one row per side) ────────────────────────────────
@@ -256,11 +240,16 @@ public:
     void setMarketWindow(HWND hWnd, int conId, const std::string& symbol);
     void unsetMarketWindow(HWND hWnd);
 
-    // ── Level 1 / Level 2 data (market window) ────────────────────────────────
+    // ── Watchlist (watchlist) ────────────────────────────────────────────────────
 
-    // Returns the latest L1 quote snapshot for the given market window.
-    // Call from the WM_MARKET_L1 handler; thread-safe.
-    bool getLevel1Data(HWND hWndMarket, Level1Info& out);
+    void setWatchlistWindow(HWND hWnd, const std::unordered_map<int, std::string>& entries);
+    void unsetWatchlistWindow(HWND hWnd);
+
+    // ── Level 1 (market window) ────────────────────────────────
+
+    bool getWatchlistData(int conId, WatchlistInfo& out);
+    
+    // ── Level 2 data (market window) ────────────────────────────────
 
     // Returns a sorted snapshot of the order book for the given market window.
     //   bids : sorted by price descending  (bids[0] = best bid)
@@ -269,12 +258,6 @@ public:
     bool getLevel2Snapshot(HWND hWndMarket,
                            std::vector<Level2Entry>& bids,
                            std::vector<Level2Entry>& asks);
-
-    // ── Watchlist (watchlist) ────────────────────────────────────────────────────
-
-    void setWatchlistWindow(HWND hWnd, const std::unordered_map<int, std::string>& entries);
-    void unsetWatchlistWindow(HWND hWnd);
-    bool getWatchlistData(int conId, WatchlistInfo& out);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 
