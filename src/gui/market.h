@@ -500,7 +500,7 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         case WM_COMMAND:
             if (LOWORD(wParam) == ID_MARKET_SEARCH_INPUT && HIWORD(wParam) == EN_CHANGE) {
                 char t[256] = {}; GetWindowTextA(GetDlgItem(hWnd, ID_MARKET_SEARCH_INPUT), t, sizeof(t));
-                if (strlen(t) > 0) { api().setSymbolSearchWindow(hWnd); api().searchSymbols(t); }
+                if (strlen(t) > 0) { api().searchSymbols(hWnd, t); }
                 else { SendMessage(GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST), LB_RESETCONTENT, 0, 0); tsSearchResults.clear(); }
             }
             break;
@@ -515,9 +515,6 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             break;
         }
-        case WM_DESTROY:
-            api().setSymbolSearchWindow(NULL);
-            break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
@@ -535,7 +532,7 @@ void StartMarket(const std::string& symbol, int conId) {
         return;
     }
     std::string key = MARKET_CLASS_NAME + std::string("_") + symbol;
-    MarketInitData* data = new MarketInitData{symbol, conId, key};
+    TradingAPI::MarketInitData* data = new TradingAPI::MarketInitData{symbol, conId, key};
     StartGenericWindow(MARKET_CLASS_NAME, symbol.c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
 }
 
@@ -937,7 +934,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     switch (message) {
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-        MarketInitData* data = (MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
+        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
         state = new TsState();
         if (data) {
@@ -1070,12 +1067,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         api().setMarketWindow(hWnd, state->conId, state->symbol);
-        api().subscribePositionPnL(hWnd, state->conId);
         api().addApiUpdateWindow(hWnd);
         // Seed L1 from watchlist cache so VWAP (and other ticks) are
         // immediately visible before the first L1 update fires
         TradingAPI::WatchlistInfo wl;
-        if (api().getWatchlistData(state->conId, state->symbol, wl)) {
+        if (api().getWatchlistData(state->conId, wl)) {
             if (wl.vwap      > 0.0) state->l1Info.vwap      = wl.vwap;
             //if (wl.last      > 0.0) state->l1Info.last      = wl.last;
             //if (wl.open      > 0.0) state->l1Info.open      = wl.open;
@@ -1339,9 +1335,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     
     case WM_DESTROY:
         api().unsetMarketWindow(hWnd);
-        api().unsubscribePositionPnL(hWnd);
         api().removeApiUpdateWindow(hWnd);
-        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data) delete data;
         if (state) {
             if (state->ttsOn) KillTimer(hWnd, TIMER_MARKET_SPEAKER);

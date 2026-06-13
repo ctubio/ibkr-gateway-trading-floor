@@ -498,7 +498,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
         // ── Market data columns — pre-fill from cache if already available ───
         TradingAPI::WatchlistInfo tickInfo;
-        if (api().getWatchlistData(pos.conId, pos.symbol, tickInfo))
+        if (api().getWatchlistData(pos.conId, tickInfo))
             Diamonds_UpdateMarketCols(hList, i, tickInfo);
     }
 
@@ -556,8 +556,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessage(hChk, BM_SETCHECK, BST_CHECKED, 0);
         }
 
-        api().setDiamondsWindow(hWnd);
-        api().addApiUpdateWindow(hWnd);
 
         // Load saved tab assignments, checkbox state, sort settings, and symbol colors.
         Diamonds_LoadTabMap();
@@ -574,6 +572,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i),
                         BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
         }
+        
+        api().addApiUpdateWindow(hWnd);        
+        Diamonds_Repopulate(hWnd);
         break;
     }
 
@@ -610,25 +611,17 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     // ── Live market data update for one symbol ────────────────────────────────
     // Posted by Impl::tickPrice / tickSize / tickString / tickGeneric
     // lParam = new std::string("conId.symbol") — we own it and must delete.
-    case WM_WATCHLIST_UPDATE: {
-        auto* key = reinterpret_cast<std::string*>(lParam);
-        if (!key) break;
-
-        auto dot = key->find('.');
-        if (dot != std::string::npos) {
-            int conId          = std::stoi(key->substr(0, dot));
-            std::string symbol = key->substr(dot + 1);
-
-            TradingAPI::WatchlistInfo info;
-            if (api().getWatchlistData(conId, symbol, info)) {
-                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                int row = Diamonds_FindRow(hList, conId);
-                if (row >= 0)
-                    Diamonds_UpdateMarketCols(hList, row, info);
-                // Defer sort — arm timer instead of sorting on every tick.
-            }
+    case WM_API_WATCHLIST_UPDATE: {
+        int conId = (int)lParam;
+        if (!conId) break;
+        TradingAPI::WatchlistInfo info;
+        if (api().getWatchlistData(conId, info)) {
+            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+            int row = Diamonds_FindRow(hList, conId);
+            if (row >= 0)
+                Diamonds_UpdateMarketCols(hList, row, info);
+            // Defer sort — arm timer instead of sorting on every tick.
         }
-        delete key;
         if (!g_DiamondsSortPending) {
             g_DiamondsSortPending = true;
             SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
@@ -685,7 +678,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Read last from the watchlist cache (no lock needed — WatchlistInfo
             // is written on the API thread but we're reading a double atomically).
             TradingAPI::WatchlistInfo wInfo;
-            if (api().getWatchlistData(conId, symBuf, wInfo)) last = wInfo.last;
+            if (api().getWatchlistData(conId, wInfo)) last = wInfo.last;
 
             if (avgCost > 0.0 && last > 0.0) {
                 double pct = (last - avgCost) / avgCost * 100.0;
@@ -713,7 +706,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (!hList) break;
         if (api().isMarketDataConnected() && api().isTradingConnected()) {
             // Re-request positions (market data re-subscribed in positionEnd()).
-            api().setDiamondsWindow(hWnd);
+            Diamonds_Repopulate(hWnd);
         } else {
             // Clear everything — positions and prices are stale.
             ListView_DeleteAllItems(hList);
@@ -991,14 +984,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_DESTROY:
-        // unsetDiamondsWindow calls cancelPnlSingleForWindow internally, which
-        // sends cancelPnLSingle for every active reqId and clears the maps in
-        // private.cpp.  We also clear our local cache so a future window
-        // instance starts clean (stale cached values from a closed session
-        // would briefly flash in the new window before the first TWS update).
         KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
         g_DiamondsSortPending = false;
-        api().unsetDiamondsWindow();   // cancels market data + PnL + position subs
         api().removeApiUpdateWindow(hWnd);
         g_DiamondsPnlCache.clear();
         g_DiamondsSparklines.clear();

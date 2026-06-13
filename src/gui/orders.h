@@ -349,6 +349,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(hEditPrice, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
             SendMessage(hEditQty, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
 
+            api().addApiUpdateWindow(hWnd);  
             Orders_Repopulate(hWnd);
             break;
         }
@@ -470,6 +471,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         
         case WM_DESTROY:
+            api().removeApiUpdateWindow(hWnd);
             if (OrdersZoomData.hFont) {
                 DeleteObject(OrdersZoomData.hFont);
             }   

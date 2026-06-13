@@ -471,7 +471,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 y += rowH;
             }
 
-            api().setCoinWindow(hWnd);
             y += 12;
             int steps = 1;
             int stepz = 0;
@@ -485,7 +484,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             addButtons(hWnd, hInst, "Settings",  14 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_SETTINGS,  108);
 
             api().addApiUpdateWindow(hWnd);
-            api().setApiErrorWindow(hWnd);
 
             BindTrayIcon(hWnd);
                     
@@ -507,9 +505,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         case WM_API_UPDATE:
             UpdateTrayIcon(hWnd);
-            if (api().isMarketDataConnected() && api().isTradingConnected()) {
-                api().setCoinWindow(hWnd);
-            } else {
+            if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
                 if (hCoin_NetLiq) SetWindowTextA(hCoin_NetLiq, "--");
                 if (hCoin_BigPnL) SetWindowTextA(hCoin_BigPnL, "--");
                 if (hCoin_Pct)    SetWindowTextA(hCoin_Pct,    "--");
@@ -517,7 +513,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (hCoinVal[i]) SetWindowTextA(hCoinVal[i], "--");
             }
             break;
-
+        case WM_API_SOUND: {
+            PlaySound_Async((int)lParam);
+            break;
+        }
         case WM_API_LOG: {
             std::string* msg = (std::string*)lParam;
             LogDebug(msg->c_str());
@@ -775,8 +774,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
-            api().clearApiErrorWindow(hWnd);
-            api().unsetCoinWindow();
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
             if (g_coinsTtsOn) KillTimer(hWnd, TIMER_COINS_SPEAKER);

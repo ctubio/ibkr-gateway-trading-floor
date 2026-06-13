@@ -35,11 +35,12 @@
 #define WM_API_LOG          (WM_USER +  4)
 #define WM_ACCOUNT_SUMMARY  (WM_USER +  5)
 #define WM_PNL_UPDATE       (WM_USER +  6)
+#define WM_API_SOUND        (WM_USER +  7)
 #define WM_DIAMONDS_UPDATE  (WM_USER +  8)
 #define WM_NEWS_RESULTS     (WM_USER +  9)
 #define WM_MARKET_TICK      (WM_USER + 10)
 #define WM_NEWS_ARTICLE     (WM_USER + 11)
-#define WM_WATCHLIST_UPDATE (WM_USER + 12)
+#define WM_API_WATCHLIST_UPDATE (WM_USER + 12)
 #define WM_MARKET_L1        (WM_USER + 13)   // Level 1 quote tick — handler calls getLevel1Data()
 #define WM_MARKET_L2        (WM_USER + 14)   // Level 2 depth change — handler calls getLevel2Snapshot()
 #define WM_PNL_SINGLE       (WM_USER + 15)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
@@ -58,6 +59,9 @@ static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
 
 class TradingAPI {
 public:
+
+    // Payload passed during HWND creation
+    struct MarketInitData { std::string symbol; int conId; std::string winKey; };
 
     // ── Data types ────────────────────────────────────────────────────────────
 
@@ -90,6 +94,7 @@ public:
         double      marketValue       = 0.0;
         double      fiftyTwoWeekChange = 0.0;  // kept for compat; populated via WatchlistInfo now
         double      marketCap         = 0.0;   // kept for compat; populated via WatchlistInfo now
+        bool reqMarketData = false;
     };
 
     // lParam of WM_MARKET_TICK — handler owns and must delete.
@@ -111,8 +116,8 @@ public:
     };
 
     // One row in the watchlist / diamonds watchlist.
-    // Posted via WM_WATCHLIST_UPDATE (lParam = new std::string("conId.symbol")).
-    // Handler calls getWatchlistData(conId, symbol, out) then deletes the string.
+    // Posted via WM_API_WATCHLIST_UPDATE (lParam = new std::string("conId.symbol")).
+    // Handler calls getWatchlistData(conId, out) then deletes the string.
     struct WatchlistInfo {
         std::string symbol;
 
@@ -223,13 +228,9 @@ public:
 
     void addApiUpdateWindow(HWND hWnd);
     void removeApiUpdateWindow(HWND hWnd);
-    void setApiErrorWindow(HWND hWnd);
-    void clearApiErrorWindow(HWND hWnd);
 
     // ── Account / PnL ─────────────────────────────────────────────────────────
 
-    void setCoinWindow(HWND hWnd);
-    void unsetCoinWindow();
     std::map<std::string, std::string> getAccountSummary();
     double getDailyPnL()      const;
     double getUnrealizedPnL() const;
@@ -240,13 +241,10 @@ public:
 
     void cancelOrders(int coinId);
     std::vector<OrderInfo> getOrdersSorted();
-
     // Transmit a cancel request for the given order.
     void cancelOrder(int orderId);
-
     // Submit a new limit order
     void submitOrder(int conId, const std::string& symbol, const std::string& action, const bool isOvernight, double qty, double price, double stopPrice, double profitPrice);
-
     // Resubmit an existing order with a new limit price and quantity while
     // keeping all other order fields (type, action, exchange, …) intact.
     // Pass price=0 to keep the original limit price.
@@ -254,19 +252,8 @@ public:
 
     // ── Portfolio ─────────────────────────────────────────────────────────────
 
-    void setDiamondsWindow(HWND hWnd);
-    void unsetDiamondsWindow();
     std::mutex& getPortfolioMutex();
     std::map<std::string, PositionInfo>& getPortfolioMap();
-
-    // ── Per-position live PnL streaming ──────────────────────────────────────
-    // Subscribe one position: posts WM_PNL_SINGLE to hWnd whenever TWS
-    // sends a pnlSingle update for conId.  Safe to call from the UI thread.
-    void subscribePositionPnL(HWND hWnd, int conId);
-
-    // Cancel every pnlSingle subscription registered for hWnd and remove them
-    // from the internal map.  Call from WM_DESTROY before the HWND is gone.
-    void unsubscribePositionPnL(HWND hWnd);
 
     // ── Time and Sales ────────────────────────────────────────────────────────
 
@@ -277,13 +264,13 @@ public:
 
     // Returns the latest L1 quote snapshot for the given market window.
     // Call from the WM_MARKET_L1 handler; thread-safe.
-    bool getLevel1Data(HWND hMarketWnd, Level1Info& out);
+    bool getLevel1Data(HWND hWndMarket, Level1Info& out);
 
     // Returns a sorted snapshot of the order book for the given market window.
     //   bids : sorted by price descending  (bids[0] = best bid)
     //   asks : sorted by price ascending   (asks[0] = best ask)
     // Call from the WM_MARKET_L2 handler; thread-safe.
-    bool getLevel2Snapshot(HWND hMarketWnd,
+    bool getLevel2Snapshot(HWND hWndMarket,
                            std::vector<Level2Entry>& bids,
                            std::vector<Level2Entry>& asks);
 
@@ -291,18 +278,15 @@ public:
 
     void setWatchlistWindow(HWND hWnd, const std::vector<std::string>& entries);
     void unsetWatchlistWindow();
-    void reqWatchlist();
-    bool getWatchlistData(int conId, const std::string& symbol, WatchlistInfo& out);
+    bool getWatchlistData(int conId, WatchlistInfo& out);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 
-    void setSymbolSearchWindow(HWND hWnd);
-    void searchSymbols(const std::string& pattern);
+    void searchSymbols(HWND hWnd, const std::string& pattern);
     std::vector<std::string> getSymbolResults();
 
     // ── News ──────────────────────────────────────────────────────────────────
 
-    void setNewsWindow(HWND hWnd);
     void reqNewsForSymbol(int conId, const std::string& symbol);
     void reqNewsArticle(const std::string& providerCode, const std::string& articleId);
     

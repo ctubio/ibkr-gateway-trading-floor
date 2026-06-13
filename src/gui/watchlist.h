@@ -117,7 +117,7 @@ struct WatchlistRowData { std::string symbol; int conId = 0; };
 
 // Find a ListView row by its lParam (which stores symbol+conId as WatchlistRowData*).
 // Returns the row index, or -1 if not found.
-static int Watchlist_FindRow(HWND hWnd, const std::string& symbol, int conId) {
+static int Watchlist_FindRow(HWND hWnd, int conId) {
     HWND hWatchlistList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
     int count = ListView_GetItemCount(hWatchlistList);
     for (int i = 0; i < count; ++i) {
@@ -126,7 +126,7 @@ static int Watchlist_FindRow(HWND hWnd, const std::string& symbol, int conId) {
         lvi.iItem = i;
         SendMessageA(hWatchlistList, LVM_GETITEMA, 0, (LPARAM)&lvi);
         auto* rd = reinterpret_cast<WatchlistRowData*>(lvi.lParam);
-        if (rd && rd->symbol == symbol && rd->conId == conId) return i;
+        if (rd && rd->conId == conId) return i;
     }
     return -1;
 }
@@ -669,8 +669,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     EnableWindow(hAC, FALSE);
                 } else {
                     wl_showingOffline = false;
-                    api().setSymbolSearchWindow(hWnd);
-                    api().searchSymbols(query);
+                    api().searchSymbols(hWnd, query);
                 }
             } else {
                 ShowWindow(hAC, SW_HIDE);
@@ -714,21 +713,21 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
     // ── Live or historical market data update for one symbol ──────────────────
     // lParam = new std::string("conId.symbol") — we own it and must delete.
-    case WM_WATCHLIST_UPDATE: {
-        auto* key = reinterpret_cast<std::string*>(lParam);
-        if (!key) break;
-        // key format: "conId.symbol"
-        auto dot = key->find('.');
-        if (dot != std::string::npos) {
-            int conId          = std::stoi(key->substr(0, dot));
-            std::string symbol = key->substr(dot + 1);
-            TradingAPI::WatchlistInfo info;
-            if (api().getWatchlistData(conId, symbol, info)) {
-                int row = Watchlist_FindRow(hWnd, symbol, conId);
-                if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
+    case WM_API_WATCHLIST_UPDATE: {
+        int conId = (int)lParam;
+        if (!conId) break;
+        for (const auto& entry : watchlistCurrentEntries) {
+            auto d1 = entry.find('.');
+            if (d1 == std::string::npos) continue;
+            if (conId == std::stoi(entry.substr(0, d1))) {
+                TradingAPI::WatchlistInfo info;
+                if (api().getWatchlistData(conId, info)) {
+                    int row = Watchlist_FindRow(hWnd, conId);
+                    if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
+                }
+                break;
             }
         }
-        delete key;
         Watchlist_ApplySort(hWnd);
         break;
     }
@@ -749,7 +748,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     case WM_API_UPDATE:
         if (api().isMarketDataConnected() && api().isTradingConnected()) {
             // Re-subscribe after reconnect with the same entries.
-            api().reqWatchlist();
+            api().setWatchlistWindow(hWnd, watchlistCurrentEntries);
         } else {
             // Clear data but keep the symbol rows visible (just blank the values).
             HWND hWatchlistList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);

@@ -387,8 +387,6 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         lvc.pszText = (LPSTR)"Time";
         ListView_InsertColumn(hNewsResults, 2, &lvc);
 
-
-        api().setNewsWindow(hWnd);
         SetWindowTextA(hWnd, "News");
 
         std::string lastList     = Settings_News_Load("LastList");
@@ -602,7 +600,6 @@ LRESULT CALLBACK WndProcNews(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 delete reinterpret_cast<std::string*>(lvi.lParam);
             }
         }
-        api().setNewsWindow(NULL);
         hNewsListCombo     = NULL;
         hNewsSymCombo      = NULL;
         hNewsProviderCombo = NULL;

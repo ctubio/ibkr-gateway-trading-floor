@@ -18,9 +18,6 @@ HBRUSH hDarkBrush2 = NULL;
 
 static std::deque<std::string> debugBuffer; // stores messages when window is closed
 
-// Payload passed during HWND creation
-struct MarketInitData { std::string symbol; int conId; std::string winKey; };
-
 void LogDebug(const std::string& msg) {
     time_t now = time(0);
     char tstr[26] = {};
@@ -232,7 +229,7 @@ void SaveWinPosition(HWND hWnd) {
     char className[256] = {};
     GetClassNameA(hWnd, className, sizeof(className));
     if (strcmp(className, MARKET_CLASS_NAME) == 0) {
-        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         winKey = data->winKey;
     } else {
         winKey = className;
@@ -605,8 +602,7 @@ static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
     
     HWND hWnd = FindWindowA(MARKET_CLASS_NAME, NULL);
     while (hWnd) {
-        std::string symbol;
-        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data && !data->symbol.empty()) {
             result.push_back({hWnd, data->symbol});
         }
@@ -700,7 +696,7 @@ void Session_AddWindow(HWND hWnd, LPARAM lParam) {
 
     std::string winKey;
     if (strcmp(className, MARKET_CLASS_NAME) == 0) {
-        MarketInitData* data = (MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         if (data) {
             winKey = data->winKey;
         }

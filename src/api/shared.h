@@ -542,10 +542,6 @@ void KillGateway() {
     CloseHandle(hSnap);
 }
 
-void wtf() {
-    MessageBoxA(NULL, "WTF", "WTF", MB_ICONSTOP | MB_OK);
-}
-
 LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
     DWORD code = exceptionInfo->ExceptionRecord->ExceptionCode;
     std::string errorType = "UNKNOWN CRITICAL EXCEPTION";
