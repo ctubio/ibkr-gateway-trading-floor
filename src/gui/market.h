@@ -44,7 +44,7 @@ struct TsState {
     int conId = 0;
 
     // ── Level 1 quote ─────────────────────────────
-    TradingAPI::WatchlistInfo l1Info;
+    TradingAPI::L1Book l1Info;
 
     // ── Portfolio snapshot ────────────────────────────────────────────────────
     double position = 0.0;
@@ -574,7 +574,7 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
     if (!state || !state->hL2List) return;
 
     std::vector<TradingAPI::Level2Entry> bids, asks;
-    api().getLevel2Snapshot(hWnd, bids, asks);
+    api().getLevel2Snapshot(state->conId, bids, asks);
 
     HWND hList = state->hL2List;
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
@@ -637,7 +637,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     DeleteObject(hBgBrush);
     SetBkMode(hdc, TRANSPARENT);
 
-    const TradingAPI::WatchlistInfo& L1 = state->l1Info;
+    const TradingAPI::L1Book& L1 = state->l1Info;
     double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
 
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
@@ -1108,7 +1108,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId || !state || state->conId != conId) break;
-        TradingAPI::WatchlistInfo fresh;
+        TradingAPI::L1Book fresh;
         if (api().getWatchlistData(state->conId, fresh)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
             if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
@@ -1257,7 +1257,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
                 if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
                 if (state->hL2List)      ListView_DeleteAllItems(state->hL2List);
-                state->l1Info = TradingAPI::WatchlistInfo{};
+                state->l1Info = TradingAPI::L1Book{};
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }

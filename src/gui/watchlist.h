@@ -197,10 +197,10 @@ static void Watchlist_InsertRow(HWND hWnd, const std::string& symbol, int conId)
     SendMessageA(hWatchlistList, LVM_INSERTITEMA, 0, (LPARAM)&lvi);
 }
 
-// Update a row with the latest WatchlistInfo data.
+// Update a row with the latest L1Book data.
 // All cells derived from Last price show "--" when Last == 0 (market closed),
 // preventing bogus -100% change readings and misleading empty-string cells.
-static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::WatchlistInfo& info) {
+static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::L1Book& info) {
     HWND hWatchlistList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
     char buf[32];
 
@@ -270,7 +270,7 @@ static void Watchlist_Subscribe(HWND hWnd, const std::string& listName) {
 
         watchlistCurrentEntries[conId] = symbol;
 
-        TradingAPI::WatchlistInfo info;
+        TradingAPI::L1Book info;
         if (api().getWatchlistData(conId, info)) {
             int row = Watchlist_FindRow(hWnd, conId);
             if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
@@ -725,7 +725,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         if (!conId) break;
         auto it = watchlistCurrentEntries.find(conId);
         if (it != watchlistCurrentEntries.end()) {
-            TradingAPI::WatchlistInfo info;
+            TradingAPI::L1Book info;
             if (api().getWatchlistData(conId, info)) {
                 int row = Watchlist_FindRow(hWnd, conId);
                 if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);

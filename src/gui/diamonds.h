@@ -281,10 +281,10 @@ static int Diamonds_FindRow(HWND hList, int conId) {
     return -1;
 }
 
-// Update the market-data columns of one row from a WatchlistInfo snapshot.
+// Update the market-data columns of one row from a L1Book snapshot.
 // All columns that depend on a valid Last price display "--" when Last == 0,
 // preventing bogus P&L calculations (e.g. -100%) during market-closed hours.
-static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::WatchlistInfo& t) {
+static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::L1Book& t) {
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     char buf[64];
 
@@ -497,7 +497,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
         ListView_SetItemText(hList, i, DCOL_AVGPRICE, buf);
 
         // ── Market data columns — pre-fill from cache if already available ───
-        TradingAPI::WatchlistInfo tickInfo;
+        TradingAPI::L1Book tickInfo;
         if (api().getWatchlistData(pos.conId, tickInfo))
             Diamonds_UpdateMarketCols(hList, i, tickInfo);
     }
@@ -614,7 +614,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId) break;
-        TradingAPI::WatchlistInfo info;
+        TradingAPI::L1Book info;
         if (api().getWatchlistData(conId, info)) {
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             int row = Diamonds_FindRow(hList, conId);
@@ -675,9 +675,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 auto pit = pmap.find(symBuf);
                 if (pit != pmap.end()) avgCost = pit->second.avgCost;
             }
-            // Read last from the watchlist cache (no lock needed — WatchlistInfo
+            // Read last from the watchlist cache (no lock needed — L1Book
             // is written on the API thread but we're reading a double atomically).
-            TradingAPI::WatchlistInfo wInfo;
+            TradingAPI::L1Book wInfo;
             if (api().getWatchlistData(conId, wInfo)) last = wInfo.last;
 
             if (avgCost > 0.0 && last > 0.0) {

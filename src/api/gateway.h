@@ -117,7 +117,7 @@ public:
     // One row in the watchlist / diamonds watchlist.
     // Posted via WM_MARKET_L1 (lParam = new std::string("conId.symbol")).
     // Handler calls getWatchlistData(conId, out) then deletes the string.
-    struct WatchlistInfo {
+    struct L1Book {
         std::string symbol;
 
         // ── Price ticks (tickPrice) ──────────────────────────────────────────
@@ -247,7 +247,7 @@ public:
 
     // ── Level 1 (market window) ────────────────────────────────
 
-    bool getWatchlistData(int conId, WatchlistInfo& out);
+    bool getWatchlistData(int conId, L1Book& out);
     
     // ── Level 2 data (market window) ────────────────────────────────
 
@@ -255,9 +255,7 @@ public:
     //   bids : sorted by price descending  (bids[0] = best bid)
     //   asks : sorted by price ascending   (asks[0] = best ask)
     // Call from the WM_MARKET_L2 handler; thread-safe.
-    bool getLevel2Snapshot(HWND hWndMarket,
-                           std::vector<Level2Entry>& bids,
-                           std::vector<Level2Entry>& asks);
+    bool getLevel2Snapshot(int conId, std::vector<Level2Entry>& bids, std::vector<Level2Entry>& asks);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 

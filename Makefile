@@ -17,7 +17,7 @@ bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
 	    src/main.cpp \
 	    lib/Trading-Floor-Assets.res \
 	    lib/Trading-Floor-Gateway.a \
-	    -std=c++17 -Wl,--no-dynamicbase -Wl,--no-high-entropy-va \
+	    -std=c++23 -Wl,--no-dynamicbase -Wl,--no-high-entropy-va \
 	    -mwindows \
 	    -static -static-libgcc -static-libstdc++ \
 	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
