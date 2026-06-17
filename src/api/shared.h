@@ -709,7 +709,7 @@ public:
             Gdiplus::Color(178, 255, 165, 0), // Orange
             Gdiplus::Color(178, 255, 0, 0)    // Red
         };
-        float positions[] = { 0.0f, 0.20f, 1.0f }; // Clamped red to the bottom
+        float positions[] = { 0.0f, 0.50f, 1.0f }; // Clamped red to the bottom
         brush.SetInterpolationColors(colors, positions, 3);
 
         // Match JS lineWidth = 3
@@ -795,7 +795,7 @@ public:
             Gdiplus::Color(200, 255, 165,   0),  // orange
             Gdiplus::Color(200, 255,   0,   0)   // red
         };
-        float stops[] = { 0.0f, 0.20f, 1.0f };
+        float stops[] = { 0.0f, 0.50f, 1.0f };
         brush.SetInterpolationColors(cols, stops, 3);
 
         Gdiplus::Pen pen(&brush, 3.0f);
