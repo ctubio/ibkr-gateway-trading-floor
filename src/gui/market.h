@@ -83,8 +83,6 @@ struct TsState {
     HWND  hOrderQty         = NULL;
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
-    double lastBidPrice;
-    double lastAskPrice;
 
     Sparkline sparkline;
 };
@@ -581,10 +579,6 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
     ListView_DeleteAllItems(hList);
 
     int rows = (int)std::max(bids.size(), asks.size());
-    if (rows > 0) {
-        if (!bids.empty()) state->lastBidPrice = bids[0].price;
-        if (!asks.empty()) state->lastAskPrice = asks[0].price;
-    }
     for (int i = 0; i < rows; ++i) {
         LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
         int hasBid = (i < (int)bids.size()) ? 1 : 0;
@@ -1171,13 +1165,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
             tick->side = 0;
-            if (state->lastBidPrice > 0) {
-                if (tick->price == state->lastBidPrice) tick->side = COINS_CLR_RED;
-                else if (tick->price < state->lastBidPrice) tick->side = COINS_CLR_RED_DARK;
-            }
-            if (state->lastAskPrice > 0) {
-                if (tick->price == state->lastAskPrice) tick->side = COINS_CLR_GREEN;
-                else if (tick->price > state->lastAskPrice) tick->side = COINS_CLR_GREEN_DARK;
+            if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0 && tick->price != state->l1Info.last) {
+                if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
+                else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
+                else if (tick->price <  state->l1Info.bid)  tick->side = COINS_CLR_RED_DARK;
+                else if (tick->price >  state->l1Info.ask)  tick->side = COINS_CLR_GREEN_DARK;
+                else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
+                else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
             }
             TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
@@ -1212,14 +1206,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0001 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0100 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F1000) {
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
             switch (cd->nmcd.dwDrawStage) {
+                case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
-                case CDDS_ITEMPREPAINT:
+                case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
                     if (dark)
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                     COLORREF rowColor = (COLORREF)cd->nmcd.lItemlParam;
-                    if (rowColor)
+                    if (rowColor && cd->iSubItem != 0)
                         cd->clrText = rowColor;
                     else if (dark)
                         cd->clrText = DM_TEXT;

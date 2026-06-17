@@ -5,8 +5,10 @@ NOTIFYICONDATAW nid = { 0 };
 // ─── Colors ───────────────────────────────────────────────────────────────────
 #define COINS_CLR_GREEN       RGB( 18, 220,  18)
 #define COINS_CLR_GREEN_DARK  RGB(92, 214, 92)
+#define COINS_CLR_GREEN_DARK2 RGB(32, 150, 32)
 #define COINS_CLR_RED         RGB(220,  55,  55)
 #define COINS_CLR_RED_DARK    RGB(217, 95, 95)
+#define COINS_CLR_RED_DARK2   RGB(148, 33, 33)
 #define COINS_CLR_WHITE       RGB(220, 220, 220)
 #define COINS_CLR_BLACK       RGB(30,  30,  30)
 #define COINS_CLR_GRAY        RGB(150, 150, 150)
