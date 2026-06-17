@@ -1,7 +1,7 @@
 #pragma once
 // Requires <windowsx.h> for GET_X_LPARAM / GET_Y_LPARAM (include before this header).
 
-void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", 1476, 420); }
+void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", 1590, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
 #define ID_DIAMONDS_CHK_0        7002   // "Growth"
@@ -51,7 +51,7 @@ static bool g_DiamondsChkVisible = false;
 #define DIAMONDS_SORT_TIMER_MS   500   // re-sort at most twice per second
 static bool g_DiamondsSortPending = false;
 
-static ListViewZoomData DiamondsZoomData = { NULL, NULL, 14, "Zoom_Diamonds" };
+static ListViewZoomData DiamondsZoomData = { NULL, NULL, 15, "Zoom_Diamonds" };
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
@@ -65,8 +65,8 @@ enum DiamondColIdx {
     DCOL_BIDSIZE,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
-    DCOL_CLOSE,
-    DCOL_OPEN,
+    //DCOL_CLOSE,
+    //DCOL_OPEN,
     DCOL_UNREALIZED_PL_PCT,
     DCOL_UNREALIZED_PL,
     DCOL_MKTVAL,
@@ -85,33 +85,47 @@ static bool g_DiamondsSortAsc = true;
 // Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
 static std::map<int, MiniSparkline> g_DiamondsSparklines;
 
-// ── Live PnL cache (populated by WM_PNL_SINGLE) ───────────────────────────────
-// Keyed by conId.  Updated on the UI thread only (PostMessage guarantees this),
-// so no additional locking is needed when reading from WndProcDiamonds.
-static std::map<int, TradingAPI::PnlSinglePayload> g_DiamondsPnlCache;
+// ── Unified Virtual List Cache (Replaces g_DiamondsPnlCache) ─────────────────
+struct DiamondRowCache {
+    int conId = 0;
+    std::string symbol;
+    double sortValues[DCOL_COUNT] = {0.0};  // Raw doubles for fast sorting
+    std::string textCols[DCOL_COUNT];       // Pre-formatted strings for instant UI painting
+};
+
+// Data storage: Fast O(1) lookup by conId for live data streams
+static std::map<int, DiamondRowCache> g_DiamondDataCache;
+
+// UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
+static std::vector<int> g_DiamondDisplayOrder;
+
+// Paint Limiter
+static bool g_DiamondsDirty = false;
+#define DIAMONDS_PAINT_TIMER_ID 7011
+#define DIAMONDS_PAINT_TIMER_MS  60     // ~16 FPS (Butter smooth, zero flicker)
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
 struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
-    { "Position",          75, LVCFMT_RIGHT },
-    { "AvgPx",             80, LVCFMT_RIGHT },
+    { "Position",          80, LVCFMT_RIGHT },
+    { "AvgPx",             90, LVCFMT_RIGHT },
     { "AskSz",             70, LVCFMT_RIGHT },
-    { "Ask",               80, LVCFMT_RIGHT },
-    { "Last",              80, LVCFMT_RIGHT },
-    { "Bid",               80, LVCFMT_RIGHT },
+    { "Ask",               90, LVCFMT_RIGHT },
+    { "Last",              90, LVCFMT_RIGHT },
+    { "Bid",               90, LVCFMT_RIGHT },
     { "BidSz",             70, LVCFMT_RIGHT },
     { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Daily %",           90, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
-    { "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
-    { "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
-    { "Unrealized %",      95, LVCFMT_RIGHT },
-    { "Unrealized",        95, LVCFMT_RIGHT },
-    { "Mkt Value",         90, LVCFMT_RIGHT },
+    { "Daily %",          100, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
+    //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
+    { "Unrealized %",     100, LVCFMT_RIGHT },
+    { "Unrealized",       100, LVCFMT_RIGHT },
+    { "Mkt Value",        100, LVCFMT_RIGHT },
     { "Net %",             85, LVCFMT_RIGHT },
     { "Yield %",           80, LVCFMT_RIGHT },
-    { "Date",              85, LVCFMT_RIGHT },
+    { "Date",             120, LVCFMT_RIGHT },
     { "Amount",            80, LVCFMT_RIGHT },
     { "Annual",            80, LVCFMT_RIGHT },
     // {"fix_tag":7290,"name":"P/E excluding extraordinary items","description":"This ratio is calculated by dividing the current Price by the sum of the Diluted Earnings Per Share from continuing operations BEFORE Extraordinary Items and Accounting Changes over the last four interim periods.","groups":["G15"],"id":"PE"}
@@ -243,225 +257,125 @@ static bool Diamonds_ColIsNumeric(int col) {
     return col != DCOL_SYMBOL && col != DCOL_DIV_DATE;
 }
 
-static int CALLBACK Diamonds_SortCompare(LPARAM idx1, LPARAM idx2, LPARAM /*extra*/) {
-    char b1[64] = {}, b2[64] = {};
-    ListView_GetItemText(g_DiamondsListForSort, (int)idx1, g_DiamondsSortCol, b1, sizeof(b1));
-    ListView_GetItemText(g_DiamondsListForSort, (int)idx2, g_DiamondsSortCol, b2, sizeof(b2));
-    int cmp;
-    if (Diamonds_ColIsNumeric(g_DiamondsSortCol)) {
-        double v1 = atof(b1), v2 = atof(b2);
-        cmp = (v1 < v2) ? -1 : (v1 > v2) ? 1 : 0;
-    } else {
-        cmp = _stricmp(b1, b2);
-    }
-    return g_DiamondsSortAsc ? cmp : -cmp;
-}
+// ── Virtual Sort ──────────────────────────────────────────────────────────────
 
 static void Diamonds_ApplySort(HWND hList) {
-    g_DiamondsListForSort = hList;
-    ListView_SortItemsEx(hList, Diamonds_SortCompare, 0);
-    Diamonds_SetSortArrow(hList, g_DiamondsSortCol, g_DiamondsSortAsc);
-}
+    if (g_DiamondDisplayOrder.empty()) return;
 
+    std::sort(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), [](int idA, int idB) {
+        const auto& a = g_DiamondDataCache[idA];
+        const auto& b = g_DiamondDataCache[idB];
+
+        if (g_DiamondsSortCol == DCOL_SYMBOL || g_DiamondsSortCol == DCOL_DIV_DATE) {
+            int cmp = _stricmp(a.textCols[g_DiamondsSortCol].c_str(), b.textCols[g_DiamondsSortCol].c_str());
+            return g_DiamondsSortAsc ? (cmp < 0) : (cmp > 0);
+        } else {
+            double v1 = a.sortValues[g_DiamondsSortCol];
+            double v2 = b.sortValues[g_DiamondsSortCol];
+            if (v1 == v2) return false;
+            return g_DiamondsSortAsc ? (v1 < v2) : (v1 > v2);
+        }
+    });
+
+    Diamonds_SetSortArrow(hList, g_DiamondsSortCol, g_DiamondsSortAsc);
+    // ZERO-FLICKER FIX: Delegate to the paint timer instead of invalidating instantly
+    g_DiamondsDirty = true;
+}
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Sentinel string displayed whenever a value cannot be computed (e.g. market closed, last == 0).
 static const char* DIAMONDS_NO_DATA = "--";
 
-// Find a row in the Diamonds list by conId (stored in lParam).
-static int Diamonds_FindRow(HWND hList, int conId) {
-    int count = ListView_GetItemCount(hList);
-    for (int i = 0; i < count; ++i) {
-        LVITEMA lvi = {};
-        lvi.mask  = LVIF_PARAM;
-        lvi.iItem = i;
-        ListView_GetItem(hList, &lvi);
-        if ((int)lvi.lParam == conId) return i;
-    }
-    return -1;
-}
 
-// Update the market-data columns of one row from a L1Book snapshot.
-// All columns that depend on a valid Last price display "--" when Last == 0,
-// preventing bogus P&L calculations (e.g. -100%) during market-closed hours.
-static void Diamonds_UpdateMarketCols(HWND hList, int row, const TradingAPI::L1Book& t) {
-    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
+static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
+    auto it = g_DiamondDataCache.find(conId);
+    if (it == g_DiamondDataCache.end()) return;
+    auto& row = it->second;
+
     char buf[64];
-
-    // Helper: format a non-zero double, or blank the cell.
-    auto setNum = [&](int col, double val, const char* fmt) {
-        if (val != 0.0) snprintf(buf, sizeof(buf), fmt, val);
-        else            buf[0] = '\0';
-        ListView_SetItemText(hList, row, col, buf);
+    
+    // Helper to write both sortable raw data and display string
+    auto setCol = [&](int col, double val, const char* fmt, bool alwaysShow = false) {
+        row.sortValues[col] = val;
+        if (val != 0.0 || alwaysShow) {
+            snprintf(buf, sizeof(buf), fmt, val);
+            row.textCols[col] = buf;
+        } else {
+            row.textCols[col] = "";
+        }
     };
-
-    // Helper: format a double always (including 0), or blank when sentinel indicates no data.
-    // Use this for signed columns (Change%, DailyPnL, UnrealizedPnL) where 0.00 is a valid
-    // and meaningful value that must be displayed, not silently hidden.
-    auto setNumAlways = [&](int col, double val, const char* fmt) {
-        snprintf(buf, sizeof(buf), fmt, val);
-        ListView_SetItemText(hList, row, col, buf);
-    };
-
-    // Helper: set a cell to the "--" sentinel.
+    
     auto setNA = [&](int col) {
-        ListView_SetItemText(hList, row, col, (LPSTR)DIAMONDS_NO_DATA);
+        row.sortValues[col] = -999999.0; // Pushes NA to bottom on sorts
+        row.textCols[col] = DIAMONDS_NO_DATA;
     };
 
-    auto setStr = [&](int col, const std::string& val) {
-        ListView_SetItemText(hList, row, col, (LPSTR)val.c_str());
-    };
+    setCol(DCOL_ASKSIZE, t.askSize, "%.0f");
+    setCol(DCOL_ASK,     t.ask,     "%.2f");
+    setCol(DCOL_BID,     t.bid,     "%.2f");
+    setCol(DCOL_BIDSIZE, t.bidSize, "%.0f");
+    setCol(DCOL_DIV_AMT, t.dividendAmount,  "%.3f");
+    setCol(DCOL_ANNUAL_DIV, t.annualDividends, "%.3f");
+    
+    row.textCols[DCOL_DIV_DATE] = t.dividendDate;
+    row.sortValues[DCOL_DIV_DATE] = 0; // Handled by string compare in sort
 
-    // ── Columns that do NOT require a valid Last ──────────────────────────────
-    setNum(DCOL_ASKSIZE, t.askSize, "%.0f");
-    setNum(DCOL_ASK,     t.ask,     "%.2f");
-    setNum(DCOL_BID,     t.bid,     "%.2f");
-    setNum(DCOL_BIDSIZE, t.bidSize, "%.0f");
-    setNum(DCOL_OPEN,    t.open,      "%.2f");
-    setNum(DCOL_CLOSE,   t.prevClose, "%.2f");
+    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "%.2f%%");
+    else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
+    else setNA(DCOL_DIV_YIELD);
 
-    // ── Dividend columns — independent of Last being live ────────────────────
-    // annualDividends / dividendAmount: blank when zero (genuinely no dividend).
-    setNum(DCOL_DIV_AMT,    t.dividendAmount,    "%.3f");
-    setNum(DCOL_ANNUAL_DIV, t.annualDividends,   "%.3f");
-    setStr(DCOL_DIV_DATE,   t.dividendDate);
-    // Dividend yield requires both Last > 0 and annualDividends > 0; show "--"
-    // (not blank) when unavailable so the user can distinguish "no data yet"
-    // from "this stock pays no dividend".
-    if (t.last > 0.0 && t.annualDividends > 0.0) {
-        setNum(DCOL_DIV_YIELD, t.dividendYield(), "%.2f%%");
-    } else if (t.annualDividends == 0.0) {
-        buf[0] = '\0';
-        ListView_SetItemText(hList, row, DCOL_DIV_YIELD, buf); // blank = no dividend
-    }
-    else {
-        setNA(DCOL_DIV_YIELD); // last not yet available
-    }
-
-    // ── Columns that require Last > 0 ─────────────────────────────────────────
     double displayLast = (t.last > 0.0) ? t.last : t.prevClose;
-    // When the market is closed, reqMktData may return Last == 0.
-    // In that case the gateway falls back to reqHistoricalData to populate
-    // prevClose (and Last itself if still 0 after the live subscription).
-    // Until a valid Last is available we show "--" to avoid misleading values.
     if (displayLast <= 0.0) {
-        setNA(DCOL_LAST);
-        setNA(DCOL_DAILYPNL);
-        setNA(DCOL_CHGPCT);
-        setNA(DCOL_UNREALIZED_PL);
-        setNA(DCOL_UNREALIZED_PL_PCT);
-        setNA(DCOL_MKTVAL);
-        setNA(DCOL_PCT_NETLIQ);
+        setNA(DCOL_LAST); setNA(DCOL_DAILYPNL); setNA(DCOL_CHGPCT); 
+        setNA(DCOL_UNREALIZED_PL); setNA(DCOL_UNREALIZED_PL_PCT); 
+        setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
         return;
     }
 
-    // Last is valid — paint it and compute the market-price-based columns.
-    snprintf(buf, sizeof(buf), "%.2f", displayLast);
-    ListView_SetItemText(hList, row, DCOL_LAST, buf);
-
-    // ── Retrieve the conId for this row (stored in lParam) ───────────────────
-    LVITEMA lviQ = {};
-    lviQ.mask  = LVIF_PARAM;
-    lviQ.iItem = row;
-    ListView_GetItem(hList, &lviQ);
-    int conId = (int)lviQ.lParam;
-
-    // ── Feed the Last price into this symbol's mini sparkline ────────────────
+    setCol(DCOL_LAST, displayLast, "%.2f", true);
     g_DiamondsSparklines[conId].AddPrice(displayLast);
 
-    // ── Portfolio data (shares / avgCost) for market-value columns ───────────
-    char symBuf[64];
-    ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
-    std::string symbol = symBuf;
-
-    double shares = 0.0, avgCost = 0.0;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        auto& pmap = api().getPortfolioMap();
-        if (pmap.count(symbol)) {
-            shares  = pmap[symbol].shares;
-            avgCost = pmap[symbol].avgCost;
-        }
-    }
-
+    double shares = row.sortValues[DCOL_POSITION];
+    double avgCost = row.sortValues[DCOL_AVGPRICE];
+    
     double netLiq = 0.0;
     auto summary = api().getAccountSummary();
     if (summary.count("NetLiquidation")) {
         try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
     }
 
-    double mktVal    = shares * t.last;
+    double mktVal = shares * t.last;
     double pctNetLiq = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
 
-    // ── Change % — still price-derived, not from PnL stream ──────────────────
-    if (t.prevClose > 0.0)
-        setNumAlways(DCOL_CHGPCT, t.changePct(), "%+.2f%%");
-    else
-        setNA(DCOL_CHGPCT);
+    if (t.prevClose > 0.0) setCol(DCOL_CHGPCT, t.changePct(), "%+.2f%%", true);
+    else setNA(DCOL_CHGPCT);
 
-    // ── Daily PnL and Unrealized PnL — sourced from live reqPnLSingle stream ──
-    // g_DiamondsPnlCache is populated by the WM_PNL_SINGLE handler on the UI
-    // thread, so reading it here (also UI thread) requires no additional locking.
-    auto pnlIt = g_DiamondsPnlCache.find(conId);
-    if (pnlIt != g_DiamondsPnlCache.end()) {
-        const auto& p = pnlIt->second;
+    setCol(DCOL_MKTVAL, mktVal, "%.2f", true);
+    setCol(DCOL_PCT_NETLIQ, pctNetLiq, "%.2f%%", true);
 
-        // Daily PnL — TWS value supersedes the local price-diff estimate.
-        if (p.has_daily)
-            setNumAlways(DCOL_DAILYPNL, p.dailyPnL, "%+.2f");
-        else if (t.prevClose > 0.0)
-            setNumAlways(DCOL_DAILYPNL, shares * t.change(), "%+.2f");
-        else
-            setNA(DCOL_DAILYPNL);
-
-        // Unrealized PnL — use TWS value; fall back to local estimate when absent.
-        if (p.has_unrealized) {
-            setNumAlways(DCOL_UNREALIZED_PL, p.unrealizedPnL, "%+.2f");
-            double unrlPct = (avgCost > 0.0 && t.last > 0.0)
-                             ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-            setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPct, "%+.2f%%");
-        } else {
-            double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
-            double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
-                                ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-            setNumAlways(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
-            setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
-        }
-    } else {
-        // No PnL stream data yet — use locally computed estimates.
-        if (t.prevClose > 0.0)
-            setNumAlways(DCOL_DAILYPNL, shares * t.change(), "%+.2f");
-        else
-            setNA(DCOL_DAILYPNL);
-
-        double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
-        double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
-                            ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-        setNumAlways(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f");
-        setNumAlways(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%");
+    // If PNL hasn't arrived natively yet, use local estimation
+    if (row.textCols[DCOL_DAILYPNL] == "") {
+        if (t.prevClose > 0.0) setCol(DCOL_DAILYPNL, shares * t.change(), "%+.2f", true);
+        double unrlPnL = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
+        double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0) ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
+        setCol(DCOL_UNREALIZED_PL, unrlPnL, "%+.2f", true);
+        setCol(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%", true);
     }
 
-    setNum(DCOL_MKTVAL,     mktVal,    "%.2f");
-    setNum(DCOL_PCT_NETLIQ, pctNetLiq, "%.2f%%");
-
-     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+    // Row selective invalidation happens in the message handler
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
-
 static void Diamonds_Repopulate(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
-    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
-    ListView_DeleteAllItems(hList);
-    g_DiamondsSparklines.clear(); // fresh slate; prices will re-populate on next tick
+    g_DiamondDisplayOrder.clear(); // Clear the virtual list viewport
 
     std::vector<TradingAPI::PositionInfo> rows;
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
         for (auto const& [sym, info] : api().getPortfolioMap()) {
-            // Show item if its assigned group's bit is set in g_DiamondsCheckedTabs.
             auto it = g_DiamondsTabMap.find(info.conId);
             int  assignedTab = (it != g_DiamondsTabMap.end()) ? it->second : DTAB_ALL;
             if (!((g_DiamondsCheckedTabs >> assignedTab) & 1)) continue;
@@ -469,41 +383,35 @@ static void Diamonds_Repopulate(HWND hWnd) {
         }
     }
 
-    // Initial insertion order: alphabetical by symbol.
-    // After insert we re-sort by the active sort column/direction.
-    std::sort(rows.begin(), rows.end(),
-              [](const TradingAPI::PositionInfo& a, const TradingAPI::PositionInfo& b) {
-                  return a.symbol < b.symbol;
-              });
-
+    // Initialize the cache for all valid rows
     char buf[64];
-    for (int i = 0; i < (int)rows.size(); ++i) {
-        const auto& pos = rows[i];
-
-        // ── Symbol (col 0) with conId in lParam ──────────────────────────────
-        LVITEMA lvi = {};
-        lvi.mask     = LVIF_TEXT | LVIF_PARAM;
-        lvi.iItem    = i;
-        lvi.iSubItem = 0;
-        lvi.lParam   = pos.conId;
-        lvi.pszText  = (LPSTR)pos.symbol.c_str();
-        ListView_InsertItem(hList, &lvi);
-
-        // ── Position columns ─────────────────────────────────────────────────
+    for (const auto& pos : rows) {
+        auto& cacheRow = g_DiamondDataCache[pos.conId];
+        cacheRow.conId = pos.conId;
+        cacheRow.symbol = pos.symbol;
+        
+        cacheRow.textCols[DCOL_SYMBOL] = pos.symbol;
+        
+        cacheRow.sortValues[DCOL_POSITION] = pos.shares;
         snprintf(buf, sizeof(buf), "%.4g", pos.shares);
-        ListView_SetItemText(hList, i, DCOL_POSITION, buf);
+        cacheRow.textCols[DCOL_POSITION] = buf;
 
+        cacheRow.sortValues[DCOL_AVGPRICE] = pos.avgCost;
         snprintf(buf, sizeof(buf), "%.2f", pos.avgCost);
-        ListView_SetItemText(hList, i, DCOL_AVGPRICE, buf);
+        cacheRow.textCols[DCOL_AVGPRICE] = buf;
 
-        // ── Market data columns — pre-fill from cache if already available ───
+        // Pre-fill market data if available
         TradingAPI::L1Book tickInfo;
-        if (api().getWatchlistData(pos.conId, tickInfo))
-            Diamonds_UpdateMarketCols(hList, i, tickInfo);
+        if (api().getWatchlistData(pos.conId, tickInfo)) {
+            Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+        }
+        
+        g_DiamondDisplayOrder.push_back(pos.conId);
     }
 
-    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-    RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+    // VIRTUAL LIST MAGIC: Tell the UI exactly how many items exist. It will ask for text later.
+    ListView_SetItemCountEx(hList, g_DiamondDisplayOrder.size(), LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL);
+    InvalidateRect(hList, NULL, FALSE);
     Diamonds_ApplySort(hList);
 
     std::string title = "Diamonds: " + std::to_string(rows.size());
@@ -522,14 +430,21 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
 
     case WM_CREATE: {
+        // ZERO-FLICKER FIX: Prevent the parent from drawing over the list view
+        //SetWindowLong(hWnd, GWL_STYLE, GetWindowLong(hWnd, GWL_STYLE) | WS_CLIPCHILDREN);
+
+        // ZERO-FLICKER FIX: Remove the class background brush so Windows never
+        // auto-erases behind our back during DefWindowProc(WM_SIZE) etc.
+        //SetClassLongPtr(hWnd, GCLP_HBRBACKGROUND, (LONG_PTR)NULL);
+
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
         HWND hList = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
-            WS_CHILD | WS_VISIBLE | WS_BORDER |
-            LVS_REPORT | LVS_SHOWSELALWAYS,
-            0, 0, 1100, 420,
-            hWnd, (HMENU)ID_DIAMONDS_RESULTS_LIST, hInst, NULL);
+            WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_OWNERDATA,
+            0, 0, 1100, 420, hWnd, (HMENU)ID_DIAMONDS_RESULTS_LIST, hInst, NULL);
+
+        // No paint timer needed, rows are selectively invalidated on data arrival.
 
         DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
         ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.hBoldFont, DiamondsZoomData.fontSize);
@@ -599,6 +514,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             Settings_CheckedTabs_Save((int)g_DiamondsCheckedTabs);
             Diamonds_Repopulate(hWnd);
+            InvalidateRect(hWnd, NULL, TRUE);
+            //UpdateWindow(hWnd);
         }
         break;
     }
@@ -610,25 +527,27 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     // ── Live market data update for one symbol ────────────────────────────────
     // Posted by Impl::tickPrice / tickSize / tickString / tickGeneric
-    // lParam = new std::string("conId.symbol") — we own it and must delete.
     case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId) break;
         TradingAPI::L1Book info;
         if (api().getWatchlistData(conId, info)) {
-            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-            int row = Diamonds_FindRow(hList, conId);
-            if (row >= 0)
-                Diamonds_UpdateMarketCols(hList, row, info);
-            // Defer sort — arm timer instead of sorting on every tick.
+            Diamonds_UpdateMarketCols(conId, info);
+            // ZERO-FLICKER FIX: Invalidate ONLY the row that changed, perfectly smoothly
+            auto it = std::find(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), conId);
+            if (it != g_DiamondDisplayOrder.end()) {
+                int row = (int)std::distance(g_DiamondDisplayOrder.begin(), it);
+                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+                if (hList) ListView_RedrawItems(hList, row, row);
+            }
         }
-        if (!g_DiamondsSortPending) {
-            g_DiamondsSortPending = true;
-            SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
-        }
+        
+        // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single market tick!
+        // This stops the rows from continuously jumping up and down (which the user perceived as flickering).
+        // Sorting will now only happen when the user clicks a column header, or when repopulated.
+        
         break;
     }
-
     // ── Live per-position PnL update (reqPnLSingle stream) ───────────────────
     // Posted by Impl::pnlSingle() on the API thread via PostMessage.
     //   wParam = conId (fast row-lookup key, no pointer deref needed)
@@ -638,36 +557,24 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (!payload) break;
 
         int conId = static_cast<int>(wParam);
+        
+        // Grab our new unified cache row
+        auto& row = g_DiamondDataCache[conId];
+        row.conId = conId; 
 
-        // Upsert cache — only overwrite fields that TWS actually provided.
-        auto& cached = g_DiamondsPnlCache[conId];
-        cached.conId = conId;
-        if (payload->has_daily)      { cached.dailyPnL      = payload->dailyPnL;      cached.has_daily      = true; }
-        if (payload->has_unrealized) { cached.unrealizedPnL = payload->unrealizedPnL; cached.has_unrealized = true; }
-        if (payload->has_realized)   { cached.realizedPnL   = payload->realizedPnL;   cached.has_realized   = true; }
-        delete payload;
-
-        // Locate the matching row by conId (stored in lParam of the list item).
-        HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-        if (!hList) break;
-        int row = Diamonds_FindRow(hList, conId);
-        if (row < 0) break;
-
-        // Update only the three PnL cells directly — avoid a full row repaint.
-        const auto& p = g_DiamondsPnlCache[conId];
         char buf[64];
-        SendMessage(hList, WM_SETREDRAW, FALSE, 0);
-        if (p.has_daily) {
-            snprintf(buf, sizeof(buf), "%+.2f", p.dailyPnL);
-            ListView_SetItemText(hList, row, DCOL_DAILYPNL, buf);
+        if (payload->has_daily) {
+            row.sortValues[DCOL_DAILYPNL] = payload->dailyPnL;
+            snprintf(buf, sizeof(buf), "%+.2f", payload->dailyPnL);
+            row.textCols[DCOL_DAILYPNL] = buf;
         }
-        if (p.has_unrealized) {
-            snprintf(buf, sizeof(buf), "%+.2f", p.unrealizedPnL);
-            ListView_SetItemText(hList, row, DCOL_UNREALIZED_PL, buf);
+        if (payload->has_unrealized) {
+            row.sortValues[DCOL_UNREALIZED_PL] = payload->unrealizedPnL;
+            snprintf(buf, sizeof(buf), "%+.2f", payload->unrealizedPnL);
+            row.textCols[DCOL_UNREALIZED_PL] = buf;
 
-            // Recompute the % column using avgCost from the portfolio map.
-            char symBuf[64] = {};
-            ListView_GetItemText(hList, row, DCOL_SYMBOL, symBuf, sizeof(symBuf));
+            // Recompute the % column
+            const std::string& symBuf = row.textCols[DCOL_SYMBOL];
             double avgCost = 0.0, last = 0.0;
             {
                 std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
@@ -675,28 +582,30 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 auto pit = pmap.find(symBuf);
                 if (pit != pmap.end()) avgCost = pit->second.avgCost;
             }
-            // Read last from the watchlist cache (no lock needed — L1Book
-            // is written on the API thread but we're reading a double atomically).
             TradingAPI::L1Book wInfo;
             if (api().getWatchlistData(conId, wInfo)) last = wInfo.last;
 
             if (avgCost > 0.0 && last > 0.0) {
                 double pct = (last - avgCost) / avgCost * 100.0;
+                row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
                 snprintf(buf, sizeof(buf), "%+.2f%%", pct);
+                row.textCols[DCOL_UNREALIZED_PL_PCT] = buf;
             } else {
-                snprintf(buf, sizeof(buf), "--");
+                row.sortValues[DCOL_UNREALIZED_PL_PCT] = -999999.0;
+                row.textCols[DCOL_UNREALIZED_PL_PCT] = "--";
             }
-            ListView_SetItemText(hList, row, DCOL_UNREALIZED_PL_PCT, buf);
         }
-        SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-        // Force a visual refresh of the affected row so the green/red colouring
-        // from NM_CUSTOMDRAW picks up the new values immediately.
-        ListView_RedrawItems(hList, row, row);
-        // Defer sort — arm timer instead of sorting on every PnL tick.
-        if (!g_DiamondsSortPending) {
-            g_DiamondsSortPending = true;
-            SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
+        delete payload;
+
+        // ZERO-FLICKER FIX: Invalidate ONLY the row that changed, perfectly smoothly
+        auto it = std::find(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), conId);
+        if (it != g_DiamondDisplayOrder.end()) {
+            int row = (int)std::distance(g_DiamondDisplayOrder.begin(), it);
+            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+            if (hList) ListView_RedrawItems(hList, row, row);
         }
+        
+        // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single PnL tick!
         break;
     }
 
@@ -709,7 +618,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             Diamonds_Repopulate(hWnd);
         } else {
             // Clear everything — positions and prices are stale.
-            ListView_DeleteAllItems(hList);
+            // ZERO-FLICKER FIX: Never use ListView_DeleteAllItems on an LVS_OWNERDATA list.
+            // It's invalid for virtual lists and triggers a full erase flash.
+            g_DiamondDisplayOrder.clear();
+            g_DiamondDataCache.clear();
+            ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
+            InvalidateRect(hList, NULL, FALSE);
         }
         break;
     }
@@ -719,6 +633,20 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->idFrom != ID_DIAMONDS_RESULTS_LIST) break;
 
+        // --- VIRTUAL LIST TEXT REQUEST ---
+        if (hdr->code == LVN_GETDISPINFO) {
+            NMLVDISPINFO* pdi = (NMLVDISPINFO*)lParam;
+            if (pdi->item.iItem < 0 || pdi->item.iItem >= (int)g_DiamondDisplayOrder.size()) return 0;
+            
+            int conId = g_DiamondDisplayOrder[pdi->item.iItem];
+            const auto& row = g_DiamondDataCache[conId];
+
+            if (pdi->item.mask & LVIF_TEXT) {
+                // VIRTUAL LIST FIX: Direct pointer assignment is zero-copy and avoids buffer truncation
+                pdi->item.pszText = (LPSTR)row.textCols[pdi->item.iSubItem].c_str();
+            }
+            return 0;
+        }
         if (hdr->code == LVN_COLUMNCLICK) {
             NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
             int col = nmlv->iSubItem;
@@ -728,6 +656,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortAsc", g_DiamondsSortAsc ? 1 : 0);
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
+            InvalidateRect(hList, NULL, FALSE);
             return 0;
         }
 
@@ -735,14 +664,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
             int row = act->iItem;
             if (row >= 0) {
-                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                char sym[256] = {};
-                ListView_GetItemText(hList, row, 0, sym, sizeof(sym));
-                LVITEMA item = {};
-                item.mask  = LVIF_PARAM;
-                item.iItem = row;
-                ListView_GetItem(hList, &item);
-                StartMarket(sym, (int)item.lParam);
+                int conId = g_DiamondDisplayOrder[row];
+                const std::string& sym = g_DiamondDataCache[conId].textCols[DCOL_SYMBOL];
+                StartMarket(sym, conId);
             }
         }
 
@@ -750,17 +674,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
             int row = act->iItem;
             if (row >= 0) {
-                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-
-                // Get conId and symbol from the clicked row.
-                char sym[64] = {};
-                ListView_GetItemText(hList, row, 0, sym, sizeof(sym));
-                LVITEMA item = {};
-                item.mask  = LVIF_PARAM;
-                item.iItem = row;
-                ListView_GetItem(hList, &item);
-                int conId = (int)item.lParam;
-
+                int conId = g_DiamondDisplayOrder[row];
+                const std::string& sym = g_DiamondDataCache[conId].textCols[DCOL_SYMBOL];
                 // Build the full registry entry string for this symbol.
                 std::string exchange;
                 {
@@ -833,6 +748,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         g_DiamondsTabMap[conId] = targetTab;
                     Diamonds_SaveTabMap();
                     Diamonds_Repopulate(hWnd);
+                    InvalidateRect(hWnd, NULL, TRUE);
                 } else if (cmd >= 100 && cmd < 100 + (int)watchlistLists.size()) {
                     // Add to watchlist list (only if not already present — menu grayed it, but guard anyway).
                     const std::string& listName = watchlistLists[cmd - 100];
@@ -855,6 +771,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     Diamonds_SaveSymbolColors();
                     // Invalidate just this row so the color appears immediately.
+                    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                     ListView_RedrawItems(hList, row, row);
                     UpdateWindow(hList);
                 }
@@ -884,7 +801,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // ── Symbol column: apply per-symbol color override ────────
                     if (cd->iSubItem == DCOL_SYMBOL) {
                         SelectObject(cd->nmcd.hdc, DiamondsZoomData.hBoldFont);
-                        auto cit = g_DiamondsSymbolColors.find((int)cd->nmcd.lItemlParam);
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        
+                        auto cit = g_DiamondsSymbolColors.find(conId);
                         if (cit != g_DiamondsSymbolColors.end() &&
                             cit->second >= 0 && cit->second < DIAMONDS_COLOR_COUNT) {
                             cd->clrText = g_DiamondColorPalette[cit->second].rgb;
@@ -894,23 +814,17 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     // Only colour P&L / change columns — and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
-                    if (cd->iSubItem == DCOL_CHGPCT    ||
-                        cd->iSubItem == DCOL_DAILYPNL  ||
-                        cd->iSubItem == DCOL_UNREALIZED_PL ||
-                        cd->iSubItem == DCOL_UNREALIZED_PL_PCT||
-                        cd->iSubItem == DCOL_POSITION)
-                    {
-                        HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                        char buf[32] = {};
-                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, cd->iSubItem, buf, sizeof(buf));
-
+                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        const std::string& textVal = g_DiamondDataCache[conId].textCols[cd->iSubItem];
                         // Guard: skip colouring the "--" sentinel — atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
                         // explicit avoids any locale-specific atof surprises.
-                        if (strcmp(buf, DIAMONDS_NO_DATA) != 0 && buf[0] != '\0') {
-                            double val = atof(buf);
-                            if      (val >= 0.0) cd->clrText = RGB(80, 200, 120);
-                            else if (val < 0.0) cd->clrText = RGB(220, 80, 80);
+                        if (!textVal.empty()) {
+                            double val = atof(textVal.c_str());
+                            if      (val >= 0.0) cd->clrText = COINS_CLR_GREEN;
+                            else if (val < 0.0) cd->clrText = COINS_CLR_RED;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, DiamondsZoomData.hFont);
@@ -920,9 +834,27 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             return CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT;
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE    ||
-                        cd->iSubItem == DCOL_MKTVAL)
-                    {
+                    if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
+                        cd->clrText = COINS_CLR_BLUE;
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_LAST || cd->iSubItem == DCOL_BID) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        const std::string& textValB = g_DiamondDataCache[conId].textCols[DCOL_BIDSIZE];
+                        const std::string& textValA = g_DiamondDataCache[conId].textCols[DCOL_ASKSIZE];
+                        if (!textValB.empty() && !textValA.empty()) {
+                            double valB = atof(textValB.c_str());
+                            double valA = atof(textValA.c_str());
+                            if      (valA > valB) cd->clrText = COINS_CLR_RED;
+                            else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
+                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                        }
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_PCT_NETLIQ) {
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
@@ -932,10 +864,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         }
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_ASKSIZE    ||
-                        cd->iSubItem == DCOL_BIDSIZE)
-                    {
-                        cd->clrText = RGB(51, 146, 255);
+                    if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
+                        cd->clrText = COINS_CLR_PURPLE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;
                     }
@@ -945,22 +875,17 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 case CDDS_ITEMPOSTPAINT | CDDS_SUBITEM: {
                     if (cd->iSubItem != DCOL_POSITION) return CDRF_DODEFAULT;
 
-                    // Retrieve the conId (stored in lParam of the list item).
-                    int conId = (int)cd->nmcd.lItemlParam;
+                    int rowIndex = (int)cd->nmcd.dwItemSpec;
+                    if (rowIndex < 0 || rowIndex >= g_DiamondDisplayOrder.size()) return CDRF_DODEFAULT;
+
+                    int conId = g_DiamondDisplayOrder[rowIndex];
                     auto sit  = g_DiamondsSparklines.find(conId);
                     if (sit == g_DiamondsSparklines.end() || !sit->second.HasData())
                         return CDRF_DODEFAULT;
 
-                    // Get the sub-item bounding rect in list-view client coords.
-                    HWND hListSpark = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                    RECT cellRc = {};
-                    cellRc.left = LVIR_BOUNDS;
-                    // Use LVM_GETSUBITEMRECT to get the exact cell rect.
-                    cellRc.top  = DCOL_POSITION;
-                    SendMessage(hListSpark, LVM_GETSUBITEMRECT,
-                                (WPARAM)cd->nmcd.dwItemSpec, (LPARAM)&cellRc);
-
-                    sit->second.Draw(cd->nmcd.hdc, cellRc);
+                    RECT cellRect;
+                    ListView_GetSubItemRect(GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST), rowIndex, DCOL_POSITION, LVIR_BOUNDS, &cellRect);
+                    sit->second.Draw(cd->nmcd.hdc, cellRect);
                     return CDRF_DODEFAULT;
                 }
             }
@@ -969,25 +894,33 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_TIMER: {
-        if (wParam == DIAMONDS_SORT_TIMER_ID) {
-            KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
-            g_DiamondsSortPending = false;
-            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-            if (hList) {
-                SendMessage(hList, WM_SETREDRAW, FALSE, 0);
-                Diamonds_ApplySort(hList);
-                SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-                RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+        if (wParam == DIAMONDS_PAINT_TIMER_ID) {
+            if (g_DiamondsDirty) {
+                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+                if (hList && !g_DiamondDisplayOrder.empty()) {
+                    // Get the range of items currently visible to the user
+                    int top = ListView_GetTopIndex(hList);
+                    int count = ListView_GetCountPerPage(hList);
+                    int bottom = top + count;
+                    
+                    // Clamp to actual size
+                    if (bottom >= (int)g_DiamondDisplayOrder.size()) 
+                        bottom = (int)g_DiamondDisplayOrder.size() - 1;
+
+                    // Only redraw the specific rows that have changed on screen
+                    ListView_RedrawItems(hList, top, bottom);
+                    UpdateWindow(hList); // Force immediate flush
+                }
+                g_DiamondsDirty = false;
             }
         }
-        break;
     }
 
     case WM_DESTROY:
         KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
         g_DiamondsSortPending = false;
         api().removeApiUpdateWindow(hWnd);
-        g_DiamondsPnlCache.clear();
+        g_DiamondDataCache.clear();
         g_DiamondsSparklines.clear();
         if (DiamondsZoomData.hFont) {
             DeleteObject(DiamondsZoomData.hFont);

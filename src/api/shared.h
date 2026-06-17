@@ -243,6 +243,10 @@ LRESULT CALLBACK ListViewZoomProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM l
     auto* zoomData = reinterpret_cast<ListViewZoomData*>(dwRefData);
     if (!zoomData) return DefSubclassProc(hList, uMsg, wParam, lParam);
 
+    if (uMsg == WM_ERASEBKGND) {
+        return 1; // Zero-flicker: suppress background erase entirely
+    }
+
     if (uMsg == WM_MOUSEWHEEL) {
         if (GetKeyState(VK_CONTROL) & 0x8000) {
             int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
@@ -774,11 +778,11 @@ public:
         if (minP == maxP) { minP -= 0.5; maxP += 0.5; }
 
         std::vector<Gdiplus::PointF> pts(data.size());
-        for (size_t i = 0; i < data.size(); ++i) {
-            float x = MapScale((double)data[i].date,  (double)minT, (double)maxT, 0, W);
-            float y = MapScale(data[i].price,          minP,         maxP,         H, 1);
-            pts[i]  = Gdiplus::PointF(ox + x, oy + y);
-        }
+            for (size_t i = 0; i < data.size(); ++i) {
+                float x = MapScale((double)data[i].date,  (double)minT, (double)maxT, 0, W);
+                float y = MapScale(data[i].price,          minP,         maxP,         H, 1);
+                pts[i]  = Gdiplus::PointF(ox + x, oy + y);
+            }
 
         // Gradient: green (top/recent-high) → orange → red (bottom/loss)
         Gdiplus::LinearGradientBrush brush(
