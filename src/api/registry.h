@@ -3,8 +3,8 @@
 constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
 // Dark mode colors
-#define DM_BG        RGB(30,  30,  30)   // Slightly darker, flatter background
-#define DM_BG2       RGB(42,  42,  42)   // Header/Alternate row background
+#define DM_BG        RGB(22,  22,  31)   // Slightly darker, flatter background
+#define DM_BG2       RGB(34,  34,  43)   // Header/Alternate row background
 #define DM_TEXT      RGB(230, 230, 230)  // Crisp, slightly off-white text
 #define DM_BORDER    RGB(65,  65,  65)   // Outer borders
 #define DM_SEPARATOR RGB(85,  85,  85)   // Subtle inner column dividers
