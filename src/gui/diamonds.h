@@ -1,5 +1,5 @@
 #pragma once
-// Requires <windowsx.h> for GET_X_LPARAM / GET_Y_LPARAM (include before this header).
+// "Proxima Nova", Verdana, Arial, sans-serif
 
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", 1590, 420); }
 

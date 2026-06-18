@@ -36,7 +36,7 @@ static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]
 
 // Returns a color for the status text (used in NM_CUSTOMDRAW).
 static COLORREF Orders_StatusColor(const std::string& orderType, const std::string& status, bool dark) {
-    if (status == "Filled")                           return RGB(196, 110, 43);
+    if (status == "Filled" || status == "Executed")   return RGB(196, 110, 43);
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
     if (status == "Cancelled" || status == "Inactive" || status == "PendingCancel")
         return dark ? RGB(130, 130, 130) : RGB(160, 160, 160);
@@ -56,12 +56,13 @@ static void Orders_Repopulate(HWND hWnd) {
     ListView_DeleteAllItems(hList);
 
     auto orders = api().getOrdersSorted();
+    std::erase_if(orders, [](const TradingAPI::OrderInfo& order) {
+        return order.status == "Executed";
+    });
     int submitted = 0;
     int filled = 0;
     for (int i = 0; i < (int)orders.size(); ++i) {
         const auto& o = orders[i];
-        //if (o.status == "Cancelled" || o.status == "PendingCancel") continue;
-
 
         int col = 0;
         LVITEMA lvi  = {};
@@ -113,7 +114,7 @@ static void Orders_Repopulate(HWND hWnd) {
 
 // Returns true if the given status string allows modification.
 static bool Orders_IsEditable(const std::string& status) {
-    return !(status == "Filled" || status == "Cancelled" ||
+    return !(status == "Filled" || status == "Executed" || status == "Cancelled" ||
              status == "Inactive" || status == "PendingCancel");
 }
 

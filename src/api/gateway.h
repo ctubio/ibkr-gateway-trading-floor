@@ -43,6 +43,7 @@
 #define WM_MARKET_L1        (WM_USER + 12)
 #define WM_MARKET_L2        (WM_USER + 13)   // Level 2 depth change — handler calls getLevel2Snapshot()
 #define WM_PNL_SINGLE       (WM_USER + 14)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
+#define WM_API_EXECUTION    (WM_USER + 15)
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
@@ -79,7 +80,6 @@ public:
         double      avgFillPx = 0.0;
         std::string status;
         std::string time;
-        long long   timestamp = 0;
         bool includeOvernight = false;
     };
 
