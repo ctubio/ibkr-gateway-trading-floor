@@ -103,7 +103,7 @@ static void Orders_Repopulate(HWND hWnd) {
     SetWindowTextA(hWnd, ("Orders: " + std::to_string(submitted) + " Submitted | " + std::to_string(filled) + " Filled").c_str());
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-    RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+    RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 }
 
 // ── Inline edit panel ─────────────────────────────────────────────────────────
@@ -404,6 +404,9 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 }
                 int orderId = (int)lvi.lParam;
                 auto orders = api().getOrdersSorted();
+                std::erase_if(orders, [](const TradingAPI::OrderInfo& order) {
+                    return order.status == "Executed";
+                });
                 for (const auto& o : orders) {
                     if (o.orderId == orderId) {
                         if (Orders_IsEditable(o.status))

@@ -14,6 +14,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 #define ID_MARKET_SEARCH_LIST          6008
 #define ID_MARKET_L2_LIST              6009   // Level 2 depth SysListView32 (left panel)
 #define ID_MARKET_SPEAKER              6010   // Speaker icon for TTS
+#define ID_MARKET_EXEC_LIST            6011   // Executions SysListView32 (far left panel)
 
 #define TIMER_MARKET_SPEAKER    0xC020  // WM_TIMER id for per-market TTS (21s)
 
@@ -28,7 +29,8 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Ask  182.87  x 154]       (row 1, right block)
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
-static const int L2_W     = 240;  // Fixed width of the Level 2 depth panel
+static const int EXEC_W   = 110;  // Fixed width of the Executions panel (far left)
+static const int L2_W     = 130;  // Fixed width of the Level 2 depth panel (beside exec)
 static const int ORDER_BAR_H = 80;
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
@@ -39,6 +41,7 @@ struct TsState {
     HWND hTsListF100 = NULL;
     HWND hTsListF1000 = NULL;
     HWND hL2List = NULL;
+    HWND hExecList = NULL;   // Executions list (far left, beside L2)
     bool isOvernight = false;
     std::string symbol;
     int conId = 0;
@@ -118,15 +121,21 @@ static const TsCol tsCols[] = {
 };
 static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 
-// ── L2 column definitions ─────────────────────────────────────────────────────
+// ── L2 column definitions (2-column: Price | Size, asks top / bids bottom) ────
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
-    { "Size",  54, LVCFMT_CENTER },
-    { "Ask",   64, LVCFMT_CENTER },
-    { "Bid",   64, LVCFMT_CENTER },
+    { "Price", 64, LVCFMT_CENTER },
     { "Size",  54, LVCFMT_CENTER },
 };
 static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
+
+// ── Executions column definitions ─────────────────────────────────────────────
+struct ExecCol { const char* header; int width; int fmt; };
+static const ExecCol execCols[] = {
+    { "Side",  0, LVCFMT_CENTER },
+    { "Quote", 100, LVCFMT_CENTER  },
+};
+static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 
 static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
@@ -142,7 +151,28 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
         if (i == 0) {
             LVCOLUMN lvcUpdate = { 0 };
             lvcUpdate.mask = LVCF_FMT;
-            lvcUpdate.fmt = l2Cols[i].fmt;
+            lvcUpdate.fmt  = l2Cols[i].fmt;
+            ListView_SetColumn(hList, i, &lvcUpdate);
+        }
+    }
+    return hList;
+}
+
+static HWND Market_CreateExecList(HWND hParent, HINSTANCE hInst) {
+    HWND hList = CreateWindowExA(
+        WS_EX_CLIENTEDGE, "SysListView32", "",
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        0, 0, EXEC_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_EXEC_LIST, hInst, NULL);
+    ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+    LVCOLUMNA lvc = {};
+    lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
+    for (int i = 0; i < EXEC_COL_COUNT; ++i) {
+        lvc.cx = execCols[i].width; lvc.pszText = (LPSTR)execCols[i].header; lvc.fmt = execCols[i].fmt;
+        ListView_InsertColumn(hList, i, &lvc);
+        if (i == 0) {
+            LVCOLUMN lvcUpdate = { 0 };
+            lvcUpdate.mask = LVCF_FMT;
+            lvcUpdate.fmt  = execCols[i].fmt;
             ListView_SetColumn(hList, i, &lvcUpdate);
         }
     }
@@ -220,14 +250,18 @@ static void Market_Layout(HWND hWnd, TsState* state) {
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    // ── Level 2 panel ─────────────────────────────────────────────────────────
+    // ── Executions panel (far left) ───────────────────────────────────────────
+    if (state->hExecList)
+        MoveWindow(state->hExecList, 0, bodyY, EXEC_W, bodyH, TRUE);
+
+    // ── Level 2 panel (beside executions) ────────────────────────────────────
     if (state->hL2List)
-        MoveWindow(state->hL2List, 0, bodyY, L2_W, bodyH, TRUE);
+        MoveWindow(state->hL2List, EXEC_W, bodyY, L2_W, bodyH, TRUE);
 
     // ── T&S area ──────────────────────────────────────────────────────────────
     const int splitThick = 4;   
-    const int tsX = L2_W + splitThick;
-    const int tsW = bodyW - L2_W - splitThick;
+    const int tsX = EXEC_W + L2_W + splitThick;
+    const int tsW = bodyW - EXEC_W - L2_W - splitThick;
 
     int leftW  = (int)((tsW - splitThick) / 2);
     int rightW = leftW;
@@ -349,13 +383,17 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
         }
         if (wParam == VK_TAB) {
             if (st) {
-                HWND order[] = { st->hOrderPrice, st->hOrderStopPrice, st->hOrderProfitPrice, st->hOrderQty };
+                std::vector<HWND> order = { st->hOrderPrice, st->hOrderStopPrice, st->hOrderProfitPrice, st->hOrderQty };
+                if (st->isOvernight) {
+                    order.erase(order.begin() + 2);
+                    order.erase(order.begin() + 1);
+                }
                 HWND hNext = nullptr;
 
-                for (int i = 0; i < 4; ++i) {
+                for (int i = 0; i < order.size(); ++i) {
                     if (hWnd == order[i]) {
                         // Find next index, wrap around to 0
-                        hNext = order[(i + 1) % 4];
+                        hNext = order[(i + 1) % order.size()];
                         break;
                     }
                 }
@@ -379,7 +417,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 double qty = std::atof(qBuf);
                 double stopPrice = std::atof(psBuf);
                 double profitPrice = std::atof(ppBuf);
-                if (price > 0 && qty > 0) {
+                if ((price > 0 || stopPrice > 0) && qty > 0) {
                     if (stopPrice < 0.1) stopPrice = 0.0;
                     if (profitPrice < 0.1) profitPrice = 0.0;
                     api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, profitPrice);
@@ -537,8 +575,9 @@ void StartMarket(const std::string& symbol, int conId) {
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     RECT rc; GetClientRect(hWnd, &rc);
     const int bodyH      = rc.bottom - HEADER_H;
-    const int tsX        = L2_W;
-    const int tsW        = rc.right - L2_W;
+    const int leftW      = EXEC_W + L2_W;
+    const int tsX        = leftW;
+    const int tsW        = rc.right - leftW;
     const int splitThick = 4;
 
     int relX = x - tsX;
@@ -568,6 +607,8 @@ static std::string Market_FmtQty(double v) {
 }
 
 // ── L2 list refresh ───────────────────────────────────────────────────────────
+// Renders asks (red) on top, bids (blue) below in a single Price/Size list.
+// lParam: 1 = ask row, 2 = bid row  (used by NM_CUSTOMDRAW for colouring).
 static void Market_RefreshL2(HWND hWnd, TsState* state) {
     if (!state || !state->hL2List) return;
 
@@ -578,23 +619,81 @@ static void Market_RefreshL2(HWND hWnd, TsState* state) {
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
 
-    int rows = (int)std::max(bids.size(), asks.size());
-    for (int i = 0; i < rows; ++i) {
+    int row = 0;
+
+    // Asks: IBKR position 0 = best ask (lowest price) → they arrive in ascending
+    // order so we reverse them so the worst ask is at the top and the best ask
+    // (lowest price, closest to mid) sits just above the bids.
+    for (int i = (int)asks.size() - 1; i >= 0; --i) {
         LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
-        int hasBid = (i < (int)bids.size()) ? 1 : 0;
-        int hasAsk = (i < (int)asks.size()) ? 2 : 0;
-        lvi.lParam  = (LPARAM)(hasBid | hasAsk);
-        lvi.iItem   = i;
-        std::string bidSzStr = hasBid ? Market_FmtQty(bids[i].size) : "";
-        std::string bidStr   = hasBid ? Market_Fmt(bids[i].price) : "";
-        std::string askStr   = hasAsk ? Market_Fmt(asks[i].price) : "";
-        std::string askSzStr = hasAsk ? Market_FmtQty(asks[i].size) : "";
-        lvi.pszText = (LPSTR)askSzStr.c_str();
+        lvi.iItem  = row;
+        lvi.lParam = 1;  // ask
+        std::string priceStr = Market_Fmt(asks[i].price);
+        lvi.pszText = (LPSTR)priceStr.c_str();
         ListView_InsertItem(hList, &lvi);
-        ListView_SetItemText(hList, i, 1, (LPSTR)askStr.c_str());
-        ListView_SetItemText(hList, i, 2, (LPSTR)bidStr.c_str());
-        ListView_SetItemText(hList, i, 3, (LPSTR)bidSzStr.c_str());
+        std::string sizeStr = Market_FmtQty(asks[i].size);
+        ListView_SetItemText(hList, row, 1, (LPSTR)sizeStr.c_str());
+        ++row;
     }
+
+    // Bids: IBKR position 0 = best bid (highest price) → insert in order so best
+    // bid appears immediately below the asks.
+    for (int i = 0; i < (int)bids.size(); ++i) {
+        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem  = row;
+        lvi.lParam = 2;  // bid
+        std::string priceStr = Market_Fmt(bids[i].price);
+        lvi.pszText = (LPSTR)priceStr.c_str();
+        ListView_InsertItem(hList, &lvi);
+        std::string sizeStr = Market_FmtQty(bids[i].size);
+        ListView_SetItemText(hList, row, 1, (LPSTR)sizeStr.c_str());
+        ++row;
+    }
+
+    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(hList, NULL, FALSE);
+}
+
+// ── Executions list refresh ───────────────────────────────────────────────────
+// Shows all orders with status=="Executed" for the current symbol.
+// lParam: 1 = BUY side, 2 = SELL side  (used by NM_CUSTOMDRAW for colouring).
+static void Market_RefreshExec(HWND hWnd, TsState* state) {
+    if (!state || !state->hExecList) return;
+
+    HWND hList = state->hExecList;
+    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
+    ListView_DeleteAllItems(hList);
+
+    auto orders = api().getOrdersSorted();
+    int row = 0;
+    for (const auto& o : orders) {
+        if (o.status != "Executed") continue;
+        if (o.symbol != state->symbol) continue;
+
+        // Normalise side: execDetails stores "BOT"/"SLD", openOrder stores "BUY"/"SELL"
+        std::string side = o.action;
+        if (side == "BOT") side = "BUY";
+        else if (side == "SLD") side = "SELL";
+
+        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem  = row;
+        lvi.lParam = (side == "BUY") ? 1 : 2;
+        lvi.pszText = (LPSTR)side.c_str();
+        ListView_InsertItem(hList, &lvi);
+
+        // Quote: "qty @ price"
+        char buf[48];
+        if (o.price > 0)
+            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.filledQty > 0 ? o.filledQty : o.totalQty, o.price);
+        else if (o.avgFillPx > 0)
+            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.filledQty > 0 ? o.filledQty : o.totalQty, o.avgFillPx);
+        else
+            snprintf(buf, sizeof(buf), "%.0f @ --", o.filledQty > 0 ? o.filledQty : o.totalQty);
+        ListView_SetItemText(hList, row, 1, buf);
+
+        ++row;
+    }
+
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     InvalidateRect(hList, NULL, FALSE);
 }
@@ -959,6 +1058,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 
         // ── Lists ─────────────────────────────────────────────────────────────
+        state->hExecList    = Market_CreateExecList(hWnd, hInst);
         state->hL2List      = Market_CreateL2List(hWnd, hInst);
         state->hTsList      = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0001,       hInst);
         state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0100,  hInst);
@@ -967,6 +1067,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SetWindowSubclass(state->hTsListF100,  Market_ListForwardCtrlProc, 11, 0);
         SetWindowSubclass(state->hTsListF1000, Market_ListForwardCtrlProc, 12, 0);
         SetWindowSubclass(state->hL2List,      Market_ListForwardCtrlProc, 13, 0);
+        SetWindowSubclass(state->hExecList,    Market_ListForwardCtrlProc, 14, 0);
 
         {
             HFONT hListFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
@@ -976,10 +1077,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hListFont, TRUE);
             SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hListFont, TRUE);
             SendMessage(state->hL2List,      WM_SETFONT, (WPARAM)hListFont, TRUE);
+            SendMessage(state->hExecList,    WM_SETFONT, (WPARAM)hListFont, TRUE);
         }
 
         ShowWindow(state->hTsList, SW_SHOW);
         ShowWindow(state->hL2List, SW_SHOW);
+        ShowWindow(state->hExecList, SW_SHOW);
 
         // ── Overnight checkbox (far left, below speaker) ─────────────────────────
         state->hOVNButton = CreateWindowW(L"STATIC", MOON_GLYPH,
@@ -1058,6 +1161,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Seed L1 from watchlist cache so VWAP (and other ticks) are
         // immediately visible before the first L1 update fires
         PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
+        // Seed executions list from any already-loaded orders
+        Market_RefreshExec(hWnd, state);
         UpdateMarketRegistry();
         break;
     }
@@ -1230,11 +1335,36 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     bool dark = Settings_DarkMode();
-                    COLORREF rowBg = dark
+                    // lParam stores 1=ask, 2=bid
+                    LPARAM side = cd->nmcd.lItemlParam;
+                    COLORREF clr = (side == 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
+                    COLORREF bg  = dark
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
-                    cd->clrTextBk = rowBg;
-                    cd->clrText   = (cd->iSubItem <= 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
+                    cd->clrTextBk = bg;
+                    cd->clrText   = clr;
+                    return CDRF_DODEFAULT;
+                }
+            }
+            break;
+        }
+
+        if (hdr->idFrom == ID_MARKET_EXEC_LIST) {
+            NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
+            switch (cd->nmcd.dwDrawStage) {
+                case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
+                case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
+                case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    bool dark = Settings_DarkMode();
+                    // lParam stores 1=BUY (blue/green), 2=SELL (red)
+                    LPARAM side = cd->nmcd.lItemlParam;
+                    COLORREF clr = (side == 1) ? COINS_CLR_BLUE : COINS_CLR_RED;
+                    COLORREF bg  = dark
+                        ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
+                        : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
+                    cd->nmcd.uItemState &= ~CDIS_SELECTED;
+                    cd->clrTextBk = bg;
+                    cd->clrText   = clr;
                     return CDRF_DODEFAULT;
                 }
             }
@@ -1242,6 +1372,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         break;
     }
+
+    case WM_API_EXECUTION:
+        if (state) Market_RefreshExec(hWnd, state);
+        break;
 
     case WM_API_UPDATE: {
         if (state) {
@@ -1252,6 +1386,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
                 if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
                 if (state->hL2List)      ListView_DeleteAllItems(state->hL2List);
+                if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
                 state->l1Info = TradingAPI::L1Book{};
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
@@ -1288,8 +1423,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state && state->dragMode != 0) {
             RECT rc; GetClientRect(hWnd, &rc);
             const int bodyH = rc.bottom - HEADER_H;
-            const int tsW   = rc.right - L2_W;
-            int x = (short)LOWORD(lParam) - L2_W;
+            const int tsW   = rc.right - (EXEC_W + L2_W);
+            int x = (short)LOWORD(lParam) - (EXEC_W + L2_W);
             int y = (short)HIWORD(lParam) - HEADER_H;
 
             if (state->dragMode == 1) {
@@ -1340,5 +1475,5 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         UpdateMarketRegistry();
         break;
     }
-    return HandleCommonMessages(hWnd, message, wParam, lParam);
+    return HandleCommonMessages(hWnd, message, wParam, lParam);   
 }

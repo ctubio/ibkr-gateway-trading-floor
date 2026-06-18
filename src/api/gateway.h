@@ -81,6 +81,9 @@ public:
         std::string status;
         std::string time;
         bool includeOvernight = false;
+        int      parentId = 0;      // Parent order Id, to associate Auto STP or TRAIL orders with the original order.
+        std::string ocaGroup;      // one cancels all group name
+        int      ocaType = 0;       // 1 = CANCEL_WITH_BLOCK, 2 = REDUCE_WITH_BLOCK, 3 = REDUCE_NON_BLOCK
     };
 
     struct PositionInfo {
