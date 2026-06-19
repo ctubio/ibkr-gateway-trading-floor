@@ -117,11 +117,11 @@ static const DiamondCol diamondCols[] = {
     { "Bid",               90, LVCFMT_RIGHT },
     { "BidSz",             70, LVCFMT_RIGHT },
     { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Daily %",          100, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Change %",          105, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
-    { "Unrealized %",     100, LVCFMT_RIGHT },
-    { "Unrealized",       100, LVCFMT_RIGHT },
+    { "Unrealized %",     115, LVCFMT_RIGHT },
+    { "Unrealized",       105, LVCFMT_RIGHT },
     { "Mkt Value",        100, LVCFMT_RIGHT },
     { "Net %",             85, LVCFMT_RIGHT },
     { "Yield %",           80, LVCFMT_RIGHT },
@@ -287,6 +287,58 @@ static void Diamonds_ApplySort(HWND hList) {
 static const char* DIAMONDS_NO_DATA = "--";
 
 
+static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
+    // Grab our new unified cache row
+    auto& row = g_DiamondDataCache[conId];
+    row.conId = conId; 
+    
+    TradingAPI::PnlSinglePayload pnlSingle;
+    double avgCost = 0.0;
+    {
+        std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
+        auto& pm = api().getPortfolioMap();
+        auto it = pm.find(conId);
+        if (it != pm.end()) {
+            pnlSingle = it->second.pnlSingle;
+            avgCost = it->second.avgCost;
+        }
+    }
+
+    if (pnlSingle.conId > 0) {
+        char buf[64];
+        if (pnlSingle.has_daily) {
+            row.sortValues[DCOL_DAILYPNL] = pnlSingle.dailyPnL;
+            snprintf(buf, sizeof(buf), "%+.2f", pnlSingle.dailyPnL);
+            row.textCols[DCOL_DAILYPNL] = buf;
+        }
+        if (pnlSingle.has_unrealized) {
+            row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
+            snprintf(buf, sizeof(buf), "%+.2f", pnlSingle.unrealizedPnL);
+            row.textCols[DCOL_UNREALIZED_PL] = buf;
+
+            // Recompute the % column
+            double last = row.sortValues[DCOL_LAST];
+            if (avgCost > 0.0 && last > 0.0) {
+                double pct = (last - avgCost) / avgCost * 100.0;
+                row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
+                snprintf(buf, sizeof(buf), "%+.2f%%", pct);
+                row.textCols[DCOL_UNREALIZED_PL_PCT] = buf;
+            } else {
+                row.sortValues[DCOL_UNREALIZED_PL_PCT] = -999999.0;
+                row.textCols[DCOL_UNREALIZED_PL_PCT] = "--";
+            }
+        }
+
+        // ZERO-FLICKER FIX: Invalidate ONLY the row that changed, perfectly smoothly
+        auto it = std::find(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), conId);
+        if (it != g_DiamondDisplayOrder.end()) {
+            int row = (int)std::distance(g_DiamondDisplayOrder.begin(), it);
+            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+            if (hList) ListView_RedrawItems(hList, row, row);
+        }
+    }
+}
+
 static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     auto it = g_DiamondDataCache.find(conId);
     if (it == g_DiamondDataCache.end()) return;
@@ -390,7 +442,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
     std::vector<TradingAPI::PositionInfo> rows;
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        for (auto const& [sym, info] : api().getPortfolioMap()) {
+        for (auto const& [conId, info] : api().getPortfolioMap()) {
             auto it = g_DiamondsTabMap.find(info.conId);
             int  assignedTab = (it != g_DiamondsTabMap.end()) ? it->second : DTAB_ALL;
             if (!((g_DiamondsCheckedTabs >> assignedTab) & 1)) continue;
@@ -427,6 +479,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
         if (api().getWatchlistData(pos.conId, tickInfo)) {
             Diamonds_UpdateMarketCols(pos.conId, tickInfo);
         }
+
+        Diamonds_UpdatePnLCols(hWnd, pos.conId);
 
         g_DiamondDisplayOrder.push_back(pos.conId);
     }
@@ -577,58 +631,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     //   wParam = conId (fast row-lookup key, no pointer deref needed)
     //   lParam = heap-allocated TradingAPI::PnlSinglePayload* — we own it, must delete.
     case WM_PNL_SINGLE: {
-        auto* payload = reinterpret_cast<TradingAPI::PnlSinglePayload*>(lParam);
-        if (!payload) break;
-
-        int conId = static_cast<int>(wParam);
-        
-        // Grab our new unified cache row
-        auto& row = g_DiamondDataCache[conId];
-        row.conId = conId; 
-
-        char buf[64];
-        if (payload->has_daily) {
-            row.sortValues[DCOL_DAILYPNL] = payload->dailyPnL;
-            snprintf(buf, sizeof(buf), "%+.2f", payload->dailyPnL);
-            row.textCols[DCOL_DAILYPNL] = buf;
-        }
-        if (payload->has_unrealized) {
-            row.sortValues[DCOL_UNREALIZED_PL] = payload->unrealizedPnL;
-            snprintf(buf, sizeof(buf), "%+.2f", payload->unrealizedPnL);
-            row.textCols[DCOL_UNREALIZED_PL] = buf;
-
-            // Recompute the % column
-            const std::string& symBuf = row.textCols[DCOL_SYMBOL];
-            double avgCost = 0.0, last = 0.0;
-            {
-                std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-                auto& pmap = api().getPortfolioMap();
-                auto pit = pmap.find(symBuf);
-                if (pit != pmap.end()) avgCost = pit->second.avgCost;
-            }
-            TradingAPI::L1Book wInfo;
-            if (api().getWatchlistData(conId, wInfo)) last = wInfo.last;
-
-            if (avgCost > 0.0 && last > 0.0) {
-                double pct = (last - avgCost) / avgCost * 100.0;
-                row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
-                snprintf(buf, sizeof(buf), "%+.2f%%", pct);
-                row.textCols[DCOL_UNREALIZED_PL_PCT] = buf;
-            } else {
-                row.sortValues[DCOL_UNREALIZED_PL_PCT] = -999999.0;
-                row.textCols[DCOL_UNREALIZED_PL_PCT] = "--";
-            }
-        }
-        delete payload;
-
-        // ZERO-FLICKER FIX: Invalidate ONLY the row that changed, perfectly smoothly
-        auto it = std::find(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), conId);
-        if (it != g_DiamondDisplayOrder.end()) {
-            int row = (int)std::distance(g_DiamondDisplayOrder.begin(), it);
-            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-            if (hList) ListView_RedrawItems(hList, row, row);
-        }
-        
+        int conId = (int)lParam;
+        if (!conId) break;
+        Diamonds_UpdatePnLCols(hWnd, conId);
         // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single PnL tick!
         break;
     }
@@ -705,7 +710,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 {
                     std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
                     auto& pmap = api().getPortfolioMap();
-                    auto pit = pmap.find(sym);
+                    auto pit = pmap.find(conId);
                     if (pit != pmap.end()) exchange = pit->second.exchange;
                 }
                 std::string entry = std::to_string(conId) + "." + sym;
@@ -878,7 +883,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_PCT_NETLIQ) {
+                    if (cd->iSubItem == DCOL_PCT_NETLIQ) {
+                        cd->clrText = COINS_CLR_GRAY;
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;

@@ -56,7 +56,6 @@ struct TsState {
     // ── PnL State ─────────────────────────────────────────────────────────────
     double dailyPnL = 0.0;
     double unrealizedPnL = 0.0;
-    bool hasPnL = false;
 
     // ── Cached fonts ──────────────────────────────────────────────────────────
     HFONT hBigFont     = NULL;   // ~22pt bold — bid ask
@@ -793,14 +792,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SelectObject(hdc, state->hStatusFont);
     
     // Calculate PnL (Fallback to local calculation if TWS hasn't sent a stream update yet)
-    double dPnL = 0.0, uPnL = 0.0;
-    if (state->hasPnL) {
-        dPnL = state->dailyPnL;
-        uPnL = state->unrealizedPnL;
-    } else {
-        //dPnL = state->position * (displayLast - L1.prevClose);
-        //uPnL = state->position * (displayLast - state->avgPrice);
-    }
+    double dPnL = state->dailyPnL;
+    double uPnL = state->unrealizedPnL;
 
     // Format Strings (Only show if we hold a position, else "--")
     char bufD[32], bufU[32];
@@ -1007,11 +1000,16 @@ void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
     if (!state) return;
     std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
     auto& pm = api().getPortfolioMap();
-    auto it = pm.find(state->symbol);
+    auto it = pm.find(state->conId);
     if (it != pm.end()) {
-        state->position = it->second.shares;
-        state->avgPrice = it->second.avgCost;
+        state->position      = it->second.shares;
+        state->avgPrice      = it->second.avgCost;
+        state->dailyPnL      = it->second.pnlSingle.dailyPnL;
+        state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
     }
+    
+    RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+    InvalidateRect(hWnd, &hdrRc, FALSE);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -1221,8 +1219,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
         }
         Market_RefreshPositionAndAvg(hWnd, state);
-        RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
-        InvalidateRect(hWnd, &hdrRc, FALSE);
         break;
     }
 
@@ -1282,27 +1278,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
             Market_RefreshPositionAndAvg(hWnd, state);
-            RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
-            InvalidateRect(hWnd, &hdrRc, FALSE);
         }
         delete tick;
         break;
     }
 
     case WM_PNL_SINGLE: {
-        auto* payload = reinterpret_cast<TradingAPI::PnlSinglePayload*>(lParam);
-        if (state && payload) {
-            std::string ffff = std::to_string(payload->unrealizedPnL);
-            LogDebug(ffff);
-            if (payload->has_daily)      state->dailyPnL      = payload->dailyPnL;
-            if (payload->has_unrealized) state->unrealizedPnL = payload->unrealizedPnL;
-            state->hasPnL = true;
-            
-            // Only invalidate the header to avoid flickering the lists
-            RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
-            InvalidateRect(hWnd, &hdrRc, FALSE);
-        }
-        if (payload) delete payload;
+        int conId = (int)lParam;
+        if (!conId || !state || state->conId != conId) break;
+        Market_RefreshPositionAndAvg(hWnd, state);
         break;
     }
 

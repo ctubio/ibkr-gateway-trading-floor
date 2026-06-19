@@ -86,14 +86,29 @@ public:
         int      ocaType = 0;       // 1 = CANCEL_WITH_BLOCK, 2 = REDUCE_WITH_BLOCK, 3 = REDUCE_NON_BLOCK
     };
 
+    // ── Per-position live PnL payload ─────────────────────────────────────────
+    // Heap-allocated by pnlSingle(); posted via WM_PNL_SINGLE.
+    //   wParam = conId (int cast)
+    //   lParam = PnlSinglePayload*  — the UI handler owns it and must delete it.
+    // Only fields whose value != UNSET_DOUBLE are valid; check the has_* guards.
+    struct PnlSinglePayload {
+        int    conId          = 0;
+        double dailyPnL       = 0.0;
+        double unrealizedPnL  = 0.0;
+        double realizedPnL    = 0.0;
+        bool   has_daily      = false;
+        bool   has_unrealized = false;
+    };
+
     struct PositionInfo {
+        int         conId;
         std::string symbol;
         std::string exchange;
-        int         conId;
         double      shares            = 0.0;
         double      avgCost           = 0.0;
         double      dailyPnL          = 0.0;
         double      marketValue       = 0.0;
+        PnlSinglePayload pnlSingle;
     };
 
     // lParam of WM_MARKET_TICK — handler owns and must delete.
@@ -175,21 +190,6 @@ public:
         double      size  = 0.0;
     };
 
-    // ── Per-position live PnL payload ─────────────────────────────────────────
-    // Heap-allocated by pnlSingle(); posted via WM_PNL_SINGLE.
-    //   wParam = conId (int cast)
-    //   lParam = PnlSinglePayload*  — the UI handler owns it and must delete it.
-    // Only fields whose value != UNSET_DOUBLE are valid; check the has_* guards.
-    struct PnlSinglePayload {
-        int    conId          = 0;
-        double dailyPnL       = 0.0;
-        double unrealizedPnL  = 0.0;
-        double realizedPnL    = 0.0;
-        bool   has_daily      = false;
-        bool   has_unrealized = false;
-        bool   has_realized   = false;
-    };
-
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     TradingAPI();
@@ -236,7 +236,7 @@ public:
     // ── Portfolio ─────────────────────────────────────────────────────────────
 
     std::mutex& getPortfolioMutex();
-    std::map<std::string, PositionInfo>& getPortfolioMap();
+    std::map<int, PositionInfo>& getPortfolioMap();
 
     // ── Time and Sales ────────────────────────────────────────────────────────
 
