@@ -94,8 +94,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
     
-    std::string* windowRegistryKey = new std::string(multiInstance ? windowKey.c_str() : className);
-    LoadWinPosition(windowRegistryKey->c_str(), x, y, w, h);
+    LoadWinPosition(multiInstance ? windowKey.c_str() : className, x, y, w, h);
 
     if (hInst) { // dashboard window
         hWnd = CreateWindow(className, title, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, x, y, w, h, NULL, NULL, hInst, lpParam);

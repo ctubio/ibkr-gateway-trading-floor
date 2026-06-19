@@ -663,10 +663,9 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
 
-    auto orders = api().getOrdersSorted();
+    auto orders = api().getExecutions();
     int row = 0;
     for (const auto& o : orders) {
-        if (o.status != "Executed") continue;
         if (o.symbol != state->symbol) continue;
 
         // Normalise side: execDetails stores "BOT"/"SLD", openOrder stores "BUY"/"SELL"
@@ -1007,7 +1006,7 @@ void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
         state->dailyPnL      = it->second.pnlSingle.dailyPnL;
         state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
     }
-    
+
     RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
     InvalidateRect(hWnd, &hdrRc, FALSE);
 }

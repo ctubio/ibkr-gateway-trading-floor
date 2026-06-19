@@ -224,6 +224,7 @@ public:
 
     void cancelOrders(int coinId);
     std::vector<OrderInfo> getOrdersSorted();
+    std::vector<OrderInfo> getExecutions();
     // Transmit a cancel request for the given order.
     void cancelOrder(int orderId);
     // Submit a new limit order
