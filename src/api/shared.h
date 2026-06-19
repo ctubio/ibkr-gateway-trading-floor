@@ -52,10 +52,12 @@ static COLORREF GetCtrlColor(HWND hw) {
 }
 
 void InitDarkBrushes() {
-    if (hDarkBrush)  DeleteObject(hDarkBrush);
-    if (hDarkBrush2) DeleteObject(hDarkBrush2);
     hDarkBrush  = CreateSolidBrush(DM_BG);
     hDarkBrush2 = CreateSolidBrush(DM_BG2);
+    
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken;
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 }
 
 void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
@@ -71,7 +73,6 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
 }
 
 HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
-    if (hDarkBrush == NULL || hDarkBrush2 == NULL) InitDarkBrushes();
     // Multi-instance windows (windowKey differs from className, e.g. market per-symbol)
     // are distinguished by title - each has a unique one. Single-instance windows match
     // on class alone. Either way no map needed: FindWindowA does the work.
@@ -271,6 +272,7 @@ std::unordered_map<std::string, HICON> offlineIcons;
 std::unordered_map<std::string, HICON> onlineIcons;
 
 void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className, int iconId, bool isPopup = false) {
+    if (hDarkBrush == NULL || hDarkBrush2 == NULL) InitDarkBrushes();
     HICON& offlineIcon = offlineIcons[std::string(className)];
     HICON& onlineIcon  = onlineIcons[std::string(className)];
     onlineIcon  = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
