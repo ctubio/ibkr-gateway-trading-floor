@@ -798,8 +798,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         dPnL = state->dailyPnL;
         uPnL = state->unrealizedPnL;
     } else {
-        dPnL = state->position * (displayLast - L1.prevClose);
-        uPnL = state->position * (displayLast - state->avgPrice);
+        //dPnL = state->position * (displayLast - L1.prevClose);
+        //uPnL = state->position * (displayLast - state->avgPrice);
     }
 
     // Format Strings (Only show if we hold a position, else "--")
@@ -1292,6 +1292,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_PNL_SINGLE: {
         auto* payload = reinterpret_cast<TradingAPI::PnlSinglePayload*>(lParam);
         if (state && payload) {
+            std::string ffff = std::to_string(payload->unrealizedPnL);
+            LogDebug(ffff);
             if (payload->has_daily)      state->dailyPnL      = payload->dailyPnL;
             if (payload->has_unrealized) state->unrealizedPnL = payload->unrealizedPnL;
             state->hasPnL = true;

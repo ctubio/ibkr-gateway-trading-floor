@@ -353,14 +353,29 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_MKTVAL, mktVal, "%.2f", true);
     setCol(DCOL_PCT_NETLIQ, pctNetLiq, "%.2f%%", true);
 
-    // If PNL hasn't arrived natively yet, use local estimation
-    if (row.textCols[DCOL_DAILYPNL] == "") {
+    /* / Estimate PnL from market data only when no real value from WM_PNL_SINGLE
+    // has arrived yet.  We detect "real value present" by checking whether the
+    // sortValue is non-zero AND the text cell is not the "--" sentinel
+    // (which can be written by setNA above with a -999999 sort value).
+    // A freshly-created row has sortValue==0.0 and textCols=="", so estimation
+    // always runs on first open.  Once pnlSingle posts a real value the sort
+    // value goes non-zero and we leave it alone.
+    bool hasRealDaily      = (row.sortValues[DCOL_DAILYPNL]      != 0.0 &&
+                               row.textCols[DCOL_DAILYPNL]        != "");
+    bool hasRealUnrealized = (row.sortValues[DCOL_UNREALIZED_PL]  != 0.0 &&
+                               row.textCols[DCOL_UNREALIZED_PL]   != "");
+
+    if (!hasRealDaily) {
         if (t.prevClose > 0.0) setCol(DCOL_DAILYPNL, shares * t.change(), "%+.2f", true);
-        double unrlPnL = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
-        double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0) ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-        setCol(DCOL_UNREALIZED_PL, unrlPnL, "%+.2f", true);
-        setCol(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%", true);
+        else setNA(DCOL_DAILYPNL);
     }
+    if (!hasRealUnrealized) {
+        double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
+        double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
+                                ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
+        setCol(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f",   true);
+        setCol(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%", true);
+    }*/
 
     // Row selective invalidation happens in the message handler
 }
@@ -383,15 +398,21 @@ static void Diamonds_Repopulate(HWND hWnd) {
         }
     }
 
-    // Initialize the cache for all valid rows
+    // Build/refresh the cache rows.
+    // Rule: only write the fields we own here (identity, position, avgCost, market
+    // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL / DCOL_UNREALIZED_PL_PCT
+    // — those are owned by WM_PNL_SINGLE and must survive a repopulate so they
+    // remain visible when the window is closed and reopened.
     char buf[64];
     for (const auto& pos : rows) {
+        // operator[] creates a default row only when the conId is new.
+        // For existing rows it returns the current entry — PnL fields are preserved.
         auto& cacheRow = g_DiamondDataCache[pos.conId];
-        cacheRow.conId = pos.conId;
+        cacheRow.conId  = pos.conId;
         cacheRow.symbol = pos.symbol;
-        
+
         cacheRow.textCols[DCOL_SYMBOL] = pos.symbol;
-        
+
         cacheRow.sortValues[DCOL_POSITION] = pos.shares;
         snprintf(buf, sizeof(buf), "%.4g", pos.shares);
         cacheRow.textCols[DCOL_POSITION] = buf;
@@ -400,12 +421,13 @@ static void Diamonds_Repopulate(HWND hWnd) {
         snprintf(buf, sizeof(buf), "%.2f", pos.avgCost);
         cacheRow.textCols[DCOL_AVGPRICE] = buf;
 
-        // Pre-fill market data if available
+        // Pre-fill market data if already cached — this also seeds the estimated
+        // PnL columns for the first open (before WM_PNL_SINGLE arrives).
         TradingAPI::L1Book tickInfo;
         if (api().getWatchlistData(pos.conId, tickInfo)) {
             Diamonds_UpdateMarketCols(pos.conId, tickInfo);
         }
-        
+
         g_DiamondDisplayOrder.push_back(pos.conId);
     }
 
@@ -445,6 +467,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             0, 0, 1100, 420, hWnd, (HMENU)ID_DIAMONDS_RESULTS_LIST, hInst, NULL);
 
         // No paint timer needed, rows are selectively invalidated on data arrival.
+        // Start the paint-limiter timer so Diamonds_ApplySort's dirty flag is flushed.
+        SetTimer(hWnd, DIAMONDS_PAINT_TIMER_ID, DIAMONDS_PAINT_TIMER_MS, NULL);
 
         DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
         ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.hBoldFont, DiamondsZoomData.fontSize);
@@ -488,7 +512,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
         }
         
-        api().addApiUpdateWindow(hWnd);        
+        api().addApiUpdateWindow(hWnd);
         Diamonds_Repopulate(hWnd);
         break;
     }
@@ -914,10 +938,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 g_DiamondsDirty = false;
             }
         }
+        break;  // was missing — without this, every timer tick fell through into WM_DESTROY,
+                // killing timers, clearing the cache, and calling removeApiUpdateWindow.
     }
 
     case WM_DESTROY:
         KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
+        KillTimer(hWnd, DIAMONDS_PAINT_TIMER_ID);
         g_DiamondsSortPending = false;
         api().removeApiUpdateWindow(hWnd);
         g_DiamondDataCache.clear();
