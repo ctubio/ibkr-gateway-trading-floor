@@ -258,8 +258,9 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     else                          snprintf(buf, sizeof(buf), "0.00");
     if (hPriceEdit) SetWindowTextA(hPriceEdit, buf);
 
-    snprintf(buf, sizeof(buf), "%.0f", order.totalQty);
-    if (hQtyEdit) SetWindowTextA(hQtyEdit, buf);
+    char bufq[32];
+    snprintf(bufq, sizeof(bufq), "%.0f", order.totalQty);
+    if (hQtyEdit) SetWindowTextA(hQtyEdit, bufq);
 
     HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hHint) {
