@@ -25,7 +25,7 @@ static HFONT fontInputs   = NULL;
 
 struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
-    { "Side",          50,  LVCFMT_CENTER},
+    { "Side",          55,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
     { "Quote",        135,  LVCFMT_RIGHT },
     { "Avg Filled",   135,  LVCFMT_RIGHT },
@@ -48,6 +48,11 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
         
     return dark ? DM_TEXT : LM_TEXT;
 }
+
+// Forward declarations (defined further below; needed because Orders_Repopulate
+// checks editability of the order currently shown in the inline panel).
+static bool Orders_IsEditable(const std::string& status);
+static void Orders_HideInlinePanel(HWND hWnd);
 
 // Rebuilds the entire ListView from the current snapshot.
 static void Orders_Repopulate(HWND hWnd) {
@@ -102,6 +107,20 @@ static void Orders_Repopulate(HWND hWnd) {
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+
+    // If the order currently shown in the inline panel is no longer editable
+    // (e.g. it just got filled/cancelled), hide the panel. Otherwise leave it as is.
+    if (s_editState.panelVisible && s_editState.orderId != 0) {
+        bool stillEditable = false;
+        for (const auto& o : orders) {
+            if (o.orderId == s_editState.orderId) {
+                stillEditable = Orders_IsEditable(o.status);
+                break;
+            }
+        }
+        if (!stillEditable)
+            Orders_HideInlinePanel(hWnd);
+    }
 }
 
 // ── Inline edit panel ─────────────────────────────────────────────────────────

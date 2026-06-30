@@ -111,11 +111,11 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",            100, LVCFMT_RIGHT },
-    { "AskSz",             75, LVCFMT_RIGHT },
+    { "AskSz",             80, LVCFMT_RIGHT },
     { "Ask",              100, LVCFMT_RIGHT },
     { "Last",             100, LVCFMT_RIGHT },
     { "Bid",              100, LVCFMT_RIGHT },
-    { "BidSz",             75, LVCFMT_RIGHT },
+    { "BidSz",             80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
