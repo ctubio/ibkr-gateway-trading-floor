@@ -764,7 +764,7 @@ public:
         if (data.size() < 2) return;
 
         // Reserve the left portion for the numeric text; sparkline fills the rest.
-        const int leftMargin = -30;   // px gap from cell left edge
+        const int leftMargin = -20;   // px gap from cell left edge
         const int topPad     = 3;
         const int botPad     = 3;
 

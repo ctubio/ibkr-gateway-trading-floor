@@ -109,7 +109,7 @@ static bool g_DiamondsDirty = false;
 struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
-    { "Position",          90, LVCFMT_RIGHT },
+    { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",            100, LVCFMT_RIGHT },
     { "AskSz",             75, LVCFMT_RIGHT },
     { "Ask",              100, LVCFMT_RIGHT },
