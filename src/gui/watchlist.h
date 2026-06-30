@@ -202,27 +202,25 @@ static void Watchlist_InsertRow(HWND hWnd, const std::string& symbol, int conId)
 // preventing bogus -100% change readings and misleading empty-string cells.
 static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::L1Book& info) {
     HWND hWatchlistList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
-    char buf[32];
 
-    // Helper: format a non-zero double into buf and return buf; otherwise blank.
-    auto fmt = [&](double v, const char* fmt_str) -> const char* {
-        if (v == 0.0) { buf[0] = '\0'; }
-        else          { snprintf(buf, sizeof(buf), fmt_str, v); }
-        return buf;
+    // Helper: format a non-zero double into std::string; otherwise blank.
+    auto fmt = [&](double v, std::string_view fmt_str) -> std::string {
+        if (v == 0.0) { return ""; }
+        return std::vformat(fmt_str, std::make_format_args(v));
     };
 
     // ── Columns independent of Last ───────────────────────────────────────────
-    ListView_SetItemText(hWatchlistList, row, TCOL_BID,        (LPSTR)fmt(info.bid,     "%.2f"));
-    ListView_SetItemText(hWatchlistList, row, TCOL_BIDSIZE,    (LPSTR)fmt(info.bidSize, "%.0f"));
-    ListView_SetItemText(hWatchlistList, row, TCOL_ASK,        (LPSTR)fmt(info.ask,     "%.2f"));
-    ListView_SetItemText(hWatchlistList, row, TCOL_ASKSIZE,    (LPSTR)fmt(info.askSize, "%.0f"));
+    ListView_SetItemText(hWatchlistList, row, TCOL_BID,        (LPSTR)fmt(info.bid,     "{:.2f}").c_str());
+    ListView_SetItemText(hWatchlistList, row, TCOL_BIDSIZE,    (LPSTR)fmt(info.bidSize, "{:.0f}").c_str());
+    ListView_SetItemText(hWatchlistList, row, TCOL_ASK,        (LPSTR)fmt(info.ask,     "{:.2f}").c_str());
+    ListView_SetItemText(hWatchlistList, row, TCOL_ASKSIZE,    (LPSTR)fmt(info.askSize, "{:.0f}").c_str());
 
     // Dividend yield requires Last to be > 0, but the function itself guards
     // for that internally (returns 0 when last <= 0); show blank rather than "--".
-    ListView_SetItemText(hWatchlistList, row, TCOL_DIV_YIELD,  (LPSTR)fmt(info.dividendYield(), "%.2f%%"));
+    ListView_SetItemText(hWatchlistList, row, TCOL_DIV_YIELD,  (LPSTR)fmt(info.dividendYield(), "{:.2f}%").c_str());
     ListView_SetItemText(hWatchlistList, row, TCOL_DIV_DATE,   (LPSTR)info.dividendDate.c_str());
-    ListView_SetItemText(hWatchlistList, row, TCOL_DIV_AMT,    (LPSTR)fmt(info.dividendAmount,  "%.3f"));
-    ListView_SetItemText(hWatchlistList, row, TCOL_ANNUAL_DIV, (LPSTR)fmt(info.annualDividends, "%.3f"));
+    ListView_SetItemText(hWatchlistList, row, TCOL_DIV_AMT,    (LPSTR)fmt(info.dividendAmount,  "{:.3f}").c_str());
+    ListView_SetItemText(hWatchlistList, row, TCOL_ANNUAL_DIV, (LPSTR)fmt(info.annualDividends, "{:.3f}").c_str());
 
     // ── Columns that require Last > 0 ────────────────────────────────────────
     // When the market is closed, reqMktData returns Last == 0.
@@ -236,12 +234,12 @@ static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::L1Book& in
     }
 
     // Last is valid — compute derived values normally.
-    ListView_SetItemText(hWatchlistList, row, TCOL_LAST, (LPSTR)fmt(info.last, "%.2f"));
+    ListView_SetItemText(hWatchlistList, row, TCOL_LAST, (LPSTR)fmt(info.last, "{:.2f}").c_str());
 
     // Change % is only meaningful when prevClose is available.
     if (info.prevClose > 0.0) {
         ListView_SetItemText(hWatchlistList, row, TCOL_CHGPCT,
-                             (LPSTR)fmt(info.changePct(), "%+.2f%%"));
+                             (LPSTR)fmt(info.changePct(), "{:+.2f}%").c_str());
     } else {
         ListView_SetItemText(hWatchlistList, row, TCOL_CHGPCT, (LPSTR)WATCHLIST_NO_DATA);
     }

@@ -48,9 +48,8 @@ void LogDebug(const std::string& msg) {
 // Generic registry helpers to reduce duplication
 void RegSetString(const char* subPath, const char* valueName, const std::string& value) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subPath);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, valueName, 0, REG_SZ, (const BYTE*)value.c_str(), (DWORD)value.size() + 1);
         RegCloseKey(hKey);
     }
@@ -58,9 +57,8 @@ void RegSetString(const char* subPath, const char* valueName, const std::string&
 
 std::string RegGetString(const char* subPath, const char* valueName, const std::string& defaultValue = "") {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subPath);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         char buf[2048] = {};
         DWORD size = sizeof(buf);
         if (RegQueryValueExA(hKey, valueName, NULL, NULL, (LPBYTE)buf, &size) == ERROR_SUCCESS) {
@@ -74,9 +72,8 @@ std::string RegGetString(const char* subPath, const char* valueName, const std::
 
 void RegSetDword(const char* subPath, const char* valueName, DWORD value) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subPath);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, valueName, 0, REG_DWORD, (const BYTE*)&value, sizeof(DWORD));
         RegCloseKey(hKey);
     }
@@ -84,10 +81,9 @@ void RegSetDword(const char* subPath, const char* valueName, DWORD value) {
 
 DWORD RegGetDword(const char* subPath, const char* valueName, DWORD defaultValue = 0) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subPath);
     DWORD value = defaultValue;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD size = sizeof(DWORD);
         RegQueryValueExA(hKey, valueName, NULL, NULL, (LPBYTE)&value, &size);
         RegCloseKey(hKey);
@@ -97,9 +93,8 @@ DWORD RegGetDword(const char* subPath, const char* valueName, DWORD defaultValue
 
 void RegDelete(const char* subPath, const char* valueName) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subPath);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subPath);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_SET_VALUE, &hKey) == ERROR_SUCCESS) {
         RegDeleteValueA(hKey, valueName);
         RegCloseKey(hKey);
     }
@@ -235,11 +230,10 @@ void SaveWinPosition(HWND hWnd) {
         winKey = className;
     }
 
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, winKey.c_str());
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, winKey);
 
     HKEY hKey;
-    if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath, 0, NULL, 
+    if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, 
         REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) 
     {
         RegSetValueEx(hKey, "Window_X", 0, REG_DWORD, (const BYTE*)&x, sizeof(DWORD));
@@ -252,10 +246,9 @@ void SaveWinPosition(HWND hWnd) {
 
 bool LoadWinPosition(const char* subKeyName, int &x, int &y, int &w, int &h) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s", APP_REG_ROOT, subKeyName);
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subKeyName);
 
-    if (RegOpenKeyEx(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    if (RegOpenKeyEx(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD dwSize = sizeof(DWORD);
         RegQueryValueEx(hKey, "Window_X", NULL, NULL, (LPBYTE)&x, &dwSize);
         RegQueryValueEx(hKey, "Window_Y", NULL, NULL, (LPBYTE)&y, &dwSize);
@@ -565,29 +558,23 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
         // Currently always on top, remove it
         SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         // Save state: not on top
-        char key[256];
-        if (windowIdentifier && strlen(windowIdentifier) > 0) {
-            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
-        } else {
-            sprintf(key, "%s", windowClassName);
-        }
-        Settings_AlwaysOnTop_Save(key, 0);
+        std::string key = (windowIdentifier && strlen(windowIdentifier) > 0)
+            ? std::format("{}_{}", windowClassName, windowIdentifier)
+            : std::string(windowClassName);
+        Settings_AlwaysOnTop_Save(key.c_str(), 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         // Save state: on top
-        char key[256];
-        if (windowIdentifier && strlen(windowIdentifier) > 0) {
-            sprintf(key, "%s_%s", windowClassName, windowIdentifier);
-        } else {
-            sprintf(key, "%s", windowClassName);
-        }
+        std::string key = (windowIdentifier && strlen(windowIdentifier) > 0)
+            ? std::format("{}_{}", windowClassName, windowIdentifier)
+            : std::string(windowClassName);
         if (IsIconic(hWnd)) {
             ShowWindow(hWnd, SW_RESTORE);
         } else {
             ShowWindow(hWnd, SW_SHOW);
         }
-        Settings_AlwaysOnTop_Save(key, 1);
+        Settings_AlwaysOnTop_Save(key.c_str(), 1);
     }
 }
 
@@ -616,9 +603,8 @@ static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
 
 // Check if a specific Market window is set to Always On Top
 bool IsMarketAlwaysOnTop(const std::string& symbol) {
-    char key[256];
-    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
-    return Settings_AlwaysOnTop_Load(key, 0) != 0;
+    std::string key = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
+    return Settings_AlwaysOnTop_Load(key.c_str(), 0) != 0;
 }
 
 // Toggle Always On Top for a specific Market window by symbol
@@ -631,17 +617,16 @@ void ToggleMarketAlwaysOnTop(HWND hWnd, const std::string& symbol) {
     LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
     bool isCurrentlyOnTop = (exStyle & WS_EX_TOPMOST) != 0;
     
-    char key[256];
-    sprintf(key, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    std::string key = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
     
     if (isCurrentlyOnTop) {
         // Currently always on top, remove it
         SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_AlwaysOnTop_Save(key, 0);
+        Settings_AlwaysOnTop_Save(key.c_str(), 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_AlwaysOnTop_Save(key, 1);
+        Settings_AlwaysOnTop_Save(key.c_str(), 1);
     }
 }
 
@@ -655,11 +640,10 @@ void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
 
 void Save_OpenWindows(const char* className) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
     std::vector<std::string> windows;
 
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD size = 0;
         RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
         if (size > 0) {
@@ -681,7 +665,7 @@ void Save_OpenWindows(const char* className) {
     for (const auto& w : windows) { multiStr += w; multiStr += '\0'; }
     multiStr += '\0';
 
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
             (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
         RegCloseKey(hKey);
@@ -726,11 +710,10 @@ void Session_RemoveWindow(HWND hWnd) {
     if (ctx.foundOther) return;
     
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
+    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
     std::vector<std::string> windows;
 
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD size = 0;
         RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);
         if (size > 0) {
@@ -750,7 +733,7 @@ void Session_RemoveWindow(HWND hWnd) {
     for (const auto& w : windows) { multiStr += w; multiStr += '\0'; }
     multiStr += '\0';
 
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, "OpenWindows", 0, REG_MULTI_SZ,
             (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
         RegCloseKey(hKey);
@@ -759,9 +742,8 @@ void Session_RemoveWindow(HWND hWnd) {
 
 void Watchlist_DeleteList(const char* listName) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
         RegDeleteValueA(hKey, listName);
         RegCloseKey(hKey);
     }
@@ -776,9 +758,8 @@ void Watchlist_SaveFullList(const char* listName, const std::vector<std::string>
     multiStr += '\0';
 
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, listName, 0, REG_MULTI_SZ,
             (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
         RegCloseKey(hKey);
@@ -790,9 +771,8 @@ void Watchlist_SaveFullList(const char* listName, const std::vector<std::string>
 std::vector<std::string> Watchlist_LoadAllListNames() {
     std::vector<std::string> names;
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         return names;
     char valueName[256];
     DWORD index = 0, nameSize = sizeof(valueName);
@@ -808,9 +788,8 @@ std::vector<std::string> Watchlist_LoadAllListNames() {
 std::vector<std::string> Watchlist_ReadListEntries(const char* listName) {
     std::vector<std::string> entries;
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         return entries;
     DWORD type, size = 0;
     RegQueryValueExA(hKey, listName, NULL, &type, NULL, &size);
@@ -825,9 +804,8 @@ std::vector<std::string> Watchlist_ReadListEntries(const char* listName) {
 }
 void Settings_NewList_Save(const char* newName) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\%s\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         const char empty[2] = { '\0', '\0' };
         RegSetValueExA(hKey, newName, 0, REG_MULTI_SZ, (const BYTE*)empty, 2);
         RegCloseKey(hKey);
@@ -839,17 +817,15 @@ void Settings_NewList_Save(const char* newName) {
 // Keys are per-symbol so multiple open windows never collide.
 
 void Settings_SaveMarketSplitter(const std::string& symbol, float splitY) {
-    char windowKey[256];
-    sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
-    RegSetDword(windowKey, "SplitY", (DWORD)(splitY * 10000.0f));
+    std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
+    RegSetDword(windowKey.c_str(), "SplitY", (DWORD)(splitY * 10000.0f));
 }
 
 bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitY) {
-    char windowKey[256];
-    sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, symbol.c_str());
+    std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
 
     // Use sentinel 0xFFFFFFFF to detect "not saved yet"
-    DWORD dx = RegGetDword(windowKey, "SplitY", 0xFFFFFFFF);
+    DWORD dx = RegGetDword(windowKey.c_str(), "SplitY", 0xFFFFFFFF);
     if (dx == 0xFFFFFFFF) return false;
 
     float fx = (float)dx / 10000.0f;
@@ -1030,9 +1006,8 @@ void Session_RestoreWindows(
     const std::function<void()>& StartDebugLog
 ) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
+    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
 
     DWORD size = 0;
     RegQueryValueExA(hKey, "OpenWindows", NULL, NULL, NULL, &size);

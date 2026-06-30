@@ -194,15 +194,15 @@ static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
 }
 
 static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time, COLORREF color) {
-    char buf[32]; snprintf(buf, sizeof(buf), "%.2f", price);
+    std::string priceStr = std::format("{:.2f}", price);
     LVITEMA lvi = {};
     lvi.mask = LVIF_TEXT | LVIF_PARAM;
     lvi.iItem = 0;
-    lvi.pszText = buf; 
+    lvi.pszText = (LPSTR)priceStr.c_str();
     lvi.lParam = (LPARAM)color;
     ListView_InsertItem(hList, &lvi);
-    snprintf(buf, sizeof(buf), "%.0f", size);
-    ListView_SetItemText(hList, 0, 1, buf);
+    std::string sizeStr = std::format("{:.0f}", size);
+    ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
     int count = ListView_GetItemCount(hList);
     if (count > 50) ListView_DeleteItem(hList, count - 1);
@@ -300,12 +300,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     if (!state || !state->hOrderLabel) return;
     state->orderSide = side;
     state->orderBarVisible = true;
-    char bufLabel[32];
-    if (state->isOvernight)
-        snprintf(bufLabel, sizeof(bufLabel), "OVN %s", side.c_str());
-    else
-        snprintf(bufLabel, sizeof(bufLabel), "%s", side.c_str());
-    SetWindowTextA(state->hOrderLabel, bufLabel);
+    std::string labelStr = state->isOvernight ? std::format("OVN {}", side) : side;
+    SetWindowTextA(state->hOrderLabel, labelStr.c_str());
     SetCtrlColor(state->hOrderLabel, side == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
     InvalidateRect(state->hOrderLabel, NULL, TRUE);
 
@@ -316,13 +312,9 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
     else if (state->l1Info.prevClose > 0.0) suggestedPrice = state->l1Info.prevClose;
     
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%.2f", suggestedPrice);
-    SetWindowTextA(state->hOrderPrice, buf);
-    char buqty[32];
+    SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
     int qty = (int)Settings_Load("OrderQty", 100);
-    snprintf(buqty, sizeof(buqty), "%d", qty);
-    SetWindowTextA(state->hOrderQty, buqty);
+    SetWindowTextA(state->hOrderQty, std::format("{}", qty).c_str());
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
     ShowWindow(state->hOrderPrice, SW_SHOW);
@@ -330,12 +322,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
 
     ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
-    char sbuf[32];
-    snprintf(sbuf, sizeof(sbuf), "%.2f", state->isOvernight ? 0.0 : (double)(int)Settings_Load("StopPrice", 1));
-    SetWindowTextA(state->hOrderStopPrice, sbuf);
-    char pbuf[32];
-    snprintf(pbuf, sizeof(pbuf), "%.2f", state->isOvernight ? 0.0 : (double)(int)Settings_Load("ProfitPrice", 2));
-    SetWindowTextA(state->hOrderProfitPrice, pbuf);
+    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : (double)(int)Settings_Load("StopPrice", 1)).c_str());
+    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : (double)(int)Settings_Load("ProfitPrice", 2)).c_str());
 
     Market_Layout(hWnd, state);
     SetFocus(state->hOrderPrice);
@@ -432,8 +420,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             double step = (uIdSubclass == 1) ? 0.01 : 1.0;
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-            snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
-            SetWindowTextA(hWnd, buf);
+            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:.0f}", val);
+            SetWindowTextA(hWnd, s.c_str());
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
             return 0;
@@ -597,12 +585,12 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 // ── Formatting helpers ────────────────────────────────────────────────────────
 static std::string Market_Fmt(double v, int dec = 2) {
     if (v == 0.0) return "--";
-    char buf[32]; snprintf(buf, sizeof(buf), "%.*f", dec, v); return buf;
+    return std::format("{:.{}f}", v, dec);
 }
 static std::string Market_FmtQty(double v) {
     if (v == 0.0) return "--";
-    if (v == (long long)v) { char b[32]; snprintf(b, sizeof(b), "%lld", (long long)v); return b; }
-    char b[32]; snprintf(b, sizeof(b), "%.2f", v); return b;
+    if (v == (long long)v) return std::format("{}", (long long)v);
+    return std::format("{:.2f}", v);
 }
 
 // ── L2 list refresh ───────────────────────────────────────────────────────────
@@ -680,14 +668,14 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
         ListView_InsertItem(hList, &lvi);
 
         // Quote: "qty @ price"
-        char buf[48];
+        std::string quoteStr;
         if (o.price > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.filledQty > 0 ? o.filledQty : o.totalQty, o.price);
+            quoteStr = std::format("{:.0f} @ {:.2f}", o.filledQty > 0 ? o.filledQty : o.totalQty, o.price);
         else if (o.avgFillPx > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.filledQty > 0 ? o.filledQty : o.totalQty, o.avgFillPx);
+            quoteStr = std::format("{:.0f} @ {:.2f}", o.filledQty > 0 ? o.filledQty : o.totalQty, o.avgFillPx);
         else
-            snprintf(buf, sizeof(buf), "%.0f @ --", o.filledQty > 0 ? o.filledQty : o.totalQty);
-        ListView_SetItemText(hList, row, 1, buf);
+            quoteStr = std::format("{:.0f} @ --", o.filledQty > 0 ? o.filledQty : o.totalQty);
+        ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
 
         ++row;
     }
@@ -761,9 +749,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hValuesFont);
-        char szBuf[32]; snprintf(szBuf, sizeof(szBuf), " x %s", Market_FmtQty(L1.askSize).c_str());
+        std::string askSzStr = std::format(" x {}", Market_FmtQty(L1.askSize));
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
-        DrawTextA(hdc, szBuf, -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextA(hdc, askSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
     // Bid (bottom row, blue)
@@ -779,9 +767,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, state->hValuesFont);
-        char szBuf[32]; snprintf(szBuf, sizeof(szBuf), " x %s", Market_FmtQty(L1.bidSize).c_str());
+        std::string bidSzStr = std::format(" x {}", Market_FmtQty(L1.bidSize));
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
-        DrawTextA(hdc, szBuf, -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
     // ── STATS BLOCK: O/C/H/L (row 1) + Pos/Avg (row 2) ──────────────────────
@@ -795,13 +783,13 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     double uPnL = state->unrealizedPnL;
 
     // Format Strings (Only show if we hold a position, else "--")
-    char bufD[32], bufU[32];
+    std::string bufD, bufU;
     if (state->position != 0.0) {
-        snprintf(bufD, sizeof(bufD), "%+.2f", dPnL);
-        snprintf(bufU, sizeof(bufU), "%+.2f", uPnL);
+        bufD = std::format("{:+.2f}", dPnL);
+        bufU = std::format("{:+.2f}", uPnL);
     } else {
-        strcpy(bufD, "--");
-        strcpy(bufU, "--");
+        bufD = "--";
+        bufU = "--";
     }
 
     // Determine Colors
@@ -834,12 +822,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         const int GAP = 8;
         for (int i = 0; i < count; i++) {
             // label
-            char labBuf[16]; snprintf(labBuf, sizeof(labBuf), "%s ", items[i].label);
+            std::string labStr = std::string(items[i].label) + " ";
             SIZE lblSz;
-            GetTextExtentPoint32A(hdc, labBuf, (int)strlen(labBuf), &lblSz);
+            GetTextExtentPoint32A(hdc, labStr.c_str(), (int)labStr.size(), &lblSz);
             SetTextColor(hdc, labelColor);
             RECT lr = { cx, y0, cx + lblSz.cx, y1 };
-            DrawTextA(hdc, labBuf, -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            DrawTextA(hdc, labStr.c_str(), -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
             cx += lblSz.cx;
 
             // value
@@ -874,11 +862,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
 
     // Measure change text (smaller font)
-    char chgBuf[48] = {};
+    std::string chgStr = std::format(" {:.2f}  {:.2f}%", chg, chgPct);
     SIZE chgSz = {};
-    snprintf(chgBuf, sizeof(chgBuf), " %.2f  %.2f%%", chg, chgPct);
     SelectObject(hdc, state->hStatusFont);
-    GetTextExtentPoint32A(hdc, chgBuf, (int)strlen(chgBuf), &chgSz);
+    GetTextExtentPoint32A(hdc, chgStr.c_str(), (int)chgStr.size(), &chgSz);
 
     // Total width of the last+change block
     int lcBlockW = std::max(lastSz.cx, chgSz.cx) + 7;
@@ -902,7 +889,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         int chgX = lcX;
         if (chgX < LC_RIGHT) {
             RECT chgRc = { chgX, 0, LC_RIGHT - 7, HEADER_H - 3 };
-            DrawTextA(hdc, chgBuf, -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
+            DrawTextA(hdc, chgStr.c_str(), -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
         }
     }
 
@@ -945,8 +932,7 @@ static void Market_SpeakLast(TsState* state) {
     if (!state->hTtsVoice) return;
     double displayLast = (state->l1Info.last > 0.0) ? state->l1Info.last : state->l1Info.prevClose;
     if (displayLast <= 0.0) return;
-    char buf[64]; snprintf(buf, sizeof(buf), "%.2f", displayLast);
-    std::string s(buf);
+    std::string s = std::format("{:.2f}", displayLast);
     std::wstring ws(s.begin(), s.end());
     ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
     std::replace(ws.begin(), ws.end(), L'.', L',');
@@ -984,9 +970,8 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
     if (state->hOVNButton) InvalidateRect(state->hOVNButton, NULL, TRUE);
     
     if (!state->symbol.empty()) {
-        char windowKey[256];
-        sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
-        Settings_Overnight_Save(windowKey, state->isOvernight ? 1 : 0);
+        std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
+        Settings_Overnight_Save(windowKey.c_str(), state->isOvernight ? 1 : 0);
     }
     if (state->orderBarVisible) {
         Market_Layout_HideBar(hWnd, state);
@@ -1145,9 +1130,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Restore splitter + filter
         if (!state->symbol.empty()) {
             Settings_LoadMarketSplitter(state->symbol, state->splitY);
-            char windowKey[256];
-            sprintf(windowKey, "%s_%s", MARKET_CLASS_NAME, state->symbol.c_str());
-            if (Settings_Overnight_Load(windowKey, 0)) {
+            std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
+            if (Settings_Overnight_Load(windowKey.c_str(), 0)) {
                 state->isOvernight = false;
                 Market_ToggleOVN(hWnd, state);
             }
@@ -1273,7 +1257,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
                 else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
             }
-            TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
+            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
             Market_RefreshPositionAndAvg(hWnd, state);

@@ -458,9 +458,8 @@ bool IsProcessRunning(const char* processName) {
 
 std::string GetGatewayPath() {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
         char path[MAX_PATH] = {};
         DWORD size = sizeof(path);
         if (RegQueryValueExA(hKey, "Gateway_Path", NULL, NULL, (LPBYTE)path, &size) == ERROR_SUCCESS && strlen(path) > 0) {
@@ -474,9 +473,8 @@ std::string GetGatewayPath() {
 
 void SaveGatewayPath(const std::string& path) {
     HKEY hKey;
-    char fullPath[256];
-    wsprintf(fullPath, "%s\\Settings", APP_REG_ROOT);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         RegSetValueExA(hKey, "Gateway_Path", 0, REG_SZ, (const BYTE*)path.c_str(), (DWORD)path.size() + 1);
         RegCloseKey(hKey);
     }
@@ -606,10 +604,8 @@ void MutexGatewayInstance() {
 }
 
 std::string FormatWithCommas(double value) {
-    char temp[64];
     // Format to 2 decimal places first
-    snprintf(temp, sizeof(temp), "%.2f", value);
-    std::string s(temp);
+    std::string s = std::format("{:.2f}", value);
 
     // Find the decimal point
     int dotPos = s.find('.');

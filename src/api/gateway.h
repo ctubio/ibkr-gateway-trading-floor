@@ -20,6 +20,7 @@
 #include <map>
 #include <deque>
 #include <mutex>
+#include <format>
 #include <memory>
 #include <exception>
 #include <fstream>

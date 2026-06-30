@@ -1,4 +1,5 @@
 #pragma once
+#include <format>
 
 void StartNews() { StartGenericWindow(NEWS_CLASS_NAME, "News", L"TWSAPIClientTradingFloor.News", 830, 250); }
 
@@ -104,8 +105,7 @@ static std::string ConvertHtmlToRtf(const std::string& html, bool dark) {
     //    Color table entry 1 is set to the appropriate text color for the current
     //    theme; \cf1 in the body references it.  \fs28 = 14 pt (RTF half-points).
     COLORREF tc = dark ? DM_TEXT : RGB(0, 0, 0);
-    char colortbl[128];
-    sprintf(colortbl, "{\\colortbl;\\red%d\\green%d\\blue%d;}",
+    std::string colortbl = std::format("{{\\colortbl;\\red{}\\green{}\\blue{};}}", 
             GetRValue(tc), GetGValue(tc), GetBValue(tc));
 
     std::string result = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Segoe UI;}}";

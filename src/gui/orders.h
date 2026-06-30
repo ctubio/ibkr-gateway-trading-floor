@@ -72,21 +72,21 @@ static void Orders_Repopulate(HWND hWnd) {
 
         ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
 
-        char buf[64];
+        std::string quoteStr;
         if (o.price > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.totalQty, o.price);
+            quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.price);
         else if (o.auxPrice > 0)
-            snprintf(buf, sizeof(buf), "%.0f @ %.2f", o.totalQty, o.auxPrice);
+            quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.auxPrice);
         else
-            snprintf(buf, sizeof(buf), "%.0f @ MKT", o.totalQty);
-        ListView_SetItemText(hList, i, col++, buf);
+            quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
+        ListView_SetItemText(hList, i, col++, (LPSTR)quoteStr.c_str());
 
-        char buff[64];
+        std::string fillStr;
         if (o.filledQty > 0)
-            snprintf(buff, sizeof(buff), "%.0f @ %.2f", o.filledQty, o.avgFillPx);
+            fillStr = std::format("{:.0f} @ {:.2f}", o.filledQty, o.avgFillPx);
         else
-            snprintf(buff, sizeof(buff), "-- @ --");
-        ListView_SetItemText(hList, i, col++, buff);
+            fillStr = "-- @ --";
+        ListView_SetItemText(hList, i, col++, (LPSTR)fillStr.c_str());
         
         std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
         ListView_SetItemText(hList, i, col++, (LPSTR)fullTypeStr.c_str());
@@ -232,8 +232,8 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             double step = (uIdSubclass == 1) ? 0.01 : 1.0;  // price vs qty
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-            snprintf(buf, sizeof(buf), (uIdSubclass == 1) ? "%.2f" : "%.0f", val);
-            SetWindowTextA(hWnd, buf);
+            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:.0f}", val);
+            SetWindowTextA(hWnd, s.c_str());
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
             return 0;
@@ -249,18 +249,17 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     s_editState.originalQty = order.totalQty;
     s_editState.panelVisible = true;
 
-    char buf[32];
     HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
 
-    if (order.price > 0)          snprintf(buf, sizeof(buf), "%.2f", order.price);
-    else if (order.auxPrice > 0)  snprintf(buf, sizeof(buf), "%.2f", order.auxPrice);
-    else                          snprintf(buf, sizeof(buf), "0.00");
-    if (hPriceEdit) SetWindowTextA(hPriceEdit, buf);
+    std::string priceStr;
+    if (order.price > 0)         priceStr = std::format("{:.2f}", order.price);
+    else if (order.auxPrice > 0) priceStr = std::format("{:.2f}", order.auxPrice);
+    else                         priceStr = "0.00";
+    if (hPriceEdit) SetWindowTextA(hPriceEdit, priceStr.c_str());
 
-    char bufq[32];
-    snprintf(bufq, sizeof(bufq), "%.0f", order.totalQty);
-    if (hQtyEdit) SetWindowTextA(hQtyEdit, bufq);
+    std::string qtyStr = std::format("{:.0f}", order.totalQty);
+    if (hQtyEdit) SetWindowTextA(hQtyEdit, qtyStr.c_str());
 
     HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hHint) {

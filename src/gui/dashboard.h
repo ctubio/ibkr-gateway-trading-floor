@@ -274,18 +274,15 @@ void Coins_UpdateLabels(HWND hWnd) {
     UpdateTrayIcon(hWnd, currency);
     
     if (hCoin_NetLiq) {
-        char buf[80];
         std::string formattedNum = FormatWithCommas(netLiq);
-        snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
-        SetWindowTextA(hCoin_NetLiq, buf);
+        SetWindowTextA(hCoin_NetLiq, formattedNum.c_str());
     }
 
     COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (hCoin_BigPnL) {
         std::string formattedNum = FormatWithCommas(daily);
         if (daily >= 0.0) formattedNum = "+" + formattedNum;
-        char buf[64]; snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
-        SetWindowTextA(hCoin_BigPnL, buf);
+        SetWindowTextA(hCoin_BigPnL, formattedNum.c_str());
         SetCtrlColor(hCoin_BigPnL, pnlClr);
         InvalidateRect(hCoin_BigPnL, NULL, TRUE);
     }
@@ -293,8 +290,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         double pct = (netLiq != 0.0) ? (daily / netLiq * 100.0) : 0.0;
         std::string formattedNum = FormatWithCommas(pct);
         if (pct >= 0.0) formattedNum = "+" + formattedNum;
-        char buf[32]; snprintf(buf, sizeof(buf), "%s%%", formattedNum.c_str());
-        SetWindowTextA(hCoin_Pct, buf);
+        SetWindowTextA(hCoin_Pct, std::format("{}%", formattedNum).c_str());
         SetCtrlColor(hCoin_Pct, pnlClr);
         InvalidateRect(hCoin_Pct, NULL, TRUE);
     }
@@ -316,11 +312,11 @@ void Coins_UpdateLabels(HWND hWnd) {
             double d = std::stod(raw);
             if (coinRows[i].colorType == 1) {
                 std::string formattedNum = FormatWithCommas(d);
-                snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
+                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
                 clr = d >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
             } else if (coinRows[i].colorType == 2) {
                 std::string formattedNum = FormatWithCommas(d);
-                snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
+                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
                 clr = COINS_CLR_PURPLE;
             } else if (coinRows[i].colorType == 3) {
                 std::string suffixStr;
@@ -331,12 +327,12 @@ void Coins_UpdateLabels(HWND hWnd) {
                 } else if (strncmp(coinRows[i].key, "USD_", 4) == 0) {
                     suffixStr = " USD";
                 }
-                std::string formattedNum = FormatWithCommas(d);
-                snprintf(buf, sizeof(buf), "%s%s", formattedNum.c_str(), suffixStr.c_str());
+                std::string formattedNum = FormatWithCommas(d) + suffixStr;
+                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
                 clr = d > 0.0 ? COINS_CLR_GREEN : (d < 0.0 ? COINS_CLR_RED : COLOR_THEME);
             } else {
                 std::string formattedNum = FormatWithCommas(d);
-                snprintf(buf, sizeof(buf), "%s", formattedNum.c_str());
+                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
             }
         } catch (...) {}
         

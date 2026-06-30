@@ -305,24 +305,20 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     }
 
     if (pnlSingle.conId > 0) {
-        char buf[64];
         if (pnlSingle.has_daily) {
             row.sortValues[DCOL_DAILYPNL] = pnlSingle.dailyPnL;
-            snprintf(buf, sizeof(buf), "%+.2f", pnlSingle.dailyPnL);
-            row.textCols[DCOL_DAILYPNL] = buf;
+            row.textCols[DCOL_DAILYPNL] = std::format("{:+.2f}", pnlSingle.dailyPnL);
         }
         if (pnlSingle.has_unrealized) {
             row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
-            snprintf(buf, sizeof(buf), "%+.2f", pnlSingle.unrealizedPnL);
-            row.textCols[DCOL_UNREALIZED_PL] = buf;
+            row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
 
             // Recompute the % column
             double last = row.sortValues[DCOL_LAST];
             if (avgCost > 0.0 && last > 0.0) {
                 double pct = (last - avgCost) / avgCost * 100.0;
                 row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
-                snprintf(buf, sizeof(buf), "%+.2f%%", pct);
-                row.textCols[DCOL_UNREALIZED_PL_PCT] = buf;
+                row.textCols[DCOL_UNREALIZED_PL_PCT] = std::format("{:+.2f}%", pct);
             } else {
                 row.sortValues[DCOL_UNREALIZED_PL_PCT] = -999999.0;
                 row.textCols[DCOL_UNREALIZED_PL_PCT] = "--";
@@ -343,36 +339,32 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     auto it = g_DiamondDataCache.find(conId);
     if (it == g_DiamondDataCache.end()) return;
     auto& row = it->second;
-
-    char buf[64];
-    
     // Helper to write both sortable raw data and display string
-    auto setCol = [&](int col, double val, const char* fmt, bool alwaysShow = false) {
+    auto setCol = [&](int col, double val, std::string_view fmt, bool alwaysShow = false) {
         row.sortValues[col] = val;
         if (val != 0.0 || alwaysShow) {
-            snprintf(buf, sizeof(buf), fmt, val);
-            row.textCols[col] = buf;
+            row.textCols[col] = std::vformat(fmt, std::make_format_args(val));
         } else {
             row.textCols[col] = "";
         }
     };
-    
+
     auto setNA = [&](int col) {
         row.sortValues[col] = -999999.0; // Pushes NA to bottom on sorts
         row.textCols[col] = DIAMONDS_NO_DATA;
     };
 
-    setCol(DCOL_ASKSIZE, t.askSize, "%.0f");
-    setCol(DCOL_ASK,     t.ask,     "%.2f");
-    setCol(DCOL_BID,     t.bid,     "%.2f");
-    setCol(DCOL_BIDSIZE, t.bidSize, "%.0f");
-    setCol(DCOL_DIV_AMT, t.dividendAmount,  "%.3f");
-    setCol(DCOL_ANNUAL_DIV, t.annualDividends, "%.3f");
+    setCol(DCOL_ASKSIZE, t.askSize, "{:.0f}");
+    setCol(DCOL_ASK,     t.ask,     "{:.2f}");
+    setCol(DCOL_BID,     t.bid,     "{:.2f}");
+    setCol(DCOL_BIDSIZE, t.bidSize, "{:.0f}");
+    setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}");
+    setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}");
     
     row.textCols[DCOL_DIV_DATE] = t.dividendDate;
     row.sortValues[DCOL_DIV_DATE] = 0; // Handled by string compare in sort
 
-    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "%.2f%%");
+    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "{:.2f}%");
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
     else setNA(DCOL_DIV_YIELD);
 
@@ -384,7 +376,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         return;
     }
 
-    setCol(DCOL_LAST, displayLast, "%.2f", true);
+    setCol(DCOL_LAST, displayLast, "{:.2f}", true);
     g_DiamondsSparklines[conId].AddPrice(displayLast);
 
     double shares = row.sortValues[DCOL_POSITION];
@@ -399,11 +391,11 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     double mktVal = shares * t.last;
     double pctNetLiq = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
 
-    if (t.prevClose > 0.0) setCol(DCOL_CHGPCT, t.changePct(), "%+.2f%%", true);
+    if (t.prevClose > 0.0) setCol(DCOL_CHGPCT, t.changePct(), "{:+.2f}%", true);
     else setNA(DCOL_CHGPCT);
 
-    setCol(DCOL_MKTVAL, mktVal, "%.2f", true);
-    setCol(DCOL_PCT_NETLIQ, pctNetLiq, "%.2f%%", true);
+    setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
+    setCol(DCOL_PCT_NETLIQ, pctNetLiq, "{:.2f}%", true);
 
     /* / Estimate PnL from market data only when no real value from WM_PNL_SINGLE
     // has arrived yet.  We detect "real value present" by checking whether the
@@ -455,7 +447,6 @@ static void Diamonds_Repopulate(HWND hWnd) {
     // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL / DCOL_UNREALIZED_PL_PCT
     // — those are owned by WM_PNL_SINGLE and must survive a repopulate so they
     // remain visible when the window is closed and reopened.
-    char buf[64];
     for (const auto& pos : rows) {
         // operator[] creates a default row only when the conId is new.
         // For existing rows it returns the current entry — PnL fields are preserved.
@@ -466,12 +457,10 @@ static void Diamonds_Repopulate(HWND hWnd) {
         cacheRow.textCols[DCOL_SYMBOL] = pos.symbol;
 
         cacheRow.sortValues[DCOL_POSITION] = pos.shares;
-        snprintf(buf, sizeof(buf), "%.4g", pos.shares);
-        cacheRow.textCols[DCOL_POSITION] = buf;
+        cacheRow.textCols[DCOL_POSITION] = std::format("{:.4g}", pos.shares);
 
         cacheRow.sortValues[DCOL_AVGPRICE] = pos.avgCost;
-        snprintf(buf, sizeof(buf), "%.2f", pos.avgCost);
-        cacheRow.textCols[DCOL_AVGPRICE] = buf;
+        cacheRow.textCols[DCOL_AVGPRICE] = std::format("{:.2f}", pos.avgCost);
 
         // Pre-fill market data if already cached — this also seeds the estimated
         // PnL columns for the first open (before WM_PNL_SINGLE arrives).

@@ -175,9 +175,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 margin + 80, margin + 217, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_QTY_VALUE, hInst, NULL);
 
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d", (int)Settings_Load("OrderQty", 100));
-            SetWindowTextA(hQtyEdit, buf);
+            SetWindowTextA(hQtyEdit, std::format("{}", (int)Settings_Load("OrderQty", 100)).c_str());
             
             
             CreateWindowA("STATIC", "Stop:",
@@ -190,9 +188,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 margin + 80, margin + 250, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_STOP_VALUE, hInst, NULL);
 
-            char ssbuf[32];
-            snprintf(ssbuf, sizeof(ssbuf), "%d", (int)Settings_Load("StopPrice", 1));
-            SetWindowTextA(hStopEdit, ssbuf);
+            SetWindowTextA(hStopEdit, std::format("{}", (int)Settings_Load("StopPrice", 1)).c_str());
 
             
             CreateWindowA("STATIC", "Profit:",
@@ -205,9 +201,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 margin + 80, margin + 283, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_PROFIT_VALUE, hInst, NULL);
 
-            char ppbuf[32];
-            snprintf(ppbuf, sizeof(ppbuf), "%d", (int)Settings_Load("ProfitPrice", 2));
-            SetWindowTextA(hProfitEdit, ppbuf);
+            SetWindowTextA(hProfitEdit, std::format("{}", (int)Settings_Load("ProfitPrice", 2)).c_str());
 
 
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
