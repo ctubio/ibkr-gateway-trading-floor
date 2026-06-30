@@ -1019,22 +1019,22 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // ── Header fonts ──────────────────────────────────────────────────────
         state->hBigFont = CreateFontA(-22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hExtraFont = CreateFontA(-26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hOrderFont = CreateFontA(-20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hValuesFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hStatusFont = CreateFontA(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hStatusNormalFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
@@ -1054,7 +1054,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         {
             HFONT hListFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+                CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
             SendMessage(state->hTsList,      WM_SETFONT, (WPARAM)hListFont, TRUE);
             SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hListFont, TRUE);
             SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hListFont, TRUE);

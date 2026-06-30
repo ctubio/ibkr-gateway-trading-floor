@@ -41,16 +41,6 @@ static HFONT hFontCoins_Label   = NULL;
 static HFONT hFontCoins_Value   = NULL;
 static HFONT hFontCoins_Speaker = NULL;   // Segoe MDL2 Assets for speaker glyph
 
-static HFONT Coins_MakeFont(int ptSize, bool bold) {
-    HDC hdc = GetDC(NULL);
-    int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-    ReleaseDC(NULL, hdc);
-    return CreateFontA(h, 0, 0, 0,
-        bold ? FW_BOLD : FW_NORMAL,
-        FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, "Segoe UI");
-}
 static HFONT Coins_MakeMDL2Font(int ptSize) {
     HDC hdc = GetDC(NULL);
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
@@ -375,11 +365,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_CREATE:	{
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
-            hFontCoins_NetLiq  = Coins_MakeFont(13, true);
-            hFontCoins_BigPnL  = Coins_MakeFont(20, true);
-            hFontCoins_Pct     = Coins_MakeFont(11, true);
-            hFontCoins_Label   = Coins_MakeFont(10, false);
-            hFontCoins_Value   = Coins_MakeFont(11, true);
+            hFontCoins_NetLiq  = MakeFont(14, true);
+            hFontCoins_BigPnL  = MakeFont(21, true);
+            hFontCoins_Pct     = MakeFont(12, true);
+            hFontCoins_Value   = MakeFont(12, true);
+            hFontCoins_Label   = MakeFont(11, false);
             hFontCoins_Speaker = Coins_MakeMDL2Font(11);
 
             const int m  = 12;

@@ -204,13 +204,24 @@ HFONT CreateBoldFont(HFONT hNormalFont) {
     return CreateFontIndirectA(&lf);
 }
 
+static HFONT MakeFont(int ptSize, bool bold) {
+    HDC hdc = GetDC(NULL);
+    int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+    return CreateFontA(h, 0, 0, 0,
+        bold ? FW_BOLD : FW_NORMAL,
+        FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, "Proxima Nova");
+}
+
 BOOL CALLBACK SetFontCallback(HWND hwndChild, LPARAM lParam) {
     HFONT hFont = (HFONT)lParam;
     SendMessage(hwndChild, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
     return TRUE;
 }
 
-static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize) {
+static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize, std::string fontFamily = "Proxima Nova") { //"Segoe UI"
     if (hFont) {
         DeleteObject(hFont);
     }
@@ -222,7 +233,7 @@ static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fo
 
     hFont = CreateFontA(fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, 
-        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, fontFamily.c_str());
     
     if (hBoldFont) {
         DeleteObject(hBoldFont);

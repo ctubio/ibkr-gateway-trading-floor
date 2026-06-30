@@ -19,6 +19,7 @@ struct OrdersEditState {
 };
 static OrdersEditState s_editState;
 static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
+static HFONT fontInputs   = NULL;
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -136,8 +137,8 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     // Panel geometry — two groups side by side.
     // [Price: |__edit__]   [Qty: |__edit__]   [↑↓ Tab  Enter]
     int py     = listH + 6;
-    int editH  = 32;
-    int lblW   = 45;
+    int editH  = 37;
+    int lblW   = 50;
     int editW  = 120;
     int gapX   = 14;
     int startX = 18;
@@ -148,13 +149,13 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
         ShowWindow(hHint, show);
         x += 120 + 5;
     }
-    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 3, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
+    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
     if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); } x += editW + gapX;
 
     // Qty is hidden when partialFill.
     bool showQty = showPanel && !s_editState.partialFill;
     int  qshow   = showQty ? SW_SHOW : SW_HIDE;
-    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 3, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); } x += lblW + 5;
+    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); } x += lblW + 5;
     if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); } x += editW + gapX;
     
 }
@@ -344,8 +345,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             // Apply font to all children.
             EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersZoomData.hFont);
-            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
-            SendMessage(hEditQty, WM_SETFONT, (WPARAM)OrdersZoomData.hBoldFont, TRUE);
+            
+            fontInputs   = MakeFont(18, true);
+            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)fontInputs, TRUE);
+            SendMessage(hEditQty, WM_SETFONT, (WPARAM)fontInputs, TRUE);
 
             api().addApiUpdateWindow(hWnd);  
             Orders_Repopulate(hWnd);
@@ -470,6 +473,11 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
+            
+            if (fontInputs)   {
+                DeleteObject(fontInputs);
+                fontInputs = NULL;
+            }
             if (OrdersZoomData.hFont) {
                 DeleteObject(OrdersZoomData.hFont);
             }   

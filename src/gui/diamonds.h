@@ -51,7 +51,7 @@ static bool g_DiamondsChkVisible = false;
 #define DIAMONDS_SORT_TIMER_MS   500   // re-sort at most twice per second
 static bool g_DiamondsSortPending = false;
 
-static ListViewZoomData DiamondsZoomData = { NULL, NULL, 15, "Zoom_Diamonds" };
+static ListViewZoomData DiamondsZoomData = { NULL, NULL, 17, "Zoom_Diamonds" };
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
@@ -109,31 +109,53 @@ static bool g_DiamondsDirty = false;
 struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
-    { "Position",          80, LVCFMT_RIGHT },
-    { "AvgPx",             90, LVCFMT_RIGHT },
-    { "AskSz",             70, LVCFMT_RIGHT },
-    { "Ask",               90, LVCFMT_RIGHT },
-    { "Last",              90, LVCFMT_RIGHT },
-    { "Bid",               90, LVCFMT_RIGHT },
-    { "BidSz",             70, LVCFMT_RIGHT },
-    { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Change %",          105, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Position",          90, LVCFMT_RIGHT },
+    { "AvgPx",            100, LVCFMT_RIGHT },
+    { "AskSz",             75, LVCFMT_RIGHT },
+    { "Ask",              100, LVCFMT_RIGHT },
+    { "Last",             100, LVCFMT_RIGHT },
+    { "Bid",              100, LVCFMT_RIGHT },
+    { "BidSz",             75, LVCFMT_RIGHT },
+    { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
+    { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
-    { "Unrealized %",     115, LVCFMT_RIGHT },
-    { "Unrealized",       105, LVCFMT_RIGHT },
-    { "Mkt Value",        100, LVCFMT_RIGHT },
-    { "Net %",             85, LVCFMT_RIGHT },
-    { "Yield %",           80, LVCFMT_RIGHT },
-    { "Date",             120, LVCFMT_RIGHT },
-    { "Amount",            80, LVCFMT_RIGHT },
-    { "Annual",            80, LVCFMT_RIGHT },
+    { "Unrealized %",     140, LVCFMT_RIGHT },
+    { "Unrealized",       115, LVCFMT_RIGHT },
+    { "Mkt Value",        105, LVCFMT_RIGHT },
+    { "Net %",             90, LVCFMT_RIGHT },
+    { "Yield %",           90, LVCFMT_RIGHT },
+    { "Date",             135, LVCFMT_RIGHT },
+    { "Amount",            85, LVCFMT_RIGHT },
+    { "Annual",            85, LVCFMT_RIGHT },
     // {"fix_tag":7290,"name":"P/E excluding extraordinary items","description":"This ratio is calculated by dividing the current Price by the sum of the Diluted Earnings Per Share from continuing operations BEFORE Extraordinary Items and Accounting Changes over the last four interim periods.","groups":["G15"],"id":"PE"}
     // {"fix_tag":7281,"name":"Category","description":"Displays a more detailed level of description within the industry under which the underlying company can be categorized.","groups":["G-3"],"id":"CATEGORY"}
     // {"fix_tag":7289,"name":"Market capitalization","description":"This value is calculated by multiplying the current Price by the current number of Shares Outstanding.","groups":["G15"],"id":"MKT_CAP"}
 };
 static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
               "diamondCols count must match DiamondColIdx::DCOL_COUNT");
+
+static HIMAGELIST g_DiamondsRowHeightImageList = NULL;
+
+static void Diamonds_SetRowHeight(HWND hList, int rowHeight) {
+    if (g_DiamondsRowHeightImageList) {
+        ImageList_Destroy(g_DiamondsRowHeightImageList);
+        g_DiamondsRowHeightImageList = NULL;
+    }
+    // Width can stay tiny (1px) since LVS_REPORT never shows the icon glyph
+    // area when there's no LVCFMT_IMAGE column, but height controls row height.
+    g_DiamondsRowHeightImageList = ImageList_Create(1, rowHeight, ILC_COLOR32 | ILC_MASK, 1, 1);
+    if (!g_DiamondsRowHeightImageList) return;
+
+    // Add one fully-transparent 1x1 bitmap so the image list is non-empty.
+    HBITMAP hbmImage = CreateBitmap(1, rowHeight, 1, 1, NULL);
+    HBITMAP hbmMask  = CreateBitmap(1, rowHeight, 1, 1, NULL);
+    ImageList_Add(g_DiamondsRowHeightImageList, hbmImage, hbmMask);
+    DeleteObject(hbmImage);
+    DeleteObject(hbmMask);
+
+    ListView_SetImageList(hList, g_DiamondsRowHeightImageList, LVSIL_SMALL);
+}
 
 // ── Registry persistence for tab assignments ──────────────────────────────────
 
@@ -513,6 +535,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Start the paint-limiter timer so Diamonds_ApplySort's dirty flag is flushed.
         SetTimer(hWnd, DIAMONDS_PAINT_TIMER_ID, DIAMONDS_PAINT_TIMER_MS, NULL);
 
+        Diamonds_SetRowHeight(hList, 28);
         DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
         ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.hBoldFont, DiamondsZoomData.fontSize);
         SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&DiamondsZoomData);
@@ -948,6 +971,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         api().removeApiUpdateWindow(hWnd);
         g_DiamondDataCache.clear();
         g_DiamondsSparklines.clear();
+        if (g_DiamondsRowHeightImageList) {
+            ImageList_Destroy(g_DiamondsRowHeightImageList);
+            g_DiamondsRowHeightImageList = NULL;
+        }
         if (DiamondsZoomData.hFont) {
             DeleteObject(DiamondsZoomData.hFont);
         }
