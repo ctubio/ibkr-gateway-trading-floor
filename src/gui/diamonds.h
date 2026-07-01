@@ -358,9 +358,18 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
 }
 
 static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
-    auto it = g_DiamondDataCache.find(conId);
-    if (it == g_DiamondDataCache.end()) return;
-    auto& row = it->second;
+    // Ensure a cache row exists even if this tick arrived before
+    // Diamonds_Repopulate had a chance to create one for it — e.g. right after
+    // the window is closed and reopened, a WM_MARKET_L1 posted just before the
+    // repopulate finishes used to hit this function while the cache was still
+    // empty/rebuilding and the early-return below silently dropped the tick
+    // for good (nothing ever re-requested it). That could look exactly like
+    // "some columns stop updating" after a close/reopen cycle. Auto-creating
+    // the row (mirroring what Diamonds_UpdatePnLCols already does) means the
+    // tick is never lost; if the row isn't in g_DiamondDisplayOrder yet it
+    // simply becomes visible on the next repopulate/sort instead of vanishing.
+    auto& row = g_DiamondDataCache[conId];
+    row.conId = conId;
     // Helper to write both sortable raw data and display string
     auto setCol = [&](int col, double val, std::string_view fmt, bool alwaysShow = false) {
         row.sortValues[col] = val;
