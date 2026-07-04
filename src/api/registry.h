@@ -1005,6 +1005,9 @@ void Session_RestoreWindows(
     const std::function<void()>& StartOrders,
     const std::function<void()>& StartDebugLog
 ) {
+    INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_USEREX_CLASSES };
+    InitCommonControlsEx(&icex);
+
     HKEY hKey;
     std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
