@@ -20,7 +20,7 @@ Before launching the application, ensure the following:
 3. Run `Trading-Floor.exe`.
 4. The app will automatically attempt to connect to `127.0.0.1:4001` or `7496`.
 
-> **Pro Tip:** Enable **Auto-start IBKR Gateway** in Settings to let the app manage the gateway process for you.
+> **Tip:** Enable **Auto-start IBKR Gateway** in Settings to let the app manage the gateway process for you.
 
 ---
 
@@ -31,7 +31,7 @@ A modern desktop trading companion built on the Interactive Brokers C++ API. It 
 ### Core Capabilities
 *   **Real-time Market Data**: Live quotes, Level 2 depth, and tick-by-tick feeds.
 *   **Account Intelligence**: Live margin metrics and Net Liquidation Value with SAPI Text-to-Speech (TTS) alerts.
-*   **Portfolio Management**: Position tracking with dividends and 52-week range analysis.
+*   **Portfolio Management**: Position tracking with dividends and custom tab grouping.
 *   **Order Tracking**: Real-time status monitoring with in-place modifications and rapid cancellation.
 *   **Information Hub**: Symbol-specific news with provider filtering and RTF article previews.
 *   **Robust Infrastructure**: Auto-reconnecting watchdog, registry-based persistence, and async audio notifications.
@@ -42,7 +42,7 @@ A modern desktop trading companion built on the Interactive Brokers C++ API. It 
 
 ### 💰 Dashboard (The Command Center)
 The primary tray window combining account metrics with centralized window management.
-*   **Account Summary**: Live Net Liquidation Value, Daily P&L (with clickable TTS speaker icon), and detailed margin metrics (Buying Power, Maintenance Margin, etc.).
+*   **Account Summary**: Live Net Liquidation Value, Daily P&L (with clickable TTS speaker icon), and detailed margin metrics (Buying Power, Maintenance Margin, Unrealized/Realized PnL, Dividends, Gross Position, Accrued Cash, EUR/USD Cash).
 *   **Window Launcher**: One-click access to all other modules.
 *   **Tray Integration**: Right-click the 💰 icon for window toggles, "Always-On-Top" markers **[ ★ ]**, and quick access to Settings/Logs.
 *   **Session Control**: Toggle the auto-connect watchdog to ensure your session stays alive.
@@ -55,9 +55,11 @@ Real-time order tracking with an emphasis on speed and accuracy.
 
 ### 💎 Diamonds (Portfolio Analysis)
 Deep-dive analysis of held positions with advanced grouping.
-*   **Performance**: Daily P&L and Unrealized P&L with high-contrast color-coding.
-*   **Dividends**: Track yield %, next dividend date, and annual amounts.
-*   **Organization**: Use custom tabs (e.g., *Growth*, *High-Yield*) and symbol colors for visual categorization.
+*   **Performance**: Daily P&L, Unrealized P&L, and unrealized % change with high-contrast color-coding.
+*   **Dividends**: Track yield %, next dividend date, annual amounts, and market value.
+*   **Custom Tabs**: Three filterable tabs — *Growth*, *High-Yield Dividends*, and *Quarantine* (checkboxes at bottom).
+*   **Symbol Colors**: Assign one of six colors (Red, Green, Blue, Purple, Gold, Brown) per position for visual categorization.
+*   **Deferred Sort**: Header-click to sort by any column; zero-flicker re-sorting via timer.
 
 ### 👀 Watchlist (Market Monitoring)
 Real-time quote monitoring with cross-window synchronization.
@@ -66,14 +68,11 @@ Real-time quote monitoring with cross-window synchronization.
 *   **Fast Navigation**: Double-click any symbol to instantly spawn a dedicated Market window.
 
 ### 🏦 Market (High-Frequency Data)
-The core data engine for active trading.
-*   **Infinite Instances**: Support for multiple concurrent market windows.
-*   **Level 1 Data**: Real-time streaming quotes (Last, Bid, Ask, High, Low, Volume, VWAP).
-*   **Level 2 Depth**: Real-time bid/ask ladder (left panel).
-*   **Time & Sales**: Real-time tick-by-tick streams, filtered for size (All, 100+, 1000+).
-*   **Dynamic Layout**: Vertical and horizontal draggable splitters to customize your view per symbol.
-*   **Quick Order**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask).
-*   **Bracket Orders**: Optionally attach Stop-Loss and Take-Profit orders to entry trades.
+The core data engine for active trading. Supports infinite concurrent instances.
+*   **Level 1 Data**: Real-time streaming quotes (Last, Bid, Ask, High, Low, Volume).
+*   **Level 2 Depth**: Real-time bid/ask ladder in the left panel with price and size columns.
+*   **Time & Sales**: Three real-time tick-by-tick streams — All, ≥100 shares, ≥1000 shares — with dynamic vertical/horizontal splitters to customize your view per symbol.
+*   **Quick Order Bar**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask). Includes Stop-Loss and Take-Profit price fields for bracket orders.
 *   **Audio Alerts**: Independent per-window TTS for price announcements.
 
 ### 📰 News (Intelligence Hub)
@@ -82,7 +81,7 @@ Contextual news delivery based on your watchlists.
 *   **Rich Preview**: Converts HTML news bodies into clean RTF for a distraction-free reading experience.
 
 ### ⚙️ Settings & 🐞 Debug Log
-*   **Settings**: Configure Dark Mode, TTS voice selection, default order quantity, and Gateway automation.
+*   **Settings**: Configure Dark Mode, TTS voice selection, default order quantity, Stop/Profit price defaults, Gateway path, and auto-start IBKR Gateway.
 *   **Debug Log**: A live stream of API callbacks and internal events for diagnostics and troubleshooting.
 
 ---
