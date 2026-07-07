@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 672;
+int windowMarketWidth = 675;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
@@ -29,7 +29,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Ask  182.87  x 154]       (row 1, right block)
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
-static const int EXEC_W   = 122;  // Fixed width of the Executions panel (far left)
+static const int EXEC_W   = 125;  // Fixed width of the Executions panel (far left)
 static const int L2_W     = 130;  // Fixed width of the Level 2 depth panel (beside exec)
 static const int ORDER_BAR_H = 80;
 
@@ -132,7 +132,7 @@ static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 struct ExecCol { const char* header; int width; int fmt; };
 static const ExecCol execCols[] = {
     { "Side",  0, LVCFMT_CENTER },
-    { "Quote", 100, LVCFMT_CENTER  },
+    { "Quote", 105, LVCFMT_CENTER  },
 };
 static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 
