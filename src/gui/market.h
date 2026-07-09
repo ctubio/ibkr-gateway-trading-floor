@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 678;
+int windowMarketWidth = 680;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
@@ -30,7 +30,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
 static const int EXEC_W   = 127;  // Fixed width of the Executions panel (far left)
-static const int L2_W     = 130;  // Fixed width of the Level 2 depth panel (beside exec)
+static const int L2_W     = 136;  // Fixed width of the Level 2 depth panel (beside exec)
 static const int ORDER_BAR_H = 80;
 
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
