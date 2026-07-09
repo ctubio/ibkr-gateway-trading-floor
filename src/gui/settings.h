@@ -171,11 +171,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, NULL, hInst, NULL);
 
             HWND hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 margin + 80, margin + 217, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_QTY_VALUE, hInst, NULL);
 
-            SetWindowTextA(hQtyEdit, std::format("{}", (int)Settings_Load("OrderQty", 100)).c_str());
+            float qty = Settings_LoadFloat("OrderQty", 100.0f);
+            SetWindowTextA(hQtyEdit, std::format("{:.4f}", qty).c_str());
             
             
             CreateWindowA("STATIC", "Stop:",
@@ -188,7 +189,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 margin + 80, margin + 250, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_STOP_VALUE, hInst, NULL);
 
-            SetWindowTextA(hStopEdit, std::format("{}", (int)Settings_Load("StopPrice", 1)).c_str());
+            float stop = Settings_LoadFloat("StopPrice", 1.0f);
+            SetWindowTextA(hStopEdit, std::format("{:.4f}", stop).c_str());
 
             
             CreateWindowA("STATIC", "Profit:",
@@ -201,7 +203,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 margin + 80, margin + 283, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_PROFIT_VALUE, hInst, NULL);
 
-            SetWindowTextA(hProfitEdit, std::format("{}", (int)Settings_Load("ProfitPrice", 2)).c_str());
+            float profit = Settings_LoadFloat("ProfitPrice", 2.0f);
+            SetWindowTextA(hProfitEdit, std::format("{:.4f}", profit).c_str());
 
 
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
@@ -247,35 +250,35 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_QTY_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                int qty = 0;
+                float qty = 100.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    qty = atoi(buf);
+                    qty = (float)atof(buf); // atof handles decimals
                 }
-                Settings_Save("OrderQty", qty);
+                Settings_SaveFloat("OrderQty", qty);
             }
             if (LOWORD(wParam) == ID_SETTINGS_STOP_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                int price = 0;
+                float price = 1.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    price = atoi(buf);
+                    price = (float)atof(buf); // atof handles decimals
                 }
-                Settings_Save("StopPrice", price);
+                Settings_SaveFloat("StopPrice", price);
             }
             if (LOWORD(wParam) == ID_SETTINGS_PROFIT_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_PROFIT_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                int price = 0;
+                float price = 2.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    price = atoi(buf);
+                    price = (float)atof(buf); // atof handles decimals
                 }
-                Settings_Save("ProfitPrice", price);
+                Settings_SaveFloat("ProfitPrice", price);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);

@@ -170,6 +170,18 @@ void Settings_Save(const char* key, DWORD value) {
     RegSetDword("Settings", key, value);
 }
 
+// ─── Decimal helpers (stored as DWORD scaled by 10000, i.e. 4 decimal places) ────
+void Settings_SaveFloat(const char* key, float value) {
+    DWORD scaled = (DWORD)(value * 10000.0f);
+    RegSetDword("Settings", key, scaled);
+}
+
+float Settings_LoadFloat(const char* key, float defaultValue = 0.0f) {
+    DWORD scaled = RegGetDword("Settings", key, 0);
+    if (scaled == 0) return defaultValue; // sentinel: never saved → use default
+    return (float)scaled / 10000.0f;
+}
+
 void Settings_Delete(const char* key) {
     RegDelete("Settings", key);
 }
