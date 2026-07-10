@@ -164,9 +164,9 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
 
     int x = startX;
     if (hHint) {
-        MoveWindow(hHint, x, py + 3, 120, 24, TRUE);
+        MoveWindow(hHint, x, py + 5, 160, 24, TRUE);
         ShowWindow(hHint, show);
-        x += 120 + 5;
+        x += 160 + 5;
     }
     if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
     if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); } x += editW + gapX;
@@ -283,9 +283,10 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
 
     HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hHint) {
-        std::string hint = order.action + " " + order.symbol;
+        std::string hint = order.symbol + " " + order.action + " " + order.orderType;
         SetWindowTextA(hHint, hint.c_str());
         SetCtrlColor(hHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
+        InvalidateRect(hHint, NULL, TRUE);
     }
     Orders_LayoutPanel(hWnd, true);
 
