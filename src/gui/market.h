@@ -322,8 +322,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
 
     ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
-    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : (double)(int)Settings_Load("StopPrice", 1)).c_str());
-    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : (double)(int)Settings_Load("ProfitPrice", 2)).c_str());
+    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("StopPrice", 1.0f)).c_str());
+    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
 
     Market_Layout(hWnd, state);
     SetFocus(state->hOrderPrice);

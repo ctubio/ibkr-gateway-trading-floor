@@ -171,13 +171,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, NULL, hInst, NULL);
 
             HWND hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
                 margin + 80, margin + 217, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_QTY_VALUE, hInst, NULL);
 
-            float qty = Settings_LoadFloat("OrderQty", 100.0f);
-            SetWindowTextA(hQtyEdit, std::format("{:.4f}", qty).c_str());
-            
+            SetWindowTextA(hQtyEdit, std::format("{}", (int)Settings_Load("OrderQty", 100)).c_str());
             
             CreateWindowA("STATIC", "Stop:",
                 WS_CHILD | WS_VISIBLE,
@@ -190,7 +188,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_STOP_VALUE, hInst, NULL);
 
             float stop = Settings_LoadFloat("StopPrice", 1.0f);
-            SetWindowTextA(hStopEdit, std::format("{:.4f}", stop).c_str());
+            SetWindowTextA(hStopEdit, std::format("{:.2f}", stop).c_str());
 
             
             CreateWindowA("STATIC", "Profit:",
@@ -204,7 +202,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_PROFIT_VALUE, hInst, NULL);
 
             float profit = Settings_LoadFloat("ProfitPrice", 2.0f);
-            SetWindowTextA(hProfitEdit, std::format("{:.4f}", profit).c_str());
+            SetWindowTextA(hProfitEdit, std::format("{:.2f}", profit).c_str());
 
 
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
@@ -250,13 +248,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_QTY_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                float qty = 100.0f;
+                int qty = 0;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    qty = (float)atof(buf); // atof handles decimals
+                    qty = atoi(buf);
                 }
-                Settings_SaveFloat("OrderQty", qty);
+                Settings_Save("OrderQty", qty);
             }
             if (LOWORD(wParam) == ID_SETTINGS_STOP_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
