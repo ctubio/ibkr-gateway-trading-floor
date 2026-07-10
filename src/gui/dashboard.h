@@ -130,6 +130,9 @@ static void Coins_SpeakDailyPnL() {
 static void Coins_ToggleTTS(HWND hWnd) {
     g_coinsTtsOn = !g_coinsTtsOn;
 
+    // Persist state to registry
+    RegSetDword(DASHBOARD_CLASS_NAME, "Speaker", g_coinsTtsOn ? 1 : 0);
+
     if (g_coinsTtsOn) {
         if (!Coins_InitVoice()) {
             g_coinsTtsOn = false;
@@ -475,6 +478,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     
             SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
             SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
+
+            if (RegGetDword(DASHBOARD_CLASS_NAME, "Speaker", 0)) {
+                Coins_ToggleTTS(hWnd);
+            }
             break;
         }
         
