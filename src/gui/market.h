@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 686;
+int windowMarketWidth = 690;
 int windowMarketHeight = 500;
 
 void StartMarketSearch(); // Forward declaration
