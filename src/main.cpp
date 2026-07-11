@@ -2,6 +2,7 @@
 #include "api/registry.h"
 #include "api/sound.h"
 #include "api/shared.h"
+#include "api/server.h"
 
 #include "gui/settings.h"
 #include "gui/market.h"
@@ -32,12 +33,16 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
 
         Session_RestoreWindows(StartDiamonds, StartNews, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
 
+        HttpServer_Start();
+
         MSG msg;
         while (GetMessage(&msg, NULL, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }   
 
+        HttpServer_Stop();
+        
         return (int)msg.wParam;
     } catch (const std::exception& e) {
         std::string errMsg = "Unhandled C++ Exception:\n\n" + std::string(e.what());  

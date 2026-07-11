@@ -107,8 +107,6 @@ public:
         std::string exchange;
         double      shares            = 0.0;
         double      avgCost           = 0.0;
-        double      dailyPnL          = 0.0;
-        double      marketValue       = 0.0;
         PnlSinglePayload pnlSingle;
     };
 
