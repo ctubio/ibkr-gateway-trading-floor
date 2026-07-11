@@ -41,7 +41,7 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
     if (status == "Cancelled" || status == "Inactive" || status == "PendingCancel")
         return dark ? RGB(130, 130, 130) : RGB(160, 160, 160);
-    if (status == "Submitted" || status == "PreSubmitted") {
+    if (status == "Submitted" || status == "PreSubmitted" || status == "PendingSubmit" || status == "Pending") {
         if (orderType == "BUY") return RGB(80, 200, 120);
         else if (orderType == "SELL") return RGB(220, 80, 80);
     }
@@ -99,7 +99,7 @@ static void Orders_Repopulate(HWND hWnd) {
 
         // ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
 
-        if (o.status == "Submitted" || o.status == "PreSubmitted") submitted++;
+        if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
         if (o.status == "Filled") filled++;
     }   
 
