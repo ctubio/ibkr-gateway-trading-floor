@@ -48,8 +48,7 @@ static bool g_DiamondsChkVisible = false;
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
 #define DIAMONDS_SORT_TIMER_ID  7010
-#define DIAMONDS_SORT_TIMER_MS   500   // re-sort at most twice per second
-static bool g_DiamondsSortPending = false;
+#define DIAMONDS_SORT_TIMER_MS   5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
 static ListViewZoomData DiamondsZoomData = { NULL, NULL, 17, "Zoom_Diamonds" };
 
@@ -585,6 +584,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         api().addApiUpdateWindow(hWnd);
         Diamonds_Repopulate(hWnd);
+
+        SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
         break;
     }
 
@@ -946,6 +947,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_TIMER: {
+        if (wParam == DIAMONDS_SORT_TIMER_ID) {
+            HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+            Diamonds_ApplySort(hList);
+            InvalidateRect(hList, NULL, FALSE);
+        }
         if (wParam == DIAMONDS_PAINT_TIMER_ID) {
             if (g_DiamondsDirty) {
                 HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
@@ -973,7 +979,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_DESTROY:
         KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
         KillTimer(hWnd, DIAMONDS_PAINT_TIMER_ID);
-        g_DiamondsSortPending = false;
         api().removeApiUpdateWindow(hWnd);
         g_DiamondDataCache.clear();
         g_DiamondsSparklines.clear();
