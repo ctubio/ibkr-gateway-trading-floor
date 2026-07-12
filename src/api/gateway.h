@@ -166,8 +166,8 @@ public:
         bool   halted = false;          // field 49 (HALTED)
 
         // ── Computed helpers ─────────────────────────────────────────────────
-        double change()    const { return prevClose > 0 ? last - prevClose : 0.0; }
-        double changePct() const { return prevClose > 0 ? (last - prevClose) / prevClose * 100.0 : 0.0; }
+        double change()    const { return (prevClose > 0 && last > 0) ? last - prevClose : 0.0; }
+        double changePct() const { return (prevClose > 0 && last > 0) ? (last - prevClose) / prevClose * 100.0 : 0.0; }
         double dividendYield() const { return (last > 0 && annualDividends > 0) ? (annualDividends / last * 100.0) : 0.0; }
 
         // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
