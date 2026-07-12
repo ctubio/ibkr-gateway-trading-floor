@@ -440,6 +440,10 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) {
                 Session_RemoveWindow(hWnd);
             }
+            if (strcmp(className, MARKET_CLASS_NAME) == 0) {
+                TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                if (data) delete data;
+            }
             return 0;
         default: {
             LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);

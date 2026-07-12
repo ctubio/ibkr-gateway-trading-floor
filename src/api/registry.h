@@ -957,7 +957,7 @@ struct TtsVoiceEntry {
 // Custom message broadcast to all top-level windows when the user picks a new
 // TTS voice in Settings, so open Market and Dashboard windows hot-swap immediately.
 // wParam = 0, lParam = 0.
-#define WM_TTS_VOICE_CHANGED (WM_APP + 201)
+#define WM_TTS_VOICE_CHANGED (WM_APP + 301)
 
 // Enumerate ALL voices from both classic SAPI and OneCore registries.
 // Duplicates (same tokenId) are suppressed so voices that appear in both

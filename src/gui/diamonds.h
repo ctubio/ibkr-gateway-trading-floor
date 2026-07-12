@@ -1,7 +1,7 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-
-void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", 1590, 420); }
+int windowDiamondsWidth = 1446;
+void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
 #define ID_DIAMONDS_CHK_0        7002   // "Growth"
@@ -134,6 +134,27 @@ static const DiamondCol diamondCols[] = {
 };
 static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
               "diamondCols count must match DiamondColIdx::DCOL_COUNT");
+
+// ── Dividend column visibility ────────────────────────────────────────────────
+// The last 4 columns (Yield/Date/Amount/Annual) are only shown when the
+// 2nd CheckedTab checkbox ("High-Yield Dividends", ID_DIAMONDS_CHK_1, bit 1
+// of g_DiamondsCheckedTabs) is checked. Hidden by collapsing the column width
+// to 0; restored to its defined width from diamondCols[] when shown again.
+static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
+    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+    if (!hList) return;
+    bool show = (g_DiamondsCheckedTabs & (1u << 1)) != 0;
+    for (int i = DCOL_DIV_YIELD; i <= DCOL_ANNUAL_DIV; ++i) {
+        ListView_SetColumnWidth(hList, i, show ? diamondCols[i].width : 0);
+    }
+    RECT windowRect; 
+    GetWindowRect(hWnd, &windowRect);
+    if (show) {
+        MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth + 16 + diamondCols[DCOL_DIV_YIELD].width + diamondCols[DCOL_DIV_DATE].width + diamondCols[DCOL_DIV_AMT].width + diamondCols[DCOL_ANNUAL_DIV].width,  windowRect.bottom - windowRect.top, TRUE);
+    } else {
+        MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth,  windowRect.bottom - windowRect.top, TRUE);
+    }
+}
 
 static HIMAGELIST g_DiamondsRowHeightImageList = NULL;
 
@@ -586,7 +607,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i),
                         BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
         }
-        
+        Diamonds_UpdateDivColumnsVisibility(hWnd);
+
         api().addApiUpdateWindow(hWnd);
         Diamonds_Repopulate(hWnd);
         break;
@@ -612,6 +634,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     g_DiamondsCheckedTabs |= (1u << i);
             }
             Settings_CheckedTabs_Save((int)g_DiamondsCheckedTabs);
+            Diamonds_UpdateDivColumnsVisibility(hWnd);
             Diamonds_Repopulate(hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
             //UpdateWindow(hWnd);

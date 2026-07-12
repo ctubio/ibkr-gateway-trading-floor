@@ -1,6 +1,6 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 646, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 596, 240); }
 
 #define ID_ORDERS_LIST          9003
 #define ID_ORDERS_PRICE_EDIT    9010
@@ -8,6 +8,7 @@ void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPICli
 #define ID_ORDERS_PRICE_LABEL   9012
 #define ID_ORDERS_QTY_LABEL     9013
 #define ID_ORDERS_HINT_LABEL    9014
+#define ID_ORDERS_FOCUS_TIMER   9020   // one-shot: defers SetFocus past click/activation processing
 
 #define EDIT_PANEL_H  44   // height reserved at the bottom when the panel is visible
 
@@ -25,7 +26,7 @@ static HFONT fontInputs   = NULL;
 
 struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
-    { "Side",          55,  LVCFMT_CENTER},
+    { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
     { "Quote",        135,  LVCFMT_RIGHT },
     { "Avg Filled",   135,  LVCFMT_RIGHT },
@@ -184,6 +185,7 @@ static void Orders_HideInlinePanel(HWND hWnd) {
     s_editState.orderId      = 0;
     s_editState.panelVisible = false;
     Orders_LayoutPanel(hWnd, false);
+    InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
 }
 
 // Forward ENTER from an edit control up to the Orders window; handle TAB and Arrows.
@@ -289,11 +291,19 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
         InvalidateRect(hHint, NULL, TRUE);
     }
     Orders_LayoutPanel(hWnd, true);
+    InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
 
-    // Focus the price field and select all.
+    // Focus the price field and select all. Deferred via a one-shot timer
+    // rather than called directly: on the FIRST click into an inactive Orders
+    // window, the OS's own activation sequence (WM_MOUSEACTIVATE → SetForegroundWindow
+    // → the list view claiming focus for itself) runs interleaved with this
+    // notification handler and steals focus back after we set it. A timer message
+    // is only dispatched once the queue is otherwise empty, so by the time it
+    // fires, activation + the list's own focus grab have already finished, and
+    // we reliably win the focus. (PostMessage is not late enough for this case,
+    // since some of that activation handling can itself be queued behind it.)
     if (hPriceEdit) {
-        SetFocus(hPriceEdit);
-        SendMessageA(hPriceEdit, EM_SETSEL, 0, -1);
+        SetTimer(hWnd, ID_ORDERS_FOCUS_TIMER, 333, NULL);
     }
 }
 
@@ -380,6 +390,18 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
 
+        case WM_TIMER: {
+            if (wParam == ID_ORDERS_FOCUS_TIMER) {
+                KillTimer(hWnd, ID_ORDERS_FOCUS_TIMER);
+                HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+                if (hPriceEdit) {
+                    SetFocus(hPriceEdit);
+                    int len = GetWindowTextLengthA(hPriceEdit);
+                    SendMessageA(hPriceEdit, EM_SETSEL, len, len);
+                }
+            }
+            break;
+        }
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
@@ -452,6 +474,13 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
                             cd->clrText   = LM_TEXT;
                         }
+                        // Highlight the row of the order currently open in the inline edit panel.
+                        // lItemlParam is the LVITEM.lParam set in Orders_Repopulate (the orderId).
+                        if (s_editState.panelVisible && s_editState.orderId != 0 &&
+                            (int)cd->nmcd.lItemlParam == s_editState.orderId) {
+                            cd->clrTextBk = dark ? RGB(40, 50, 75) : RGB(255, 244, 190);
+                            return CDRF_NOTIFYSUBITEMDRAW;
+                        }
                         return CDRF_NOTIFYSUBITEMDRAW;
 
                     case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
@@ -470,7 +499,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)       orderType = "BUY";
                             else if (len >= 4 && strcmp(buf + len - 4, "SELL") == 0) orderType = "SELL";
                             cd->clrText = Orders_StatusColor(orderType, statusStr, dark);
-                            if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                            bool isEditRow = s_editState.panelVisible && s_editState.orderId != 0 &&
+                                             (int)cd->nmcd.lItemlParam == s_editState.orderId;
+                            if (isEditRow)
+                                cd->clrTextBk = dark ? RGB(40, 50, 75) : RGB(255, 244, 190);
+                            else if (dark)
+                                cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             return CDRF_NEWFONT;
                         }
                         return CDRF_DODEFAULT;

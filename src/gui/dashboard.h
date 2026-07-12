@@ -5,7 +5,7 @@ int windowDashboardHeight = 450;
 
 void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor: Offline", L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
-#define WM_TRAYICON (WM_APP + 100)
+#define WM_TRAYICON (WM_APP + 101)
 
 #define TIMER_WATCHDOG 1
 

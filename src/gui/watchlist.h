@@ -11,8 +11,8 @@ void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"
 #define TIMER_WL_DROPDOWN        98
 
 
-#define WM_WATCHLIST_NEW_LIST_START  (WM_APP + 200)
-#define WM_WATCHLIST_LIST_CHANGED    (WM_APP + 201)
+#define WM_WATCHLIST_NEW_LIST_START  (WM_APP + 201)
+#define WM_WATCHLIST_LIST_CHANGED    (WM_APP + 202)
 // Posted Watchlist when the set of lists changes (create/delete).
 // lParam = new std::string*(newListName, or "" if a list was deleted) — receiver must delete.
 #define WM_WATCHLIST_LISTS_CHANGED   (WM_APP + 203)

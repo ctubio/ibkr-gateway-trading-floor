@@ -428,18 +428,20 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
         }
         
         if (wParam == VK_CONTROL) {
-            bool isRight = (lParam & (1 << 24)) != 0;
-            if (isRight) {
-                if (st->orderBarVisible && st->orderSide == "SELL") {
-                    Market_Layout_HideBar(hMarket, st);
+            if (st) {
+                bool isRight = (lParam & (1 << 24)) != 0;
+                if (isRight) {
+                    if (st->orderBarVisible && st->orderSide == "SELL") {
+                        Market_Layout_HideBar(hMarket, st);
+                    } else {
+                        OrderBar_Show(hMarket, st, "SELL");
+                    }
                 } else {
-                    OrderBar_Show(hMarket, st, "SELL");
-                }
-            } else {
-                if (st->orderBarVisible && st->orderSide == "BUY") {
-                    Market_Layout_HideBar(hMarket, st);
-                } else {
-                    OrderBar_Show(hMarket, st, "BUY");
+                    if (st->orderBarVisible && st->orderSide == "BUY") {
+                        Market_Layout_HideBar(hMarket, st);
+                    } else {
+                        OrderBar_Show(hMarket, st, "BUY");
+                    }
                 }
             }
         }
@@ -1419,8 +1421,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_DESTROY:
         api().unsetMarketWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
-        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-        if (data) delete data;
         if (state) {
             if (state->ttsOn) KillTimer(hWnd, TIMER_MARKET_SPEAKER);
             if (state->hTtsVoice) {
