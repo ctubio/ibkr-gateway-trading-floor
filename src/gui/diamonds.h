@@ -448,32 +448,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
 
     setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
     setCol(DCOL_PCT_NETLIQ, pctNetLiq, "{:.2f}%", true);
-
-    /* / Estimate PnL from market data only when no real value from WM_PNL_SINGLE
-    // has arrived yet.  We detect "real value present" by checking whether the
-    // sortValue is non-zero AND the text cell is not the "--" sentinel
-    // (which can be written by setNA above with a -999999 sort value).
-    // A freshly-created row has sortValue==0.0 and textCols=="", so estimation
-    // always runs on first open.  Once pnlSingle posts a real value the sort
-    // value goes non-zero and we leave it alone.
-    bool hasRealDaily      = (row.sortValues[DCOL_DAILYPNL]      != 0.0 &&
-                               row.textCols[DCOL_DAILYPNL]        != "");
-    bool hasRealUnrealized = (row.sortValues[DCOL_UNREALIZED_PL]  != 0.0 &&
-                               row.textCols[DCOL_UNREALIZED_PL]   != "");
-
-    if (!hasRealDaily) {
-        if (t.prevClose > 0.0) setCol(DCOL_DAILYPNL, shares * t.change(), "%+.2f", true);
-        else setNA(DCOL_DAILYPNL);
-    }
-    if (!hasRealUnrealized) {
-        double unrlPnL    = (avgCost > 0.0) ? shares * (t.last - avgCost) : 0.0;
-        double unrlPnLPct = (avgCost > 0.0 && t.last > 0.0)
-                                ? ((t.last - avgCost) / avgCost * 100.0) : 0.0;
-        setCol(DCOL_UNREALIZED_PL,     unrlPnL,    "%+.2f",   true);
-        setCol(DCOL_UNREALIZED_PL_PCT, unrlPnLPct, "%+.2f%%", true);
-    }*/
-
-    // Row selective invalidation happens in the message handler
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
