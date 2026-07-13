@@ -77,6 +77,9 @@ struct TsState {
     float splitY = 0.5f;
     int dragMode = 0;
 
+    // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
+    RECT lastPriceRect = { 0, 0, 0, 0 };
+
     // ── Order entry bar ───────────────────────────────────────────────────────
     HWND  hOrderLabel       = NULL;
     HWND  hOrderPrice       = NULL;
@@ -884,6 +887,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT lastRc = { lcX, 0, LC_RIGHT - 7, HEADER_H - 7 };
         DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
+        // Remember this rect so WM_LBUTTONDOWN/WM_SETCURSOR can hit-test clicks
+        // on the big last-price display to toggle TTS (same action as the speaker icon).
+        state->lastPriceRect = lastRc;
+
         // Draw change/pct% in smaller font immediately to below
         COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
         SelectObject(hdc, state->hStatusFont);
@@ -893,6 +900,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
             RECT chgRc = { chgX, 0, LC_RIGHT - 7, HEADER_H - 3 };
             DrawTextA(hdc, chgStr.c_str(), -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
         }
+    } else {
+        // Nothing drawn this frame — disable the click target so a stale rect
+        // from a previous (wider) layout can't be hit-tested.
+        SetRectEmpty(&state->lastPriceRect);
     }
 
     // ── Bottom separator ──────────────────────────────────────────────────────
@@ -1376,6 +1387,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
             if (hit == 1) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
+            if (PtInRect(&state->lastPriceRect, pt)) {
+                SetCursor(LoadCursor(NULL, IDC_HAND));
+                return TRUE;
+            }
         }
         break;
     }
@@ -1385,7 +1400,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             int x = (short)LOWORD(lParam);
             int y = (short)HIWORD(lParam);
             state->dragMode = HitTestSplitter(hWnd, state, x, y);
-            if (state->dragMode != 0) SetCapture(hWnd);
+            if (state->dragMode != 0) {
+                SetCapture(hWnd);
+            } else {
+                POINT pt = { x, y };
+                if (PtInRect(&state->lastPriceRect, pt)) {
+                    Market_ToggleTTS(hWnd, state);
+                }
+            }
         }
         break;
     }
