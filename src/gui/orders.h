@@ -54,6 +54,7 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
 // checks editability of the order currently shown in the inline panel).
 static bool Orders_IsEditable(const std::string& status);
 static void Orders_HideInlinePanel(HWND hWnd);
+static void Orders_MoveSelection(HWND hWnd, int dir);
 
 // Rebuilds the entire ListView from the current snapshot.
 static void Orders_Repopulate(HWND hWnd) {
@@ -188,6 +189,44 @@ static void Orders_HideInlinePanel(HWND hWnd) {
     InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
 }
 
+// Moves the ListView selection up or down by one row (clamped to the ends).
+// If nothing is currently selected, selects the first row regardless of dir.
+// Does NOT move keyboard focus — safe to call while an edit field has focus.
+static void Orders_MoveSelection(HWND hWnd, int dir) {
+    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+    if (!hList) return;
+    int count = ListView_GetItemCount(hList);
+    if (count <= 0) return;
+
+    int sel  = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+    int next = (sel < 0) ? 0 : sel + dir;
+    if (next < 0) next = 0;
+    if (next >= count) next = count - 1;
+    if (next == sel) return;
+
+    if (sel >= 0)
+        ListView_SetItemState(hList, sel, 0, LVIS_SELECTED | LVIS_FOCUSED);
+
+    UINT state = LVIS_SELECTED | LVIS_FOCUSED;
+    ListView_SetItemState(hList, next, state, state);
+    ListView_EnsureVisible(hList, next, FALSE);
+}
+
+// Subclass for the orders ListView: intercepts Ctrl+Up/Ctrl+Down so they move
+// the selection by one row instead of the default multi-select behavior
+// (which — since this list isn't LVS_SINGLESEL — would otherwise just move
+// the dotted focus rectangle without changing the selection). Everything
+// else (plain arrows, Home/End, mouse, etc.) is passed straight through.
+static LRESULT CALLBACK OrdersList_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
+                                                 LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (message == WM_KEYDOWN && (wParam == VK_UP || wParam == VK_DOWN) &&
+        (GetKeyState(VK_CONTROL) & 0x8000)) {
+        Orders_MoveSelection(GetParent(hWnd), (wParam == VK_UP) ? -1 : 1);
+        return 0;
+    }
+    return DefSubclassProc(hWnd, message, wParam, lParam);
+}
+
 // Forward ENTER from an edit control up to the Orders window; handle TAB and Arrows.
 static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
                                                LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
@@ -244,6 +283,15 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 int len = GetWindowTextLengthA(hNext);
                 SendMessageA(hNext, EM_SETSEL, len, len);
             }
+            return 0;
+        }
+
+        if ((wParam == VK_UP || wParam == VK_DOWN) && (GetKeyState(VK_CONTROL) & 0x8000)) {
+            // Ctrl+Arrow: move the ListView's selected order instead of
+            // stepping the price/qty value. Focus deliberately stays in
+            // this edit field.
+            HWND hParent = GetParent(hWnd);
+            Orders_MoveSelection(hParent, (wParam == VK_UP) ? -1 : 1);
             return 0;
         }
 
@@ -326,6 +374,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             OrdersZoomData.fontSize = (int)Settings_Load(OrdersZoomData.settingKey, OrdersZoomData.fontSize);
             ApplyListViewFont(hList, OrdersZoomData.hFont, OrdersZoomData.hBoldFont, OrdersZoomData.fontSize);
             SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&OrdersZoomData);
+            SetWindowSubclass(hList, OrdersList_SubclassProc, 1, 0);
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
