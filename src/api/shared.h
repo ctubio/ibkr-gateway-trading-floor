@@ -643,7 +643,6 @@ std::wstring StringToWide(const std::string& str) {
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
 }
-
 struct SparkPoint {
     ULONGLONG date; 
     double price;
@@ -653,10 +652,35 @@ class Sparkline {
 private:
     std::vector<SparkPoint> data;
 
+    // NEW: long-lived history (~65 min) used only for the 10/20/30/40/50-min reference dots.
+    // Kept completely separate from `data` so the existing sparkline logic is untouched.
+    std::vector<SparkPoint> priceHistory;
+
     // Equivalent to your d3_scale_linear
     float MapScale(double value, double minDomain, double maxDomain, float minRange, float maxRange) {
         if (maxDomain == minDomain) return minRange + (maxRange - minRange) / 2.0f;
         return minRange + (float)((value - minDomain) / (maxDomain - minDomain)) * (maxRange - minRange);
+    }
+
+    // NEW: finds the price closest to (now - minutesAgo) in priceHistory.
+    // Returns false if we don't yet have history reaching that far back
+    // (this is what makes the dots appear one by one as time passes).
+    bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice) const {
+        ULONGLONG minMs = minutesAgo * 60000ULL;
+        if (now < minMs) return false;
+        ULONGLONG target = now - minMs;
+        if (priceHistory.empty() || priceHistory.front().date > target) return false;
+
+        size_t bestIdx = 0;
+        ULONGLONG bestDiff = (priceHistory[0].date > target)
+            ? (priceHistory[0].date - target) : (target - priceHistory[0].date);
+        for (size_t i = 1; i < priceHistory.size(); ++i) {
+            ULONGLONG diff = (priceHistory[i].date > target)
+                ? (priceHistory[i].date - target) : (target - priceHistory[i].date);
+            if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+        }
+        outPrice = priceHistory[bestIdx].price;
+        return true;
     }
 
 public:
@@ -678,6 +702,15 @@ public:
         if (data.size() > 21) {
             data.erase(data.begin()); 
         }
+
+        // NEW: maintain the separate long-term history used for the reference dots
+        if (priceHistory.empty() || priceHistory.back().price != price) {
+            priceHistory.push_back({ now, price });
+        }
+        const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL; // keep ~65 minutes
+        while (!priceHistory.empty() && now > maxAge && priceHistory.front().date < now - maxAge) {
+            priceHistory.erase(priceHistory.begin());
+        }
     }
 
     void Draw(HDC hdc, RECT clientRect, float W, float H) {
@@ -685,6 +718,12 @@ public:
 
         Gdiplus::Graphics graphics(hdc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+
+        // NEW: reserve a small strip on the right for the 5 reference dots.
+        // This is the only change to the existing line drawing: it uses `lineW`
+        // instead of `W` when mapping x, so the line stops a bit short of the edge.
+        const float dotAreaWidth = 10.0f;
+        float lineW = (W - dotAreaWidth > 4.0f) ? (W - dotAreaWidth) : W;
 
         // Find Min/Max Domains
         ULONGLONG minTime = data[0].date;
@@ -704,8 +743,8 @@ public:
         // Map data to Gdiplus screen coordinates
         std::vector<Gdiplus::PointF> points(data.size());
         for (size_t i = 0; i < data.size(); ++i) {
-            // X spans from 0 to Width
-            float x = MapScale(data[i].date, minTime, maxTime, 0, W);
+            // X spans from 0 to lineW (was W)
+            float x = MapScale(data[i].date, minTime, maxTime, 0, lineW);
             // Y is inverted (0 is top, H is bottom in Windows)
             float y = MapScale(data[i].price, minPrice, maxPrice, H, 1);
             
@@ -731,23 +770,61 @@ public:
         pen.SetLineJoin(Gdiplus::LineJoinRound);
 
         graphics.DrawLines(&pen, points.data(), (INT)points.size());
+
+        // NEW: draw the 5 reference dots (10/20/30/40/50 min ago), top to bottom.
+        // Each dot only appears once priceHistory reaches back that far.
+        ULONGLONG now = GetTickCount64();
+        double lastPrice = data.back().price;
+        static const int minutesAgo[5] = { 10, 20, 30, 40, 50 };
+        const float dotRadius = 2.5f;
+        float dotX = clientRect.left + W - dotRadius - 1.0f;
+
+        for (int i = 0; i < 5; ++i) {
+            double histPrice;
+            if (!GetPriceAgo(now, minutesAgo[i], histPrice)) continue; // not enough history yet
+            float dotY = clientRect.top + H * ((i + 0.5f) / 5.0f);
+
+            Gdiplus::Color dotColor =
+                (lastPrice > histPrice) ? Gdiplus::Color(255, 1, 166, 1)   // green: price up
+              : (lastPrice < histPrice) ? Gdiplus::Color(255, 220, 0, 0)   // red: price down
+              : Gdiplus::Color(255, 150, 150, 150);                       // equal: neutral
+
+            Gdiplus::SolidBrush dotBrush(dotColor);
+            graphics.FillEllipse(&dotBrush, dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
+        }
     }
 };
-
-
-// ── Mini sparkline for the Position cell ─────────────────────────────────────
-// A self-contained sparkline sized to fit inside a SysListView32 sub-item cell.
-// Kept deliberately separate from the full-size Sparkline used in market.h so
-// that changes to either class don't affect the other.
 
 class MiniSparkline {
 private:
     struct MiniSparkPoint { ULONGLONG date; double price; };
     std::vector<MiniSparkPoint> data;
 
+    // NEW: same idea as in Sparkline, a separate long-lived history for the dots
+    std::vector<MiniSparkPoint> priceHistory;
+
     float MapScale(double value, double minD, double maxD, float minR, float maxR) const {
         if (maxD == minD) return minR + (maxR - minR) / 2.0f;
         return minR + (float)((value - minD) / (maxD - minD)) * (maxR - minR);
+    }
+
+    // NEW
+    bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice) const {
+        ULONGLONG minMs = minutesAgo * 60000ULL;
+        if (now < minMs) return false;
+        ULONGLONG target = now - minMs;
+        if (priceHistory.empty() || priceHistory.front().date > target) return false;
+
+        size_t bestIdx = 0;
+        ULONGLONG bestDiff = (priceHistory[0].date > target)
+            ? (priceHistory[0].date - target) : (target - priceHistory[0].date);
+        for (size_t i = 1; i < priceHistory.size(); ++i) {
+            ULONGLONG diff = (priceHistory[i].date > target)
+                ? (priceHistory[i].date - target) : (target - priceHistory[i].date);
+            if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+        }
+        outPrice = priceHistory[bestIdx].price;
+        return true;
     }
 
 public:
@@ -760,6 +837,15 @@ public:
         data.push_back({ now, price });
         if (data.size() > 21)
             data.erase(data.begin());
+
+        // NEW: maintain long-term history for the reference dots
+        if (priceHistory.empty() || priceHistory.back().price != price) {
+            priceHistory.push_back({ now, price });
+        }
+        const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL;
+        while (!priceHistory.empty() && now > maxAge && priceHistory.front().date < now - maxAge) {
+            priceHistory.erase(priceHistory.begin());
+        }
     }
 
     // Draw the sparkline into the sub-item bounding rect.
@@ -779,6 +865,10 @@ public:
         float ox = (float)(cellRect.left + leftMargin);
         float oy = (float)(cellRect.top  + topPad);
 
+        // NEW: reserve a small strip on the right for the 5 reference dots
+        const float dotAreaWidth = 7.0f;
+        float lineW = (W - dotAreaWidth > 4.0f) ? (W - dotAreaWidth) : W;
+
         Gdiplus::Graphics g(hdc);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
 
@@ -793,7 +883,7 @@ public:
 
         std::vector<Gdiplus::PointF> pts(data.size());
             for (size_t i = 0; i < data.size(); ++i) {
-                float x = MapScale((double)data[i].date,  (double)minT, (double)maxT, 0, W);
+                float x = MapScale((double)data[i].date,  (double)minT, (double)maxT, 0, lineW); // was W
                 float y = MapScale(data[i].price,          minP,         maxP,         H, 1);
                 pts[i]  = Gdiplus::PointF(ox + x, oy + y);
             }
@@ -815,6 +905,27 @@ public:
         Gdiplus::Pen pen(&brush, 3.0f);
         pen.SetLineJoin(Gdiplus::LineJoinRound);
         g.DrawLines(&pen, pts.data(), (INT)pts.size());
+
+        // NEW: draw the 5 reference dots (10/20/30/40/50 min ago), top to bottom
+        ULONGLONG now = GetTickCount64();
+        double lastPrice = data.back().price;
+        static const int minutesAgo[5] = { 10, 20, 30, 40, 50 };
+        const float dotRadius = 1.8f;
+        float dotX = ox + W - dotRadius - 1.0f;
+
+        for (int i = 0; i < 5; ++i) {
+            double histPrice;
+            if (!GetPriceAgo(now, minutesAgo[i], histPrice)) continue;
+            float dotY = oy + H * ((i + 0.5f) / 5.0f);
+
+            Gdiplus::Color dotColor =
+                (lastPrice > histPrice) ? Gdiplus::Color(255, 1, 166, 1)
+              : (lastPrice < histPrice) ? Gdiplus::Color(255, 220, 0, 0)
+              : Gdiplus::Color(255, 150, 150, 150);
+
+            Gdiplus::SolidBrush dotBrush(dotColor);
+            g.FillEllipse(&dotBrush, dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
+        }
     }
 
     bool HasData() const { return data.size() >= 2; }

@@ -204,12 +204,27 @@ static void Orders_MoveSelection(HWND hWnd, int dir) {
     if (next >= count) next = count - 1;
     if (next == sel) return;
 
-    if (sel >= 0)
-        ListView_SetItemState(hList, sel, 0, LVIS_SELECTED | LVIS_FOCUSED);
+    LVITEMA lvi = {};
+    lvi.mask  = LVIF_PARAM;
+    lvi.iItem = next;
+    if (!ListView_GetItem(hList, &lvi)) {
+        return;
+    }
+    int orderId = (int)lvi.lParam;
+    auto orders = api().getOrdersSorted();
+    for (const auto& o : orders) {
+        if (o.orderId == orderId) {
+            if (Orders_IsEditable(o.status)) {
+                ListView_SetItemState(hList, sel, 0, LVIS_SELECTED | LVIS_FOCUSED);
+                
+                UINT state = LVIS_SELECTED | LVIS_FOCUSED;
+                ListView_SetItemState(hList, next, state, state);
+                ListView_EnsureVisible(hList, next, FALSE);
+            }
+            break;
+        }
+    }
 
-    UINT state = LVIS_SELECTED | LVIS_FOCUSED;
-    ListView_SetItemState(hList, next, state, state);
-    ListView_EnsureVisible(hList, next, FALSE);
 }
 
 // Subclass for the orders ListView: intercepts Ctrl+Up/Ctrl+Down so they move
