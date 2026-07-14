@@ -232,8 +232,10 @@ static std::string RouteRequest(const std::string& rawRequest) {
     std::string path = (qmark != std::string::npos) ? fullPath.substr(0, qmark) : fullPath;
 
     if (method != "GET") return MakeMethodNotAllowed();
-
-    // Route: GET /balance
+    
+    LogDebug(std::string("HTTP request: ") + method + " " + path);
+    
+        // Route: GET /balance
     if (path == "/balance" || path == "/balance/") {
         return MakeOk(HandleGetBalance());
     }
