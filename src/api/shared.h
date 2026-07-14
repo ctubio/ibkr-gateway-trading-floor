@@ -661,7 +661,33 @@ private:
         if (maxDomain == minDomain) return minRange + (maxRange - minRange) / 2.0f;
         return minRange + (float)((value - minDomain) / (maxDomain - minDomain)) * (maxRange - minRange);
     }
+    // NEW: maps a % price change into a color (gray -> saturated green/red)
+    // and a radius (small -> large), both scaled by magnitude.
+    void GetDotStyle(double pctChange, float minR, float maxR,
+                      Gdiplus::Color& outColor, float& outRadius) const {
+        const double maxPct = 0.5; // % change at which color/size reach full intensity — tune as needed
+        double mag = fabs(pctChange);
+        double t = mag / maxPct;
+        if (t > 1.0) t = 1.0;
 
+        outRadius = minR + (float)t * (maxR - minR);
+
+        // Base neutral gray, blended toward vivid green or red as magnitude grows
+        int grayC = 150;
+        if (pctChange > 0.0) {
+            int r = (int)(grayC + t * (1   - grayC));
+            int g = (int)(grayC + t * (166 - grayC));
+            int b = (int)(grayC + t * (1   - grayC));
+            outColor = Gdiplus::Color(255, r, g, b);
+        } else if (pctChange < 0.0) {
+            int r = (int)(grayC + t * (220 - grayC));
+            int g = (int)(grayC + t * (0   - grayC));
+            int b = (int)(grayC + t * (0   - grayC));
+            outColor = Gdiplus::Color(255, r, g, b);
+        } else {
+            outColor = Gdiplus::Color(255, grayC, grayC, grayC);
+        }
+    }
     // NEW: finds the price closest to (now - minutesAgo) in priceHistory.
     // Returns false if we don't yet have history reaching that far back
     // (this is what makes the dots appear one by one as time passes).
@@ -772,22 +798,24 @@ public:
         graphics.DrawLines(&pen, points.data(), (INT)points.size());
 
         // NEW: draw the 5 reference dots (10/20/30/40/50 min ago), top to bottom.
-        // Each dot only appears once priceHistory reaches back that far.
+        // Both color saturation and dot size scale with the magnitude of % change.
         ULONGLONG now = GetTickCount64();
         double lastPrice = data.back().price;
         static const int minutesAgo[5] = { 10, 20, 30, 40, 50 };
-        const float dotRadius = 2.5f;
-        float dotX = clientRect.left + W - dotRadius - 1.0f;
+        const float minRadius = 1.5f;
+        const float maxRadius = 4.5f;
+        float dotX = clientRect.left + W - maxRadius - 1.0f;
 
         for (int i = 0; i < 5; ++i) {
             double histPrice;
             if (!GetPriceAgo(now, minutesAgo[i], histPrice)) continue; // not enough history yet
             float dotY = clientRect.top + H * ((i + 0.5f) / 5.0f);
 
-            Gdiplus::Color dotColor =
-                (lastPrice > histPrice) ? Gdiplus::Color(255, 1, 166, 1)   // green: price up
-              : (lastPrice < histPrice) ? Gdiplus::Color(255, 220, 0, 0)   // red: price down
-              : Gdiplus::Color(255, 150, 150, 150);                       // equal: neutral
+            double pctChange = (histPrice != 0.0) ? ((lastPrice - histPrice) / histPrice * 100.0) : 0.0;
+
+            Gdiplus::Color dotColor;
+            float dotRadius;
+            GetDotStyle(pctChange, minRadius, maxRadius, dotColor, dotRadius);
 
             Gdiplus::SolidBrush dotBrush(dotColor);
             graphics.FillEllipse(&dotBrush, dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
@@ -807,7 +835,32 @@ private:
         if (maxD == minD) return minR + (maxR - minR) / 2.0f;
         return minR + (float)((value - minD) / (maxD - minD)) * (maxR - minR);
     }
+    // NEW: maps a % price change into a color (gray -> saturated green/red)
+    // and a radius (small -> large), both scaled by magnitude.
+    void GetDotStyle(double pctChange, float minR, float maxR,
+                      Gdiplus::Color& outColor, float& outRadius) const {
+        const double maxPct = 0.5; // % change at which color/size reach full intensity — tune as needed
+        double mag = fabs(pctChange);
+        double t = mag / maxPct;
+        if (t > 1.0) t = 1.0;
 
+        outRadius = minR + (float)t * (maxR - minR);
+
+        int grayC = 150;
+        if (pctChange > 0.0) {
+            int r = (int)(grayC + t * (1   - grayC));
+            int g = (int)(grayC + t * (166 - grayC));
+            int b = (int)(grayC + t * (1   - grayC));
+            outColor = Gdiplus::Color(255, r, g, b);
+        } else if (pctChange < 0.0) {
+            int r = (int)(grayC + t * (220 - grayC));
+            int g = (int)(grayC + t * (0   - grayC));
+            int b = (int)(grayC + t * (0   - grayC));
+            outColor = Gdiplus::Color(255, r, g, b);
+        } else {
+            outColor = Gdiplus::Color(255, grayC, grayC, grayC);
+        }
+    }
     // NEW
     bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice) const {
         ULONGLONG minMs = minutesAgo * 60000ULL;
@@ -866,7 +919,7 @@ public:
         float oy = (float)(cellRect.top  + topPad);
 
         // NEW: reserve a small strip on the right for the 5 reference dots
-        const float dotAreaWidth = 7.0f;
+        const float dotAreaWidth = 18.0f;
         float lineW = (W - dotAreaWidth > 4.0f) ? (W - dotAreaWidth) : W;
 
         Gdiplus::Graphics g(hdc);
@@ -910,18 +963,20 @@ public:
         ULONGLONG now = GetTickCount64();
         double lastPrice = data.back().price;
         static const int minutesAgo[5] = { 10, 20, 30, 40, 50 };
-        const float dotRadius = 1.8f;
-        float dotX = ox + W - dotRadius - 1.0f;
+        const float minRadius = 1.0f;
+        const float maxRadius = 2.8f;
+        float dotX = ox + W - maxRadius - 1.0f;
 
         for (int i = 0; i < 5; ++i) {
             double histPrice;
             if (!GetPriceAgo(now, minutesAgo[i], histPrice)) continue;
             float dotY = oy + H * ((i + 0.5f) / 5.0f);
 
-            Gdiplus::Color dotColor =
-                (lastPrice > histPrice) ? Gdiplus::Color(255, 1, 166, 1)
-              : (lastPrice < histPrice) ? Gdiplus::Color(255, 220, 0, 0)
-              : Gdiplus::Color(255, 150, 150, 150);
+            double pctChange = (histPrice != 0.0) ? ((lastPrice - histPrice) / histPrice * 100.0) : 0.0;
+
+            Gdiplus::Color dotColor;
+            float dotRadius;
+            GetDotStyle(pctChange, minRadius, maxRadius, dotColor, dotRadius);
 
             Gdiplus::SolidBrush dotBrush(dotColor);
             g.FillEllipse(&dotBrush, dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
