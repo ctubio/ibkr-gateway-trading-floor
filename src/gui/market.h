@@ -923,7 +923,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     //DeleteObject(bgBrush);
 
     // Draw the sparkline stretched across the RECT
-    state->sparkline.Draw(hdc, rc, 380, HEADER_H - 2);
+    state->sparkline.Draw(hdc, rc, 390, HEADER_H - 2);
 
     EndPaint(hWnd, &ps);
 }

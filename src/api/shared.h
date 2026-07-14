@@ -748,7 +748,7 @@ public:
         // NEW: reserve a small strip on the right for the 5 reference dots.
         // This is the only change to the existing line drawing: it uses `lineW`
         // instead of `W` when mapping x, so the line stops a bit short of the edge.
-        const float dotAreaWidth = 10.0f;
+        const float dotAreaWidth = 15.0f;
         float lineW = (W - dotAreaWidth > 4.0f) ? (W - dotAreaWidth) : W;
 
         // Find Min/Max Domains
