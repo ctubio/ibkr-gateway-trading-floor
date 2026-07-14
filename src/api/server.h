@@ -12,8 +12,7 @@
 //  from the local machine.  Call HttpServer_Start() once after WinMain initialises
 //  and HttpServer_Stop() before the process exits.
 //
-//  JSON is hand-built (no external library required) — all string values are
-//  escaped so that symbols/exchanges with special chars are safe.
+//  JSON is hand-built (no external library required).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -66,23 +65,6 @@ static std::string PriceToJson(const TradingAPI::PositionInfo& p) {
     j.reserve(64);
     j += "{";
     j += "\"" + JsonEscapeString(p.symbol) + "\":" + JsonDouble(l1.last);
-    j += "}";
-    return j;
-}
-
-// Serialise one PositionInfo to a JSON object string.
-static std::string SymbolToJson(const TradingAPI::PositionInfo& p) {
-    TradingAPI::L1Book l1;
-    api().getWatchlistData(p.conId, l1);
-
-    std::string j;
-    j.reserve(256);
-    j += "{";
-    j += "\"conId\":"       + std::to_string(p.conId)         + ",";
-    j += "\"symbol\":\""    + JsonEscapeString(p.symbol)      + "\",";
-    j += "\"exchange\":\""  + JsonEscapeString(p.exchange)    + "\",";
-    j += "\"last\":"        + JsonDouble(l1.last)             + ",";
-    j += "\"change_pct\":\"" + std::format("{:+.2f}%", l1.changePct()) + "\"";
     j += "}";
     return j;
 }
@@ -184,22 +166,6 @@ static std::string HandleGetPriceBySymbol(const std::string& symbol) {
     return "";
 }
 
-// GET /symbols  →  JSON array of all symbols
-static std::string HandleGetSymbols() {
-    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-    const auto& map = api().getPortfolioMap();
-
-    std::string body = "[";
-    bool first = true;
-    for (const auto& [conId, pos] : map) {
-        if (!first) body += ",";
-        body += SymbolToJson(pos);
-        first = false;
-    }
-    body += "]";
-    return body;
-}
-
 // GET /portfolio/{SYMBOL}  →  JSON object for a single position (or empty on miss)
 static std::string HandleGetPositionBySymbol(const std::string& symbol) {
     std::string upper = symbol;
@@ -270,11 +236,6 @@ static std::string RouteRequest(const std::string& rawRequest) {
     // Route: GET /balance
     if (path == "/balance" || path == "/balance/") {
         return MakeOk(HandleGetBalance());
-    }
-
-    // Route: GET /symbols
-    if (path == "/symbols" || path == "/symbols/") {
-        return MakeOk(HandleGetSymbols());
     }
 
     // Route: GET /positions
