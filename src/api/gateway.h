@@ -266,7 +266,7 @@ public:
     // ── Scanner ───────────────────────────────────────────────────────────────
     // scannerIndex: 0 = Small Caps, 1 = Big Caps. Cancels any previous
     // subscription from this same API instance before requesting the new one.
-    void reqScanner(int scannerIndex);
+    void runScanner(int scannerIndex);
     void cancelScanner();
     std::vector<ScannerRow> getScannerResults();
     

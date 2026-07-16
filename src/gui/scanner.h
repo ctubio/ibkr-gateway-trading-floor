@@ -13,7 +13,7 @@ static HWND hScannerResults   = NULL;
 static HWND hScannerBtnNYSE    = NULL;
 static HWND hScannerBtnNASDAQNational  = NULL;
 static HWND hScannerBtnNASDAQSCM  = NULL;
-static int  g_ScannerActiveIndex = 0; // 0 = NYSE, 1 = NASDAQ National, 2 = NASDAQ SCM
+static int  g_ScannerActiveId = 0; // 0 = NYSE, 1 = NASDAQ National, 2 = NASDAQ SCM
 
 // conId -> symbol for the rows currently shown; also the map handed to
 // api().setWatchlistWindow() so Change%/Last Price arrive via WM_MARKET_L1,
@@ -63,9 +63,9 @@ static void Scanner_Layout(HWND hWnd) {
 
     if (btnsVisible) {
         
-        int btnW = 130;
+        int btnW = 100;
         int btnY = rc.bottom - SCANNER_SELECTOR_H + (SCANNER_SELECTOR_H - SCANNER_BTN_H) / 2;
-        int totalW = (btnW * 3) + m - 60;
+        int totalW = (btnW * 3) + (m * 2);
         int startX = (rc.right - totalW) / 2;
         MoveWindow(hScannerResults, 0, 0, rc.right, rc.bottom - SCANNER_SELECTOR_H, TRUE);
         SetWindowPos(hScannerBtnNYSE,           NULL, startX,                          btnY, btnW, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -78,20 +78,20 @@ static void Scanner_Layout(HWND hWnd) {
 
 // ── Subscribe / switch scanner ────────────────────────────────────────────────
 
-static void Scanner_Subscribe(HWND hWnd, int index) {
-    g_ScannerActiveIndex = index;
-    Settings_Scanner_Save("LastIndex", (DWORD)index);
+static void Scanner_Subscribe(HWND hWnd, int scannerId) {
+    g_ScannerActiveId = scannerId;
+    Settings_Scanner_Save("LastIndex", (DWORD)scannerId);
 
-    if (hScannerBtnNYSE)           SendMessage(hScannerBtnNYSE,           BM_SETCHECK, index == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
-    if (hScannerBtnNASDAQNational) SendMessage(hScannerBtnNASDAQNational, BM_SETCHECK, index == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
-    if (hScannerBtnNASDAQSCM)      SendMessage(hScannerBtnNASDAQSCM,      BM_SETCHECK, index == 2 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerBtnNYSE)           SendMessage(hScannerBtnNYSE,           BM_SETCHECK, scannerId == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerBtnNASDAQNational) SendMessage(hScannerBtnNASDAQNational, BM_SETCHECK, scannerId == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerBtnNASDAQSCM)      SendMessage(hScannerBtnNASDAQSCM,      BM_SETCHECK, scannerId == 2 ? BST_CHECKED : BST_UNCHECKED, 0);
 
     Scanner_ClearList(hWnd);
     g_ScannerEntries.clear();
     api().unsetWatchlistWindow(hWnd); // drop L1 subscriptions for the previous rows
 
-    SetWindowTextA(hWnd, index == 0 ? "Scanner: New York Stock Exchange" : (index == 1 ? "Scanner: NASDAQ National Market" : "Scanner: NASDAQ Small/Mid Caps"));
-    api().reqScanner(index);
+    SetWindowTextA(hWnd, scannerId == 0 ? "Scanner: New York Stock Exchange" : (scannerId == 1 ? "Scanner: NASDAQ National Market" : "Scanner: NASDAQ Small/Mid Caps"));
+    api().runScanner(scannerId);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -133,10 +133,10 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             0, 0, 10, 10, hWnd, (HMENU)ID_SCANNER_BTN_NASDAQ_SCM, hInst, NULL);
 
         int savedIndex = (int)Settings_Scanner_Load("LastIndex", 0);
-        g_ScannerActiveIndex = (savedIndex == 1) ? 1 : 0;
+        g_ScannerActiveId = (savedIndex == 1) ? 1 : 0;
 
         api().addApiUpdateWindow(hWnd);
-        Scanner_Subscribe(hWnd, g_ScannerActiveIndex);
+        Scanner_Subscribe(hWnd, g_ScannerActiveId);
         break;
     }
 
@@ -159,15 +159,15 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_COMMAND:
         if ((LOWORD(wParam) == ID_SCANNER_BTN_NYSE || LOWORD(wParam) == ID_SCANNER_BTN_NASDAQ_NATIONAL || LOWORD(wParam) == ID_SCANNER_BTN_NASDAQ_SCM) && HIWORD(wParam) == BN_CLICKED) {
-            int newIndex = 0;
+            int scannerId = g_ScannerActiveId;
             if (LOWORD(wParam) == ID_SCANNER_BTN_NYSE) {
-                newIndex = 0;
+                scannerId = 0;
             } else if (LOWORD(wParam) == ID_SCANNER_BTN_NASDAQ_NATIONAL) {
-                newIndex = 1;
+                scannerId = 1;
             } else if (LOWORD(wParam) == ID_SCANNER_BTN_NASDAQ_SCM){
-                newIndex = 2;
+                scannerId = 2;
             }
-            if (newIndex != g_ScannerActiveIndex) Scanner_Subscribe(hWnd, newIndex);
+            if (scannerId != g_ScannerActiveId) Scanner_Subscribe(hWnd, scannerId);
         }
         break;
 
@@ -181,7 +181,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         for (const auto& row : rows) {
             if (row.conId <= 0) continue;
             std::string label = row.symbol;
-            if (!row.exchange.empty()) label += "." + row.exchange;
+            // if (!row.exchange.empty()) label += "." + row.exchange;
 
             LVITEMA lvi = {};
             lvi.mask     = LVIF_TEXT | LVIF_PARAM;
@@ -210,9 +210,10 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         TradingAPI::L1Book info;
         if (api().getWatchlistData(conId, info)) {
             int row = Scanner_FindRow(conId);
-            if (row >= 0 && info.last > 0.0) {
+            double displayLast = (info.last > 0.0) ? info.last : info.prevClose;
+            if (row >= 0 && displayLast > 0.0) {
                 ListView_SetItemText(hScannerResults, row, SCOL_LAST,
-                    (LPSTR)std::format("{:.2f}", info.last).c_str());
+                    (LPSTR)std::format("{:.2f}", displayLast).c_str());
                 if (info.prevClose > 0.0) {
                     ListView_SetItemText(hScannerResults, row, SCOL_CHGPCT,
                         (LPSTR)std::format("{:+.2f}%", info.changePct()).c_str());
@@ -224,7 +225,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_API_UPDATE:
         if (api().isMarketDataConnected() && api().isTradingConnected()) {
-            Scanner_Subscribe(hWnd, g_ScannerActiveIndex); // re-request after reconnect
+            Scanner_Subscribe(hWnd, g_ScannerActiveId); // re-request after reconnect
         } else {
             Scanner_ClearList(hWnd);
             g_ScannerEntries.clear();
