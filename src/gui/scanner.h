@@ -1,6 +1,6 @@
 #pragma once
 
-void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPIClientTradingFloor.Scanner", 520, 450); }
+void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPIClientTradingFloor.Scanner", 400, 600); }
 
 #define ID_SCANNER_RESULTS_LIST  3001
 #define ID_SCANNER_BTN_SMALLCAP  3002
@@ -39,8 +39,15 @@ static int Scanner_FindRow(int conId) {
     return -1;
 }
 
-static void Scanner_ClearList() {
-    if (hScannerResults) ListView_DeleteAllItems(hScannerResults);
+static void Scanner_ClearList(HWND hWnd) {
+    if (!hScannerResults) return;
+    
+    SendMessage(hScannerResults, WM_SETREDRAW, FALSE, 0);
+
+    ListView_DeleteAllItems(hScannerResults);
+    
+    SendMessage(hScannerResults, WM_SETREDRAW, TRUE, 0);
+    RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -75,7 +82,7 @@ static void Scanner_Subscribe(HWND hWnd, int index) {
     if (hScannerBtnSmall) SendMessage(hScannerBtnSmall, BM_SETCHECK, index == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
     if (hScannerBtnBig)   SendMessage(hScannerBtnBig,   BM_SETCHECK, index == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
 
-    Scanner_ClearList();
+    Scanner_ClearList(hWnd);
     g_ScannerEntries.clear();
     api().unsetWatchlistWindow(hWnd); // drop L1 subscriptions for the previous rows
 
@@ -153,7 +160,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_SCANNER_DATA: {
         auto rows = api().getScannerResults();
 
-        Scanner_ClearList();
+        Scanner_ClearList(hWnd);
         g_ScannerEntries.clear();
 
         for (const auto& row : rows) {
@@ -204,7 +211,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         if (api().isMarketDataConnected() && api().isTradingConnected()) {
             Scanner_Subscribe(hWnd, g_ScannerActiveIndex); // re-request after reconnect
         } else {
-            Scanner_ClearList();
+            Scanner_ClearList(hWnd);
             g_ScannerEntries.clear();
         }
         break;
