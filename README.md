@@ -75,10 +75,12 @@ The core data engine for active trading. Supports infinite concurrent instances.
 *   **Quick Order Bar**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask). Includes Stop-Loss and Take-Profit price fields for bracket orders.
 *   **Audio Alerts**: Independent per-window TTS for price announcements.
 
-### 📰 News (Intelligence Hub)
-Contextual news delivery based on your watchlists.
-*   **Smart Filtering**: Narrow headlines by specific providers (Bloomberg, Reuters, etc.).
-*   **Rich Preview**: Converts HTML news bodies into clean RTF for a distraction-free reading experience.
+### 🚀 Scanner (Symbol Discovery)
+Advanced market scanner for finding trading opportunities based on multiple criteria.
+*   **Multi-Criteria Filtering**: Combine conditions across price, volume, volatility, and fundamental metrics.
+*   **Real-time Results**: Live updating scan results as market data streams in.
+*   **Customizable Views**: Save and manage multiple predefined scan configurations.
+*   **Quick Actions**: Double-click any result to open a dedicated Market window for that symbol.
 
 ### ⚙️ Settings & 🐞 Debug Log
 *   **Settings**: Configure Dark Mode, TTS voice selection, default order quantity, Stop/Profit price defaults, Gateway path, and auto-start IBKR Gateway.
@@ -136,3 +138,4 @@ make
 - Provided as-is for educational and personal use.
 - Interactive Brokers® and IB Gateway® are trademarks of Interactive Brokers.
 - Use at your own risk; verify behavior before trading live.
+

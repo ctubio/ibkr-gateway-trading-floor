@@ -38,13 +38,12 @@
 #define WM_PNL_UPDATE       (WM_USER +  6)
 #define WM_API_SOUND        (WM_USER +  7)
 #define WM_DIAMONDS_UPDATE  (WM_USER +  8)
-#define WM_NEWS_RESULTS     (WM_USER +  9)
-#define WM_MARKET_TICK      (WM_USER + 10)
-#define WM_NEWS_ARTICLE     (WM_USER + 11)
-#define WM_MARKET_L1        (WM_USER + 12)
-#define WM_MARKET_L2        (WM_USER + 13)   // Level 2 depth change — handler calls getLevel2Snapshot()
-#define WM_PNL_SINGLE       (WM_USER + 14)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
-#define WM_API_EXECUTION    (WM_USER + 15)
+#define WM_MARKET_TICK      (WM_USER +  9)
+#define WM_MARKET_L1        (WM_USER + 10)
+#define WM_MARKET_L2        (WM_USER + 11)   // Level 2 depth change — handler calls getLevel2Snapshot()
+#define WM_PNL_SINGLE       (WM_USER + 12)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
+#define WM_SCANNER_DATA     (WM_USER + 13)   // Scanner subscription refreshed — handler calls getScannerResults()
+#define WM_API_EXECUTION    (WM_USER + 14)
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
@@ -53,8 +52,7 @@ static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
 static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
 static const char* MARKET_CLASS_NAME             = "Market";
 static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
-static const char* NEWS_CLASS_NAME               = "News";
-static const char* NEWS_ARTICLE_CLASS_NAME       = "NewsArticle";
+static const char* SCANNER_CLASS_NAME            = "Scanner";
 static const char* SETTINGS_CLASS_NAME           = "Settings";
 static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
 
@@ -119,16 +117,16 @@ public:
         std::string exchange;
     };
 
-    // lParam of WM_NEWS_RESULTS — handler owns and must delete.
-    struct NewsTickEntry {
-        std::string providerCode;
-        std::string articleId;
-        std::string headline;
-        std::string timeStamp;
-        std::string extraData;
+    // Row returned by the market scanner (rank + contract identity only —
+    // no price data; the Scanner window subscribes L1 market data for the
+    // returned conIds via the existing setWatchlistWindow() mechanism).
+    struct ScannerRow {
+        int         rank    = 0;
+        int         conId   = 0;
+        std::string symbol;
+        std::string exchange;
     };
 
- 
     // ── Level 1 quote (per market window) ────────────────────────────────────
     // Populated via reqMktData ticks; retrieved with getWatchlistData().
     // One row in the watchlist / diamonds watchlist.
@@ -265,10 +263,12 @@ public:
     void searchSymbols(HWND hWnd, const std::string& pattern);
     std::vector<std::string> getSymbolResults();
 
-    // ── News ──────────────────────────────────────────────────────────────────
-
-    void reqNewsForSymbol(int conId, const std::string& symbol);
-    void reqNewsArticle(const std::string& providerCode, const std::string& articleId);
+    // ── Scanner ───────────────────────────────────────────────────────────────
+    // scannerIndex: 0 = Small Caps, 1 = Big Caps. Cancels any previous
+    // subscription from this same API instance before requesting the new one.
+    void reqScanner(int scannerIndex);
+    void cancelScanner();
+    std::vector<ScannerRow> getScannerResults();
     
 private:
     struct Impl;

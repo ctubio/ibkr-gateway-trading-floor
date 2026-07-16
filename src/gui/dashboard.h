@@ -12,17 +12,18 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_DASHBOARD   1001
 #define ID_MB_DIAMONDS   1003
 #define ID_MB_SETTINGS   1004
-#define ID_MB_NEWS       1005
+#define ID_MB_SCANNER    1005
 #define ID_MB_WATCHLIST  1006
 #define ID_MB_MARKET     1007
 #define ID_MB_ORDERS     1008
 #define ID_M_ORDERS      1009
 #define ID_M_DIAMONDS    1011
 #define ID_M_SETTINGS    1012
-#define ID_M_NEWS        1013
+#define ID_M_SCANNER     1013
 #define ID_M_WATCHLIST   1014
 #define ID_M_MARKET      1015
 #define ID_M_DEBUGLOG    1016
+
 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
@@ -468,7 +469,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             
             addButtons(hWnd, hInst, "Watchlist",  8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_WATCHLIST, 105);
             addButtons(hWnd, hInst, "Market",     8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_MARKET,    106);
-            addButtons(hWnd, hInst, "News",       8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_NEWS,      107);
+            addButtons(hWnd, hInst, "Scanner",   8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_SCANNER,    107);
 
             addButtons(hWnd, hInst, "Settings",  14 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_SETTINGS,  108);
 
@@ -609,7 +610,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds");
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders");
                     if (FindWindowA(WATCHLIST_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_WATCHLIST, IsWindowAlwaysOnTop(WATCHLIST_CLASS_NAME) ? L"[ ★ ] Watchlist" : L"[  ] Watchlist");
-                    
+
+
                     auto tsWindows = EnumerateMarketWindows();
                     std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
                         return a.symbol < b.symbol;
@@ -622,7 +624,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         AppendMenuW(hMenu, MF_STRING, ID_M_MARKET_BASE + (int)i, label.c_str());
                     }
                     
-                    if (FindWindowA(NEWS_CLASS_NAME, NULL))      AppendMenuW(hMenu, MF_STRING, ID_M_NEWS,      IsWindowAlwaysOnTop(NEWS_CLASS_NAME)      ? L"[ ★ ] News"      : L"[  ] News");
+                    if (FindWindowA(SCANNER_CLASS_NAME, NULL))   AppendMenuW(hMenu, MF_STRING, ID_M_SCANNER,   IsWindowAlwaysOnTop(SCANNER_CLASS_NAME)   ? L"[ ★ ] Scanner"   : L"[  ] Scanner");
                     if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME)  ? L"[ ★ ] Settings"  : L"[  ] Settings");
                     if (FindWindowA(DEBUGLOG_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DEBUGLOG,  IsWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME)  ? L"[ ★ ] Debug Log" : L"[  ] Debug Log");
 
@@ -646,7 +648,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_DIAMONDS:
                         case ID_M_ORDERS:
                         case ID_M_WATCHLIST:
-                        case ID_M_NEWS:
+                        case ID_M_SCANNER:
                         case ID_M_SETTINGS:
                         case ID_M_DEBUGLOG:
                             SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
@@ -712,8 +714,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_DIAMONDS:
                     StartDiamonds();
                     break;
-                case ID_MB_NEWS:
-                    StartNews();
+                case ID_MB_SCANNER:
+                    StartScanner();
                     break;
                 case ID_MB_MARKET:
                     StartMarket();
@@ -733,8 +735,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_M_DIAMONDS:
                     ToggleWindowAlwaysOnTop(DIAMONDS_CLASS_NAME);
                     break;
-                case ID_M_NEWS:
-                    ToggleWindowAlwaysOnTop(NEWS_CLASS_NAME);
+                case ID_M_SCANNER:
+                    ToggleWindowAlwaysOnTop(SCANNER_CLASS_NAME);
                     break;
                 case ID_M_WATCHLIST:
                     ToggleWindowAlwaysOnTop(WATCHLIST_CLASS_NAME);

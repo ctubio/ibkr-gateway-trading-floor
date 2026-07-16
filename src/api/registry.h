@@ -109,12 +109,12 @@ std::string Settings_LoadString(const char* key, const std::string& defaultValue
     return RegGetString("Settings", key, defaultValue);
 }
 
-void Settings_News_Save(const char* key, const std::string& value) {
-    RegSetString(NEWS_CLASS_NAME, key, value);
+void Settings_Scanner_Save(const char* key, DWORD value) {
+    RegSetDword(SCANNER_CLASS_NAME, key, value);
 }
 
-std::string Settings_News_Load(const char* key, const std::string& defaultValue = "") {
-    return RegGetString(NEWS_CLASS_NAME, key, defaultValue);
+DWORD Settings_Scanner_Load(const char* key, DWORD defaultValue = 0) {
+    return RegGetDword(SCANNER_CLASS_NAME, key, defaultValue);
 }
 
 void Settings_LastList_Save(const std::string& value) {
@@ -1010,7 +1010,7 @@ static std::vector<TtsVoiceEntry> TTS_EnumerateVoices() {
 
 void Session_RestoreWindows(
     const std::function<void()>& StartDiamonds,
-    const std::function<void()>& StartNews,
+    const std::function<void()>& StartScanner,
     const std::function<void()>& StartSettings,
     const std::function<void(const std::string&, int)>& StartMarket,
     const std::function<void()>& StartWatchlist,
@@ -1037,8 +1037,8 @@ void Session_RestoreWindows(
         if (cls == DIAMONDS_CLASS_NAME)  { 
             StartDiamonds(); 
         }
-        else if (cls == NEWS_CLASS_NAME)      { 
-            StartNews(); 
+        else if (cls == SCANNER_CLASS_NAME)      { 
+            StartScanner(); 
         }
         else if (cls == SETTINGS_CLASS_NAME)  { 
             StartSettings(); 

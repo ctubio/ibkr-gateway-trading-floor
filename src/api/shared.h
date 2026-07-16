@@ -105,12 +105,11 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
         DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
-        if (strcmp(className, NEWS_CLASS_NAME)         == 0
+        if (strcmp(className, SCANNER_CLASS_NAME)         == 0
          || strcmp(className, ORDERS_CLASS_NAME)       == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)     == 0
          || strcmp(className, MARKET_CLASS_NAME)    == 0
          || strcmp(className, WATCHLIST_CLASS_NAME)       == 0
-         || strcmp(className, NEWS_ARTICLE_CLASS_NAME) == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
@@ -122,11 +121,6 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = FindWindowA(WATCHLIST_CLASS_NAME, NULL);
-        }
-        if (strcmp(className, NEWS_ARTICLE_CLASS_NAME) == 0) {
-            dwExStyle = WS_EX_DLGMODALFRAME;
-            dwStyle   = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
-            hWndParent = FindWindowA(NEWS_CLASS_NAME, NULL);
         }
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }

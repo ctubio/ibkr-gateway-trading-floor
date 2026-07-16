@@ -11,7 +11,7 @@
 #include "gui/watchlist.h"
 #include "gui/diamonds.h"
 #include "gui/orders.h"
-#include "gui/news.h"
+#include "gui/scanner.h"
 #include "gui/dashboard.h"
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
@@ -27,13 +27,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
         RegisterWindowClass(hInst, WndProcNewList,     WATCHLIST_NEW_LIST_CLASS_NAME, 105, true);
         RegisterWindowClass(hInst, WndProcMarket,      MARKET_CLASS_NAME,             106);
         RegisterWindowClass(hInst, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      106, true);
-        RegisterWindowClass(hInst, WndProcNews,        NEWS_CLASS_NAME,               107);
-        RegisterWindowClass(hInst, WndProcNewsArticle, NEWS_ARTICLE_CLASS_NAME,       107);
+        RegisterWindowClass(hInst, WndProcScanner,     SCANNER_CLASS_NAME,            107);
         RegisterWindowClass(hInst, WndProcSettings,    SETTINGS_CLASS_NAME,           108);
         RegisterWindowClass(hInst, WndProcDebugLog,    DEBUGLOG_CLASS_NAME,           109, true);
         StartDashboard(hInst);
 
-        Session_RestoreWindows(StartDiamonds, StartNews, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
+        Session_RestoreWindows(StartDiamonds, StartScanner, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
 
         HttpServer_Start();
 
