@@ -3,6 +3,8 @@
 #include "api/sound.h"
 #include "api/shared.h"
 #include "api/server.h"
+#include "api/process.h"
+#include "api/sparklines.h"
 
 #include "gui/settings.h"
 #include "gui/market.h"

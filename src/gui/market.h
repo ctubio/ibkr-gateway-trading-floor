@@ -1164,7 +1164,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_SIZE:
         Market_Layout(hWnd, state);
         InvalidateRect(hWnd, NULL, FALSE);
-        return 0;
+        break;
 
     case WM_PAINT:
         if (state) Market_PaintHeader(hWnd, state);

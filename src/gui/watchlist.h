@@ -1,6 +1,6 @@
 #pragma once
 
-void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"TWSAPIClientTradingFloor.Watchlist", 1000, 400); }
+void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"TWSAPIClientTradingFloor.Watchlist", 660, 400); }
 
 
 #define ID_WATCHLIST_LIST_COMBO       8001
@@ -44,9 +44,6 @@ enum WatchlistColIdx {
     TCOL_BIDSIZE,
     TCOL_CHGPCT,
     TCOL_DIV_YIELD,
-    TCOL_DIV_DATE,
-    TCOL_DIV_AMT,
-    TCOL_ANNUAL_DIV,
     TCOL_COUNT
 };
 
@@ -64,9 +61,6 @@ static const WatchlistCol watchlistCols[] = {
     { "Bid",          75, LVCFMT_RIGHT },
     { "Bid Size",     75, LVCFMT_RIGHT },
     { "Change %",     75, LVCFMT_RIGHT },
-    { "Div Yield %",  80, LVCFMT_RIGHT },
-    { "Div Date",     85, LVCFMT_RIGHT },
-    { "Div Amount",   80, LVCFMT_RIGHT },
     { "Annual Div",   80, LVCFMT_RIGHT },
 };
 
@@ -161,7 +155,7 @@ static void Watchlist_SetSortArrow(HWND hList, int col, bool asc) {
 }
 
 static bool Watchlist_ColIsNumeric(int col) {
-    return col != TCOL_SYMBOL && col != TCOL_DIV_DATE;
+    return col != TCOL_SYMBOL;
 }
 
 static int CALLBACK Watchlist_SortCompare(LPARAM idx1, LPARAM idx2, LPARAM /*extra*/) {
@@ -218,9 +212,6 @@ static void Watchlist_UpdateRow(HWND hWnd, int row, const TradingAPI::L1Book& in
     // Dividend yield requires Last to be > 0, but the function itself guards
     // for that internally (returns 0 when last <= 0); show blank rather than "--".
     ListView_SetItemText(hWatchlistList, row, TCOL_DIV_YIELD,  (LPSTR)fmt(info.dividendYield(), "{:.2f}%").c_str());
-    ListView_SetItemText(hWatchlistList, row, TCOL_DIV_DATE,   (LPSTR)info.dividendDate.c_str());
-    ListView_SetItemText(hWatchlistList, row, TCOL_DIV_AMT,    (LPSTR)fmt(info.dividendAmount,  "{:.3f}").c_str());
-    ListView_SetItemText(hWatchlistList, row, TCOL_ANNUAL_DIV, (LPSTR)fmt(info.annualDividends, "{:.3f}").c_str());
 
     // ── Columns that require Last > 0 ────────────────────────────────────────
     // When the market is closed, reqMktData returns Last == 0.
@@ -628,7 +619,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
     case WM_SIZE:
         Watchlist_Layout(hWnd);
-        return 0;
+        break;
 
     case WM_ACTIVATE:
         Watchlist_ShowSelectors(hWnd, LOWORD(wParam) != WA_INACTIVE);
