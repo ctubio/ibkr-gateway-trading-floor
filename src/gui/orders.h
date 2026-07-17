@@ -53,11 +53,69 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
     return dark ? DM_TEXT : LM_TEXT;
 }
 
-// Forward declarations (defined further below; needed because Orders_Repopulate
-// checks editability of the order currently shown in the inline panel).
-static bool Orders_IsEditable(const std::string& status);
-static void Orders_HideInlinePanel(HWND hWnd);
-static void Orders_MoveSelection(HWND hWnd, int dir);
+
+// ── Inline edit panel ─────────────────────────────────────────────────────────
+// Price and Qty edit fields shown at the bottom of the Orders window when an
+// editable order is selected.  Hidden (and the ListView expands to fill) when
+// no order is selected or the order is in a terminal / non-editable state.
+
+// Resize ListView and show/hide the edit panel controls to fit the window.
+static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    int w = rc.right;
+    int h = rc.bottom;
+
+    HWND hList      = GetDlgItem(hWnd, ID_ORDERS_LIST);
+    HWND hPriceLbl  = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+    HWND hQtyLbl    = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
+    HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+    HWND hHint      = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
+
+    int listH = showPanel ? h - EDIT_PANEL_H : h;
+    if (hList) MoveWindow(hList, 0, 0, w, listH, TRUE);
+
+    int show = showPanel ? SW_SHOW : SW_HIDE;
+    // Panel geometry — two groups side by side.
+    // [Price: |__edit__]   [Qty: |__edit__]   [↑↓ Tab  Enter]
+    int py     = listH + 6;
+    int editH  = 37;
+    int lblW   = 50;
+    int editW  = 120;
+    int gapX   = 14;
+    int startX = 18;
+
+    int x = startX;
+    if (hHint) {
+        MoveWindow(hHint, x, py + 5, 160, 24, TRUE);
+        ShowWindow(hHint, show);
+        x += 160 + 5;
+    }
+    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
+    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); } x += editW + gapX;
+
+    // Qty is hidden when partialFill.
+    bool showQty = showPanel && !s_editState.partialFill;
+    int  qshow   = showQty ? SW_SHOW : SW_HIDE;
+    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); } x += lblW + 5;
+    if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); } x += editW + gapX;
+    
+}
+
+// Returns true if the given status string allows modification.
+static bool Orders_IsEditable(const std::string& status) {
+    return !(status == "Filled" || status == "Cancelled" ||
+             status == "Inactive" || status == "PendingCancel");
+}
+
+// Hide the panel and let the ListView fill the window.
+static void Orders_HideInlinePanel(HWND hWnd) {
+    s_editState.orderId      = 0;
+    s_editState.panelVisible = false;
+    Orders_LayoutPanel(hWnd, false);
+    InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
+}
 
 // Rebuilds the entire ListView from the current snapshot.
 static void Orders_Repopulate(HWND hWnd) {
@@ -128,69 +186,6 @@ static void Orders_Repopulate(HWND hWnd) {
     }
 }
 
-// ── Inline edit panel ─────────────────────────────────────────────────────────
-// Price and Qty edit fields shown at the bottom of the Orders window when an
-// editable order is selected.  Hidden (and the ListView expands to fill) when
-// no order is selected or the order is in a terminal / non-editable state.
-
-
-// Returns true if the given status string allows modification.
-static bool Orders_IsEditable(const std::string& status) {
-    return !(status == "Filled" || status == "Cancelled" ||
-             status == "Inactive" || status == "PendingCancel");
-}
-
-// Resize ListView and show/hide the edit panel controls to fit the window.
-static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
-    RECT rc;
-    GetClientRect(hWnd, &rc);
-    int w = rc.right;
-    int h = rc.bottom;
-
-    HWND hList      = GetDlgItem(hWnd, ID_ORDERS_LIST);
-    HWND hPriceLbl  = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
-    HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
-    HWND hQtyLbl    = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
-    HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
-    HWND hHint      = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
-
-    int listH = showPanel ? h - EDIT_PANEL_H : h;
-    if (hList) MoveWindow(hList, 0, 0, w, listH, TRUE);
-
-    int show = showPanel ? SW_SHOW : SW_HIDE;
-    // Panel geometry — two groups side by side.
-    // [Price: |__edit__]   [Qty: |__edit__]   [↑↓ Tab  Enter]
-    int py     = listH + 6;
-    int editH  = 37;
-    int lblW   = 50;
-    int editW  = 120;
-    int gapX   = 14;
-    int startX = 18;
-
-    int x = startX;
-    if (hHint) {
-        MoveWindow(hHint, x, py + 5, 160, 24, TRUE);
-        ShowWindow(hHint, show);
-        x += 160 + 5;
-    }
-    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
-    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); } x += editW + gapX;
-
-    // Qty is hidden when partialFill.
-    bool showQty = showPanel && !s_editState.partialFill;
-    int  qshow   = showQty ? SW_SHOW : SW_HIDE;
-    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); } x += lblW + 5;
-    if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); } x += editW + gapX;
-    
-}
-
-// Hide the panel and let the ListView fill the window.
-static void Orders_HideInlinePanel(HWND hWnd) {
-    s_editState.orderId      = 0;
-    s_editState.panelVisible = false;
-    Orders_LayoutPanel(hWnd, false);
-    InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
-}
 
 // Moves the ListView selection up or down by one row (clamped to the ends).
 // If nothing is currently selected, selects the first row regardless of dir.

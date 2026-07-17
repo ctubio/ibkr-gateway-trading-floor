@@ -1,19 +1,27 @@
 #pragma once
 
-void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPIClientTradingFloor.Scanner", 400, 600); }
+void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPIClientTradingFloor.Scanner", 432, 600); }
 
 #define ID_SCANNER_RESULTS_LIST         3001
 #define ID_SCANNER_BTN_NYSE             3002
 #define ID_SCANNER_BTN_NASDAQ_NATIONAL  3003
 #define ID_SCANNER_BTN_NASDAQ_SCM       3004
+#define ID_SCANNER_COMBO_SCANCODE       3005
 
 enum ScannerColIdx { SCOL_INSTRUMENT = 0, SCOL_CHGPCT, SCOL_LAST, SCOL_COUNT };
+
+// Scan-code selector options — independent of the NYSE/NASDAQ location radio
+// buttons above. Index matches TradingAPI::runScanner()'s scanCodeIndex param.
+enum ScannerScanCodeIdx { SCANCODE_TOP_PERC_GAIN = 0, SCANCODE_TOP_PERC_LOSE, SCANCODE_MOST_ACTIVE, SCANCODE_COUNT };
+static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = { "GAIN", "LOSE", "ACTIVE" };
 
 static HWND hScannerResults   = NULL;
 static HWND hScannerBtnNYSE    = NULL;
 static HWND hScannerBtnNASDAQNational  = NULL;
 static HWND hScannerBtnNASDAQSCM  = NULL;
-static int  g_ScannerActiveId = 0; // 0 = NYSE, 1 = NASDAQ National, 2 = NASDAQ SCM
+static HWND hScannerComboScanCode = NULL;
+static int  g_ScannerActiveId = 0;   // 0 = NYSE, 1 = NASDAQ National, 2 = NASDAQ SCM
+static int  g_ScannerScanCodeId = 0; // 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE
 
 // conId -> symbol for the rows currently shown; also the map handed to
 // api().setWatchlistWindow() so Change%/Last Price arrive via WM_MARKET_L1,
@@ -62,15 +70,24 @@ static void Scanner_Layout(HWND hWnd) {
     bool btnsVisible = hScannerBtnNASDAQSCM && IsWindowVisible(hScannerBtnNASDAQSCM);
 
     if (btnsVisible) {
-        
-        int btnW = 100;
+        int btnW = 90;
         int btnY = rc.bottom - SCANNER_SELECTOR_H + (SCANNER_SELECTOR_H - SCANNER_BTN_H) / 2;
         int totalW = (btnW * 3) + (m * 2);
-        int startX = (rc.right - totalW) / 2;
+        int startX = 10;
         MoveWindow(hScannerResults, 0, 0, rc.right, rc.bottom - SCANNER_SELECTOR_H, TRUE);
-        SetWindowPos(hScannerBtnNYSE,           NULL, startX,                          btnY, btnW, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hScannerBtnNASDAQNational, NULL, startX + btnW + m,               btnY, btnW, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(hScannerBtnNASDAQSCM,      NULL, startX + btnW + m + btnW + m,    btnY, btnW, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hScannerBtnNYSE,           NULL, startX,                          btnY, btnW-20, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hScannerBtnNASDAQNational, NULL, startX + btnW-20 + m,            btnY, btnW+10, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hScannerBtnNASDAQSCM,      NULL, startX + btnW-20 + m + btnW + m, btnY, btnW+10, SCANNER_BTN_H, SWP_NOZORDER | SWP_NOACTIVATE);
+
+        // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE) —
+        // anchored to the far right of the bottom bar, independent of the
+        // location radio-button group. Height passed here is the combo's
+        // drop-down list height, not the closed-box height (fixed by the
+        // system to roughly the font's line height), so it's kept tall
+        // enough that the list isn't clipped when opened.
+        int comboW = 110;
+        int comboDropH = 200;
+        SetWindowPos(hScannerComboScanCode, NULL, rc.right - comboW - m, btnY-3, comboW, comboDropH, SWP_NOZORDER | SWP_NOACTIVATE);
     } else {
         MoveWindow(hScannerResults, 0, 0, rc.right, rc.bottom, TRUE);
     }
@@ -78,20 +95,39 @@ static void Scanner_Layout(HWND hWnd) {
 
 // ── Subscribe / switch scanner ────────────────────────────────────────────────
 
-static void Scanner_Subscribe(HWND hWnd, int scannerId) {
-    g_ScannerActiveId = scannerId;
-    Settings_Scanner_Save("LastIndex", (DWORD)scannerId);
+// Re-requests the scan using the current g_ScannerActiveId (location) and
+// g_ScannerScanCodeId (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE), and syncs
+// the UI controls to match. Called whenever either selection changes, and on
+// initial creation / reconnect.
+static void Scanner_ApplySelection(HWND hWnd) {
+    Settings_Scanner_Save("LastIndex", (DWORD)g_ScannerActiveId);
+    Settings_Scanner_Save("LastScanCode", (DWORD)g_ScannerScanCodeId);
 
-    if (hScannerBtnNYSE)           SendMessage(hScannerBtnNYSE,           BM_SETCHECK, scannerId == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
-    if (hScannerBtnNASDAQNational) SendMessage(hScannerBtnNASDAQNational, BM_SETCHECK, scannerId == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
-    if (hScannerBtnNASDAQSCM)      SendMessage(hScannerBtnNASDAQSCM,      BM_SETCHECK, scannerId == 2 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerBtnNYSE)           SendMessage(hScannerBtnNYSE,           BM_SETCHECK, g_ScannerActiveId == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerBtnNASDAQNational) SendMessage(hScannerBtnNASDAQNational, BM_SETCHECK, g_ScannerActiveId == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerBtnNASDAQSCM)      SendMessage(hScannerBtnNASDAQSCM,      BM_SETCHECK, g_ScannerActiveId == 2 ? BST_CHECKED : BST_UNCHECKED, 0);
+    if (hScannerComboScanCode)     SendMessage(hScannerComboScanCode, CB_SETCURSEL, g_ScannerScanCodeId, 0);
 
     Scanner_ClearList(hWnd);
     g_ScannerEntries.clear();
     api().unsetWatchlistWindow(hWnd); // drop L1 subscriptions for the previous rows
 
-    SetWindowTextA(hWnd, scannerId == 0 ? "Scanner: New York Stock Exchange" : (scannerId == 1 ? "Scanner: NASDAQ National Market" : "Scanner: NASDAQ Small/Mid Caps"));
-    api().runScanner(scannerId);
+    const char* locationName = g_ScannerActiveId == 0 ? "New York Stock Exchange" : (g_ScannerActiveId == 1 ? "NASDAQ National Market" : "NASDAQ Small/Mid Caps");
+    std::string title = std::string("Scanner: ") + locationName + " - " + g_ScannerScanCodeLabels[g_ScannerScanCodeId];
+    SetWindowTextA(hWnd, title.c_str());
+    api().runScanner(g_ScannerActiveId, g_ScannerScanCodeId);
+}
+
+// Switch the NYSE/NASDAQ-National/NASDAQ-SCM location.
+static void Scanner_Subscribe(HWND hWnd, int scannerId) {
+    g_ScannerActiveId = scannerId;
+    Scanner_ApplySelection(hWnd);
+}
+
+// Switch the scan code (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE).
+static void Scanner_SetScanCode(HWND hWnd, int scanCodeId) {
+    g_ScannerScanCodeId = scanCodeId;
+    Scanner_ApplySelection(hWnd);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -117,9 +153,9 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         LVCOLUMNA lvc = {};
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
 
-        lvc.fmt = LVCFMT_LEFT;  lvc.cx = 180; lvc.pszText = (LPSTR)"Instrument";  ListView_InsertColumn(hScannerResults, SCOL_INSTRUMENT, &lvc);
-        lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Change %";    ListView_InsertColumn(hScannerResults, SCOL_CHGPCT,     &lvc);
-        lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Last Price";  ListView_InsertColumn(hScannerResults, SCOL_LAST,       &lvc);
+        lvc.fmt = LVCFMT_LEFT;  lvc.cx = 100; lvc.pszText = (LPSTR)"Symbol";    ListView_InsertColumn(hScannerResults, SCOL_INSTRUMENT, &lvc);
+        lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Change %";  ListView_InsertColumn(hScannerResults, SCOL_CHGPCT,     &lvc);
+        lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Last";      ListView_InsertColumn(hScannerResults, SCOL_LAST,       &lvc);
 
         // Bottom selector buttons — hidden until the window is activated.
         hScannerBtnNYSE = CreateWindowA("BUTTON", "NYSE",
@@ -132,11 +168,24 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             WS_CHILD | BS_AUTORADIOBUTTON,
             0, 0, 10, 10, hWnd, (HMENU)ID_SCANNER_BTN_NASDAQ_SCM, hInst, NULL);
 
+        // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE) —
+        // hidden until activated, same as the location radio buttons above.
+        hScannerComboScanCode = CreateWindowA("COMBOBOX", "",
+            WS_CHILD | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
+            0, 0, 130, 200, hWnd, (HMENU)ID_SCANNER_COMBO_SCANCODE, hInst, NULL);
+        SendMessage(hScannerComboScanCode, WM_SETFONT, (WPARAM)ScannerZoomData.hFont, TRUE);
+        for (int i = 0; i < SCANCODE_COUNT; ++i)
+            SendMessageA(hScannerComboScanCode, CB_ADDSTRING, 0, (LPARAM)g_ScannerScanCodeLabels[i]);
+
         int savedIndex = (int)Settings_Scanner_Load("LastIndex", 0);
         g_ScannerActiveId = (savedIndex == 1) ? 1 : 0;
 
+        int savedScanCode = (int)Settings_Scanner_Load("LastScanCode", 0);
+        g_ScannerScanCodeId = (savedScanCode >= 0 && savedScanCode < SCANCODE_COUNT) ? savedScanCode : 0;
+        SendMessage(hScannerComboScanCode, CB_SETCURSEL, g_ScannerScanCodeId, 0);
+
         api().addApiUpdateWindow(hWnd);
-        Scanner_Subscribe(hWnd, g_ScannerActiveId);
+        Scanner_ApplySelection(hWnd);
         break;
     }
 
@@ -149,10 +198,12 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             ShowWindow(hScannerBtnNYSE,           SW_SHOW);
             ShowWindow(hScannerBtnNASDAQNational, SW_SHOW);
             ShowWindow(hScannerBtnNASDAQSCM,      SW_SHOW);
+            ShowWindow(hScannerComboScanCode,     SW_SHOW);
         } else {
             ShowWindow(hScannerBtnNYSE,           SW_HIDE);
             ShowWindow(hScannerBtnNASDAQNational, SW_HIDE);
             ShowWindow(hScannerBtnNASDAQSCM,      SW_HIDE);
+            ShowWindow(hScannerComboScanCode,     SW_HIDE);
         }
         Scanner_Layout(hWnd);
         return 0;
@@ -168,6 +219,10 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 scannerId = 2;
             }
             if (scannerId != g_ScannerActiveId) Scanner_Subscribe(hWnd, scannerId);
+        }
+        if (LOWORD(wParam) == ID_SCANNER_COMBO_SCANCODE && HIWORD(wParam) == CBN_SELCHANGE) {
+            int scanCodeId = (int)SendMessageA(hScannerComboScanCode, CB_GETCURSEL, 0, 0);
+            if (scanCodeId >= 0 && scanCodeId != g_ScannerScanCodeId) Scanner_SetScanCode(hWnd, scanCodeId);
         }
         break;
 
@@ -225,7 +280,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_API_UPDATE:
         if (api().isMarketDataConnected() && api().isTradingConnected()) {
-            Scanner_Subscribe(hWnd, g_ScannerActiveId); // re-request after reconnect
+            Scanner_ApplySelection(hWnd); // re-request (same location + scan code) after reconnect
         } else {
             Scanner_ClearList(hWnd);
             g_ScannerEntries.clear();
@@ -293,7 +348,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         api().unsetWatchlistWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         g_ScannerEntries.clear();
-        hScannerResults = hScannerBtnNASDAQSCM = hScannerBtnNYSE = hScannerBtnNASDAQNational = NULL;
+        hScannerResults = hScannerBtnNASDAQSCM = hScannerBtnNYSE = hScannerBtnNASDAQNational = hScannerComboScanCode = NULL;
         if (ScannerZoomData.hFont)     DeleteObject(ScannerZoomData.hFont);
         if (ScannerZoomData.hBoldFont) DeleteObject(ScannerZoomData.hBoldFont);
         break;

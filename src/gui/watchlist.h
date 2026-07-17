@@ -54,7 +54,7 @@ static HWND g_WatchlistListForSort = NULL;
 
 struct WatchlistCol { const char* header; int width; int fmt; };
 static const WatchlistCol watchlistCols[] = {
-    { "Instrument",   90, LVCFMT_LEFT  },
+    { "Symbol",       90, LVCFMT_LEFT  },
     { "Ask Size",     75, LVCFMT_RIGHT },
     { "Ask",          75, LVCFMT_RIGHT },
     { "Last",         75, LVCFMT_RIGHT },

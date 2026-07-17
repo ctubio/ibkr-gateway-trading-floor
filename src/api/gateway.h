@@ -118,8 +118,10 @@ public:
     };
 
     // Row returned by the market scanner (rank + contract identity only —
-    // no price data; the Scanner window subscribes L1 market data for the
-    // returned conIds via the existing setWatchlistWindow() mechanism).
+    // no price data; the Scanner window requests L1 market data for the
+    // returned conIds via the existing setWatchlistWindow() mechanism, which
+    // fires one-time snapshot reqMktData() calls paced 100ms apart rather
+    // than a permanent streaming subscription).
     struct ScannerRow {
         int         rank    = 0;
         int         conId   = 0;
@@ -242,7 +244,10 @@ public:
     void unsetMarketWindow(HWND hWnd);
 
     // ── Watchlist (watchlist) ────────────────────────────────────────────────────
-
+    // Fires one-time snapshot reqMktData() calls (paced 100ms apart) for each
+    // entry rather than a permanent streaming subscription, to stay off the
+    // concurrent-market-data-line limit. Call again (e.g. on every list edit)
+    // to refresh. Diamonds does not use this — it keeps live streaming data.
     void setWatchlistWindow(HWND hWnd, const std::unordered_map<int, std::string>& entries);
     void unsetWatchlistWindow(HWND hWnd);
 
@@ -264,9 +269,10 @@ public:
     std::vector<std::string> getSymbolResults();
 
     // ── Scanner ───────────────────────────────────────────────────────────────
-    // scannerIndex: 0 = Small Caps, 1 = Big Caps. Cancels any previous
-    // subscription from this same API instance before requesting the new one.
-    void runScanner(int scannerIndex);
+    // scannerIndex: 0 = NYSE, 1 = NASDAQ National Market, 2 = NASDAQ Small/Mid Caps.
+    // scanCodeIndex: 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE.
+    // Cancels any previous subscription from this same API instance before requesting the new one.
+    void runScanner(int scannerIndex, int scanCodeIndex = 0);
     void cancelScanner();
     std::vector<ScannerRow> getScannerResults();
     
