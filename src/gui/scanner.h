@@ -230,6 +230,29 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_SCANNER_DATA: {
         auto rows = api().getScannerResults();
 
+        // Snapshot the currently displayed Change%/Last for each conId before
+        // clearing, so a routine scan refresh doesn't blank rows for the few
+        // seconds it takes fresh snapshot data to arrive. Symbols that are
+        // genuinely new (no prior row) still fall back to SCANNER_NO_DATA.
+        std::unordered_map<int, std::pair<std::string, std::string>> prevValues;
+        {
+            int count = ListView_GetItemCount(hScannerResults);
+            for (int i = 0; i < count; ++i) {
+                LVITEMA lvi = {};
+                lvi.mask  = LVIF_PARAM;
+                lvi.iItem = i;
+                SendMessageA(hScannerResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+                int conId = (int)lvi.lParam;
+                if (conId <= 0) continue;
+
+                char chgBuf[32]  = {};
+                char lastBuf[32] = {};
+                ListView_GetItemText(hScannerResults, i, SCOL_CHGPCT, chgBuf,  sizeof(chgBuf));
+                ListView_GetItemText(hScannerResults, i, SCOL_LAST,   lastBuf, sizeof(lastBuf));
+                prevValues[conId] = { chgBuf, lastBuf };
+            }
+        }
+
         Scanner_ClearList(hWnd);
         g_ScannerEntries.clear();
 
@@ -244,8 +267,15 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             lvi.lParam   = (LPARAM)row.conId;
             lvi.pszText  = (LPSTR)label.c_str();
             int idx = (int)SendMessageA(hScannerResults, LVM_INSERTITEMA, 0, (LPARAM)&lvi);
-            ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)SCANNER_NO_DATA);
-            ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)SCANNER_NO_DATA);
+
+            auto pit = prevValues.find(row.conId);
+            if (pit != prevValues.end()) {
+                ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)pit->second.first.c_str());
+                ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)pit->second.second.c_str());
+            } else {
+                ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)SCANNER_NO_DATA);
+                ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)SCANNER_NO_DATA);
+            }
 
             g_ScannerEntries[row.conId] = row.symbol;
         }
