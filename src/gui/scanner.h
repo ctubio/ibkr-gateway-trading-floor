@@ -28,6 +28,11 @@ static int  g_ScannerScanCodeId = 0; // 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 
 // reusing the existing watchlist L1 subscription plumbing unchanged.
 static std::unordered_map<int, std::string> g_ScannerEntries;
 
+// Snapshot of portfolio conIds, taken once when the window opens (see WM_CREATE)
+// so NM_CUSTOMDRAW doesn't have to lock/query the live portfolio map on every
+// cell repaint.
+static std::unordered_set<int> g_ScannerPortfolioConIds;
+
 static const int SCANNER_BTN_H       = 24;
 static const int SCANNER_SELECTOR_H  = 8 + SCANNER_BTN_H + 8;
 static const char* SCANNER_NO_DATA   = "--";
@@ -137,6 +142,14 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+
+        // One-time snapshot of held positions, used to bold the Symbol column.
+        // Deliberately not refreshed on every repaint/scan update — see NM_CUSTOMDRAW.
+        {
+            std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+            g_ScannerPortfolioConIds.clear();
+            for (const auto& kv : api().getPortfolioMap()) g_ScannerPortfolioConIds.insert(kv.first);
+        }
 
         hScannerResults = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
@@ -355,6 +368,23 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                     return CDRF_NOTIFYSUBITEMDRAW;
 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    if (cd->iSubItem == SCOL_INSTRUMENT) {
+                        LVITEMA lvi = {};
+                        lvi.mask  = LVIF_PARAM;
+                        lvi.iItem = (int)cd->nmcd.dwItemSpec;
+                        SendMessageA(hScannerResults, LVM_GETITEMA, 0, (LPARAM)&lvi);
+                        int conId = (int)lvi.lParam;
+                        bool inPortfolio = g_ScannerPortfolioConIds.count(conId) > 0;
+
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+
+                        if (inPortfolio && ScannerZoomData.hBoldFont) {
+                            SelectObject(cd->nmcd.hdc, ScannerZoomData.hBoldFont);
+                            cd->clrText = COINS_CLR_BLUE;
+                            return CDRF_NEWFONT;
+                        }
+                        return CDRF_DODEFAULT;
+                    }
                     if (cd->iSubItem == SCOL_CHGPCT) {
                         char buf[32] = {};
                         ListView_GetItemText(hScannerResults, (int)cd->nmcd.dwItemSpec, SCOL_CHGPCT, buf, sizeof(buf));
@@ -364,6 +394,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                             else if (v < 0.0) cd->clrText = COINS_CLR_RED;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        SelectObject(cd->nmcd.hdc, ScannerZoomData.hFont);
                         return CDRF_NEWFONT;
                     }
                     return CDRF_DODEFAULT;
@@ -378,6 +409,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         api().unsetWatchlistWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         g_ScannerEntries.clear();
+        g_ScannerPortfolioConIds.clear();
         hScannerResults = hScannerBtnNASDAQSCM = hScannerBtnNYSE = hScannerBtnNASDAQNational = hScannerComboScanCode = NULL;
         if (ScannerZoomData.hFont)     DeleteObject(ScannerZoomData.hFont);
         if (ScannerZoomData.hBoldFont) DeleteObject(ScannerZoomData.hBoldFont);
