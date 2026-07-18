@@ -1,6 +1,6 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 395); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 428); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
@@ -15,6 +15,7 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_PROFIT_VALUE      4009
 #define ID_SETTINGS_GATEWAY_PATH      4010
 #define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
+#define ID_SETTINGS_RISK_VALUE        4012
 
 static HWND hDebugEdit = NULL;
 static HWND hGatewayEdit = NULL;
@@ -204,10 +205,23 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             float profit = Settings_LoadFloat("ProfitPrice", 2.0f);
             SetWindowTextA(hProfitEdit, std::format("{:.2f}", profit).c_str());
 
+            CreateWindowA("STATIC", "Risk %:",
+                WS_CHILD | WS_VISIBLE,
+                margin, margin + 319, 75, 20,
+                hWnd, NULL, hInst, NULL);
+
+            HWND hRiskEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                margin + 80, margin + 316, 80, 26,
+                hWnd, (HMENU)ID_SETTINGS_RISK_VALUE, hInst, NULL);
+
+            float riskPct = Settings_LoadFloat("RiskPct", 1.0f);
+            SetWindowTextA(hRiskEdit, std::format("{:.2f}", riskPct).c_str());
+
 
             HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                margin, margin + 319, 250, 24,
+                margin, margin + 352, 250, 24,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
             break;
         }
@@ -277,6 +291,17 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     price = (float)atof(buf); // atof handles decimals
                 }
                 Settings_SaveFloat("ProfitPrice", price);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_RISK_VALUE) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_RISK_VALUE);
+                int len = GetWindowTextLength(hEdit);
+                float pct = 1.0f;
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    pct = (float)atof(buf); // atof handles decimals
+                }
+                Settings_SaveFloat("RiskPct", pct);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);
