@@ -67,8 +67,7 @@ private:
         void* pData = LockResource(hMem);
         if (!pData || size == 0) return;
 
-        PlaySoundA(reinterpret_cast<LPCSTR>(pData), NULL,
-                   SND_MEMORY | SND_SYNC | SND_NODEFAULT);
+        PlaySoundA(reinterpret_cast<LPCSTR>(pData), NULL, SND_MEMORY | SND_SYNC | SND_NODEFAULT);
     }
 };
 
