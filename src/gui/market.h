@@ -86,6 +86,7 @@ struct TsState {
     HWND  hOrderStopPrice   = NULL;
     HWND  hOrderProfitPrice = NULL;
     HWND  hOrderQty         = NULL;
+    HWND  hOrderRisk        = NULL;   // right of hOrderLabel: notional / risk / sizing readout
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
 
@@ -280,23 +281,92 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     // ── Order entry bar ───────────────────────────────────────────────────────
     if (state->hOrderLabel && state->hOrderPrice && state->hOrderStopPrice && state->hOrderProfitPrice && state->hOrderQty) {
         const int m    = 8;
-        const int lblW = 100;
         int BAR_H = (state->isOvernight ? ORDER_BAR_H / 2 : ORDER_BAR_H);
         const int editH = (BAR_H - 6) / (state->isOvernight ? 1 : 2);
         const int editY = rc.bottom - BAR_H + (BAR_H - editH * (state->isOvernight ? 1 : 2)) / 2;
         const int lblY  = rc.bottom - BAR_H + (BAR_H - 18) / 2;
-        int availW = rc.right - m * 3 - lblW;
-        int priceW = availW / 2;
-        int qtyW   = availW - priceW - 1;
+        const int lblW = 150;
+        const int priceW = 150;
+        const int riskW = 190;
+        const int startY = rc.right - (priceW * 2) - m;
 
         SetWindowPos(state->hOrderLabel,       NULL, m,                                  lblY,   lblW,    18, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderPrice,       NULL, m + lblW + m,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderQty,         NULL, m + lblW + m + priceW + m,         editY,   qtyW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderRisk,        NULL, m + lblW + m,                       lblY - (state->isOvernight ? 0 : 26), riskW, BAR_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderPrice,       NULL, startY,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderQty,         NULL, startY + priceW + m,         editY,  priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         if (!state->isOvernight) {
-            SetWindowPos(state->hOrderStopPrice,   NULL, m + lblW + m,              editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-            SetWindowPos(state->hOrderProfitPrice, NULL, m + lblW + m + priceW + m, editY + editH + 4, priceW - 2, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderStopPrice,   NULL, startY,              editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderProfitPrice, NULL, startY + priceW + m, editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
+}
+
+// Recomputes and redraws the risk readout beside hOrderLabel from the current
+// price / qty / stop-distance edit fields plus account NetLiquidation.
+// hOrderStopPrice holds a $ distance from entry (not an absolute stop price),
+// matching how it is already fed into api().submitOrder() as stopPrice.
+static void Market_UpdateOrderRiskLabel(TsState* state) {
+    if (!state || !state->hOrderRisk) return;
+
+    char pBuf[32] = {}, qBuf[32] = {}, sBuf[32] = {};
+    GetWindowTextA(state->hOrderPrice,     pBuf, sizeof(pBuf));
+    GetWindowTextA(state->hOrderQty,       qBuf, sizeof(qBuf));
+    GetWindowTextA(state->hOrderStopPrice, sBuf, sizeof(sBuf));
+
+    double price    = std::atof(pBuf);
+    double qty      = std::atof(qBuf);
+    double stopDist = std::atof(sBuf);
+
+    double netLiq = 0.0;
+    {
+        std::map<std::string, std::string> summary = api().getAccountSummary();
+        auto it = summary.find("NetLiquidation");
+        if (it != summary.end()) netLiq = std::atof(it->second.c_str());
+    }
+
+    const float riskPct = Settings_LoadFloat("RiskPct", 1.0f);   // target risk per trade, % of NLV
+
+    std::string text;
+
+    // 1) Notional value = qty * entry price
+    if (price > 0.0 && qty > 0.0)
+        text += std::format("{:.2f}", price * qty);
+    else
+        text += "--";
+
+    if (!state->isOvernight) {
+        // 2) Total possible loss at the current stop distance, in $ and % of NLV
+        if (stopDist > 0.0 && qty > 0.0) {
+            double lossDollars = stopDist * qty;
+            std::string lossPctStr = (netLiq > 0.0)
+                ? std::format("{:.2f}%", lossDollars / netLiq * 100.0)
+                : "--";
+            text += std::format("\r\n{} = {:.2f} R", lossPctStr, lossDollars);
+        } else {
+            if (stopDist > 0.0) text += "\r\n-- R";
+            else text += "\r\n!! R"; // ∞
+        }
+
+        text += "\r\n";
+
+        // 3) Position size that would risk exactly riskPct of NLV at this stop distance
+        if (stopDist > 0.0 && netLiq > 0.0) {
+            int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
+            text += std::format("{:.2f}% = {} Q\r\n", riskPct, optQty);
+        } else {
+            text += "-- Q\r\n";
+        }
+
+        // 4) Stop distance that would risk exactly riskPct of NLV at this position size
+        if (qty > 0.0 && netLiq > 0.0) {
+            double optStop = (netLiq * riskPct / 100.0) / qty;
+            text += std::format("{:.2f}% = {:.2f} S", riskPct, optStop);
+        } else {
+            text += "-- S";
+        }
+    }
+
+    SetWindowTextA(state->hOrderRisk, text.c_str());
 }
 
 static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
@@ -319,6 +389,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     SetWindowTextA(state->hOrderQty, std::format("{}", qty).c_str());
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
+    ShowWindow(state->hOrderRisk,  SW_SHOW);
     ShowWindow(state->hOrderPrice, SW_SHOW);
     ShowWindow(state->hOrderQty,   SW_SHOW);
 
@@ -326,6 +397,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
     SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("StopPrice", 1.0f)).c_str());
     SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
+    Market_UpdateOrderRiskLabel(state);
 
     Market_Layout(hWnd, state);
     SetFocus(state->hOrderPrice);
@@ -339,6 +411,7 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hOrderQty,   SW_HIDE);
     ShowWindow(state->hOrderStopPrice, SW_HIDE);
     ShowWindow(state->hOrderProfitPrice, SW_HIDE);
+    ShowWindow(state->hOrderRisk, SW_HIDE);
     state->orderBarVisible = false;
     Market_Layout(hWnd, state);
 }
@@ -426,6 +499,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             SetWindowTextA(hWnd, s.c_str());
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
+            if (st) Market_UpdateOrderRiskLabel(st);
             return 0;
         }
         
@@ -1128,6 +1202,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 
+        // Risk readout — read-only, left-aligned, wraps over 4 lines via \r\n.
+        state->hOrderRisk = CreateWindowA("STATIC", "",
+            WS_CHILD | SS_LEFT,
+            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+
         // Apply font to order bar controls
         if (state->hOrderFont) {
             SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
@@ -1136,6 +1215,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
             SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
         }
+        if (state->hOrderRisk)
+            SendMessage(state->hOrderRisk, WM_SETFONT, (WPARAM)state->hValuesFont, TRUE);
 
         // Restore splitter + filter
         if (!state->symbol.empty()) {
@@ -1225,6 +1306,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         if (LOWORD(wParam) == ID_MARKET_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)
             Market_ToggleTTS(hWnd, state);
+        // Order-bar edits have no control ID (created with a NULL HMENU), so
+        // identify them by HWND (lParam) instead of LOWORD(wParam).
+        if (state && HIWORD(wParam) == EN_CHANGE) {
+            HWND hCtrl = (HWND)lParam;
+            if (hCtrl == state->hOrderPrice || hCtrl == state->hOrderQty || hCtrl == state->hOrderStopPrice)
+                Market_UpdateOrderRiskLabel(state);
+        }
         break;
 
     case WM_TIMER:
@@ -1456,7 +1544,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
-            state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = NULL;
+            state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hOrderRisk = NULL;
             delete state;
             tsStates.erase(hWnd);
         }
