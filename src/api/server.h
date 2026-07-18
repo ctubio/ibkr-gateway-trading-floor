@@ -74,26 +74,24 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     TradingAPI::L1Book l1;
     api().getWatchlistData(p.conId, l1);
 
-    double last = (l1.last > 0.0) ? l1.last : l1.prevClose;
-    
-    double unrealizedPct = (p.avgCost > 0.0 && last > 0.0)
-        ? (last - p.avgCost) / p.avgCost * 100.0
+    double unrealizedPct = (p.avgCost > 0.0 && l1.last > 0.0)
+        ? (l1.last - p.avgCost) / p.avgCost * 100.0
         : 0.0;
 
     std::string j;
     j.reserve(512);
     j += "{";
-    j += "\"conId\":"              + std::to_string(p.conId)                + ",";
-    j += "\"symbol\":\""           + JsonEscapeString(p.symbol)             + "\",";
-    j += "\"exchange\":\""         + JsonEscapeString(p.exchange)           + "\",";
-    j += "\"shares\":"             + std::format("{:.0f}", p.shares)                      + ",";
-    j += "\"avgCost\":"            + JsonDouble(p.avgCost)                  + ",";
-    j += "\"last\":"               + JsonDouble(last)                    + ",";
-    j += "\"marketValue\":"        + JsonDouble(p.shares * last)              + ",";
-    j += "\"change_pct\":\""       + std::format("{:+.2f}%", l1.changePct())      + "\",";
-    j += "\"dailyPnL\":"           + JsonDouble(p.pnlSingle.dailyPnL)      + ",";
-    j += "\"unrealizedPnL\":"      + JsonDouble(p.pnlSingle.unrealizedPnL) + ",";
-    j += "\"unrealizedPnL_pct\":\"" + std::format("{:+.2f}%", unrealizedPct)     + "\"";
+    j += "\"conId\":"              + std::to_string(p.conId)                 + ",";
+    j += "\"symbol\":\""           + JsonEscapeString(p.symbol)              + "\",";
+    j += "\"exchange\":\""         + JsonEscapeString(p.exchange)            + "\",";
+    j += "\"shares\":"             + std::format("{:.0f}", p.shares)         + ",";
+    j += "\"avgCost\":"            + JsonDouble(p.avgCost)                   + ",";
+    j += "\"last\":"               + JsonDouble(l1.last)                     + ",";
+    j += "\"marketValue\":"        + JsonDouble(p.shares * l1.last)          + ",";
+    j += "\"change_pct\":\""       + std::format("{:+.2f}%", l1.changePct()) + "\",";
+    j += "\"dailyPnL\":"           + JsonDouble(p.pnlSingle.dailyPnL)        + ",";
+    j += "\"unrealizedPnL\":"      + JsonDouble(p.pnlSingle.unrealizedPnL)   + ",";
+    j += "\"unrealizedPnL_pct\":\"" + std::format("{:+.2f}%", unrealizedPct) + "\"";
     j += "}";
     return j;
 }

@@ -419,16 +419,15 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
     else setNA(DCOL_DIV_YIELD);
 
-    double displayLast = (t.last > 0.0) ? t.last : t.prevClose;
-    if (displayLast <= 0.0) {
+    if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_DAILYPNL); setNA(DCOL_CHGPCT); 
         setNA(DCOL_UNREALIZED_PL); setNA(DCOL_UNREALIZED_PL_PCT); 
         setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
         return;
     }
 
-    setCol(DCOL_LAST, displayLast, "{:.2f}", true);
-    g_DiamondsSparklines[conId].AddPrice(displayLast);
+    setCol(DCOL_LAST, t.last, "{:.2f}", true);
+    g_DiamondsSparklines[conId].AddPrice(t.last);
 
     double shares = row.sortValues[DCOL_POSITION];
     double avgCost = row.sortValues[DCOL_AVGPRICE];
@@ -638,6 +637,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 if (hList) ListView_RedrawItems(hList, row, row);
             }
         }
+        Diamonds_UpdatePnLCols(hWnd, conId);
         
         // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single market tick!
         // This stops the rows from continuously jumping up and down (which the user perceived as flickering).

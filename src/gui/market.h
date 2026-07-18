@@ -313,7 +313,6 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     if (side == "BUY"  && state->l1Info.ask > 0.0) suggestedPrice = state->l1Info.ask;
     else if (side == "SELL" && state->l1Info.bid > 0.0) suggestedPrice = state->l1Info.bid;
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
-    else if (state->l1Info.prevClose > 0.0) suggestedPrice = state->l1Info.prevClose;
     
     SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
     int qty = (int)Settings_Load("OrderQty", 100);
@@ -722,14 +721,13 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SetBkMode(hdc, TRANSPARENT);
 
     const TradingAPI::L1Book& L1 = state->l1Info;
-    double displayLast = (L1.last > 0.0) ? L1.last : L1.prevClose;
 
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
 
     // ── Color helpers ─────────────────────────────────────────────────────────
     COLORREF openColor  = textColor;
-    if (displayLast > 0.0 && L1.open > 0.0)
-        openColor = (displayLast >= L1.open) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    if (L1.last > 0.0 && L1.open > 0.0)
+        openColor = (L1.last >= L1.open) ? COINS_CLR_GREEN : COINS_CLR_RED;
     COLORREF vwapColor  = COINS_CLR_ORANGE;
     COLORREF highColor = (L1.high > 0.0) ? COINS_CLR_GREEN : textColor;
     COLORREF lowColor  = (L1.low  > 0.0) ? COINS_CLR_RED   : textColor;
@@ -862,7 +860,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Measure large last price
     SelectObject(hdc, state->hExtraFont);
-    std::string lastStr = Market_Fmt(displayLast);
+    std::string lastStr = Market_Fmt(L1.last);
     SIZE lastSz = {};
     GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
 
@@ -943,9 +941,8 @@ static bool Market_InitVoice(TsState* state) {
 
 static void Market_SpeakLast(TsState* state) {
     if (!state->hTtsVoice) return;
-    double displayLast = (state->l1Info.last > 0.0) ? state->l1Info.last : state->l1Info.prevClose;
-    if (displayLast <= 0.0) return;
-    std::string s = std::format("{:.2f}", displayLast);
+    if (state->l1Info.last <= 0.0) return;
+    std::string s = std::format("{:.2f}", state->l1Info.last);
     std::wstring ws(s.begin(), s.end());
     ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
     std::replace(ws.begin(), ws.end(), L'.', L',');
