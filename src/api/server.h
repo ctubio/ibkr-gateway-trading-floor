@@ -64,7 +64,7 @@ static std::string PriceToJson(const TradingAPI::PositionInfo& p) {
     std::string j;
     j.reserve(64);
     j += "{";
-    j += "\"" + JsonEscapeString(p.symbol) + "\":" + JsonDouble((l1.last > 0.0) ? l1.last : l1.prevClose);
+    j += "\"" + JsonEscapeString(p.symbol) + "\":" + JsonDouble(l1.last);
     j += "}";
     return j;
 }

@@ -6,7 +6,7 @@ void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPI
 #define ID_SCANNER_COMBO_LOCATION       3002
 #define ID_SCANNER_COMBO_SCANCODE       3005
 
-enum ScannerColIdx { SCOL_INSTRUMENT = 0, SCOL_CHGPCT, SCOL_LAST, SCOL_COUNT };
+enum ScannerColIdx { SCOL_INSTRUMENT = 0, SCOL_LAST, SCOL_CHGPCT, SCOL_COUNT };
 
 // Location selector options (NYSE / NASDAQ National / NASDAQ SCM).
 enum ScannerLocationIdx { SCANNER_LOC_NYSE = 0, SCANNER_LOC_NASDAQ_NATIONAL, SCANNER_LOC_NASDAQ_SCM, SCANNER_LOC_COUNT };
@@ -142,14 +142,6 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
-        // One-time snapshot of held positions, used to bold the Symbol column.
-        // Deliberately not refreshed on every repaint/scan update — see NM_CUSTOMDRAW.
-        {
-            std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-            g_ScannerPortfolioConIds.clear();
-            for (const auto& kv : api().getPortfolioMap()) g_ScannerPortfolioConIds.insert(kv.first);
-        }
-
         hScannerResults = CreateWindowExA(
             WS_EX_CLIENTEDGE, "SysListView32", "",
             WS_CHILD | WS_VISIBLE | WS_BORDER |
@@ -166,8 +158,8 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
 
         lvc.fmt = LVCFMT_LEFT;  lvc.cx = 100; lvc.pszText = (LPSTR)"Symbol";    ListView_InsertColumn(hScannerResults, SCOL_INSTRUMENT, &lvc);
-        lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Change %";  ListView_InsertColumn(hScannerResults, SCOL_CHGPCT,     &lvc);
         lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Last";      ListView_InsertColumn(hScannerResults, SCOL_LAST,       &lvc);
+        lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Change %";  ListView_InsertColumn(hScannerResults, SCOL_CHGPCT,     &lvc);
 
         // Bottom-left location selector (NYSE / NASDAQ National / NASDAQ
         // SCM) — hidden until the window is activated. Replaces the old
@@ -229,7 +221,15 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     // ── Scanner subscription refreshed (rank/contract only, no price yet) ────
     case WM_SCANNER_DATA: {
         auto rows = api().getScannerResults();
-
+        // One-time snapshot of held positions, used to bold the Symbol column.
+        // Deliberately not refreshed on every repaint/scan update — see NM_CUSTOMDRAW.
+        {
+            if (g_ScannerPortfolioConIds.empty()) {
+                std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+                g_ScannerPortfolioConIds.clear();
+                for (const auto& kv : api().getPortfolioMap()) g_ScannerPortfolioConIds.insert(kv.first);
+            }
+        }
         // Snapshot the currently displayed Change%/Last for each conId before
         // clearing, so a routine scan refresh doesn't blank rows for the few
         // seconds it takes fresh snapshot data to arrive. Symbols that are
@@ -273,8 +273,14 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)pit->second.first.c_str());
                 ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)pit->second.second.c_str());
             } else {
-                ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)SCANNER_NO_DATA);
-                ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)SCANNER_NO_DATA);
+                TradingAPI::L1Book info;
+                if (api().getWatchlistData(row.conId, info)) {
+                    ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)std::format("{:+.2f}%", info.changePct()).c_str());
+                    ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)std::format("{:.2f}", info.last).c_str());
+                } else {
+                    ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)SCANNER_NO_DATA);
+                    ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)SCANNER_NO_DATA);
+                }
             }
 
             g_ScannerEntries[row.conId] = row.symbol;
@@ -295,13 +301,10 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         TradingAPI::L1Book info;
         if (api().getWatchlistData(conId, info)) {
             int row = Scanner_FindRow(conId);
-            double displayLast = (info.last > 0.0) ? info.last : info.prevClose;
-            if (row >= 0 && displayLast > 0.0) {
-                ListView_SetItemText(hScannerResults, row, SCOL_LAST,
-                    (LPSTR)std::format("{:.2f}", displayLast).c_str());
+            if (row >= 0 && info.last > 0.0) {
+                ListView_SetItemText(hScannerResults, row, SCOL_LAST, (LPSTR)std::format("{:.2f}", info.last).c_str());
                 if (info.prevClose > 0.0) {
-                    ListView_SetItemText(hScannerResults, row, SCOL_CHGPCT,
-                        (LPSTR)std::format("{:+.2f}%", info.changePct()).c_str());
+                    ListView_SetItemText(hScannerResults, row, SCOL_CHGPCT, (LPSTR)std::format("{:+.2f}%", info.changePct()).c_str());
                 }
             }
         }
@@ -372,7 +375,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                         }
                         return CDRF_DODEFAULT;
                     }
-                    if (cd->iSubItem == SCOL_CHGPCT) {
+                    if (cd->iSubItem == SCOL_LAST) {
                         char buf[32] = {};
                         ListView_GetItemText(hScannerResults, (int)cd->nmcd.dwItemSpec, SCOL_CHGPCT, buf, sizeof(buf));
                         if (strcmp(buf, SCANNER_NO_DATA) != 0 && buf[0] != '\0') {
