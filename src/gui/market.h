@@ -963,6 +963,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "V:", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
         { "F:", freqRateStr,          freqRateClr },   // Print-frequency rate: recent trades/sec ÷ baseline trades/sec
     };
+
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),  openColor  },
@@ -971,8 +972,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "  D:", bufD,                 dPnlColor  },
         { "U:", bufU,                 uPnlColor  },
     };
-    
-    SetWindowTextA(hWnd, (state->symbol + ": " +  Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
+
+    std::string imbalance;
+    if (L1.auctionShares > 0 && L1.auctionPrice > 0) {
+        imbalance = std::string("          IMBALANCE: ") + Market_FmtQty(L1.auctionShares) + " @ " + Market_Fmt(L1.auctionPrice);
+    }
+    SetWindowTextA(hWnd, (state->symbol + ": " +  Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice) + imbalance).c_str());
 
     // Helper: draw a row of stat pairs starting at (startX, y0).
     // Returns the x position after the last pair.

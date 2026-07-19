@@ -14,14 +14,14 @@ static const char* g_ScannerLocationLabels[SCANNER_LOC_COUNT] = { "NYSE", "NASDA
 
 // Scan-code selector options — independent of the location combo above.
 // Index matches TradingAPI::runScanner()'s scanCodeIndex param.
-enum ScannerScanCodeIdx { SCANCODE_TOP_PERC_GAIN = 0, SCANCODE_TOP_PERC_LOSE, SCANCODE_MOST_ACTIVE, SCANCODE_COUNT };
-static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = { "GAIN", "LOSE", "ACTIVE" };
+enum ScannerScanCodeIdx { SCANCODE_TOP_PERC_GAIN = 0, SCANCODE_TOP_PERC_LOSE, SCANCODE_MOST_ACTIVE, SCANCODE_TOP_BUY_IMBALANCE, SCANCODE_TOP_SELL_IMBALANCE, SCANCODE_COUNT };
+static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = { "GAIN", "LOSE", "ACTIVE", "BUY IMB", "SELL IMB" };
 
 static HWND hScannerResults        = NULL;
 static HWND hScannerComboLocation  = NULL;
 static HWND hScannerComboScanCode  = NULL;
 static int  g_ScannerActiveId = 0;   // 0 = NYSE, 1 = NASDAQ National, 2 = NASDAQ SCM
-static int  g_ScannerScanCodeId = 0; // 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE
+static int  g_ScannerScanCodeId = 0; // 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE, 3 = TOP_STOCK_BUY_IMBALANCE_ADV_RATIO, 4 = TOP_STOCK_SELL_IMBALANCE_ADV_RATIO
 
 // conId -> symbol for the rows currently shown; also the map handed to
 // api().setWatchlistWindow() so Change%/Last Price arrive via WM_MARKET_L1,
@@ -85,14 +85,14 @@ static void Scanner_Layout(HWND hWnd) {
         // height, not the closed-box height (fixed by the system to roughly
         // the font's line height), so it's kept tall enough that the list
         // isn't clipped when opened.
-        int locComboW = 170;
+        int locComboW = 160;
         int comboDropH = 200;
         SetWindowPos(hScannerComboLocation, NULL, startX, btnY-3, locComboW, comboDropH, SWP_NOZORDER | SWP_NOACTIVATE);
 
-        // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE) —
+        // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE / TOP_STOCK_BUY_IMBALANCE_ADV_RATIO / TOP_STOCK_SELL_IMBALANCE_ADV_RATIO) —
         // anchored to the far right of the bottom bar, independent of the
         // location combo above.
-        int comboW = 110;
+        int comboW = 120;
         SetWindowPos(hScannerComboScanCode, NULL, rc.right - comboW - m, btnY-3, comboW, comboDropH, SWP_NOZORDER | SWP_NOACTIVATE);
     } else {
         MoveWindow(hScannerResults, 0, 0, rc.right, rc.bottom, TRUE);
@@ -102,7 +102,7 @@ static void Scanner_Layout(HWND hWnd) {
 // ── Subscribe / switch scanner ────────────────────────────────────────────────
 
 // Re-requests the scan using the current g_ScannerActiveId (location) and
-// g_ScannerScanCodeId (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE), and syncs
+// g_ScannerScanCodeId (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE / TOP_STOCK_BUY_IMBALANCE_ADV_RATIO / TOP_STOCK_SELL_IMBALANCE_ADV_RATIO), and syncs
 // the UI controls to match. Called whenever either selection changes, and on
 // initial creation / reconnect.
 static void Scanner_ApplySelection(HWND hWnd) {
@@ -128,7 +128,7 @@ static void Scanner_Subscribe(HWND hWnd, int scannerId) {
     Scanner_ApplySelection(hWnd);
 }
 
-// Switch the scan code (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE).
+// Switch the scan code (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE / TOP_STOCK_BUY_IMBALANCE_ADV_RATIO / TOP_STOCK_SELL_IMBALANCE_ADV_RATIO).
 static void Scanner_SetScanCode(HWND hWnd, int scanCodeId) {
     g_ScannerScanCodeId = scanCodeId;
     Scanner_ApplySelection(hWnd);
@@ -166,16 +166,16 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         // 3-radio-button group with a single combo box.
         hScannerComboLocation = CreateWindowA("COMBOBOX", "",
             WS_CHILD | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
-            0, 0, 170, 200, hWnd, (HMENU)ID_SCANNER_COMBO_LOCATION, hInst, NULL);
+            0, 0, 160, 200, hWnd, (HMENU)ID_SCANNER_COMBO_LOCATION, hInst, NULL);
         SendMessage(hScannerComboLocation, WM_SETFONT, (WPARAM)ScannerZoomData.hFont, TRUE);
         for (int i = 0; i < SCANNER_LOC_COUNT; ++i)
             SendMessageA(hScannerComboLocation, CB_ADDSTRING, 0, (LPARAM)g_ScannerLocationLabels[i]);
 
-        // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE) —
+        // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE / TOP_STOCK_BUY_IMBALANCE_ADV_RATIO / TOP_STOCK_SELL_IMBALANCE_ADV_RATIO) —
         // hidden until activated, same as the location combo above.
         hScannerComboScanCode = CreateWindowA("COMBOBOX", "",
             WS_CHILD | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
-            0, 0, 130, 200, hWnd, (HMENU)ID_SCANNER_COMBO_SCANCODE, hInst, NULL);
+            0, 0, 120, 200, hWnd, (HMENU)ID_SCANNER_COMBO_SCANCODE, hInst, NULL);
         SendMessage(hScannerComboScanCode, WM_SETFONT, (WPARAM)ScannerZoomData.hFont, TRUE);
         for (int i = 0; i < SCANCODE_COUNT; ++i)
             SendMessageA(hScannerComboScanCode, CB_ADDSTRING, 0, (LPARAM)g_ScannerScanCodeLabels[i]);
