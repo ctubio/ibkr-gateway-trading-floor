@@ -959,8 +959,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     StatItem row1[] = {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
-        { "  W:", Market_Fmt(L1.vwap),      vwapColor  },
-        { "V:", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
+        { "  W:", Market_Fmt(L1.vwap),    vwapColor  },
+        { "V:", formatVolume(L1.volume),  textColor  },
+        { "  R:", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
         { "F:", freqRateStr,          freqRateClr },   // Print-frequency rate: recent trades/sec ÷ baseline trades/sec
     };
 

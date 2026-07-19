@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1446;
+int windowDiamondsWidth = 1536;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -62,6 +62,7 @@ enum DiamondColIdx {
     DCOL_LAST,
     DCOL_BID,
     DCOL_BIDSIZE,
+    DCOL_VOLUME,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
     //DCOL_CLOSE,
@@ -115,6 +116,7 @@ static const DiamondCol diamondCols[] = {
     { "Last",             100, LVCFMT_RIGHT },
     { "Bid",              100, LVCFMT_RIGHT },
     { "BidSz",             80, LVCFMT_RIGHT },
+    { "Volume",            90, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
@@ -409,6 +411,10 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_ASK,     t.ask,     "{:.2f}");
     setCol(DCOL_BID,     t.bid,     "{:.2f}");
     setCol(DCOL_BIDSIZE, t.bidSize, "{:.0f}");
+    
+    row.textCols[DCOL_VOLUME] = formatVolume(t.volume);
+    row.sortValues[DCOL_VOLUME] = 0; 
+
     setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}");
     setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}");
     
@@ -907,7 +913,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
+                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_VOLUME) {
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;

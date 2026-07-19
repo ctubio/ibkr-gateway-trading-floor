@@ -493,3 +493,35 @@ std::wstring StringToWide(const std::string& str) {
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
 }
+
+std::string formatVolume(long long volume) {
+    if (volume < 0) return "0"; // guard against bad/sentinel data
+
+    const long long THOUSAND = 1'000LL;
+    const long long MILLION  = 1'000'000LL;
+    const long long BILLION  = 1'000'000'000LL;
+    const long long TRILLION = 1'000'000'000'000LL;
+
+    auto formatScaled = [](double value, char suffix) -> std::string {
+        char buf[32];
+        // 1 decimal place, but drop it if it's a whole number (e.g. "5M" not "5.0M")
+        if (std::fabs(value - std::round(value)) < 0.05) {
+            std::snprintf(buf, sizeof(buf), "%.0f%c", value, suffix);
+        } else {
+            std::snprintf(buf, sizeof(buf), "%.1f%c", value, suffix);
+        }
+        return std::string(buf);
+    };
+
+    if (volume >= TRILLION) {
+        return formatScaled(static_cast<double>(volume) / TRILLION, 'T');
+    } else if (volume >= BILLION) {
+        return formatScaled(static_cast<double>(volume) / BILLION, 'B');
+    } else if (volume >= MILLION) {
+        return formatScaled(static_cast<double>(volume) / MILLION, 'M');
+    } else if (volume >= THOUSAND) {
+        return formatScaled(static_cast<double>(volume) / THOUSAND, 'K');
+    } else {
+        return std::to_string(volume);
+    }
+}
