@@ -21,6 +21,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
         MutexGatewayInstance();
 
         RegisterWindowClass(hInst, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
+        RegisterWindowClass(hInst, WndProcExchange,    DASHBOARD_EXCHANGE_CLASS_NAME, 106, true);
         RegisterWindowClass(hInst, WndProcOrders,      ORDERS_CLASS_NAME,             103);
         RegisterWindowClass(hInst, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
         RegisterWindowClass(hInst, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);

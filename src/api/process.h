@@ -142,24 +142,3 @@ LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
     // Tell Windows to close the application cleanly now that we handled it
     return EXCEPTION_EXECUTE_HANDLER; 
 }
-
-void MutexGatewayInstance() {
-    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
-
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
-        if (existingWnd) {
-            DWORD processId;
-            GetWindowThreadProcessId(existingWnd, &processId);
-            HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processId);
-            if (hProcess) {
-                TerminateProcess(hProcess, 0);
-                CloseHandle(hProcess);
-            }
-        }
-        
-        if (hMutex) CloseHandle(hMutex);
-        // Re-create to own the mutex for this instance
-        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
-    }
-}

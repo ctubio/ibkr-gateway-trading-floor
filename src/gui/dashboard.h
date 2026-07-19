@@ -40,7 +40,35 @@ static HFONT hFontCoins_BigPnL  = NULL;
 static HFONT hFontCoins_Pct     = NULL;
 static HFONT hFontCoins_Label   = NULL;
 static HFONT hFontCoins_Value   = NULL;
-static HFONT hFontCoins_Speaker = NULL;   // Segoe MDL2 Assets for speaker glyph
+static HFONT hFontCoins_Icons = NULL;   // Segoe MDL2 Assets for speaker glyph
+
+void MutexGatewayInstance() {
+    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
+        if (existingWnd) {
+            DWORD processId;
+            GetWindowThreadProcessId(existingWnd, &processId);
+
+            PostMessage(existingWnd, WM_COMMAND, ID_M_EXIT, 0);
+
+            HANDLE hProcess = OpenProcess(SYNCHRONIZE | PROCESS_TERMINATE, FALSE, processId);
+            if (hProcess) {
+                DWORD waitResult = WaitForSingleObject(hProcess, 7000);
+
+                if (waitResult == WAIT_TIMEOUT) {
+                    TerminateProcess(hProcess, 0);
+                }
+                CloseHandle(hProcess);
+            }
+        }
+        
+        if (hMutex) CloseHandle(hMutex);
+        
+        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+    }
+}
 
 static HFONT Coins_MakeMDL2Font(int ptSize) {
     HDC hdc = GetDC(NULL);
@@ -56,12 +84,18 @@ static HWND hCoin_NetLiq  = NULL;
 static HWND hCoin_BigPnL  = NULL;
 static HWND hCoin_Pct     = NULL;
 static HWND hCoin_Speaker = NULL;   // speaker icon button (SS_NOTIFY)
+static HWND hCoin_FxIcon  = NULL;   // exchange-currency icon button (SS_NOTIFY) — color never changes
 
 #define ID_COIN_NETLIQ   5100
 #define ID_COIN_BIGPNL   5101
 #define ID_COIN_PCT      5102
 #define ID_COIN_SPEAKER  5103
+#define ID_COIN_FXICON   5104
 #define TIMER_COINS_SPEAKER  0xC015   // WM_TIMER id
+
+// ─── Exchange Currency popup (DASHBOARD_EXCHANGE_CLASS_NAME) ───────────────────
+#define ID_DASHFX_ACTION_COMBO  5201
+#define ID_DASHFX_AMOUNT_EDIT   5202
 
 // ─── TTS state ────────────────────────────────────────────────────────────────
 static ISpVoice* g_pCoinsVoice  = nullptr;
@@ -364,6 +398,164 @@ void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HME
         SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
 }
 
+// ─── Exchange Currency (FX conversion) popup ─────────────────────────────────
+// A small single-instance popup (see DASHBOARD_EXCHANGE_CLASS_NAME) that shows a
+// live EUR.USD rate in its title bar and lets the user submit a market order
+// converting between USD and EUR on IDEALPRO. Opened from the 🗘 icon at the
+// right of the last account-summary row.
+
+static void DashboardFx_UpdateTitle(HWND hWnd) {
+    TradingAPI::L1Book fx;
+    api().getFxRate(fx);
+
+    double rate = 0.0;
+    if      (fx.bid > 0.0 && fx.ask > 0.0) rate = (fx.bid + fx.ask) / 2.0;
+    else if (fx.last > 0.0)                rate = fx.last;
+    else if (fx.bid > 0.0)                 rate = fx.bid;
+    else if (fx.ask > 0.0)                 rate = fx.ask;
+
+    HWND hCombo = GetDlgItem(hWnd, ID_DASHFX_ACTION_COMBO);
+    HWND hEdit  = GetDlgItem(hWnd, ID_DASHFX_AMOUNT_EDIT);
+    int sel = hCombo ? (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0) : 0;
+    bool isBuy = (sel != 1);   // 0 = BUY (USD->EUR), 1 = SELL (EUR->USD)
+
+    char buf[32] = {};
+    if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
+    double amount = atof(buf);
+
+    std::string title = "Exchange: ";
+    if (rate > 0.0) {
+        if (amount > 0.0) {
+            title += std::format("{:.2f} ", amount);
+            title += isBuy ? "USD" : "EUR";
+            if (isBuy) {
+                double receivedEUR = amount / rate;   // spending `amount` USD
+                title += " = " + FormatWithCommas(receivedEUR) + " EUR";
+            } else {
+                double receivedUSD = amount * rate;   // spending `amount` EUR
+                title += " = " + FormatWithCommas(receivedUSD) + " USD";
+            }
+        } else {
+            title += std::format("1 EUR = {:.5f} USD", rate);
+        }
+    } else {
+        title += "waiting for rate..";
+    }
+    SetWindowTextA(hWnd, title.c_str());
+}
+
+// Reads the selector + amount, submits the conversion order (if valid), then
+// closes the popup. order.totalQuantity for a CASH/IDEALPRO contract is always
+// denominated in the base currency (EUR), so a BUY (USD->EUR) amount typed in
+// USD is converted to its EUR notional before being sent.
+static void DashboardFx_SubmitAndClose(HWND hWnd) {
+    HWND hCombo = GetDlgItem(hWnd, ID_DASHFX_ACTION_COMBO);
+    HWND hEdit  = GetDlgItem(hWnd, ID_DASHFX_AMOUNT_EDIT);
+    int sel = hCombo ? (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0) : 0;
+    bool isBuy = (sel != 1);
+
+    char buf[32] = {};
+    if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
+    double amount = atof(buf);
+
+    if (amount > 0.0) {
+        TradingAPI::L1Book fx;
+        api().getFxRate(fx);
+        double rate = 0.0;
+        if      (fx.bid > 0.0 && fx.ask > 0.0) rate = (fx.bid + fx.ask) / 2.0;
+        else if (fx.last > 0.0)                rate = fx.last;
+        else if (fx.bid > 0.0)                 rate = fx.bid;
+        else if (fx.ask > 0.0)                 rate = fx.ask;
+
+        if (rate > 0.0) {
+            double quantityEUR = isBuy ? (amount / rate) : amount;
+            api().submitCurrencyOrder(isBuy ? "BUY" : "SELL", quantityEUR);
+        }
+    }
+    DestroyWindow(hWnd);
+}
+
+// Subclass shared by the action combo and the amount edit: ESC closes without
+// submitting, ENTER submits and closes.
+static LRESULT CALLBACK DashboardFx_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
+                                                     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
+    if (msg == WM_CHAR) {
+        if (wParam == VK_RETURN || wParam == VK_ESCAPE)
+            return 0;
+    }
+    if (msg == WM_KEYDOWN) {
+        HWND hParent = GetParent(hCtrl);
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hParent);
+            return 0;
+        }
+        if (wParam == VK_RETURN) {
+            DashboardFx_SubmitAndClose(hParent);
+            return 0;
+        }
+    }
+    if (msg == WM_NCDESTROY)
+        RemoveWindowSubclass(hCtrl, DashboardFx_KeySubclassProc, uIdSubclass);
+    return DefSubclassProc(hCtrl, msg, wParam, lParam);
+}
+
+LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+        case WM_CREATE: {
+            HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+
+            HWND hCombo = CreateWindowA("COMBOBOX", "",
+                WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                10, 10, 140, 200, hWnd, (HMENU)ID_DASHFX_ACTION_COMBO, hInst, NULL);
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)"USD to EUR"); // BUY
+            SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)"EUR to USD"); // SELL
+            SendMessage(hCombo, CB_SETCURSEL, 0, 0);
+
+            CreateWindowA("STATIC", "Amount:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                160, 14, 55, 18, hWnd, NULL, hInst, NULL);
+
+            HWND hEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                218, 10, 90, 24, hWnd, (HMENU)ID_DASHFX_AMOUNT_EDIT, hInst, NULL);
+
+            SetWindowSubclass(hCombo, DashboardFx_KeySubclassProc, 1, 0);
+            SetWindowSubclass(hEdit,  DashboardFx_KeySubclassProc, 2, 0);
+
+            api().reqFxRate(hWnd);
+            DashboardFx_UpdateTitle(hWnd);
+
+            SetFocus(hEdit);
+            int len = GetWindowTextLengthA(hEdit);
+            SendMessageA(hEdit, EM_SETSEL, 0, len);
+            break;
+        }
+
+        case WM_FX_RATE_UPDATE:
+            DashboardFx_UpdateTitle(hWnd);
+            break;
+
+        case WM_COMMAND:
+            if ((LOWORD(wParam) == ID_DASHFX_ACTION_COMBO && HIWORD(wParam) == CBN_SELCHANGE) ||
+                (LOWORD(wParam) == ID_DASHFX_AMOUNT_EDIT  && HIWORD(wParam) == EN_CHANGE)) {
+                DashboardFx_UpdateTitle(hWnd);
+            }
+            break;
+
+        case WM_KEYDOWN: {
+            if (wParam == VK_ESCAPE) {
+                DestroyWindow(hWnd);
+                return 0;
+            }
+            break;
+        }
+        case WM_DESTROY:
+            api().cancelFxRate(hWnd);
+            break;
+    }
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
+}
+
 LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE:	{
@@ -374,7 +566,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hFontCoins_Pct     = MakeFont(12, true);
             hFontCoins_Value   = MakeFont(12, true);
             hFontCoins_Label   = MakeFont(11, false);
-            hFontCoins_Speaker = Coins_MakeMDL2Font(11);
+            hFontCoins_Icons = Coins_MakeMDL2Font(11);
 
             const int m  = 12;
             const int rW = 220;
@@ -403,7 +595,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + lblW - 10, 48, 22, 22, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
-            SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFontCoins_Speaker, TRUE);
+            SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
             SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
 
             // Daily PnL Value - bounding box reduced slightly so the text pulls tight to the speaker icon
@@ -434,6 +626,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Body rows
             const int rowH = 23;
             int y = 111;
+            int lastRowY = y;
             lblW  = 90;
             valW  = rW - lblW;
             for (int i = 0; i < COIN_ROW_COUNT; i++) {
@@ -458,8 +651,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SendMessage(hCoinVal[i], WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
                 // No SetCtrlColor – let the theme paint it (accent rows get colored on first update)
 
+                lastRowY = y;
                 y += rowH;
             }
+
+            // Exchange-currency icon — right side of the last account-summary row.
+            // Color is set once here and intentionally never touched again on click.
+            hCoin_FxIcon = CreateWindowW(L"STATIC", FX_GLYPH,
+                WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
+                m + lblW - 18, lastRowY + 3, 20, 20, hWnd, (HMENU)ID_COIN_FXICON, hInst, NULL);
+            SendMessage(hCoin_FxIcon, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
+            SetCtrlColor(hCoin_FxIcon, COINS_CLR_GRAY);
 
             y += 12;
             int steps = 1;
@@ -525,7 +727,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         case WM_SETCURSOR: {
             int id = GetDlgCtrlID((HWND)wParam);
-            if  (id == ID_COIN_SPEAKER || id == ID_COIN_BIGPNL) {
+            if  (id == ID_COIN_SPEAKER || id == ID_COIN_BIGPNL || id == ID_COIN_FXICON) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
             }
@@ -693,6 +895,12 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (evt == STN_CLICKED)
                         Coins_ToggleTTS(hWnd);
                     break;
+                case ID_COIN_FXICON:
+                    // Opens the currency-exchange popup. Deliberately does NOT
+                    // call SetCtrlColor here — this icon's color never changes.
+                    if (evt == STN_CLICKED)
+                        StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
+                    break;
                 case ID_M_CONNECT:
                     shouldBeConnected = true; // Turn the auto-watchdog back on
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
@@ -785,9 +993,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hFontCoins_Pct)     { DeleteObject(hFontCoins_Pct);     hFontCoins_Pct     = NULL; }
             if (hFontCoins_Label)   { DeleteObject(hFontCoins_Label);   hFontCoins_Label   = NULL; }
             if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
-            if (hFontCoins_Speaker) { DeleteObject(hFontCoins_Speaker); hFontCoins_Speaker = NULL; }
+            if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons); hFontCoins_Icons = NULL; }
 
-            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Speaker = NULL;
+            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Speaker = hCoin_FxIcon = NULL;
             memset(hCoinLbl, 0, sizeof(hCoinLbl));
             memset(hCoinVal, 0, sizeof(hCoinVal));
             gClrCount = 0;

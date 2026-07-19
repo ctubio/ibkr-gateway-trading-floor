@@ -45,6 +45,7 @@
 #define WM_PNL_SINGLE       (WM_USER + 12)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
 #define WM_SCANNER_DATA     (WM_USER + 13)   // Scanner subscription refreshed — handler calls getScannerResults()
 #define WM_API_EXECUTION    (WM_USER + 14)
+#define WM_FX_RATE_UPDATE   (WM_USER + 15)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
@@ -56,6 +57,7 @@ static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
 static const char* SCANNER_CLASS_NAME            = "Scanner";
 static const char* SETTINGS_CLASS_NAME           = "Settings";
 static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
+static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange";
 
 class TradingAPI {
 public:
@@ -270,6 +272,20 @@ public:
 
     void searchSymbols(HWND hWnd, const std::string& pattern);
     std::vector<std::string> getSymbolResults();
+
+    // ── FX / Currency Conversion (Dashboard "Exchange Currency" popup) ───────────
+    // Subscribes streaming market data for the EUR.USD spot FX contract on
+    // IDEALPRO and routes ticks to hWnd via WM_FX_RATE_UPDATE (no lParam —
+    // call getFxRate() to read the latest bid/ask/last).
+    void reqFxRate(HWND hWnd);
+    // Cancels the market data subscription started by reqFxRate() for this window.
+    void cancelFxRate(HWND hWnd);
+    // Returns the latest known EUR.USD bid/ask/last (all 0.0 until the first tick arrives).
+    bool getFxRate(L1Book& out);
+    // Places a market order converting between USD and EUR on IDEALPRO.
+    //   action        = "BUY"  (spend USD, receive EUR) or "SELL" (spend EUR, receive USD)
+    //   totalQuantity = order notional, denominated in EUR (matches IB's CASH contract convention)
+    void submitCurrencyOrder(const std::string& action, double totalQuantity);
 
     // ── Scanner ───────────────────────────────────────────────────────────────
     // scannerIndex: 0 = NYSE, 1 = NASDAQ National Market, 2 = NASDAQ Small/Mid Caps.

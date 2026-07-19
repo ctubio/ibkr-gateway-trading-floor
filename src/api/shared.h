@@ -19,10 +19,13 @@ NOTIFYICONDATAW nid = { 0 };
 // Sentinel: no custom col or – let HandleDarkModeMessages / system theme paint this control
 #define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
 
-// Speaker glyph: E767 = Volume on (Segoe MDL2 Assets)
+// glyph: E767 = Volume on (Segoe MDL2 Assets)
 static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
-// Speaker glyph: E708 = QuietHours on (Segoe MDL2 Assets)
+// glyph: E708 = QuietHours on (Segoe MDL2 Assets)
 static const wchar_t MOON_GLYPH[] = L"\uE708";
+
+// glyph: E825 = Bank on (Segoe MDL2 Assets)
+static const wchar_t FX_GLYPH[] = L"\uE825";
 
 // ─── Per-control color table ──────────────────────────────────────────────────
 static HWND     gClrHwnd[160]  = {};
@@ -134,10 +137,15 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = FindWindowA(WATCHLIST_CLASS_NAME, NULL);
         }
+        if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) == 0) {
+            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
+            dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
+            hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        }
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }
 
-    if (strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) != 0)
+    if (strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) != 0 && strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) != 0)
         SetWindowTaskbarId(hWnd, taskbarId);
         
     return hWnd;
