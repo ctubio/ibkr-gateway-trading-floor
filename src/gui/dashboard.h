@@ -458,7 +458,7 @@ static void DashboardFx_SubmitAndClose(HWND hWnd) {
     if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
     double amount = atof(buf);
 
-    if (amount > 0.0) {
+    if (amount > 2.0) {
         TradingAPI::L1Book fx;
         api().getFxRate(fx);
         double rate = 0.0;
