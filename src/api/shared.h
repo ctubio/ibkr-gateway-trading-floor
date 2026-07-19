@@ -77,7 +77,19 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     // are distinguished by title - each has a unique one. Single-instance windows match
     // on class alone. Either way no map needed: FindWindowA does the work.
     bool multiInstance = !windowKey.empty() && windowKey != className;
-    HWND hWnd = FindWindowA(className, multiInstance ? title : NULL);
+    HWND hWnd;
+    if (multiInstance) {
+        auto tsWindows = EnumerateMarketWindows();
+        for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
+            TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
+            if (data && data->winKey == windowKey) {
+                hWnd = tsWindows[i].hWnd;
+                break;
+            }
+        }
+    } else {
+        hWnd = FindWindowA(className, NULL);
+    }
 
     if (hWnd && IsWindow(hWnd)) {
         if (IsIconic(hWnd)) {
@@ -105,11 +117,11 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
         DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
-        if (strcmp(className, SCANNER_CLASS_NAME)         == 0
-         || strcmp(className, ORDERS_CLASS_NAME)       == 0
-         || strcmp(className, DIAMONDS_CLASS_NAME)     == 0
+        if (strcmp(className, SCANNER_CLASS_NAME)   == 0
+         || strcmp(className, ORDERS_CLASS_NAME)    == 0
+         || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
          || strcmp(className, MARKET_CLASS_NAME)    == 0
-         || strcmp(className, WATCHLIST_CLASS_NAME)       == 0
+         || strcmp(className, WATCHLIST_CLASS_NAME) == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }

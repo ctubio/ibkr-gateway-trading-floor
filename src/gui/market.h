@@ -33,6 +33,15 @@ static const int EXEC_W   = 126;  // Fixed width of the Executions panel (far le
 static const int L2_W     = 140;  // Fixed width of the Level 2 depth panel (beside exec)
 static const int ORDER_BAR_H = 80;
 
+// ── Volume / print-frequency rate windows ─────────────────────────────────────
+// "Recent" is the short trailing window whose rate we compare against
+// "Baseline", the longer trailing window (excluding the recent slice) that
+// represents this symbol's normal pace. A ratio >> 1 means recent activity is
+// running hot relative to how this symbol has been trading over the last few
+// minutes — the day-trading "sudden volume increase" signal.
+static const ULONGLONG VOL_RATE_RECENT_MS   = 15000ULL;    // 15s recent window
+static const ULONGLONG VOL_RATE_BASELINE_MS = 300000ULL;   // 5 min baseline window (includes recent slice until pruned)
+
 static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
 
 // State mapped per-window to support infinite instances safely
@@ -56,6 +65,14 @@ struct TsState {
     // ── PnL State ─────────────────────────────────────────────────────────────
     double dailyPnL = 0.0;
     double unrealizedPnL = 0.0;
+
+    // ── Volume / print-frequency tracking (tick-by-tick) ─────────────────────
+    // Rolling history of every trade print received via WM_MARKET_TICK, kept
+    // just long enough (VOL_RATE_BASELINE_MS) to derive a recent-vs-baseline
+    // rate ratio. Same "small rolling vector, pruned lazily" pattern as
+    // Sparkline::priceHistory — sampled at paint time, not recomputed per tick.
+    struct VolTick { ULONGLONG time; double size; };
+    std::deque<VolTick> volHistory;
 
     // ── Cached fonts ──────────────────────────────────────────────────────────
     HFONT hBigFont     = NULL;   // ~22pt bold — bid ask
@@ -634,7 +651,7 @@ void StartMarket(const std::string& symbol, int conId) {
     }
     std::string key = MARKET_CLASS_NAME + std::string("_") + symbol;
     TradingAPI::MarketInitData* data = new TradingAPI::MarketInitData{symbol, conId, key};
-    StartGenericWindow(MARKET_CLASS_NAME, symbol.c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+    StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
@@ -669,6 +686,54 @@ static std::string Market_FmtQty(double v) {
     if (v == 0.0) return "--";
     if (v == (long long)v) return std::format("{}", (long long)v);
     return std::format("{:.2f}", v);
+}
+
+// ── Volume rate / print-frequency rate ────────────────────────────────────────
+// Compares a short "recent" window of trade prints against a longer "baseline"
+// window (the trailing history minus the recent slice) to catch a sudden
+// increase in either total share volume or trade frequency — the day-trading
+// "something is happening right now" signal. Both ratios are derived from the
+// same tick-by-tick history (state->volHistory), never from RTVolume, since
+// the conflated L1 feed can fold several prints into one update and hides the
+// print-frequency signal entirely.
+struct VolRateResult {
+    bool   ready     = false;
+    double volRatio  = 0.0;   // recent shares/sec  ÷ baseline shares/sec
+    double freqRatio = 0.0;   // recent prints/sec  ÷ baseline prints/sec
+};
+
+static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& hist, ULONGLONG now) {
+    VolRateResult r;
+    if (hist.empty()) return r;
+
+    // Not enough history yet to trust a baseline — avoid a misleadingly huge
+    // ratio off a thin denominator (mirrors Sparkline::GetPriceAgo's approach
+    // of simply not showing a reading until there's enough history for it).
+    ULONGLONG oldest = hist.front().time;
+    if (now < VOL_RATE_BASELINE_MS || oldest > now - VOL_RATE_BASELINE_MS)
+        return r;
+
+    ULONGLONG recentCutoff = now - VOL_RATE_RECENT_MS;
+    double recentVol = 0.0, baselineVol = 0.0;
+    int    recentCount = 0,  baselineCount = 0;
+
+    for (const auto& t : hist) {
+        if (t.time >= recentCutoff) { recentVol += t.size; recentCount++; }
+        else                        { baselineVol += t.size; baselineCount++; }
+    }
+
+    double recentSec   = VOL_RATE_RECENT_MS / 1000.0;
+    double baselineSec = (VOL_RATE_BASELINE_MS - VOL_RATE_RECENT_MS) / 1000.0;
+
+    double recentVolRate    = recentVol    / recentSec;
+    double baselineVolRate  = baselineVol  / baselineSec;
+    double recentFreqRate   = recentCount  / recentSec;
+    double baselineFreqRate = baselineCount / baselineSec;
+
+    r.ready     = true;
+    r.volRatio  = (baselineVolRate  > 0.0001) ? (recentVolRate  / baselineVolRate)  : (recentVolRate  > 0.0 ? 9.9 : 0.0);
+    r.freqRatio = (baselineFreqRate > 0.0001) ? (recentFreqRate / baselineFreqRate) : (recentFreqRate > 0.0 ? 9.9 : 0.0);
+    return r;
 }
 
 // ── L2 list refresh ───────────────────────────────────────────────────────────
@@ -874,23 +939,40 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     COLORREF uPnlColor = (uPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (state->position == 0.0) { dPnlColor = textColor; uPnlColor = textColor; }
 
+    // ── Volume rate / print-frequency rate (tick-by-tick, see Market_ComputeVolRates) ──
+    ULONGLONG nowTick = GetTickCount64();
+    VolRateResult volRates = Market_ComputeVolRates(state->volHistory, nowTick);
+
+    auto rateColor = [&](double ratio) -> COLORREF {
+        if (ratio >= 3.0) return COINS_CLR_RED;      // hot: 3x+ normal pace
+        if (ratio >= 1.5) return COINS_CLR_ORANGE;   // warming up
+        return textColor;                             // normal pace
+    };
+
+    std::string volRateStr  = volRates.ready ? std::format("{:.1f}x", volRates.volRatio)  : "--";
+    std::string freqRateStr = volRates.ready ? std::format("{:.1f}x", volRates.freqRatio) : "--";
+    COLORREF    volRateClr  = volRates.ready ? rateColor(volRates.volRatio)  : textColor;
+    COLORREF    freqRateClr = volRates.ready ? rateColor(volRates.freqRatio) : textColor;
+
     // Row 1: O  C  H  L
     struct StatItem { const char* label; std::string value; COLORREF color; };
     StatItem row1[] = {
         { "C:", Market_Fmt(L1.prevClose), textColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", Market_Fmt(L1.vwap),      vwapColor  },
-        { "P:", (Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str(),      textColor  },
+        { "V:", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
+        { "F:", freqRateStr,          freqRateClr },   // Print-frequency rate: recent trades/sec ÷ baseline trades/sec
     };
-    // Row 2: Pos  Avg
+    // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),  openColor  },
         { "L:", Market_Fmt(L1.low),   lowColor   },
+        //{ "P:", (Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str(),      textColor  },
         { "D:", bufD,                 dPnlColor  },
         { "U:", bufU,                 uPnlColor  },
-        //{ "Pos:", Market_FmtQty(state->position), posColor   },
-        //{ "Avg:", Market_Fmt(state->avgPrice),    avgPrColor },
     };
+    
+    SetWindowTextA(hWnd, (state->symbol + ": " +  Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
 
     // Helper: draw a row of stat pairs starting at (startX, y0).
     // Returns the x position after the last pair.
@@ -917,8 +999,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         }
         return cx;
     };
-    drawStatRow(row1, 4, STATS_X, 0,    rowH);
-    drawStatRow(row2, 4, STATS_X, rowH, HEADER_H - 1);
+    drawStatRow(row1, std::size(row1), STATS_X, 0,    rowH);
+    drawStatRow(row2, std::size(row2), STATS_X, rowH, HEADER_H - 1);
 
     // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
     // We measure both pieces then right-justify them to RB_X - 10.
@@ -1358,6 +1440,17 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
+
+            // ── Volume rate / print-frequency rate: feed the rolling tick history ──
+            // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
+            // here with its arrival time so Market_ComputeVolRates can derive a
+            // recent-vs-baseline ratio for both share volume and trade frequency.
+            ULONGLONG tickNow = GetTickCount64();
+            state->volHistory.push_back({ tickNow, tick->size });
+            while (!state->volHistory.empty() && tickNow > VOL_RATE_BASELINE_MS &&
+                   state->volHistory.front().time < tickNow - VOL_RATE_BASELINE_MS)
+                state->volHistory.pop_front();
+
             Market_RefreshPositionAndAvg(hWnd, state);
         }
         delete tick;
@@ -1455,6 +1548,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (state->hL2List)      ListView_DeleteAllItems(state->hL2List);
                 if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
                 state->l1Info = TradingAPI::L1Book{};
+                state->volHistory.clear();   // stale on disconnect — avoid a phantom ratio off a frozen history
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }
