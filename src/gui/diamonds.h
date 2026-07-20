@@ -358,9 +358,11 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
             row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
 
             // Recompute the % column
-            double last = row.sortValues[DCOL_LAST];
-            if (avgCost > 0.0 && last > 0.0) {
-                double pct = (last - avgCost) / avgCost * 100.0;
+            double last  = row.sortValues[DCOL_LAST];
+            double shares = row.sortValues[DCOL_POSITION];
+            if (avgCost > 0.0 && last > 0.0 && shares != 0.0) {
+                double sign = (shares < 0.0) ? -1.0 : 1.0;
+                double pct = (last - avgCost) / avgCost * 100.0 * sign;
                 row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
                 row.textCols[DCOL_UNREALIZED_PL_PCT] = std::format("{:+.2f}%", pct);
             } else {
