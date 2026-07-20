@@ -73,6 +73,8 @@ struct TsState {
     // Sparkline::priceHistory — sampled at paint time, not recomputed per tick.
     struct VolTick { ULONGLONG time; double size; };
     std::deque<VolTick> volHistory;
+    ULONGLONG volTrackingStart = 0;   // time tracking began (since last clear); NOT touched by
+                                       // pruning, so the vol-rate "ready" gate below can't flicker
 
     // ── Cached fonts ──────────────────────────────────────────────────────────
     HFONT hBigFont     = NULL;   // ~22pt bold — bid ask
@@ -702,15 +704,21 @@ struct VolRateResult {
     double freqRatio = 0.0;   // recent prints/sec  ÷ baseline prints/sec
 };
 
-static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& hist, ULONGLONG now) {
+static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& hist, ULONGLONG trackingStart, ULONGLONG now) {
     VolRateResult r;
     if (hist.empty()) return r;
 
     // Not enough history yet to trust a baseline — avoid a misleadingly huge
     // ratio off a thin denominator (mirrors Sparkline::GetPriceAgo's approach
     // of simply not showing a reading until there's enough history for it).
-    ULONGLONG oldest = hist.front().time;
-    if (now < VOL_RATE_BASELINE_MS || oldest > now - VOL_RATE_BASELINE_MS)
+    // Gated on trackingStart (set once when the first tick after a clear
+    // arrives), NOT on hist.front().time: the front is continuously pruned
+    // back to just inside VOL_RATE_BASELINE_MS as new ticks land, so checking
+    // "is the oldest entry >= BASELINE_MS old" flip-flops forever right at
+    // that boundary — true between prints, false the instant the next print
+    // evicts the stale entry. trackingStart only moves on an explicit clear,
+    // so once ready flips true it stays true.
+    if (trackingStart == 0 || now < trackingStart || now - trackingStart < VOL_RATE_BASELINE_MS)
         return r;
 
     ULONGLONG recentCutoff = now - VOL_RATE_RECENT_MS;
@@ -941,7 +949,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── Volume rate / print-frequency rate (tick-by-tick, see Market_ComputeVolRates) ──
     ULONGLONG nowTick = GetTickCount64();
-    VolRateResult volRates = Market_ComputeVolRates(state->volHistory, nowTick);
+    VolRateResult volRates = Market_ComputeVolRates(state->volHistory, state->volTrackingStart, nowTick);
 
     auto rateColor = [&](double ratio) -> COLORREF {
         if (ratio >= 3.0) return COINS_CLR_RED;      // hot: 3x+ normal pace
@@ -1452,6 +1460,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             // here with its arrival time so Market_ComputeVolRates can derive a
             // recent-vs-baseline ratio for both share volume and trade frequency.
             ULONGLONG tickNow = GetTickCount64();
+            if (state->volHistory.empty())
+                state->volTrackingStart = tickNow;
             state->volHistory.push_back({ tickNow, tick->size });
             while (!state->volHistory.empty() && tickNow > VOL_RATE_BASELINE_MS &&
                    state->volHistory.front().time < tickNow - VOL_RATE_BASELINE_MS)
@@ -1555,6 +1565,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
                 state->l1Info = TradingAPI::L1Book{};
                 state->volHistory.clear();   // stale on disconnect — avoid a phantom ratio off a frozen history
+                state->volTrackingStart = 0; // re-arm the warm-up gate so ready doesn't latch true off pre-disconnect data
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }
