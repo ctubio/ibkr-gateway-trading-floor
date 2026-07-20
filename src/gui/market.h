@@ -349,7 +349,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
 
     // 1) Notional value = qty * entry price
     if (price > 0.0 && qty > 0.0)
-        text += std::format("{:.2f}", price * qty);
+        text += FormatWithCommas(price * qty);
     else
         text += "--";
 
