@@ -1387,6 +1387,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.bidSize   > 0.0) state->l1Info.bidSize   = fresh.bidSize;
             if (fresh.askSize   > 0.0) state->l1Info.askSize   = fresh.askSize;
             if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
+            if (fresh.volume    > 0.0) state->l1Info.volume    = fresh.volume;
         }
         Market_RefreshPositionAndAvg(hWnd, state);
         break;
