@@ -294,7 +294,7 @@ public:
     // scannerIndex: 0 = NYSE, 1 = NASDAQ National Market, 2 = NASDAQ Small/Mid Caps.
     // scanCodeIndex: 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE.
     // Cancels any previous subscription from this same API instance before requesting the new one.
-    void runScanner(int scannerIndex, int scanCodeIndex = 0);
+    void runScanner(int scannerIndex, std::string scanCode = "TOP_PERC_GAIN");
     void cancelScanner();
     std::vector<ScannerRow> getScannerResults();
     

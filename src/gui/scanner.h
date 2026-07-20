@@ -14,8 +14,34 @@ static const char* g_ScannerLocationLabels[SCANNER_LOC_COUNT] = { "NYSE", "NASDA
 
 // Scan-code selector options — independent of the location combo above.
 // Index matches TradingAPI::runScanner()'s scanCodeIndex param.
-enum ScannerScanCodeIdx { SCANCODE_TOP_PERC_GAIN = 0, SCANCODE_TOP_PERC_LOSE, SCANCODE_MOST_ACTIVE, SCANCODE_TOP_BUY_IMBALANCE, SCANCODE_TOP_SELL_IMBALANCE, SCANCODE_COUNT };
-static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = { "GAIN", "LOSE", "ACTIVE", "BUY IMB", "SELL IMB" };
+enum ScannerScanCodeIdx {
+    SCANCODE_TOP_PERC_GAIN = 0,
+    SCANCODE_TOP_PERC_LOSE,
+    SCANCODE_MOST_ACTIVE,
+    SCANCODE_MOST_ACTIVE_USD,
+    SCANCODE_HALTED,
+    SCANCODE_TOP_BUY_IMBALANCE,
+    SCANCODE_TOP_SELL_IMBALANCE,
+    SCANCODE_COUNT
+};
+static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = {
+    "GAIN",
+    "LOSE",
+    "ACTIVE",
+    "TOP USD",
+    "HALTED",
+    "BUY IMB",
+    "SELL IMB"
+};
+static const char* g_ScannerScanCodes[SCANCODE_COUNT] = {
+    "TOP_PERC_GAIN",
+    "TOP_PERC_LOSE",
+    "MOST_ACTIVE",
+    "MOST_ACTIVE_AVG_USD",
+    "HALTED",
+    "TOP_STOCK_BUY_IMBALANCE_ADV_RATIO",
+    "TOP_STOCK_SELL_IMBALANCE_ADV_RATIO"
+};
 
 static HWND hScannerResults        = NULL;
 static HWND hScannerComboLocation  = NULL;
@@ -119,7 +145,7 @@ static void Scanner_ApplySelection(HWND hWnd) {
     const char* locationName = g_ScannerActiveId == 0 ? "New York Stock Exchange" : (g_ScannerActiveId == 1 ? "NASDAQ National Market" : "NASDAQ Small/Mid Caps");
     std::string title = std::string("Scanner: ") + locationName + " - " + g_ScannerScanCodeLabels[g_ScannerScanCodeId];
     SetWindowTextA(hWnd, title.c_str());
-    api().runScanner(g_ScannerActiveId, g_ScannerScanCodeId);
+    api().runScanner(g_ScannerActiveId, g_ScannerScanCodes[g_ScannerScanCodeId]);
 }
 
 // Switch the NYSE/NASDAQ-National/NASDAQ-SCM location.
