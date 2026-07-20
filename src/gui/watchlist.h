@@ -719,7 +719,6 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 int row = Watchlist_FindRow(hWnd, conId);
                 if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
             }
-            break;
         }
         Watchlist_ApplySort(hWnd);
         break;
