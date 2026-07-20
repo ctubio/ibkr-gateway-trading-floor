@@ -423,10 +423,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE, 
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
 
-            CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
-
             // Subclass edit fields to intercept keyboard navigation.
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT), EditField_SubclassProc, 1, 0);
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT),   EditField_SubclassProc, 2, 0);
