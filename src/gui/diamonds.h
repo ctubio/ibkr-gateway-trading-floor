@@ -413,7 +413,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_BIDSIZE, t.bidSize, "{:.0f}");
     
     row.textCols[DCOL_VOLUME] = formatVolume(t.volume);
-    row.sortValues[DCOL_VOLUME] = 0; 
+    row.sortValues[DCOL_VOLUME] = t.volume; 
 
     setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}");
     setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}");
