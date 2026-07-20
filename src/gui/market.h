@@ -977,7 +977,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),  openColor  },
         { "L:", Market_Fmt(L1.low),   lowColor   },
-        //{ "P:", (Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str(),      textColor  },
+        { "  P:", (Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str(),      textColor  },
         { "  D:", bufD,                 dPnlColor  },
         { "U:", bufU,                 uPnlColor  },
     };

@@ -177,8 +177,8 @@ void Settings_SaveFloat(const char* key, float value) {
 }
 
 float Settings_LoadFloat(const char* key, float defaultValue = 0.0f) {
-    DWORD scaled = RegGetDword("Settings", key, 0);
-    if (scaled == 0) return defaultValue; // sentinel: never saved → use default
+    DWORD scaled = RegGetDword("Settings", key, 0xFFFFFFFF);
+    if (scaled == 0xFFFFFFFF) return defaultValue; // sentinel: never saved → use default
     return (float)scaled / 10000.0f;
 }
 
