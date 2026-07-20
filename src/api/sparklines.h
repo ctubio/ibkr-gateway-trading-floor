@@ -263,7 +263,7 @@ public:
     void Draw(HDC hdc, const RECT& cellRect) const {
         if (data.size() < 2) return;
 
-        // Reserve the right portion for the numeric text; sparkline fills the rest.
+        // Reserve the right portion for the numeric text; sparkline fills the rest, including a small part of the previous cell to the left.
         const int rightMargin = -20;  // px gap from cell right edge
         const int topPad     = 3;
         const int botPad     = 3;
