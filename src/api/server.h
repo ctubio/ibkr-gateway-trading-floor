@@ -386,3 +386,13 @@ static void HttpServer_Stop() {
 
     WSACleanup();
 }
+
+class HttpServerRAII {
+public:
+    HttpServerRAII() {
+        HttpServer_Start();
+    }
+    ~HttpServerRAII() {
+        HttpServer_Stop();
+    }
+};

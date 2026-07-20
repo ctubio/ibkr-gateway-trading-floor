@@ -35,15 +35,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
 
         Session_RestoreWindows(StartDiamonds, StartScanner, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
 
-        HttpServer_Start();
+        HttpServerRAII httpServerRAII;
 
         MSG msg;
         while (GetMessage(&msg, NULL, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
-        }   
-
-        HttpServer_Stop();
+        }
         
         return (int)msg.wParam;
     } catch (const std::exception& e) {
