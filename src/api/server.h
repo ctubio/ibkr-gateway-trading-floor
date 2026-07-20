@@ -106,6 +106,16 @@ static std::string HandleGetBalance() {
     double realized   = api().getRealizedPnL();
     std::map<std::string, std::string> summary = api().getAccountSummary();
 
+    if (summary["NetLiquidation"].empty()) summary["NetLiquidation"] = "0.00";
+    if (summary["AccruedDividend"].empty()) summary["AccruedDividend"] = "0.00";
+    if (summary["GrossPositionValue"].empty()) summary["GrossPositionValue"] = "0.00";
+    if (summary["BuyingPower"].empty()) summary["BuyingPower"] = "0.00";
+    if (summary["MaintMarginReq"].empty()) summary["MaintMarginReq"] = "0.00";
+    if (summary["AccruedCash"].empty()) summary["AccruedCash"] = "0.00";
+    if (summary["EUR_CashBalance"].empty()) summary["EUR_CashBalance"] = "0.00";
+    if (summary["USD_CashBalance"].empty()) summary["USD_CashBalance"] = "0.00";
+    if (summary["BASE_CashBalance"].empty()) summary["BASE_CashBalance"] = "0.00";
+    
     std::string j;
     j.reserve(512);
     j += "{";
