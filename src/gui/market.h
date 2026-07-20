@@ -117,7 +117,7 @@ static LRESULT CALLBACK Market_ListForwardCtrlProc(
     HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
 {
-    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE))
+    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE || wParam == VK_TAB))
         SendMessage(GetParent(hList), WM_KEYDOWN, wParam, lParam);
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hList, Market_ListForwardCtrlProc, uIdSubclass);
@@ -1347,6 +1347,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_KEYDOWN: {
         if (!state) break;
+        if (wParam == VK_TAB) {
+            if (state->orderBarVisible && state->hOrderPrice) {
+                SetFocus(state->hOrderPrice);
+                int len = GetWindowTextLengthA(state->hOrderPrice);
+                SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
+            }
+            return 0;
+        }
         if (wParam == VK_ESCAPE) {
             if (state) {
                 api().cancelOrders(state->conId);
