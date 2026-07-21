@@ -155,9 +155,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 if (herenaIdx < 0 &&
                     (TTS_ContainsCI(v.tokenId.c_str(),  L"herena") ||
-                     TTS_ContainsCI(v.display.c_str(),  L"herena") ||
-                     TTS_ContainsCI(v.tokenId.c_str(),  L"ca-es")  ||
-                     TTS_ContainsCI(v.display.c_str(),  L"catalan")))
+                    TTS_ContainsCI(v.display.c_str(),  L"herena")  ||
+                    TTS_ContainsCI(v.tokenId.c_str(),  L"helena")  ||
+                    TTS_ContainsCI(v.display.c_str(),  L"helena")  ||
+                    TTS_ContainsCI(v.tokenId.c_str(),  L"ca-es")   ||
+                    TTS_ContainsCI(v.display.c_str(),  L"ca-es")   ||
+                    TTS_ContainsCI(v.tokenId.c_str(),  L"catalan") ||
+                    TTS_ContainsCI(v.display.c_str(),  L"catalan")))
                     herenaIdx = i;
             }
 
