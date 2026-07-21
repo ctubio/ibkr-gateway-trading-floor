@@ -33,7 +33,7 @@ A modern desktop trading companion built on the Interactive Brokers C++ API. It 
 *   **Account Intelligence**: Live margin metrics and Net Liquidation Value with SAPI Text-to-Speech (TTS) alerts.
 *   **Portfolio Management**: Position tracking with dividends and custom tab grouping.
 *   **Order Tracking**: Real-time status monitoring with in-place modifications and rapid cancellation.
-*   **Information Hub**: Symbol-specific news with provider filtering and RTF article previews.
+*   **Market Intelligence**: Advanced scanner for finding trading opportunities based on multiple criteria.
 *   **Robust Infrastructure**: Auto-reconnecting watchdog, registry-based persistence, and async audio notifications.
 
 ---
@@ -64,7 +64,7 @@ Deep-dive analysis of held positions with advanced grouping.
 ### 👀 Watchlist (Market Monitoring)
 Real-time quote monitoring with cross-window synchronization.
 *   **Smart Entry**: Inline symbol entry with real-time auto-complete.
-*   **Named Lists**: Create multiple saved watchlists (stored in Registry) shared across News and Market windows.
+*   **Named Lists**: Create multiple saved watchlists (stored in Registry) shared across Scanner and Market windows.
 *   **Fast Navigation**: Double-click any symbol to instantly spawn a dedicated Market window.
 
 ### 🏦 Market (High-Frequency Data)

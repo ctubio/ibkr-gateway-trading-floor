@@ -47,7 +47,7 @@ static HWND g_DiamondsListForSort = NULL;
 static bool g_DiamondsChkVisible = false;
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
-#define DIAMONDS_SORT_TIMER_ID  7010
+#define TIMER_DIAMONDS_SORT      7010
 #define DIAMONDS_SORT_TIMER_MS   5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
 static ListViewZoomData DiamondsZoomData = { NULL, NULL, 17, "Zoom_Diamonds" };
@@ -101,7 +101,7 @@ static std::vector<int> g_DiamondDisplayOrder;
 
 // Paint Limiter
 static bool g_DiamondsDirty = false;
-#define DIAMONDS_PAINT_TIMER_ID 7011
+#define TIMER_DIAMONDS_PAINT 7011
 #define DIAMONDS_PAINT_TIMER_MS  60     // ~16 FPS (Butter smooth, zero flicker)
 
 // ── Column definitions ────────────────────────────────────────────────────────
@@ -544,7 +544,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         // No paint timer needed, rows are selectively invalidated on data arrival.
         // Start the paint-limiter timer so Diamonds_ApplySort's dirty flag is flushed.
-        SetTimer(hWnd, DIAMONDS_PAINT_TIMER_ID, DIAMONDS_PAINT_TIMER_MS, NULL);
+        SetTimer(hWnd, TIMER_DIAMONDS_PAINT, DIAMONDS_PAINT_TIMER_MS, NULL);
 
         Diamonds_SetRowHeight(hList, 28);
         DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
@@ -593,7 +593,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         api().addApiUpdateWindow(hWnd);
         Diamonds_Repopulate(hWnd);
 
-        SetTimer(hWnd, DIAMONDS_SORT_TIMER_ID, DIAMONDS_SORT_TIMER_MS, NULL);
+        SetTimer(hWnd, TIMER_DIAMONDS_SORT, DIAMONDS_SORT_TIMER_MS, NULL);
         break;
     }
 
@@ -956,12 +956,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_TIMER: {
-        if (wParam == DIAMONDS_SORT_TIMER_ID) {
+        if (wParam == TIMER_DIAMONDS_SORT) {
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
             InvalidateRect(hList, NULL, FALSE);
         }
-        if (wParam == DIAMONDS_PAINT_TIMER_ID) {
+        if (wParam == TIMER_DIAMONDS_PAINT) {
             if (g_DiamondsDirty) {
                 HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                 if (hList && !g_DiamondDisplayOrder.empty()) {
@@ -986,8 +986,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_DESTROY:
-        KillTimer(hWnd, DIAMONDS_SORT_TIMER_ID);
-        KillTimer(hWnd, DIAMONDS_PAINT_TIMER_ID);
+        KillTimer(hWnd, TIMER_DIAMONDS_SORT);
+        KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
         api().removeApiUpdateWindow(hWnd);
         g_DiamondDataCache.clear();
         g_DiamondsSparklines.clear();

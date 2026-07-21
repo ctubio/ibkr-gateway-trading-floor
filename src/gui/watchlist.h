@@ -8,6 +8,10 @@ void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"
 #define ID_WATCHLIST_EDIT             8003
 #define ID_WATCHLIST_NEW_SYMBOL_INPUT 8004
 
+// ── Deferred sort (prevents flicker on every tick) ────────────────────────────
+#define TIMER_WATCHLIST_SORT       8005
+#define WATCHLIST_SORT_TIMER_MS       5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
+
 #define TIMER_WL_DROPDOWN        98
 
 
@@ -614,6 +618,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         g_WatchlistSortCol = (int)Settings_Sort_Load(WATCHLIST_CLASS_NAME, "SortCol", TCOL_SYMBOL);
         g_WatchlistSortAsc = Settings_Sort_Load(WATCHLIST_CLASS_NAME, "SortAsc", 1) != 0;
         if (g_WatchlistSortCol < 0 || g_WatchlistSortCol >= TCOL_COUNT) g_WatchlistSortCol = TCOL_SYMBOL;
+
+        SetTimer(hWnd, TIMER_WATCHLIST_SORT, WATCHLIST_SORT_TIMER_MS, NULL);
         break;
     }
 
@@ -682,6 +688,11 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             HWND hAC = (HWND)GetPropA(hWnd, "hWLAutoComplete");
             if (hAC) ShowWindow(hAC, SW_HIDE);
         }
+        if (wParam == TIMER_WATCHLIST_SORT) {
+            HWND hList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
+            Watchlist_ApplySort(hList);
+            InvalidateRect(hList, NULL, FALSE);
+        }
         break;
 
     case WM_SYMBOL_RESULTS: {
@@ -720,7 +731,6 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (row >= 0) Watchlist_UpdateRow(hWnd, row, info);
             }
         }
-        Watchlist_ApplySort(hWnd);
         break;
     }
 
@@ -914,6 +924,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
     }
 
     case WM_DESTROY:
+        KillTimer(hWnd, TIMER_WATCHLIST_SORT);
         api().unsetWatchlistWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         Watchlist_ClearList(hWnd);
