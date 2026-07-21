@@ -9,7 +9,7 @@ void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"
 #define ID_WATCHLIST_NEW_SYMBOL_INPUT 8004
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
-#define TIMER_WATCHLIST_SORT       8005
+#define TIMER_WATCHLIST_SORT          8005
 #define WATCHLIST_SORT_TIMER_MS       5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
 #define TIMER_WL_DROPDOWN        98
