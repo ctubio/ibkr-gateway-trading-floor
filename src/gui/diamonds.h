@@ -357,12 +357,14 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
             row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
             row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
 
-            // Recompute the % column
-            double last  = row.sortValues[DCOL_LAST];
+            // Recompute the % column — derived from unrealizedPnL / cost basis,
+            // NOT from last price, so it stays valid even when last == 0
+            // (market closed / no quote yet) and matches IBKR's own PnL figure
+            // rather than a reconstruction from price.
             double shares = row.sortValues[DCOL_POSITION];
-            if (avgCost > 0.0 && last > 0.0 && shares != 0.0) {
-                double sign = (shares < 0.0) ? -1.0 : 1.0;
-                double pct = (last - avgCost) / avgCost * 100.0 * sign;
+            double costBasis = avgCost * std::fabs(shares);
+            if (costBasis > 0.0) {
+                double pct = pnlSingle.unrealizedPnL / costBasis * 100.0;
                 row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
                 row.textCols[DCOL_UNREALIZED_PL_PCT] = std::format("{:+.2f}%", pct);
             } else {
@@ -428,8 +430,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else setNA(DCOL_DIV_YIELD);
 
     if (t.last <= 0.0) {
-        setNA(DCOL_LAST); setNA(DCOL_DAILYPNL); setNA(DCOL_CHGPCT); 
-        setNA(DCOL_UNREALIZED_PL); setNA(DCOL_UNREALIZED_PL_PCT); 
+        setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
         setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
         return;
     }

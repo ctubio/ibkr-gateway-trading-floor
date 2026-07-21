@@ -75,9 +75,9 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     api().getWatchlistData(p.conId, l1);
 
     double unrealizedPct = 0;
-    if (p.avgCost > 0.0 && l1.last > 0.0 && p.shares != 0.0) {
-        double sign = (p.shares < 0.0) ? -1.0 : 1.0;
-        unrealizedPct = (l1.last - p.avgCost) / p.avgCost * 100.0 * sign;
+    double costBasis = p.avgCost * std::fabs(p.shares);
+    if (costBasis > 0.0) {
+        unrealizedPct = p.pnlSingle.unrealizedPnL / costBasis * 100.0;
     }
 
     std::string j;
