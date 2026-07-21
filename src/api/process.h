@@ -72,10 +72,16 @@ std::string AskGatewayPath(HWND hParent) {
     return "";
 }
 
+struct EnsureOnceFlag {
+    bool& flag;
+    EnsureOnceFlag(bool& f) : flag(f) { flag = true; }
+    ~EnsureOnceFlag() { flag = false; }
+};
+
 bool alreadyEnsureGatewayRunning = false;
 void EnsureGatewayRunning(HWND hParent) {
     if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe")) return;
-    alreadyEnsureGatewayRunning = true;
+    EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
     std::string path = GetGatewayPath();
     if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxA(hParent, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
@@ -83,7 +89,6 @@ void EnsureGatewayRunning(HWND hParent) {
         if (path.empty()) return; 
         SaveGatewayPath(path);
     }
-    alreadyEnsureGatewayRunning = false;
     LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
 }
