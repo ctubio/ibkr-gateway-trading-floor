@@ -19,7 +19,7 @@ enum ScannerScanCodeIdx {
     SCANCODE_TOP_PERC_LOSE,
     SCANCODE_MOST_ACTIVE,
     SCANCODE_MOST_ACTIVE_USD,
-    SCANCODE_HALTED,
+    SCANCODE_YIELD,
     SCANCODE_TOP_BUY_IMBALANCE,
     SCANCODE_TOP_SELL_IMBALANCE,
     SCANCODE_COUNT
@@ -29,7 +29,7 @@ static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = {
     "LOSE",
     "ACTIVE",
     "TOP USD",
-    "HALTED",
+    "YIELD",
     "BUY IMB",
     "SELL IMB"
 };
@@ -38,7 +38,7 @@ static const char* g_ScannerScanCodes[SCANCODE_COUNT] = {
     "TOP_PERC_LOSE",
     "MOST_ACTIVE",
     "MOST_ACTIVE_AVG_USD",
-    "HALTED",
+    "HIGH_DIVIDEND_YIELD_IB",
     "TOP_STOCK_BUY_IMBALANCE_ADV_RATIO",
     "TOP_STOCK_SELL_IMBALANCE_ADV_RATIO"
 };
