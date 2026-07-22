@@ -235,7 +235,7 @@ public:
     // Transmit a cancel request for the given order.
     void cancelOrder(int orderId);
     // Submit a new limit order
-    void submitOrder(int conId, const std::string& symbol, const std::string& action, const bool isOvernight, double qty, double price, double stopPrice, double profitPrice);
+    void submitOrder(int conId, const std::string& symbol, const std::string& action, const bool isOvernight, double qty, double price, double stopPrice, double profitPrice, bool transmit = true);
     // Resubmit an existing order with a new limit price and quantity while
     // keeping all other order fields (type, action, exchange, …) intact.
     // Pass price=0 to keep the original limit price.

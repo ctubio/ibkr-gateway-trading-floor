@@ -761,6 +761,25 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 // IDs 200-206: color options (200+idx for colors, 206 = None)
                 HMENU hMenu = CreatePopupMenu();
 
+
+                // ── Quick placeholder orders ───────────────────────────────────
+                // Placed with transmit=false — they land in the Orders window
+                // unsent so qty/price can be adjusted inline; modifyOrder() (which
+                // defaults transmit to true) sends them once edited.
+                double quickLastPrice = 0.0;
+                {
+                    TradingAPI::L1Book quickInfo;
+                    if (api().getWatchlistData(conId, quickInfo)) quickLastPrice = quickInfo.last;
+                }
+                std::string sellLabel = sym + (
+                    (quickLastPrice > 0.0)
+                        ? std::format(" SELL 1 @ {:.2f}", quickLastPrice * 2.0)
+                        : " SELL 1 @ 2x Price"
+                );
+                AppendMenuA(hMenu, MF_STRING | (quickLastPrice <= 0.0 ? MF_GRAYED : 0), 301, sellLabel.c_str());
+                AppendMenuA(hMenu, MF_STRING, 300, (sym + " BUY 1 @ 1").c_str());
+                AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to High-Yield Dividends");
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
@@ -790,6 +809,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     AppendMenuA(hMenu, MF_STRING | (isCurrent ? MF_GRAYED : 0),
                                 200 + i, g_DiamondColorPalette[i].label);
                 }
+
                 POINT pt;
                 GetCursorPos(&pt);
                 int cmd = (int)TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
@@ -831,6 +851,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                     ListView_RedrawItems(hList, row, row);
                     UpdateWindow(hList);
+                } else if (cmd == 300) {
+                    // Quick BUY placeholder: 1 share @ $1.00.
+                    api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0);
+                } else if (cmd == 301) {
+                    // Quick SELL placeholder: 1 share @ 2x last price.
+                    TradingAPI::L1Book quickInfo;
+                    if (api().getWatchlistData(conId, quickInfo) && quickInfo.last > 0.0) {
+                        api().submitOrder(conId, sym, "SELL", false, 1.0, quickInfo.last * 2.0, 0.0, 0.0);
+                    }
                 }
             }
         }
