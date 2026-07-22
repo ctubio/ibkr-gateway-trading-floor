@@ -708,7 +708,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
             int col = nmlv->iSubItem;
             if (col == g_DiamondsSortCol) g_DiamondsSortAsc = !g_DiamondsSortAsc;
-            else { g_DiamondsSortCol = col; g_DiamondsSortAsc = true; }
+            else { g_DiamondsSortCol = col; g_DiamondsSortAsc = false; }
             Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortCol", g_DiamondsSortCol);
             Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortAsc", g_DiamondsSortAsc ? 1 : 0);
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
