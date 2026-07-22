@@ -460,6 +460,21 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             break;
         }
+        
+        case WM_KEYDOWN: {
+            if (wParam == VK_TAB) {
+                HWND hPrice  = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+                bool qtyVisible = hPrice && IsWindowVisible(hPrice);
+                if (qtyVisible) {
+                    SetFocus(hPrice);
+                    int len = GetWindowTextLengthA(hPrice);
+                    SendMessageA(hPrice, EM_SETSEL, len, len);
+                }
+                return 0;
+            }
+            break;
+        }
+
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
             if (hdr->idFrom != ID_ORDERS_LIST) break;
