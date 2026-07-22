@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1536;
+int windowDiamondsWidth = 1490;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -51,6 +51,28 @@ static bool g_DiamondsChkVisible = false;
 #define DIAMONDS_SORT_TIMER_MS   5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
 static ListViewZoomData DiamondsZoomData = { NULL, NULL, 17, "Zoom_Diamonds" };
+
+// Smaller font used for secondary/less-important numeric columns (AvgPx, Volume,
+// Mkt Value, Net %, dividend columns). Kept in sync with DiamondsZoomData's
+// zoom level (Ctrl+Wheel) via Diamonds_EnsureSmallFont(), called lazily from
+// NM_CUSTOMDRAW rather than wired into ListViewZoomProc directly.
+static HFONT DiamondsSmallFont     = NULL;
+static int   DiamondsSmallFontSize = -1;
+
+static void Diamonds_EnsureSmallFont() {
+    int targetSize = std::max(6, DiamondsZoomData.fontSize - 3);
+    if (DiamondsSmallFont && DiamondsSmallFontSize == targetSize) return;
+    if (DiamondsSmallFont) { DeleteObject(DiamondsSmallFont); DiamondsSmallFont = NULL; }
+
+    HDC hdc = GetDC(NULL);
+    int h = -MulDiv(targetSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+
+    DiamondsSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+    DiamondsSmallFontSize = targetSize;
+}
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
@@ -110,23 +132,23 @@ struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
-    { "AvgPx",            100, LVCFMT_RIGHT },
+    { "AvgPx",             85, LVCFMT_RIGHT },
     { "AskSz",             80, LVCFMT_RIGHT },
     { "Ask",              100, LVCFMT_RIGHT },
     { "Last",             100, LVCFMT_RIGHT },
     { "Bid",              100, LVCFMT_RIGHT },
     { "BidSz",             80, LVCFMT_RIGHT },
-    { "Volume",            90, LVCFMT_RIGHT },
+    { "Vol",               80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Unrealized %",     140, LVCFMT_RIGHT },
     { "Unrealized",       115, LVCFMT_RIGHT },
-    { "Mkt Value",        105, LVCFMT_RIGHT },
-    { "Net %",             90, LVCFMT_RIGHT },
+    { "Value",             90, LVCFMT_RIGHT },
+    { "Net %",             85, LVCFMT_RIGHT },
     { "Yield %",           90, LVCFMT_RIGHT },
-    { "Date",             135, LVCFMT_RIGHT },
+    { "Date",             125, LVCFMT_RIGHT },
     { "Amount",            85, LVCFMT_RIGHT },
     { "Annual",            85, LVCFMT_RIGHT },
     // {"fix_tag":7290,"name":"P/E excluding extraordinary items","description":"This ratio is calculated by dividing the current Price by the sum of the Diluted Earnings Per Share from continuing operations BEFORE Extraordinary Items and Accounting Changes over the last four interim periods.","groups":["G15"],"id":"PE"}
@@ -151,7 +173,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     RECT windowRect; 
     GetWindowRect(hWnd, &windowRect);
     if (show) {
-        MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth + 16 + diamondCols[DCOL_DIV_YIELD].width + diamondCols[DCOL_DIV_DATE].width + diamondCols[DCOL_DIV_AMT].width + diamondCols[DCOL_ANNUAL_DIV].width,  windowRect.bottom - windowRect.top, TRUE);
+        MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth + 18 + diamondCols[DCOL_DIV_YIELD].width + diamondCols[DCOL_DIV_DATE].width + diamondCols[DCOL_DIV_AMT].width + diamondCols[DCOL_ANNUAL_DIV].width,  windowRect.bottom - windowRect.top, TRUE);
     } else {
         MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth,  windowRect.bottom - windowRect.top, TRUE);
     }
@@ -923,6 +945,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
                         cd->clrText = COINS_CLR_BLUE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        SelectObject(cd->nmcd.hdc, DiamondsZoomData.hFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_LAST || cd->iSubItem == DCOL_BID) {
@@ -943,6 +966,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_PCT_NETLIQ) {
                         cd->clrText = COINS_CLR_GRAY;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        Diamonds_EnsureSmallFont();
+                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_VOLUME) {
@@ -953,11 +978,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
                             cd->clrText   = LM_TEXT;
                         }
+                        Diamonds_EnsureSmallFont();
+                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
                         cd->clrText = COINS_CLR_PURPLE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        Diamonds_EnsureSmallFont();
+                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
                     return CDRF_DODEFAULT;
@@ -1030,6 +1059,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (DiamondsZoomData.hBoldFont) {
             DeleteObject(DiamondsZoomData.hBoldFont);
         }
+        if (DiamondsSmallFont) {
+            DeleteObject(DiamondsSmallFont);
+            DiamondsSmallFont = NULL;
+            DiamondsSmallFontSize = -1;
+        }
+        break;
         break;
     }
 

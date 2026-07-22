@@ -1,6 +1,6 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 596, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 540, 240); }
 
 #define ID_ORDERS_LIST          9003
 #define ID_ORDERS_PRICE_EDIT    9010
@@ -22,6 +22,30 @@ static OrdersEditState s_editState;
 static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
 static HFONT fontInputs   = NULL;
 
+// Column indices, matching orderCols[] order below.
+enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_AVGFILL, OCOL_STATUS };
+
+// Smaller font used for the Status column. Kept in sync with OrdersZoomData's
+// zoom level (Ctrl+Wheel) via Orders_EnsureSmallFont(), called lazily from
+// NM_CUSTOMDRAW rather than wired into ListViewZoomProc directly.
+static HFONT OrdersSmallFont     = NULL;
+static int   OrdersSmallFontSize = -1;
+
+static void Orders_EnsureSmallFont() {
+    int targetSize = std::max(6, OrdersZoomData.fontSize - 3);
+    if (OrdersSmallFont && OrdersSmallFontSize == targetSize) return;
+    if (OrdersSmallFont) { DeleteObject(OrdersSmallFont); OrdersSmallFont = NULL; }
+
+    HDC hdc = GetDC(NULL);
+    int h = -MulDiv(targetSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+
+    OrdersSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+    OrdersSmallFontSize = targetSize;
+}
+
 // ── Column definitions ────────────────────────────────────────────────────────
 
 struct OrderCol { const char* header; int width; int fmt; };
@@ -30,7 +54,7 @@ static const OrderCol orderCols[] = {
     { "Symbol",        80,  LVCFMT_CENTER},
     { "Quote",        135,  LVCFMT_RIGHT },
     { "Avg Filled",   135,  LVCFMT_RIGHT },
-    { "Status",       225,  LVCFMT_CENTER},
+    { "Status",       170,  LVCFMT_CENTER},
     // { "Time",          80,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
@@ -578,6 +602,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                                 cd->clrTextBk = dark ? RGB(40, 50, 75) : RGB(255, 244, 190);
                             else if (dark)
                                 cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                            if (cd->iSubItem == OCOL_STATUS) {
+                                Orders_EnsureSmallFont();
+                                SelectObject(cd->nmcd.hdc, OrdersSmallFont);
+                            }
                             return CDRF_NEWFONT;
                         }
                         return CDRF_DODEFAULT;
@@ -610,6 +638,11 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }   
             if (OrdersZoomData.hBoldFont) {
                 DeleteObject(OrdersZoomData.hBoldFont);
+            }
+            if (OrdersSmallFont) {
+                DeleteObject(OrdersSmallFont);
+                OrdersSmallFont = NULL;
+                OrdersSmallFontSize = -1;
             }
             break;
     }
