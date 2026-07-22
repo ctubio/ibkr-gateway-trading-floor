@@ -4,9 +4,10 @@
 //
 //  Serves endpoints over a background thread using raw Winsock (no extra libs):
 //
-//    GET /account            → JSON object with account number, PnL, and summary map
-//    GET /portfolio          → JSON array of all positions from api().getPortfolioMap()
-//    GET /portfolio/{SYMBOL} → JSON object for the single position matching SYMBOL
+//    GET /balance            → JSON object with account number, PnL, and summary map
+//    GET /positions          → JSON array of all positions from api().getPortfolioMap()
+//    GET /position/{SYMBOL}  → JSON object for the single position matching SYMBOL
+//    GET /price/{SYMBOL}     → JSON object with a single price (or empty on miss)
 //
 //  The server listens on 127.0.0.1:PORT (default 7779) so it is only reachable
 //  from the local machine.  Call HttpServer_Start() once after WinMain initialises
