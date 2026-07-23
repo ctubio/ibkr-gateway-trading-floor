@@ -943,7 +943,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Determine Colors
     COLORREF dPnlColor = (dPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
-    dPnlColor = textColor; 
     COLORREF uPnlColor = (uPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (state->position == 0.0) { uPnlColor = textColor; }
 
