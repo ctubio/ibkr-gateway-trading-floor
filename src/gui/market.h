@@ -934,18 +934,18 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Format Strings (Only show if we hold a position, else "--")
     std::string bufD, bufU;
+    bufD = std::format("{:+.2f}", dPnL);
     if (state->position != 0.0) {
-        bufD = std::format("{:+.2f}", dPnL);
         bufU = std::format("{:+.2f}", uPnL);
     } else {
-        bufD = "--";
         bufU = "--";
     }
 
     // Determine Colors
     COLORREF dPnlColor = (dPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    dPnlColor = textColor; 
     COLORREF uPnlColor = (uPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
-    if (state->position == 0.0) { dPnlColor = textColor; uPnlColor = textColor; }
+    if (state->position == 0.0) { uPnlColor = textColor; }
 
     // ── Volume rate / print-frequency rate (tick-by-tick, see Market_ComputeVolRates) ──
     ULONGLONG nowTick = GetTickCount64();
