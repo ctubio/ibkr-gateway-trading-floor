@@ -200,11 +200,10 @@ HICON CreateGrayIcon(HICON hOriginal) {
     return hGray;
 }
 
-struct ListViewZoomData {
+struct ListViewFontData {
     HFONT hFont;
     HFONT hBoldFont;
     int fontSize;
-    const char* settingKey;
 };
 
 HFONT CreateBoldFont(HFONT hNormalFont) {
@@ -266,29 +265,12 @@ static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fo
     InvalidateRect(hList, NULL, TRUE);
 }
 
-LRESULT CALLBACK ListViewZoomProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-    auto* zoomData = reinterpret_cast<ListViewZoomData*>(dwRefData);
-    if (!zoomData) return DefSubclassProc(hList, uMsg, wParam, lParam);
-
+// Suppresses WM_ERASEBKGND on list views so custom-draw repaints stay flicker-free.
+// (Previously also handled Ctrl+MouseWheel zoom — that feature has been removed;
+// this proc now only keeps the zero-flicker background-erase suppression.)
+LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (uMsg == WM_ERASEBKGND) {
         return 1; // Zero-flicker: suppress background erase entirely
-    }
-
-    if (uMsg == WM_MOUSEWHEEL) {
-        if (GetKeyState(VK_CONTROL) & 0x8000) {
-            int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-
-            if (zDelta > 0) zoomData->fontSize++;
-            else zoomData->fontSize--;
-
-            if (zoomData->fontSize < 6)  zoomData->fontSize = 6;
-            if (zoomData->fontSize > 30) zoomData->fontSize = 30;
-
-            Settings_Save(zoomData->settingKey, zoomData->fontSize);
-            ApplyListViewFont(hList, zoomData->hFont, zoomData->hBoldFont, zoomData->fontSize);
-
-            return 0; // Prevent default scrolling
-        }
     }
     return DefSubclassProc(hList, uMsg, wParam, lParam);
 }

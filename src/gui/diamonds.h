@@ -50,17 +50,16 @@ static bool g_DiamondsChkVisible = false;
 #define TIMER_DIAMONDS_SORT      7010
 #define DIAMONDS_SORT_TIMER_MS   5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
-static ListViewZoomData DiamondsZoomData = { NULL, NULL, 17, "Zoom_Diamonds" };
+static ListViewFontData DiamondsFontData = { NULL, NULL, 17 };
 
 // Smaller font used for secondary/less-important numeric columns (AvgPx, Volume,
-// Mkt Value, Net %, dividend columns). Kept in sync with DiamondsZoomData's
-// zoom level (Ctrl+Wheel) via Diamonds_EnsureSmallFont(), called lazily from
-// NM_CUSTOMDRAW rather than wired into ListViewZoomProc directly.
+// Mkt Value, Net %, dividend columns). Kept in sync with DiamondsFontData's
+// font size via Diamonds_EnsureSmallFont(), called lazily from NM_CUSTOMDRAW.
 static HFONT DiamondsSmallFont     = NULL;
 static int   DiamondsSmallFontSize = -1;
 
 static void Diamonds_EnsureSmallFont() {
-    int targetSize = std::max(6, DiamondsZoomData.fontSize - 3);
+    int targetSize = std::max(6, DiamondsFontData.fontSize - 3);
     if (DiamondsSmallFont && DiamondsSmallFontSize == targetSize) return;
     if (DiamondsSmallFont) { DeleteObject(DiamondsSmallFont); DiamondsSmallFont = NULL; }
 
@@ -569,9 +568,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         SetTimer(hWnd, TIMER_DIAMONDS_PAINT, DIAMONDS_PAINT_TIMER_MS, NULL);
 
         Diamonds_SetRowHeight(hList, 28);
-        DiamondsZoomData.fontSize = (int)Settings_Load(DiamondsZoomData.settingKey, DiamondsZoomData.fontSize);
-        ApplyListViewFont(hList, DiamondsZoomData.hFont, DiamondsZoomData.hBoldFont, DiamondsZoomData.fontSize);
-        SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&DiamondsZoomData);
+        ApplyListViewFont(hList, DiamondsFontData.hFont, DiamondsFontData.hBoldFont, DiamondsFontData.fontSize);
+        SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
         
@@ -908,7 +906,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     // ── Symbol column: apply per-symbol color override ────────
                     if (cd->iSubItem == DCOL_SYMBOL) {
-                        SelectObject(cd->nmcd.hdc, DiamondsZoomData.hBoldFont);
+                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hBoldFont);
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         
@@ -935,7 +933,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             else if (val < 0.0) cd->clrText = COINS_CLR_RED;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsZoomData.hFont);
+                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
                         // For the Position cell also request post-paint so we can
                         // overlay the mini sparkline after the text is drawn.
                         if (cd->iSubItem == DCOL_POSITION)
@@ -945,7 +943,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
                         cd->clrText = COINS_CLR_BLUE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsZoomData.hFont);
+                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_LAST || cd->iSubItem == DCOL_BID) {
@@ -1053,11 +1051,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             ImageList_Destroy(g_DiamondsRowHeightImageList);
             g_DiamondsRowHeightImageList = NULL;
         }
-        if (DiamondsZoomData.hFont) {
-            DeleteObject(DiamondsZoomData.hFont);
+        if (DiamondsFontData.hFont) {
+            DeleteObject(DiamondsFontData.hFont);
         }
-        if (DiamondsZoomData.hBoldFont) {
-            DeleteObject(DiamondsZoomData.hBoldFont);
+        if (DiamondsFontData.hBoldFont) {
+            DeleteObject(DiamondsFontData.hBoldFont);
         }
         if (DiamondsSmallFont) {
             DeleteObject(DiamondsSmallFont);

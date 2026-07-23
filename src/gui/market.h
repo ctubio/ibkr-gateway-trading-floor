@@ -42,7 +42,7 @@ static const int ORDER_BAR_H = 80;
 static const ULONGLONG VOL_RATE_RECENT_MS   = 15000ULL;    // 15s recent window
 static const ULONGLONG VOL_RATE_BASELINE_MS = 300000ULL;   // 5 min baseline window (includes recent slice until pruned)
 
-static ListViewZoomData MarketZoomData = { NULL, NULL, 14, "Zoom_Market" };
+static ListViewFontData MarketFontData = { NULL, NULL, 14 };
 
 // State mapped per-window to support infinite instances safely
 struct TsState {
@@ -613,7 +613,7 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowSubclass(hTsSearchEdit, TsSearchEditSubclass, 1, 0);
             HWND hTsSearchList = CreateWindowA("LISTBOX", "", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY, 10, 40, 240, 180, hWnd, (HMENU)ID_MARKET_SEARCH_LIST, hInst, NULL);
             SetWindowSubclass(hTsSearchList, TsSearchListSubclass, 2, 0);
-            ApplyListViewFont(hTsSearchList, MarketZoomData.hFont, MarketZoomData.hBoldFont, MarketZoomData.fontSize);
+            ApplyListViewFont(hTsSearchList, MarketFontData.hFont, MarketFontData.hBoldFont, MarketFontData.fontSize);
             SetFocus(hTsSearchEdit);
             break;
         }

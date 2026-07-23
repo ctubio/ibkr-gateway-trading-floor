@@ -63,7 +63,7 @@ static const int SCANNER_BTN_H       = 24;
 static const int SCANNER_SELECTOR_H  = 8 + SCANNER_BTN_H + 8;
 static const char* SCANNER_NO_DATA   = "--";
 
-static ListViewZoomData ScannerZoomData = { NULL, NULL, 14, "Zoom_Scanner" };
+static ListViewFontData ScannerFontData = { NULL, NULL, 14 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -175,9 +175,8 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             0, 0, 400, 400,
             hWnd, (HMENU)ID_SCANNER_RESULTS_LIST, hInst, NULL);
 
-        ScannerZoomData.fontSize = (int)Settings_Load(ScannerZoomData.settingKey, ScannerZoomData.fontSize);
-        ApplyListViewFont(hScannerResults, ScannerZoomData.hFont, ScannerZoomData.hBoldFont, ScannerZoomData.fontSize);
-        SetWindowSubclass(hScannerResults, ListViewZoomProc, 0, (DWORD_PTR)&ScannerZoomData);
+        ApplyListViewFont(hScannerResults, ScannerFontData.hFont, ScannerFontData.hBoldFont, ScannerFontData.fontSize);
+        SetWindowSubclass(hScannerResults, ListViewNoFlickerProc, 0, 0);
         ListView_SetExtendedListViewStyle(hScannerResults, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
         LVCOLUMNA lvc = {};
@@ -194,7 +193,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         hScannerComboLocation = CreateWindowA("COMBOBOX", "",
             WS_CHILD | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
             0, 0, 160, 200, hWnd, (HMENU)ID_SCANNER_COMBO_LOCATION, hInst, NULL);
-        SendMessage(hScannerComboLocation, WM_SETFONT, (WPARAM)ScannerZoomData.hFont, TRUE);
+        SendMessage(hScannerComboLocation, WM_SETFONT, (WPARAM)ScannerFontData.hFont, TRUE);
         for (int i = 0; i < SCANNER_LOC_COUNT; ++i)
             SendMessageA(hScannerComboLocation, CB_ADDSTRING, 0, (LPARAM)g_ScannerLocationLabels[i]);
 
@@ -203,7 +202,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         hScannerComboScanCode = CreateWindowA("COMBOBOX", "",
             WS_CHILD | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
             0, 0, 120, 200, hWnd, (HMENU)ID_SCANNER_COMBO_SCANCODE, hInst, NULL);
-        SendMessage(hScannerComboScanCode, WM_SETFONT, (WPARAM)ScannerZoomData.hFont, TRUE);
+        SendMessage(hScannerComboScanCode, WM_SETFONT, (WPARAM)ScannerFontData.hFont, TRUE);
         for (int i = 0; i < SCANCODE_COUNT; ++i)
             SendMessageA(hScannerComboScanCode, CB_ADDSTRING, 0, (LPARAM)g_ScannerScanCodeLabels[i]);
 
@@ -406,8 +405,8 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
 
-                        if (inPortfolio && ScannerZoomData.hBoldFont) {
-                            SelectObject(cd->nmcd.hdc, ScannerZoomData.hBoldFont);
+                        if (inPortfolio && ScannerFontData.hBoldFont) {
+                            SelectObject(cd->nmcd.hdc, ScannerFontData.hBoldFont);
                             cd->clrText = COINS_CLR_BLUE;
                             return CDRF_NEWFONT;
                         }
@@ -422,7 +421,7 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                             else if (v < 0.0) cd->clrText = COINS_CLR_RED;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, ScannerZoomData.hFont);
+                        SelectObject(cd->nmcd.hdc, ScannerFontData.hFont);
                         return CDRF_NEWFONT;
                     }
                     return CDRF_DODEFAULT;
@@ -439,8 +438,8 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         g_ScannerEntries.clear();
         g_ScannerPortfolioConIds.clear();
         hScannerResults = hScannerComboLocation = hScannerComboScanCode = NULL;
-        if (ScannerZoomData.hFont)     DeleteObject(ScannerZoomData.hFont);
-        if (ScannerZoomData.hBoldFont) DeleteObject(ScannerZoomData.hBoldFont);
+        if (ScannerFontData.hFont)     DeleteObject(ScannerFontData.hFont);
+        if (ScannerFontData.hBoldFont) DeleteObject(ScannerFontData.hBoldFont);
         break;
     }
 

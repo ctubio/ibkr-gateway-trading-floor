@@ -19,20 +19,19 @@ struct OrdersEditState {
     bool   panelVisible = false;
 };
 static OrdersEditState s_editState;
-static ListViewZoomData OrdersZoomData = { NULL, NULL, 14, "Zoom_Orders" };
+static ListViewFontData OrdersFontData = { NULL, NULL, 14 };
 static HFONT fontInputs   = NULL;
 
 // Column indices, matching orderCols[] order below.
 enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_AVGFILL, OCOL_STATUS };
 
-// Smaller font used for the Status column. Kept in sync with OrdersZoomData's
-// zoom level (Ctrl+Wheel) via Orders_EnsureSmallFont(), called lazily from
-// NM_CUSTOMDRAW rather than wired into ListViewZoomProc directly.
+// Smaller font used for the Status column. Kept in sync with OrdersFontData's
+// font size via Orders_EnsureSmallFont(), called lazily from NM_CUSTOMDRAW.
 static HFONT OrdersSmallFont     = NULL;
 static int   OrdersSmallFontSize = -1;
 
 static void Orders_EnsureSmallFont() {
-    int targetSize = std::max(6, OrdersZoomData.fontSize - 3);
+    int targetSize = std::max(6, OrdersFontData.fontSize - 3);
     if (OrdersSmallFont && OrdersSmallFontSize == targetSize) return;
     if (OrdersSmallFont) { DeleteObject(OrdersSmallFont); OrdersSmallFont = NULL; }
 
@@ -408,9 +407,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 0, 0, 760, 420,
                 hWnd, (HMENU)ID_ORDERS_LIST, hInst, NULL);
 
-            OrdersZoomData.fontSize = (int)Settings_Load(OrdersZoomData.settingKey, OrdersZoomData.fontSize);
-            ApplyListViewFont(hList, OrdersZoomData.hFont, OrdersZoomData.hBoldFont, OrdersZoomData.fontSize);
-            SetWindowSubclass(hList, ListViewZoomProc, 0, (DWORD_PTR)&OrdersZoomData);
+            ApplyListViewFont(hList, OrdersFontData.hFont, OrdersFontData.hBoldFont, OrdersFontData.fontSize);
+            SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
             SetWindowSubclass(hList, OrdersList_SubclassProc, 1, 0);
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -456,7 +454,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_HINT_LABEL, hInst, NULL);
 
             // Apply font to all children.
-            EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersZoomData.hFont);
+            EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersFontData.hFont);
             
             fontInputs   = MakeFont(18, true);
             SendMessage(hEditPrice, WM_SETFONT, (WPARAM)fontInputs, TRUE);
@@ -633,11 +631,11 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 DeleteObject(fontInputs);
                 fontInputs = NULL;
             }
-            if (OrdersZoomData.hFont) {
-                DeleteObject(OrdersZoomData.hFont);
+            if (OrdersFontData.hFont) {
+                DeleteObject(OrdersFontData.hFont);
             }   
-            if (OrdersZoomData.hBoldFont) {
-                DeleteObject(OrdersZoomData.hBoldFont);
+            if (OrdersFontData.hBoldFont) {
+                DeleteObject(OrdersFontData.hBoldFont);
             }
             if (OrdersSmallFont) {
                 DeleteObject(OrdersSmallFont);

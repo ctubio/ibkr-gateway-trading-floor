@@ -34,8 +34,8 @@ static std::vector<std::string> wl_currentResults;
 static const int WATCHLIST_COMBO_H    = 24;
 static const int WATCHLIST_SELECTOR_H = 8 + WATCHLIST_COMBO_H + 8;
 
-static ListViewZoomData WatchlistZoomData = { NULL, NULL, 14, "Zoom_Watchlist" };
-static ListViewZoomData WatchlistAutocompleteZoomData = { NULL, NULL, 14, "Zoom_Watchlist" };
+static ListViewFontData WatchlistFontData = { NULL, NULL, 14 };
+static ListViewFontData WatchlistAutocompleteFontData = { NULL, NULL, 14 };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -556,9 +556,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             0, 0, 1000, 400,
             hWnd, (HMENU)ID_WATCHLIST_LIST, hInst, NULL);
 
-        WatchlistZoomData.fontSize = (int)Settings_Load(WatchlistZoomData.settingKey, WatchlistZoomData.fontSize);
-        ApplyListViewFont(hWatchlistList, WatchlistZoomData.hFont, WatchlistZoomData.hBoldFont, WatchlistZoomData.fontSize);
-        SetWindowSubclass(hWatchlistList, ListViewZoomProc, 0, (DWORD_PTR)&WatchlistZoomData);
+        ApplyListViewFont(hWatchlistList, WatchlistFontData.hFont, WatchlistFontData.hBoldFont, WatchlistFontData.fontSize);
+        SetWindowSubclass(hWatchlistList, ListViewNoFlickerProc, 0, 0);
 
         ListView_SetExtendedListViewStyle(hWatchlistList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
@@ -596,8 +595,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         // Store the watchlist HWND on the autocomplete so its subclass can reach it.
         SetPropA(hAC, "hWLParent", (HANDLE)hWnd);
         SetPropA(hWnd, "hWLAutoComplete", (HANDLE)hAC);
-        WatchlistAutocompleteZoomData.fontSize = WatchlistZoomData.fontSize;
-        ApplyListViewFont(hAC, WatchlistAutocompleteZoomData.hFont, WatchlistAutocompleteZoomData.hBoldFont, WatchlistAutocompleteZoomData.fontSize);
+        WatchlistAutocompleteFontData.fontSize = WatchlistFontData.fontSize;
+        ApplyListViewFont(hAC, WatchlistAutocompleteFontData.hFont, WatchlistAutocompleteFontData.hBoldFont, WatchlistAutocompleteFontData.fontSize);
 
         // Populate combo (sentinel + all lists).
         Watchlist_LoadListCombo(hWnd);
@@ -892,11 +891,11 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     if (cd->iSubItem == TCOL_SYMBOL) {
-                        SelectObject(cd->nmcd.hdc, WatchlistZoomData.hBoldFont);
+                        SelectObject(cd->nmcd.hdc, WatchlistFontData.hBoldFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == TCOL_LAST) {
-                        SelectObject(cd->nmcd.hdc, WatchlistZoomData.hFont);
+                        SelectObject(cd->nmcd.hdc, WatchlistFontData.hFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == TCOL_CHGPCT) {
@@ -935,17 +934,17 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hAC) { RemovePropA(hAC, "hWLParent"); DestroyWindow(hAC); }
             RemovePropA(hWnd, "hWLAutoComplete");
         }
-        if (WatchlistZoomData.hFont) {
-            DeleteObject(WatchlistZoomData.hFont);
+        if (WatchlistFontData.hFont) {
+            DeleteObject(WatchlistFontData.hFont);
         }
-        if (WatchlistZoomData.hBoldFont) {
-            DeleteObject(WatchlistZoomData.hBoldFont);
+        if (WatchlistFontData.hBoldFont) {
+            DeleteObject(WatchlistFontData.hBoldFont);
         }
-        if (WatchlistAutocompleteZoomData.hFont) {
-            DeleteObject(WatchlistAutocompleteZoomData.hFont);
+        if (WatchlistAutocompleteFontData.hFont) {
+            DeleteObject(WatchlistAutocompleteFontData.hFont);
         }
-        if (WatchlistAutocompleteZoomData.hBoldFont) {
-            DeleteObject(WatchlistAutocompleteZoomData.hBoldFont);
+        if (WatchlistAutocompleteFontData.hBoldFont) {
+            DeleteObject(WatchlistAutocompleteFontData.hBoldFont);
         }
         break;
     }

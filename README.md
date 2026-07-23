@@ -93,7 +93,6 @@ Advanced market scanner for finding trading opportunities based on multiple crit
 ### 🖱 Navigation & UI
 | Action | Shortcut | Note |
 | :--- | :--- | :--- |
-| **Zoom Text** | `Ctrl` + `Mouse Wheel` | Persists per window in Registry |
 | **Sort Column** | `Click Header` | Click again to reverse direction |
 | **Remove Item** | `Delete` | Removes selected row/watchlist |
 | **Quick Order Bar**| `L-Ctrl` / `R-Ctrl` | Toggles entry bar in Market window |
@@ -104,7 +103,7 @@ Advanced market scanner for finding trading opportunities based on multiple crit
 | `Double-Click` | Enter edit mode for Price/Quantity |
 | `Tab` | Cycle between Price and Quantity fields |
 | `Enter` | Confirm and submit modification |
-| `Esc` | Cancel edits |
+| `Esc` | Cancel order |
 | `Up / Down` | Increment/Decrement values (0.01 / 1 unit) |
 
 ---
