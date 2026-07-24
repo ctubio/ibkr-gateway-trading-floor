@@ -331,8 +331,8 @@ static void Diamonds_ApplySort(HWND hList) {
         const auto& a = g_DiamondDataCache[idA];
         const auto& b = g_DiamondDataCache[idB];
 
-        if (g_DiamondsSortCol == DCOL_SYMBOL || g_DiamondsSortCol == DCOL_DIV_DATE) {
-            int cmp = _stricmp(a.textCols[g_DiamondsSortCol].c_str(), b.textCols[g_DiamondsSortCol].c_str());
+        if (g_DiamondsSortCol == DCOL_SYMBOL) {
+            int cmp = _stricmp(a.textCols[DCOL_SYMBOL].c_str(), b.textCols[DCOL_SYMBOL].c_str());
             return g_DiamondsSortAsc ? (cmp < 0) : (cmp > 0);
         } else {
             double v1 = a.sortValues[g_DiamondsSortCol];
@@ -444,7 +444,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}");
     
     row.textCols[DCOL_DIV_DATE] = t.dividendDate;
-    row.sortValues[DCOL_DIV_DATE] = 0; // Handled by string compare in sort
+    row.sortValues[DCOL_DIV_DATE] = t.dividendDateSortable;
 
     if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "{:.2f}%");
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
