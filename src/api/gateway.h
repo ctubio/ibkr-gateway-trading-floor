@@ -48,6 +48,10 @@
 #define WM_SCANNER_DATA     (WM_USER + 13)   // Scanner subscription refreshed — handler calls getScannerResults()
 #define WM_API_EXECUTION    (WM_USER + 14)
 #define WM_FX_RATE_UPDATE   (WM_USER + 15)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
+#define WM_API_UNSENT_ORDER (WM_USER + 16)   // Posted to the Orders window for an untransmitted (transmit=false)
+                                              // order. lParam = heap-allocated TradingAPI::OrderInfo* — handler
+                                              // owns it and must delete it. Purely cosmetic: never written to
+                                              // ordersMap, so it's naturally cleared on the next Orders_Repopulate().
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";

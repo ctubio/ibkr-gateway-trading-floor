@@ -1,7 +1,7 @@
 MAJOR      = 0
 MINOR      = 0
 PATCH      = 0
-BUILD      = 81
+BUILD      = 82
 
 CXX     := x86_64-w64-mingw32-g++
 WINDRES := x86_64-w64-mingw32-windres
@@ -70,5 +70,5 @@ else
 	&& curl -s -n -H "Content-Type:application/zip" -H "Authorization: token ${TRADINGFLOOR}" \
 	--data-binary "@$(PWD)/$(ZIPFILE)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/$(shell curl -s        \
 	https://api.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/latest | grep id | head -n1 | cut -d ' ' -f4 | cut -d ',' -f1 \
-	)/assets?name=$(ZIPFILE)" && rm -v $(ZIPFILE)
+	)/assets?name=$(ZIPFILE)" && rm -v $(ZIPFILE) && (cd ../$(shell ls -r1 .. | tail -n1) && make git)
 endif

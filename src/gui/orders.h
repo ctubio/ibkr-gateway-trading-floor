@@ -17,8 +17,23 @@ struct OrdersEditState {
     bool   partialFill  = false;
     double originalQty  = 0.0;
     bool   panelVisible = false;
+    // ── Unsent (transmit=false) placeholder rows ────────────────────────────
+    // These never made it into api()'s ordersMap, so Enter must re-submit a
+    // fresh order (transmit=true) instead of modifyOrder()'ing a nonexistent one.
+    bool        isUnsent    = false;
+    int         conId       = 0;
+    std::string symbol;
+    std::string action;
+    bool        isOvernight = false;
 };
 static OrdersEditState s_editState;
+
+// Cosmetic-only cache of Unsent placeholder rows, keyed by orderId, so the
+// inline panel can be repopulated when one is clicked (they're absent from
+// api()'s ordersMap). Cleared on every Orders_Repopulate() — the same event
+// that wipes the phantom row from the ListView.
+static std::map<int, TradingAPI::OrderInfo> s_unsentOrders;
+
 static ListViewFontData OrdersFontData = { NULL, NULL, 14 };
 static HFONT fontInputs   = NULL;
 
@@ -140,29 +155,49 @@ static void Orders_HideInlinePanel(HWND hWnd) {
     InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
 }
 
-// Rebuilds the entire ListView from the current snapshot.
+// Rebuilds the ListView from the current snapshot, preserving any Unsent
+// placeholder rows in place. Only rows whose orderId is NOT in s_unsentOrders
+// get deleted/rebuilt; Unsent rows are left untouched unless a real order
+// with the same orderId has since appeared (meaning it was transmitted for
+// real — the placeholder is stale and gets dropped).
 static void Orders_Repopulate(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
     if (!hList) return;
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
-    ListView_DeleteAllItems(hList);
 
     auto orders = api().getOrdersSorted();
+
+    // A placeholder whose orderId now has a real ordersMap entry has been
+    // superseded (the user resubmitted it via the inline panel) — drop it so
+    // its row gets removed in the sweep below instead of lingering as a dupe.
+    for (const auto& o : orders) s_unsentOrders.erase(o.orderId);
+
+    // Remove only the rows that aren't (still) an Unsent placeholder.
+    for (int i = ListView_GetItemCount(hList) - 1; i >= 0; --i) {
+        LVITEMA lvi = {};
+        lvi.mask  = LVIF_PARAM;
+        lvi.iItem = i;
+        ListView_GetItem(hList, &lvi);
+        int orderId = (int)lvi.lParam;
+        if (!s_unsentOrders.count(orderId))
+            ListView_DeleteItem(hList, i);
+    }
+
     int submitted = 0;
     int filled = 0;
-    for (int i = 0; i < (int)orders.size(); ++i) {
-        const auto& o = orders[i];
+    for (const auto& o : orders) {
+        int row = ListView_GetItemCount(hList);   // append after any surviving Unsent rows
 
         int col = 0;
         LVITEMA lvi  = {};
         lvi.mask     = LVIF_TEXT | LVIF_PARAM;
-        lvi.iItem    = i;
+        lvi.iItem    = row;
         lvi.iSubItem = col++;
-        lvi.lParam   = (LPARAM)o.orderId;  // orderId — used by cancel/edit handlers
+        lvi.lParam   = (LPARAM)o.orderId;
         lvi.pszText  = (LPSTR)o.action.c_str();
         ListView_InsertItem(hList, &lvi);
 
-        ListView_SetItemText(hList, i, col++, (LPSTR)o.symbol.c_str());
+        ListView_SetItemText(hList, row, col++, (LPSTR)o.symbol.c_str());
 
         std::string quoteStr;
         if (o.price > 0)
@@ -171,23 +206,21 @@ static void Orders_Repopulate(HWND hWnd) {
             quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.auxPrice);
         else
             quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
-        ListView_SetItemText(hList, i, col++, (LPSTR)quoteStr.c_str());
+        ListView_SetItemText(hList, row, col++, (LPSTR)quoteStr.c_str());
 
         std::string fillStr;
         if (o.filledQty > 0)
             fillStr = std::format("{:.0f} @ {:.2f}", o.filledQty, o.avgFillPx);
         else
             fillStr = "-- @ --";
-        ListView_SetItemText(hList, i, col++, (LPSTR)fillStr.c_str());
-        
-        std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
-        ListView_SetItemText(hList, i, col++, (LPSTR)fullTypeStr.c_str());
+        ListView_SetItemText(hList, row, col++, (LPSTR)fillStr.c_str());
 
-        // ListView_SetItemText(hList, i, col++, (LPSTR)o.time.c_str());
+        std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
+        ListView_SetItemText(hList, row, col++, (LPSTR)fullTypeStr.c_str());
 
         if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
         if (o.status == "Filled") filled++;
-    }   
+    }
 
     SetWindowTextA(hWnd, ("Orders: " + std::to_string(submitted) + " Submitted | " + std::to_string(filled) + " Filled").c_str());
 
@@ -196,7 +229,7 @@ static void Orders_Repopulate(HWND hWnd) {
 
     // If the order currently shown in the inline panel is no longer editable
     // (e.g. it just got filled/cancelled), hide the panel. Otherwise leave it as is.
-    if (s_editState.panelVisible && s_editState.orderId != 0) {
+    if (s_editState.panelVisible && s_editState.orderId != 0 && !s_editState.isUnsent) {
         bool stillEditable = false;
         for (const auto& o : orders) {
             if (o.orderId == s_editState.orderId) {
@@ -208,7 +241,6 @@ static void Orders_Repopulate(HWND hWnd) {
             Orders_HideInlinePanel(hWnd);
     }
 }
-
 
 // Moves the ListView selection up or down by one row (clamped to the ends).
 // If nothing is currently selected, selects the first row regardless of dir.
@@ -264,8 +296,7 @@ static LRESULT CALLBACK OrdersList_SubclassProc(HWND hWnd, UINT message, WPARAM 
 }
 
 // Forward ENTER from an edit control up to the Orders window; handle TAB and Arrows.
-static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
-                                               LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (message == WM_GETDLGCODE) {
         LRESULT res = DefSubclassProc(hWnd, message, wParam, lParam);
         return res | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
@@ -279,14 +310,20 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
     if (message == WM_KEYDOWN) {
         if (wParam == VK_ESCAPE) {
             if (s_editState.panelVisible && s_editState.orderId != 0) {
-                api().cancelOrder(s_editState.orderId);
                 HWND hParent = GetParent(hWnd);
+                // Unsent placeholder never reached TWS — nothing to cancel there.
+                if (s_editState.isUnsent) {
+                    HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
+                    int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+                    if (sel >= 0) ListView_DeleteItem(hList, sel);
+                } else {
+                    api().cancelOrder(s_editState.orderId);
+                }
                 Orders_HideInlinePanel(hParent);
             }
             return 0;
         }
         if (wParam == VK_RETURN) {
-            // ENTER from a subclassed edit field → submit the pending edit.
             if (s_editState.panelVisible && s_editState.orderId != 0) {
                 HWND hParent = GetParent(hWnd);
                 HWND hPriceEdit = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
@@ -301,8 +338,19 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 } else {
                     qty = s_editState.originalQty;
                 }
-                if (qty > 0)
-                    api().modifyOrder(s_editState.orderId, price, qty);
+                if (qty > 0) {
+                    if (s_editState.isUnsent) {
+                        // Placeholder was never transmitted — place it for real now.
+                        api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action,
+                                           s_editState.isOvernight, qty, price, 0.0, 0.0, true);
+                        HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
+                        int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+                        if (sel >= 0) ListView_DeleteItem(hList, sel);
+                        Orders_HideInlinePanel(hParent);
+                    } else {
+                        api().modifyOrder(s_editState.orderId, price, qty);
+                    }
+                }
             }
             return 0;
         }
@@ -354,6 +402,11 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     s_editState.partialFill = (order.status == "Partially Filled");
     s_editState.originalQty = order.totalQty;
     s_editState.panelVisible = true;
+    s_editState.isUnsent    = (order.status == "Unsent");
+    s_editState.conId       = order.conId;
+    s_editState.symbol      = order.symbol;
+    s_editState.action      = order.action;
+    s_editState.isOvernight = order.includeOvernight;
 
     HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
@@ -541,14 +594,23 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 }
                 int orderId = (int)lvi.lParam;
                 auto orders = api().getOrdersSorted();
+                bool found = false;
                 for (const auto& o : orders) {
                     if (o.orderId == orderId) {
+                        found = true;
                         if (Orders_IsEditable(o.status))
                             Orders_ShowInlinePanel(hWnd, o);
                         else
                             Orders_HideInlinePanel(hWnd);
                         break;
                     }
+                }
+                if (!found) {
+                    auto uit = s_unsentOrders.find(orderId);
+                    if (uit != s_unsentOrders.end())
+                        Orders_ShowInlinePanel(hWnd, uit->second);
+                    else
+                        Orders_HideInlinePanel(hWnd);
                 }
                 return 0;
             }
@@ -612,7 +674,32 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             break;
         }
-
+        
+        case WM_API_UNSENT_ORDER: {
+            auto* info = reinterpret_cast<TradingAPI::OrderInfo*>(lParam);
+            if (info) {
+                s_unsentOrders[info->orderId] = *info;
+                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                if (hList) {
+                    int idx = ListView_GetItemCount(hList);
+                    LVITEMA lvi = {};
+                    lvi.mask     = LVIF_TEXT | LVIF_PARAM;
+                    lvi.iItem    = idx;
+                    lvi.iSubItem = 0;
+                    lvi.lParam   = (LPARAM)info->orderId;
+                    lvi.pszText  = (LPSTR)info->action.c_str();
+                    ListView_InsertItem(hList, &lvi);
+                    ListView_SetItemText(hList, idx, OCOL_SYMBOL, (LPSTR)info->symbol.c_str());
+                    std::string quoteStr = std::format("{:.0f} @ {:.2f}", info->totalQty, info->price);
+                    ListView_SetItemText(hList, idx, OCOL_QUOTE, (LPSTR)quoteStr.c_str());
+                    ListView_SetItemText(hList, idx, OCOL_AVGFILL, (LPSTR)"-- @ --");
+                    std::string fullTypeStr = info->tif + " " + info->orderType + " " + info->status;
+                    ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
+                }
+                delete info;
+            }
+            break;
+        }
 
         case WM_API_UPDATE: {
             if (api().isMarketDataConnected() && api().isTradingConnected()) {

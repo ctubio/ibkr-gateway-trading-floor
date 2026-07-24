@@ -83,10 +83,10 @@ enum DiamondColIdx {
     DCOL_LAST,
     DCOL_BID,
     DCOL_BIDSIZE,
-    DCOL_VOLUME,
+    DCOL_CHG5MIN,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
-    DCOL_CHG5MIN,
+    DCOL_VOLUME,
     //DCOL_CLOSE,
     //DCOL_OPEN,
     DCOL_UNREALIZED_PL_PCT,
@@ -138,10 +138,10 @@ static const DiamondCol diamondCols[] = {
     { "Last",             100, LVCFMT_RIGHT },
     { "Bid",              100, LVCFMT_RIGHT },
     { "BidSz",             80, LVCFMT_RIGHT },
-    { "Vol",               80, LVCFMT_RIGHT },
+    { "5m",            80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
-    { "5m",            80, LVCFMT_RIGHT },
+    { "Vol",               80, LVCFMT_RIGHT },
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Unrealized %",     140, LVCFMT_RIGHT },
@@ -799,9 +799,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 
                 // ── Quick placeholder orders ───────────────────────────────────
-                // Placed with transmit=false — they land in the Orders window
-                // unsent so qty/price can be adjusted inline; modifyOrder() (which
-                // defaults transmit to true) sends them once edited.
                 double quickLastPrice = 0.0;
                 {
                     TradingAPI::L1Book quickInfo;
@@ -889,12 +886,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     UpdateWindow(hList);
                 } else if (cmd == 300) {
                     // Quick BUY placeholder: 1 share @ $1.00.
-                    api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0);
+                    api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, false);
                 } else if (cmd == 301) {
                     // Quick SELL placeholder: 1 share @ 2x last price.
                     TradingAPI::L1Book quickInfo;
                     if (api().getWatchlistData(conId, quickInfo) && quickInfo.last > 0.0) {
-                        api().submitOrder(conId, sym, "SELL", false, 1.0, quickInfo.last * 2.0, 0.0, 0.0);
+                        api().submitOrder(conId, sym, "SELL", false, 1.0, quickInfo.last * 2.0, 0.0, 0.0, false);
                     }
                 }
             }
