@@ -341,4 +341,12 @@ public:
     }
 
     bool HasData() const { return data.size() >= 2; }
+
+    // Public accessor: price from `minutesAgo` minutes ago, sampled from the
+    // same long-lived history used for the reference dots in Draw(). Returns
+    // false if there isn't yet enough history reaching that far back (so
+    // callers can show "--" until it's ready, same pattern as the dots).
+    bool GetPriceMinutesAgo(int minutesAgo, double& outPrice) const {
+        return GetPriceAgo(GetTickCount64(), (ULONGLONG)minutesAgo, outPrice);
+    }
 };

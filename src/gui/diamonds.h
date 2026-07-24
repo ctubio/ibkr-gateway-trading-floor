@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1490;
+int windowDiamondsWidth = 1570;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -83,9 +83,10 @@ enum DiamondColIdx {
     DCOL_LAST,
     DCOL_BID,
     DCOL_BIDSIZE,
-    DCOL_VOLUME,
+    DCOL_CHG5MIN,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
+    DCOL_VOLUME,
     //DCOL_CLOSE,
     //DCOL_OPEN,
     DCOL_UNREALIZED_PL_PCT,
@@ -140,6 +141,7 @@ static const DiamondCol diamondCols[] = {
     { "Vol",               80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "5m",            80, LVCFMT_RIGHT },
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Unrealized %",     140, LVCFMT_RIGHT },
@@ -453,11 +455,25 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
         setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
+        setNA(DCOL_CHG5MIN);
         return;
     }
 
     setCol(DCOL_LAST, t.last, "{:.2f}", true);
     g_DiamondsSparklines[conId].AddPrice(t.last);
+
+    // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
+    // sampled from the same long-lived history the sparkline's reference dots
+    // use. Shows "--" until at least 5 minutes of history has accumulated
+    // for this symbol (same "appears once ready" behavior as those dots).
+    {
+        double price5MinAgo = 0.0;
+        if (g_DiamondsSparklines[conId].GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
+            setCol(DCOL_CHG5MIN, t.last - price5MinAgo, "{:+.2f}", true);
+        } else {
+            setNA(DCOL_CHG5MIN);
+        }
+    }
 
     double shares = row.sortValues[DCOL_POSITION];
     double avgCost = row.sortValues[DCOL_AVGPRICE];
@@ -920,7 +936,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     // Only colour P&L / change columns — and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
-                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION) {
+                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         const std::string& textVal = g_DiamondDataCache[conId].textCols[cd->iSubItem];
