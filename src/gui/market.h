@@ -872,12 +872,11 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
 
     // ── Color helpers ─────────────────────────────────────────────────────────
-    COLORREF openColor  = textColor;
-    if (L1.last > 0.0 && L1.open > 0.0)
-        openColor = (L1.last >= L1.open) ? COINS_CLR_GREEN : COINS_CLR_RED;
-    COLORREF vwapColor  = COINS_CLR_ORANGE;
-    COLORREF highColor = (L1.high > 0.0) ? COINS_CLR_GREEN : textColor;
-    COLORREF lowColor  = (L1.low  > 0.0) ? COINS_CLR_RED   : textColor;
+    COLORREF openColor = (L1.open > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.open ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
+    COLORREF closeColor = (L1.prevClose > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.prevClose ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
+    COLORREF vwapColor  = (L1.vwap > 0.0 && L1.last > 0.0) ? (L1.last >= L1.vwap ? COINS_CLR_GREEN : COINS_CLR_RED) : COINS_CLR_ORANGE;
+    COLORREF highColor = (L1.high > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.high ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
+    COLORREF lowColor  = (L1.low  > 0.0 && L1.last > 0.0) ? (L1.last >= L1.low ? COINS_CLR_GREEN : COINS_CLR_RED)   : textColor;
     // COLORREF posColor  = (state->position > 0.0) ? COINS_CLR_GREEN : (state->position < 0.0) ? COINS_CLR_RED : textColor;
     // COLORREF avgPrColor = textColor;
     // if (displayLast > 0.0 && state->avgPrice > 0.0) avgPrColor = (displayLast >= state->avgPrice) ? COINS_CLR_GREEN : COINS_CLR_RED;
@@ -964,7 +963,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Row 1: O  C  H  L
     struct StatItem { const char* label; std::string value; COLORREF color; };
     StatItem row1[] = {
-        { "C:", Market_Fmt(L1.prevClose), textColor  },
+        { "C:", Market_Fmt(L1.prevClose), closeColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", Market_Fmt(L1.vwap),    vwapColor  },
         { "", formatVolume(L1.volume),  textColor  },
