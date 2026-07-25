@@ -1,6 +1,6 @@
 #pragma once
 
-void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"TWSAPIClientTradingFloor.Watchlist", 660, 400); }
+void StartWatchlist() { StartGenericWindow(WATCHLIST_CLASS_NAME, "Watchlist", L"TWSAPIClientTradingFloor.Watchlist", 680, 400); }
 
 
 #define ID_WATCHLIST_LIST_COMBO       8001
@@ -41,12 +41,12 @@ static ListViewFontData WatchlistAutocompleteFontData = { NULL, NULL, 14 };
 
 enum WatchlistColIdx {
     TCOL_SYMBOL = 0,
+    TCOL_CHGPCT,
     TCOL_ASKSIZE,
     TCOL_ASK,
     TCOL_LAST,
     TCOL_BID,
     TCOL_BIDSIZE,
-    TCOL_CHGPCT,
     TCOL_DIV_YIELD,
     TCOL_COUNT
 };
@@ -59,13 +59,13 @@ static HWND g_WatchlistListForSort = NULL;
 struct WatchlistCol { const char* header; int width; int fmt; };
 static const WatchlistCol watchlistCols[] = {
     { "Symbol",       90, LVCFMT_LEFT  },
-    { "Ask Size",     75, LVCFMT_RIGHT },
+    { "Change %",     95, LVCFMT_RIGHT },
+    { "AskSz",        75, LVCFMT_RIGHT },
     { "Ask",          75, LVCFMT_RIGHT },
     { "Last",         75, LVCFMT_RIGHT },
     { "Bid",          75, LVCFMT_RIGHT },
-    { "Bid Size",     75, LVCFMT_RIGHT },
-    { "Change %",     75, LVCFMT_RIGHT },
-    { "Annual Div",   80, LVCFMT_RIGHT },
+    { "BidSz",        75, LVCFMT_RIGHT },
+    { "Yield %",      80, LVCFMT_RIGHT },
 };
 
 // Sentinel string displayed whenever a value cannot be computed (e.g. market closed, last == 0).
@@ -689,7 +689,7 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         if (wParam == TIMER_WATCHLIST_SORT) {
             HWND hList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
-            Watchlist_ApplySort(hList);
+            Watchlist_ApplySort(hWnd);
             InvalidateRect(hList, NULL, FALSE);
         }
         break;
@@ -894,11 +894,8 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         SelectObject(cd->nmcd.hdc, WatchlistFontData.hBoldFont);
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == TCOL_LAST) {
-                        SelectObject(cd->nmcd.hdc, WatchlistFontData.hFont);
-                        return CDRF_NEWFONT;
-                    }
                     if (cd->iSubItem == TCOL_CHGPCT) {
+                        SelectObject(cd->nmcd.hdc, WatchlistFontData.hFont);
                         char buf[32] = {};
                         ListView_GetItemText(GetDlgItem(hWnd, ID_WATCHLIST_LIST),
                                             (int)cd->nmcd.dwItemSpec, TCOL_CHGPCT,
@@ -909,8 +906,36 @@ LRESULT CALLBACK WndProcWatchlist(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         // a missing-data cell as a neutral (uncoloured) number.
                         if (strcmp(buf, WATCHLIST_NO_DATA) != 0 && buf[0] != '\0') {
                             double v = atof(buf);
-                            if      (v > 0.0) cd->clrText = RGB(80, 200, 120);
-                            else if (v < 0.0) cd->clrText = RGB(220, 80, 80);
+                            if      (v > 0.0) cd->clrText = COINS_CLR_GREEN;
+                            else if (v < 0.0) cd->clrText = COINS_CLR_RED;
+                        }
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == TCOL_ASKSIZE || cd->iSubItem == TCOL_BIDSIZE) {
+                        cd->clrText = COINS_CLR_BLUE;
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == TCOL_DIV_YIELD) {
+                        cd->clrText = COINS_CLR_PURPLE;
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == TCOL_ASK || cd->iSubItem == TCOL_LAST || cd->iSubItem == TCOL_BID) {
+                        HWND hList = GetDlgItem(hWnd, ID_WATCHLIST_LIST);
+                        char bufB[32] = {};
+                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, TCOL_BIDSIZE, bufB, sizeof(bufB));
+                        char bufA[32] = {};
+                        ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, TCOL_ASKSIZE, bufA, sizeof(bufA));
+                        const std::string& textValB(bufB);
+                        const std::string& textValA(bufA);
+                        if (!textValB.empty() && !textValA.empty()) {
+                            double valB = atof(textValB.c_str());
+                            double valA = atof(textValA.c_str());
+                            if      (valA > valB) cd->clrText = COINS_CLR_RED;
+                            else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
+                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;

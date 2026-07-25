@@ -51,27 +51,8 @@ static bool g_DiamondsChkVisible = false;
 #define DIAMONDS_SORT_TIMER_MS   5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
 static ListViewFontData DiamondsFontData = { NULL, NULL, 17 };
-
-// Smaller font used for secondary/less-important numeric columns (AvgPx, Volume,
-// Mkt Value, Net %, dividend columns). Kept in sync with DiamondsFontData's
-// font size via Diamonds_EnsureSmallFont(), called lazily from NM_CUSTOMDRAW.
 static HFONT DiamondsSmallFont     = NULL;
-static int   DiamondsSmallFontSize = -1;
 
-static void Diamonds_EnsureSmallFont() {
-    int targetSize = std::max(6, DiamondsFontData.fontSize - 3);
-    if (DiamondsSmallFont && DiamondsSmallFontSize == targetSize) return;
-    if (DiamondsSmallFont) { DeleteObject(DiamondsSmallFont); DiamondsSmallFont = NULL; }
-
-    HDC hdc = GetDC(NULL);
-    int h = -MulDiv(targetSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-    ReleaseDC(NULL, hdc);
-
-    DiamondsSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-    DiamondsSmallFontSize = targetSize;
-}
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
@@ -601,6 +582,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+
+        HDC hdc = GetDC(NULL);
+        int h = -MulDiv(std::max(6, DiamondsFontData.fontSize - 3), GetDeviceCaps(hdc, LOGPIXELSY), 72);
+        ReleaseDC(NULL, hdc);
+        DiamondsSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         
         LVCOLUMNA lvc = {};
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
@@ -1002,7 +990,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_PCT_NETLIQ) {
                         cd->clrText = COINS_CLR_GRAY;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        Diamonds_EnsureSmallFont();
                         SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
@@ -1014,14 +1001,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
                             cd->clrText   = LM_TEXT;
                         }
-                        Diamonds_EnsureSmallFont();
                         SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
                         cd->clrText = COINS_CLR_PURPLE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        Diamonds_EnsureSmallFont();
                         SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
@@ -1097,8 +1082,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         if (DiamondsSmallFont) {
             DeleteObject(DiamondsSmallFont);
-            DiamondsSmallFont = NULL;
-            DiamondsSmallFontSize = -1;
         }
         break;
         break;
