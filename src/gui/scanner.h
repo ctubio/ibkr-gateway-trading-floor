@@ -1,12 +1,12 @@
 #pragma once
 
-void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPIClientTradingFloor.Scanner", 428, 600); }
+void StartScanner() { StartGenericWindow(SCANNER_CLASS_NAME, "Scanner", L"TWSAPIClientTradingFloor.Scanner", 338, 600); }
 
 #define ID_SCANNER_RESULTS_LIST         3001
 #define ID_SCANNER_COMBO_LOCATION       3002
 #define ID_SCANNER_COMBO_SCANCODE       3005
 
-enum ScannerColIdx { SCOL_INSTRUMENT = 0, SCOL_LAST, SCOL_VOLUME, SCOL_CHGPCT, SCOL_COUNT };
+enum ScannerColIdx { SCOL_INSTRUMENT = 0, SCOL_LAST, SCOL_CHGPCT, SCOL_COUNT };
 
 // Location selector options (NYSE / NASDAQ National / NASDAQ SCM).
 enum ScannerLocationIdx { SCANNER_LOC_NYSE = 0, SCANNER_LOC_NASDAQ_NATIONAL, SCANNER_LOC_NASDAQ_SCM, SCANNER_LOC_COUNT };
@@ -17,7 +17,10 @@ static const char* g_ScannerLocationLabels[SCANNER_LOC_COUNT] = { "NYSE", "NASDA
 enum ScannerScanCodeIdx {
     SCANCODE_TOP_PERC_GAIN = 0,
     SCANCODE_TOP_PERC_LOSE,
-    SCANCODE_MOST_ACTIVE,
+    SCANCODE_TOP_PERC_GAIN_SINCE_OPEN,
+    SCANCODE_TOP_PERC_LOSE_SINCE_OPEN,
+    SCANCODE_TOP_VOLUME,
+    SCANCODE_PRICE_RANGE,
     SCANCODE_MOST_ACTIVE_USD,
     SCANCODE_YIELD,
     SCANCODE_TOP_BUY_IMBALANCE,
@@ -27,8 +30,11 @@ enum ScannerScanCodeIdx {
 static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = {
     "GAIN",
     "LOSE",
-    "ACTIVE",
-    "TOP USD",
+    "GAIN OPEN",
+    "LOSE OPEN",
+    "VOLUME",
+    "PRICE",
+    "USD",
     "YIELD",
     "BUY IMB",
     "SELL IMB"
@@ -36,7 +42,10 @@ static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = {
 static const char* g_ScannerScanCodes[SCANCODE_COUNT] = {
     "TOP_PERC_GAIN",
     "TOP_PERC_LOSE",
-    "MOST_ACTIVE",
+    "TOP_PERC_GAIN_SINCE_OPEN",
+    "TOP_PERC_LOSE_SINCE_OPEN",
+    "TOP_VOLUME_RATE",
+    "HOT_BY_PRICE_RANGE",
     "MOST_ACTIVE_AVG_USD",
     "HIGH_DIVIDEND_YIELD_IB",
     "TOP_STOCK_BUY_IMBALANCE_ADV_RATIO",
@@ -111,14 +120,14 @@ static void Scanner_Layout(HWND hWnd) {
         // height, not the closed-box height (fixed by the system to roughly
         // the font's line height), so it's kept tall enough that the list
         // isn't clipped when opened.
-        int locComboW = 160;
+        int locComboW = 140;
         int comboDropH = 200;
         SetWindowPos(hScannerComboLocation, NULL, startX, btnY-3, locComboW, comboDropH, SWP_NOZORDER | SWP_NOACTIVATE);
 
         // Scan-code selector (TOP_PERC_GAIN / TOP_PERC_LOSE / MOST_ACTIVE / TOP_STOCK_BUY_IMBALANCE_ADV_RATIO / TOP_STOCK_SELL_IMBALANCE_ADV_RATIO) —
         // anchored to the far right of the bottom bar, independent of the
         // location combo above.
-        int comboW = 120;
+        int comboW = 140;
         SetWindowPos(hScannerComboScanCode, NULL, rc.right - comboW - m, btnY-3, comboW, comboDropH, SWP_NOZORDER | SWP_NOACTIVATE);
     } else {
         MoveWindow(hScannerResults, 0, 0, rc.right, rc.bottom, TRUE);
@@ -184,7 +193,6 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
         lvc.fmt = LVCFMT_LEFT;  lvc.cx = 100; lvc.pszText = (LPSTR)"Symbol";    ListView_InsertColumn(hScannerResults, SCOL_INSTRUMENT, &lvc);
         lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Last";      ListView_InsertColumn(hScannerResults, SCOL_LAST,       &lvc);
-        lvc.fmt = LVCFMT_RIGHT; lvc.cx =  90; lvc.pszText = (LPSTR)"Volume";    ListView_InsertColumn(hScannerResults, SCOL_VOLUME,     &lvc);
         lvc.fmt = LVCFMT_RIGHT; lvc.cx = 100; lvc.pszText = (LPSTR)"Change %";  ListView_InsertColumn(hScannerResults, SCOL_CHGPCT,     &lvc);
 
         // Bottom-left location selector (NYSE / NASDAQ National / NASDAQ
@@ -262,7 +270,6 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         // genuinely new (no prior row) still fall back to SCANNER_NO_DATA.
         struct PrevValues {
             std::string changePct;
-            std::string volume;
             std::string last;
         };
         std::unordered_map<int, PrevValues> prevValues;
@@ -277,12 +284,10 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 if (conId <= 0) continue;
 
                 char chgBuf[32]  = {};
-                char volumeBuf[32] = {};
                 char lastBuf[32] = {};
                 ListView_GetItemText(hScannerResults, i, SCOL_CHGPCT, chgBuf,  sizeof(chgBuf));
-                ListView_GetItemText(hScannerResults, i, SCOL_VOLUME, volumeBuf, sizeof(volumeBuf));
                 ListView_GetItemText(hScannerResults, i, SCOL_LAST,   lastBuf, sizeof(lastBuf));
-                prevValues[conId] = { chgBuf, volumeBuf, lastBuf };
+                prevValues[conId] = { chgBuf, lastBuf };
             }
         }
 
@@ -304,17 +309,14 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             auto pit = prevValues.find(row.conId);
             if (pit != prevValues.end()) {
                 ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)pit->second.last.c_str());
-                ListView_SetItemText(hScannerResults, idx, SCOL_VOLUME, (LPSTR)pit->second.volume.c_str());
                 ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)pit->second.changePct.c_str());
             } else {
                 TradingAPI::L1Book info;
                 if (api().getWatchlistData(row.conId, info)) {
                     ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)std::format("{:+.2f}%", info.changePct()).c_str());
-                    ListView_SetItemText(hScannerResults, idx, SCOL_VOLUME, (LPSTR)formatVolume(info.volume).c_str());
                     ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)std::format("{:.2f}", info.last).c_str());
                 } else {
                     ListView_SetItemText(hScannerResults, idx, SCOL_CHGPCT, (LPSTR)SCANNER_NO_DATA);
-                    ListView_SetItemText(hScannerResults, idx, SCOL_VOLUME, (LPSTR)SCANNER_NO_DATA);
                     ListView_SetItemText(hScannerResults, idx, SCOL_LAST,   (LPSTR)SCANNER_NO_DATA);
                 }
             }
@@ -339,7 +341,6 @@ LRESULT CALLBACK WndProcScanner(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             int row = Scanner_FindRow(conId);
             if (row >= 0 && info.last > 0.0) {
                 ListView_SetItemText(hScannerResults, row, SCOL_LAST, (LPSTR)std::format("{:.2f}", info.last).c_str());
-                ListView_SetItemText(hScannerResults, row, SCOL_VOLUME, (LPSTR)formatVolume(info.volume).c_str());
                 if (info.prevClose > 0.0) {
                     ListView_SetItemText(hScannerResults, row, SCOL_CHGPCT, (LPSTR)std::format("{:+.2f}%", info.changePct()).c_str());
                 }

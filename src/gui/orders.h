@@ -1,6 +1,6 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 558, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 600, 240); }
 
 #define ID_ORDERS_LIST          9003
 #define ID_ORDERS_PRICE_EDIT    9010
@@ -66,8 +66,8 @@ struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
-    { "Quote",        135,  LVCFMT_RIGHT },
-    { "Avg Filled",   135,  LVCFMT_RIGHT },
+    { "Quote",        175,  LVCFMT_LEFT },
+    { "Avg Filled",   135,  LVCFMT_LEFT },
     { "Status",       170,  LVCFMT_CENTER},
     // { "Time",          80,  LVCFMT_CENTER},
 };
@@ -83,7 +83,7 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
     if (status == "Cancelled" || status == "Inactive" || status == "PendingCancel")
         return dark ? RGB(130, 130, 130) : RGB(160, 160, 160);
-    if (status == "Submitted" || status == "PreSubmitted" || status == "PendingSubmit" || status == "Pending") {
+    if (status == "Submitted" || status == "PreSubmitted" || status == "PreSub" || status == "PendingSubmit" || status == "Pending") {
         if (orderType == "BUY") return RGB(80, 200, 120);
         else if (orderType == "SELL") return RGB(220, 80, 80);
     }
@@ -200,10 +200,10 @@ static void Orders_Repopulate(HWND hWnd) {
         ListView_SetItemText(hList, row, col++, (LPSTR)o.symbol.c_str());
 
         std::string quoteStr;
-        if (o.price > 0)
+        if (o.trailStopPrice > 0.0)
+            quoteStr += std::format("{:.0f} @ {:.2f} | {:.2f}", o.totalQty, o.trailStopPrice, o.price);
+        else if (o.price > 0)
             quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.price);
-        else if (o.auxPrice > 0)
-            quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.auxPrice);
         else
             quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
         ListView_SetItemText(hList, row, col++, (LPSTR)quoteStr.c_str());
@@ -215,7 +215,7 @@ static void Orders_Repopulate(HWND hWnd) {
             fillStr = "-- @ --";
         ListView_SetItemText(hList, row, col++, (LPSTR)fillStr.c_str());
 
-        std::string fullTypeStr = o.tif + " " + o.orderType + " " + o.status;
+        std::string fullTypeStr = o.tif + " " + o.orderType + " " + (o.status == "PreSubmitted" ? "PreSub" : o.status);
         ListView_SetItemText(hList, row, col++, (LPSTR)fullTypeStr.c_str());
 
         if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
@@ -341,8 +341,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 if (qty > 0) {
                     if (s_editState.isUnsent) {
                         // Placeholder was never transmitted — place it for real now.
-                        api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action,
-                                           s_editState.isOvernight, qty, price, 0.0, 0.0, true);
+                        api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action, s_editState.isOvernight, qty, price, 0.0, 0.0, true);
                         HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                         int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                         if (sel >= 0) ListView_DeleteItem(hList, sel);
@@ -412,9 +411,8 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
 
     std::string priceStr;
-    if (order.price > 0)         priceStr = std::format("{:.2f}", order.price);
-    else if (order.auxPrice > 0) priceStr = std::format("{:.2f}", order.auxPrice);
-    else                         priceStr = "0.00";
+    if (order.price > 0) priceStr = std::format("{:.2f}", order.price);
+    else                 priceStr = "0.00";
     if (hPriceEdit) SetWindowTextA(hPriceEdit, priceStr.c_str());
 
     std::string qtyStr = std::format("{:.0f}", order.totalQty);

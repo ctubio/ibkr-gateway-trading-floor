@@ -82,14 +82,14 @@ public:
         std::string orderType;
         std::string tif;
         double      price     = 0.0;
-        double      auxPrice  = 0.0;
         double      totalQty  = 0.0;
         double      filledQty = 0.0;
         double      avgFillPx = 0.0;
+        double      trailStopPrice = 0.0;
         std::string status;
         std::string time;
         bool includeOvernight = false;
-        int      parentId = 0;      // Parent order Id, to associate Auto STP or TRAIL orders with the original order.
+        int      parentId = 0;      // Parent order Id, to associate Auto STP or TRAIL or TAKE-PROFIT orders with the original order.
         std::string ocaGroup;      // one cancels all group name
         int      ocaType = 0;       // 1 = CANCEL_WITH_BLOCK, 2 = REDUCE_WITH_BLOCK, 3 = REDUCE_NON_BLOCK
     };

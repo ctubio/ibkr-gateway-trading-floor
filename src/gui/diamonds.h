@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1570;
+int windowDiamondsWidth = 1660;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -86,6 +86,7 @@ enum DiamondColIdx {
     DCOL_CHG5MIN,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
+    DCOL_VWAP,          // NEW — displays VWAP price, sorts by (Last - VWAP)
     DCOL_VOLUME,
     //DCOL_CLOSE,
     //DCOL_OPEN,
@@ -141,6 +142,7 @@ static const DiamondCol diamondCols[] = {
     { "5m",            80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "VWAP",              90, LVCFMT_RIGHT },  // NEW
     { "Vol",               80, LVCFMT_RIGHT },
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
@@ -456,11 +458,22 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
         setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
         setNA(DCOL_CHG5MIN);
+        setNA(DCOL_VWAP);          // NEW
         return;
     }
 
     setCol(DCOL_LAST, t.last, "{:.2f}", true);
     g_DiamondsSparklines[conId].AddPrice(t.last);
+
+    // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
+    // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
+    if (t.vwap > 0.0) {
+        double vwapDiff = t.last - t.vwap;
+        row.sortValues[DCOL_VWAP] = vwapDiff;
+        row.textCols[DCOL_VWAP]   = std::format("{:.2f}", t.vwap);
+    } else {
+        setNA(DCOL_VWAP);
+    }
 
     // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
     // sampled from the same long-lived history the sparkline's reference dots
@@ -955,6 +968,18 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
                         cd->clrText = COINS_CLR_BLUE;
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_VWAP) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        const auto& cacheRow = g_DiamondDataCache[conId];
+                        if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
+                            double diff = cacheRow.sortValues[DCOL_VWAP];
+                            cd->clrText = (diff >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+                        }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
                         return CDRF_NEWFONT;
