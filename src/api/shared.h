@@ -80,7 +80,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     // are distinguished by title - each has a unique one. Single-instance windows match
     // on class alone. Either way no map needed: FindWindowA does the work.
     bool multiInstance = !windowKey.empty() && windowKey != className;
-    HWND hWnd;
+    HWND hWnd = NULL;
     if (multiInstance) {
         auto tsWindows = EnumerateMarketWindows();
         for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
