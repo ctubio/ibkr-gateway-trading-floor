@@ -205,13 +205,6 @@ static std::string News_BuildUrl(int year, int month, int day) {
         + "-" + std::to_string(year);
 }
 
-// Format a date as YYYY-MM-DD string
-static std::string News_DateKey(SYSTEMTIME st) {
-    char buf[12];
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d", st.wYear, st.wMonth, st.wDay);
-    return buf;
-}
-
 // Format a date as "Month D, YYYY" (no leading zero on day, matching Python)
 static std::string News_FormatHeader(SYSTEMTIME st) {
     return std::string(s_monthNames[st.wMonth][0] ? (std::string() + (char)toupper(s_monthNames[st.wMonth][0]) + (s_monthNames[st.wMonth] + 1)) : "")
@@ -484,7 +477,7 @@ static std::string HandleGetNews(int numDays) {
 
     std::string body;
     for (const auto& st : days) {
-        std::string dateKey = News_DateKey(st);
+        std::string dateKey = std::format("{:04d}-{:02d}-{:02d}", st.wYear, st.wMonth, st.wDay);
 
         // Try registry cache first
         std::string content = News_LoadCache(dateKey);
