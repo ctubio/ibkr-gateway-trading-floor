@@ -766,11 +766,11 @@ static std::string HandlePostTrade(const std::string& body) {
         }
     }).detach();
 
-    LogDebug("POST /trade: " + side + " " + std::to_string((int)quantity) +
+    /*LogDebug("POST /trade: " + side + " " + std::to_string((int)quantity) +
              " " + symbol + " @ " + std::to_string(price) +
              " stop=" + std::format("{:.2f}", stopPrice) +
              " profit=" + std::format("{:.2f}", profitPrice) +
-             " conId=" + std::to_string(conId));
+             " conId=" + std::to_string(conId));*/
 
     // ── Build success response ────────────────────────────────────────────────
     std::string resp;
