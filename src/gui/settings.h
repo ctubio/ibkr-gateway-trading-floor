@@ -1,6 +1,6 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 428); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 530); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
@@ -84,58 +84,80 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-            int margin = 8;
+            int m  = 8;   // outer margin
+            int gm = 14;  // inner margin inside a group box
+            int w  = 252; // usable width inside client area
+            int gw = w - gm * 2; // control width inside group box
+            int y  = m;
+
+            // ── Gateway ──────────────────────────────────────────────────────
+            CreateWindowA("BUTTON", "Gateway",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y, w, 130,
+                hWnd, NULL, hInst, NULL);
 
             HWND hChkAutoGtw = CreateWindowA("BUTTON", "Auto-start IBKR Gateway",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                margin, margin, 250, 24,
+                m + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_AUTO_GATEWAY, hInst, NULL);
             if (Settings_AutoGateway())
                 SendMessage(hChkAutoGtw, BM_SETCHECK, BST_CHECKED, 0);
 
             HWND hChkKill = CreateWindowA("BUTTON", "Kill IBKR Gateway on exit",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                margin, margin + 32, 250, 24,
+                m + gm, y + 44, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_KILL_GATEWAY, hInst, NULL);
             if (Settings_KillGatewayOnExit())
                 SendMessage(hChkKill, BM_SETCHECK, BST_CHECKED, 0);
 
-            HWND hBtnGatewayPath = CreateWindowA("BUTTON", "Change executable path",
+            CreateWindowA("BUTTON", "Change executable path",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                margin, margin + 64, 250, 24,
+                m + gm, y + 70, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH, hInst, NULL);
 
             hGatewayEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_READONLY,
-                margin, margin + 94, 250, 20,
+                m + gm, y + 98, gw, 20,
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
+            SetWindowTextA(hGatewayEdit, GetGatewayPath().c_str());
+            y += 138;
 
-            std::string path = GetGatewayPath();
-            SetWindowTextA(hGatewayEdit, path.c_str());
+            // ── Display ──────────────────────────────────────────────────────
+            CreateWindowA("BUTTON", "Display",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y, w, 46,
+                hWnd, NULL, hInst, NULL);
 
             HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                margin, margin + 124, 250, 24,
+                m + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
             if (Settings_DarkMode())
                 SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
+            y += 54;
+
+            // ── Audio ────────────────────────────────────────────────────────
+            CreateWindowA("BUTTON", "Audio",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y, w, 78,
+                hWnd, NULL, hInst, NULL);
 
             HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                margin, margin + 156, 250, 24,
+                m + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
             if (Settings_Load("PlaySounds", 0))
                 SendMessage(hChkSounds, BM_SETCHECK, BST_CHECKED, 0);
 
-            // ── TTS Voice selector ────────────────────────────────────────────
+            // ── TTS Voice selector ───────────────────────────────────────────
             CreateWindowA("STATIC", "Voice:",
                 WS_CHILD | WS_VISIBLE,
-                margin, margin + 188, 44, 20,
+                m + gm, y + 44, 40, 20,
                 hWnd, NULL, hInst, NULL);
 
             HWND hVoiceCombo = CreateWindowA("COMBOBOX", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-                margin + 48, margin + 186, 202, 200,
+                m + gm + 44, y + 42, gw - 44, 200,
                 hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
 
             // Enumerate all system voices and fill the combo
@@ -169,63 +191,47 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (selectIdx < 0) selectIdx = (herenaIdx >= 0) ? herenaIdx : 0;
             if (!g_settingsVoices.empty())
                 SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
+            y += 86;
 
-            CreateWindowA("STATIC", "Order Qty:",
-                WS_CHILD | WS_VISIBLE,
-                margin, margin + 220, 75, 20,
+            // ── Trading ──────────────────────────────────────────────────────
+            CreateWindowA("BUTTON", "Trading",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y, w, 148,
                 hWnd, NULL, hInst, NULL);
 
-            HWND hQtyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                margin + 80, margin + 217, 80, 26,
-                hWnd, (HMENU)ID_SETTINGS_QTY_VALUE, hInst, NULL);
+            // Row helper: label + edit
+            auto MakeRow = [&](const char* label, UINT id, int rowY, bool isInt) -> HWND {
+                CreateWindowA("STATIC", label,
+                    WS_CHILD | WS_VISIBLE,
+                    m + gm, y + rowY, 72, 20,
+                    hWnd, NULL, hInst, NULL);
+                DWORD numStyle = isInt ? ES_NUMBER : 0;
+                return CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | numStyle,
+                    m + gm + 76, y + rowY - 3, 80, 26,
+                    hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
+            };
 
-            SetWindowTextA(hQtyEdit, std::format("{}", (int)Settings_Load("OrderQty", 100)).c_str());
-            
-            CreateWindowA("STATIC", "Stop:",
-                WS_CHILD | WS_VISIBLE,
-                margin, margin + 253, 75, 20,
+            HWND hQtyEdit    = MakeRow("Order Qty:",  ID_SETTINGS_QTY_VALUE,    18, true);
+            HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,   51, false);
+            HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE, 84, false);
+            HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,  117, false);
+
+            SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 100)).c_str());
+            SetWindowTextA(hStopEdit,   std::format("{:.2f}", Settings_LoadFloat("StopPrice",  1.0f)).c_str());
+            SetWindowTextA(hProfitEdit, std::format("{:.2f}", Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
+            SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
+            y += 156;
+
+            // ── Debug ────────────────────────────────────────────────────────
+            CreateWindowA("BUTTON", "Debug",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y, w, 46,
                 hWnd, NULL, hInst, NULL);
 
-            HWND hStopEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                margin + 80, margin + 250, 80, 26,
-                hWnd, (HMENU)ID_SETTINGS_STOP_VALUE, hInst, NULL);
-
-            float stop = Settings_LoadFloat("StopPrice", 1.0f);
-            SetWindowTextA(hStopEdit, std::format("{:.2f}", stop).c_str());
-
-            
-            CreateWindowA("STATIC", "Profit:",
-                WS_CHILD | WS_VISIBLE,
-                margin, margin + 286, 75, 20,
-                hWnd, NULL, hInst, NULL);
-
-            HWND hProfitEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                margin + 80, margin + 283, 80, 26,
-                hWnd, (HMENU)ID_SETTINGS_PROFIT_VALUE, hInst, NULL);
-
-            float profit = Settings_LoadFloat("ProfitPrice", 2.0f);
-            SetWindowTextA(hProfitEdit, std::format("{:.2f}", profit).c_str());
-
-            CreateWindowA("STATIC", "Risk %:",
-                WS_CHILD | WS_VISIBLE,
-                margin, margin + 319, 75, 20,
-                hWnd, NULL, hInst, NULL);
-
-            HWND hRiskEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                margin + 80, margin + 316, 80, 26,
-                hWnd, (HMENU)ID_SETTINGS_RISK_VALUE, hInst, NULL);
-
-            float riskPct = Settings_LoadFloat("RiskPct", 1.0f);
-            SetWindowTextA(hRiskEdit, std::format("{:.2f}", riskPct).c_str());
-
-
-            HWND hBtnDebug = CreateWindowA("BUTTON", "Debug Log",
+            CreateWindowA("BUTTON", "View Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                margin, margin + 352, 250, 24,
+                m + gm, y + 16, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
             break;
         }
