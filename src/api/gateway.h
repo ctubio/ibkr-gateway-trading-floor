@@ -59,6 +59,8 @@
                                               // order. lParam = heap-allocated TradingAPI::OrderInfo* — handler
                                               // owns it and must delete it. Purely cosmetic: never written to
                                               // ordersMap, so it's naturally cleared on the next Orders_Repopulate().
+#define WM_OPEN_ORDERS_WINDOW (WM_USER + 17) // Posted from background thread (e.g. HTTP server) to the
+                                              // Dashboard window to request opening the Orders window on the UI thread.
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds";

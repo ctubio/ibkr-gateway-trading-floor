@@ -595,15 +595,17 @@ static std::string MakeMethodNotAllowed() {
 
 // Forward the trade to the external paper-trading dashboard.
 // Uses WinInet (already linked for news fetching) so no new dependencies.
-static void ForwardTradeToDashboard(const std::string& symbol,
-                                    const std::string& side,
-                                    double             quantity,
-                                    double             price) {
+static void ForwardTradeToDashboard(const std::string& symbol, const std::string& side, double quantity, double price, double stopPrice, double profitPrice) {
+    std::string stopPriceStr;
+    if (stopPrice > 0.0) {
+        stopPriceStr = ",\"stopPrice\":" + std::format("{:.2f}", stopPrice);
+    }
+    std::string profitPriceStr;
+    if (profitPrice > 0.0) {
+        profitPriceStr = ",\"profitPrice\":" + std::format("{:.2f}", profitPrice);
+    }
     // Build JSON payload
-    char payload[256];
-    snprintf(payload, sizeof(payload),
-             "{\"symbol\":\"%s\",\"side\":\"%s\",\"quantity\":%.0f,\"price\":%.2f}",
-             symbol.c_str(), side.c_str(), quantity, price);
+    std::string payload = std::format(R"({{"symbol":"{}", "side":"{}", "quantity":{:.0f}, "price":{:.2f}{}{}}})", symbol, side, quantity, price, stopPriceStr, profitPriceStr);
 
     // Build the raw HTTP POST request
     // Host: 192.168.1.105:2025  Path: /paper?action=place_trade
@@ -615,7 +617,7 @@ static void ForwardTradeToDashboard(const std::string& symbol,
     request += "POST " + urlPath + " HTTP/1.1\r\n";
     request += "Host: " + host + ":" + std::to_string(port) + "\r\n";
     request += "Content-Type: application/json\r\n";
-    request += "Content-Length: " + std::to_string(strlen(payload)) + "\r\n";
+    request += "Content-Length: " + std::to_string(payload.length()) + "\r\n";
     request += "Connection: close\r\n";
     request += "\r\n";
     request += payload;
@@ -650,7 +652,7 @@ static void ForwardTradeToDashboard(const std::string& symbol,
     while (recv(sock, rbuf, sizeof(rbuf) - 1, 0) > 0) {}
 
     closesocket(sock);
-    LogDebug("ForwardTrade: forwarded " + side + " " + symbol + " to dashboard");
+    LogDebug("ForwardTrade: forwarded " + side + " " + symbol + " to dashboard: " + payload);
 }
 
 // POST /trade
@@ -744,10 +746,25 @@ static std::string HandlePostTrade(const std::string& body) {
     }
 
     // ── Forward to external dashboard first ───────────────────────────────────
-    ForwardTradeToDashboard(symbol, side, quantity, price);
+    ForwardTradeToDashboard(symbol, side, quantity, price, stopPrice, profitPrice);
 
     // ── Submit the order to IBKR (transmit = false) ───────────────────────────
-    api().submitOrder(conId, symbol, side, false, quantity, price, stopPrice, profitPrice, false);
+    std::thread([conId, symbol, side, quantity, price, stopPrice, profitPrice]() {
+        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        if (hDashboard && IsWindow(hDashboard)) {
+            PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+        }
+        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+        int max = 10;
+        while (!hOrders || !IsWindow(hOrders)) {
+            if (!max--) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(121));
+            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+        }
+        if (hOrders && IsWindow(hOrders)) {
+            api().submitOrder(conId, symbol, side, false, quantity, price, stopPrice, profitPrice, false);
+        }
+    }).detach();
 
     LogDebug("POST /trade: " + side + " " + std::to_string((int)quantity) +
              " " + symbol + " @ " + std::to_string(price) +

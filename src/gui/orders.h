@@ -43,24 +43,7 @@ static HFONT fontInputs   = NULL;
 enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_AVGFILL, OCOL_STATUS };
 
 // Smaller font used for the Status column. Kept in sync with OrdersFontData's
-// font size via Orders_EnsureSmallFont(), called lazily from NM_CUSTOMDRAW.
 static HFONT OrdersSmallFont     = NULL;
-static int   OrdersSmallFontSize = -1;
-
-static void Orders_EnsureSmallFont() {
-    int targetSize = std::max(6, OrdersFontData.fontSize - 3);
-    if (OrdersSmallFont && OrdersSmallFontSize == targetSize) return;
-    if (OrdersSmallFont) { DeleteObject(OrdersSmallFont); OrdersSmallFont = NULL; }
-
-    HDC hdc = GetDC(NULL);
-    int h = -MulDiv(targetSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-    ReleaseDC(NULL, hdc);
-
-    OrdersSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-    OrdersSmallFontSize = targetSize;
-}
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -493,6 +476,14 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
+            int targetSize = std::max(6, OrdersFontData.fontSize - 3);
+            HDC hdc = GetDC(NULL);
+            int h = -MulDiv(targetSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+            ReleaseDC(NULL, hdc);
+            OrdersSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+
             LVCOLUMNA lvc = {};
             lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
             for (int i = 0; i < ORDER_COL_COUNT; ++i) {
@@ -690,7 +681,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             else if (dark)
                                 cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             if (cd->iSubItem == OCOL_STATUS) {
-                                Orders_EnsureSmallFont();
                                 SelectObject(cd->nmcd.hdc, OrdersSmallFont);
                             }
                             return CDRF_NEWFONT;
@@ -754,8 +744,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             if (OrdersSmallFont) {
                 DeleteObject(OrdersSmallFont);
-                OrdersSmallFont = NULL;
-                OrdersSmallFontSize = -1;
             }
             break;
     }

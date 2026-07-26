@@ -748,6 +748,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
             break;
 
+        case WM_OPEN_ORDERS_WINDOW:
+            StartOrders();
+            break;
+
         case WM_TTS_VOICE_CHANGED: {
             // Hot-swap the TTS voice without closing the window.
             // Release the current voice object so the next Coins_InitVoice call
