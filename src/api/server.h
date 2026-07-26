@@ -89,7 +89,16 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     j += "\"last\":"               + JsonDouble(l1.last)                     + ",";
     j += "\"vwap\":"               + JsonDouble(l1.vwap)                     + ",";
     j += "\"marketValue\":"        + JsonDouble(p.shares * l1.last)          + ",";
-    j += "\"dailyChange_pct\":\""       + std::format("{:+.2f}%", l1.changePct()) + "\",";
+    j += "\"week13_low\":"         + JsonDouble(l1.low13)                    + ",";
+    j += "\"week13_high\":"        + JsonDouble(l1.high13)                   + ",";
+    j += "\"week26_low\":"         + JsonDouble(l1.low26)                    + ",";
+    j += "\"week26_high\":"        + JsonDouble(l1.high26)                   + ",";
+    j += "\"week52_low\":"         + JsonDouble(l1.low52)                    + ",";
+    j += "\"week52_high\":"        + JsonDouble(l1.high52)                   + ",";
+    j += "\"week13Change_pct\":\""       + std::format("{:+.2f}%", l1.Week13RangePct()) + "\",";
+    j += "\"week26Change_pct\":\""       + std::format("{:+.2f}%", l1.Week26RangePct()) + "\",";
+    j += "\"week52Change_pct\":\""       + std::format("{:+.2f}%", l1.Week52RangePct()) + "\",";
+    j += "\"dailyChange_pct\":\""  + std::format("{:+.2f}%", l1.changePct()) + "\",";
     j += "\"dailyPnL\":"           + JsonDouble(p.pnlSingle.dailyPnL)        + ",";
     j += "\"unrealizedPnL\":"      + JsonDouble(p.pnlSingle.unrealizedPnL)   + ",";
     j += "\"unrealizedPnL_pct\":\"" + std::format("{:+.2f}%", unrealizedPct) + "\"";

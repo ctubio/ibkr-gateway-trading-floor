@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1660;
+int windowDiamondsWidth = 2000;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -65,6 +65,9 @@ enum DiamondColIdx {
     DCOL_BID,
     DCOL_BIDSIZE,
     DCOL_CHG5MIN,
+    DCOL_CHG13WEEK,
+    DCOL_CHG26WEEK,
+    DCOL_CHG52WEEK,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
     DCOL_VWAP,          // NEW — displays VWAP price, sorts by (Last - VWAP)
@@ -121,6 +124,9 @@ static const DiamondCol diamondCols[] = {
     { "Bid",              100, LVCFMT_RIGHT },
     { "BidSz",             80, LVCFMT_RIGHT },
     { "5m",            80, LVCFMT_RIGHT },
+    { "13w",            80, LVCFMT_RIGHT },
+    { "26w",            80, LVCFMT_RIGHT },
+    { "52w",            80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "VWAP",              90, LVCFMT_RIGHT },  // NEW
@@ -439,7 +445,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
         setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
         setNA(DCOL_CHG5MIN);
-        setNA(DCOL_VWAP);          // NEW
+        setNA(DCOL_VWAP);
+        setNA(DCOL_CHG13WEEK); setNA(DCOL_CHG26WEEK); setNA(DCOL_CHG52WEEK);
         return;
     }
 
@@ -454,6 +461,29 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         row.textCols[DCOL_VWAP]   = std::format("{:.2f}", t.vwap);
     } else {
         setNA(DCOL_VWAP);
+    }
+
+    // ── 13 26 52 weeks
+    if (t.high13 > 0.0 && t.low13 > 0.0) {
+        double pct13 = t.Week13RangePct();
+        row.sortValues[DCOL_CHG13WEEK] = pct13;
+        row.textCols[DCOL_CHG13WEEK]   = std::format("{:+.2f}%", pct13);
+    } else {
+        setNA(DCOL_CHG13WEEK);
+    }
+    if (t.high26 > 0.0 && t.low26 > 0.0) {
+        double pct26 = t.Week26RangePct();
+        row.sortValues[DCOL_CHG26WEEK] = pct26;
+        row.textCols[DCOL_CHG26WEEK]   = std::format("{:+.2f}%", pct26);
+    } else {
+        setNA(DCOL_CHG26WEEK);
+    }
+    if (t.high52 > 0.0 && t.low52 > 0.0) {
+        double pct52 = t.Week52RangePct();
+        row.sortValues[DCOL_CHG52WEEK] = pct52;
+        row.textCols[DCOL_CHG52WEEK]   = std::format("{:+.2f}%", pct52);
+    } else {
+        setNA(DCOL_CHG52WEEK);
     }
 
     // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,

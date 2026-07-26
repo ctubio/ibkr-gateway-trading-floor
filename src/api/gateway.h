@@ -174,9 +174,12 @@ public:
 
         // ── Fundamental ratios (tickString field 47, generic tick "258") ─────
         // Populated once per session; "-99999.99" sentinel is skipped.
-        double fiftyTwoWeekHigh = 0.0;  // NHIGH52
-        double fiftyTwoWeekLow  = 0.0;  // NLOW52
-        double beta             = 0.0;  // BETA
+        double low13     = 0.0;
+        double high13    = 0.0;
+        double low26     = 0.0;
+        double high26    = 0.0;
+        double low52     = 0.0;
+        double high52    = 0.0;
 
         // ── Dividends (tickString field 59, generic tick "456") ──────────────
         double annualDividends  = 0.0;
@@ -193,11 +196,25 @@ public:
         double dividendYield() const { return (last > 0 && annualDividends > 0) ? (annualDividends / last * 100.0) : 0.0; }
 
         // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
-        // Returns a sentinel (-999) when data is not yet available.
-        double fiftyTwoWeekRangePct() const {
-            double range = fiftyTwoWeekHigh - fiftyTwoWeekLow;
-            if (range <= 0 || last <= 0) return -999.0;
-            return (last - fiftyTwoWeekLow) / range * 100.0;
+        // Returns a sentinel (0.0) when data is not yet available.
+        double Week52RangePct() const {
+            double range = high52 - low52;
+            if (range <= 0 || last <= 0) return 0.0;
+            return (last - low52) / range * 100.0;
+        }
+        // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
+        // Returns a sentinel (0.0) when data is not yet available.
+        double Week26RangePct() const {
+            double range = high26 - low26;
+            if (range <= 0 || last <= 0) return 0.0;
+            return (last - low26) / range * 100.0;
+        }
+        // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
+        // Returns a sentinel (0.0) when data is not yet available.
+        double Week13RangePct() const {
+            double range = high13 - low13;
+            if (range <= 0 || last <= 0) return 0.0;
+            return (last - low13) / range * 100.0;
         }
     };
 
