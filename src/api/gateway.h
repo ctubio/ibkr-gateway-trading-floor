@@ -89,6 +89,8 @@ public:
         std::string orderType;
         std::string tif;
         double      price     = 0.0;
+        double      fullStopPrice     = 0.0;
+        double      fullProfitPrice     = 0.0;
         double      totalQty  = 0.0;
         double      filledQty = 0.0;
         double      avgFillPx = 0.0;

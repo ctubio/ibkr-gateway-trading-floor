@@ -1,6 +1,6 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 600, 240); }
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 635, 240); }
 
 #define ID_ORDERS_LIST          9003
 #define ID_ORDERS_PRICE_EDIT    9010
@@ -25,6 +25,8 @@ struct OrdersEditState {
     std::string symbol;
     std::string action;
     bool        isOvernight = false;
+    double fullStopPrice;
+    double fullProfitPrice;
 };
 static OrdersEditState s_editState;
 
@@ -66,8 +68,8 @@ struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
-    { "Quote",        175,  LVCFMT_LEFT },
-    { "Avg Filled",   135,  LVCFMT_LEFT },
+    { "Quote",        190,  LVCFMT_LEFT },
+    { "Avg Filled",   150,  LVCFMT_LEFT },
     { "Status",       170,  LVCFMT_CENTER},
     // { "Time",          80,  LVCFMT_CENTER},
 };
@@ -331,17 +333,42 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 char pBuf[32] = {}, qBuf[32] = {};
                 if (hPriceEdit) GetWindowTextA(hPriceEdit, pBuf, sizeof(pBuf));
                 double price = atof(pBuf);
-                double qty;
+                double qty = s_editState.originalQty;
                 if (!s_editState.partialFill && hQtyEdit) {
                     GetWindowTextA(hQtyEdit, qBuf, sizeof(qBuf));
                     qty = atof(qBuf);
-                } else {
-                    qty = s_editState.originalQty;
                 }
                 if (qty > 0) {
                     if (s_editState.isUnsent) {
                         // Placeholder was never transmitted — place it for real now.
-                        api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action, s_editState.isOvernight, qty, price, 0.0, 0.0, true);
+                        bool stopValid = s_editState.fullStopPrice <= 0.0 || price <= 0.0 ||
+                            (s_editState.action == "BUY"  ? s_editState.fullStopPrice < price
+                                                        : s_editState.fullStopPrice > price);
+
+                        bool profitValid = s_editState.fullProfitPrice <= 0.0 || price <= 0.0 ||
+                            (s_editState.action == "BUY"  ? s_editState.fullProfitPrice > price
+                                                        : s_editState.fullProfitPrice < price);
+
+                        if (!stopValid || !profitValid || qty > 10) {
+                            // bail out / show error instead of submitting
+                            return 0;
+                        }
+
+                        double stopPrice = (price > 0 && s_editState.fullStopPrice > 0) ? (
+                            s_editState.action == "BUY" ? price - s_editState.fullStopPrice : s_editState.fullStopPrice - price
+                            ) : 0.0;
+                        double profitPrice = (price > 0 && s_editState.fullProfitPrice > 0) ? (
+                            s_editState.action == "BUY" ? s_editState.fullProfitPrice - price : price - s_editState.fullProfitPrice
+                            ) : 0.0;
+
+                        // defensive: distances should never be negative once validated above
+                        stopPrice   = std::max(0.0, stopPrice);
+                        profitPrice = std::max(0.0, profitPrice);
+                        if ((price > 0 || stopPrice > 0) && qty > 0 && qty <= 10) {
+                            if (stopPrice < 0.1) stopPrice = 0.0;
+                            if (profitPrice < 0.1) profitPrice = 0.0;
+                            api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action, s_editState.isOvernight, qty, price, stopPrice, profitPrice);
+                        }
                         HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                         int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                         if (sel >= 0) ListView_DeleteItem(hList, sel);
@@ -406,6 +433,8 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     s_editState.symbol      = order.symbol;
     s_editState.action      = order.action;
     s_editState.isOvernight = order.includeOvernight;
+    s_editState.fullStopPrice = order.fullStopPrice;
+    s_editState.fullProfitPrice = order.fullProfitPrice;
 
     HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
@@ -690,7 +719,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     ListView_SetItemText(hList, idx, OCOL_SYMBOL, (LPSTR)info->symbol.c_str());
                     std::string quoteStr = std::format("{:.0f} @ {:.2f}", info->totalQty, info->price);
                     ListView_SetItemText(hList, idx, OCOL_QUOTE, (LPSTR)quoteStr.c_str());
-                    ListView_SetItemText(hList, idx, OCOL_AVGFILL, (LPSTR)"-- @ --");
+                    std::string filledStr = std::format("{:.2f} | {:.2f}", info->fullStopPrice, info->fullProfitPrice);
+                    ListView_SetItemText(hList, idx, OCOL_AVGFILL, (LPSTR)filledStr.c_str());
                     std::string fullTypeStr = info->tif + " " + info->orderType + " " + info->status;
                     ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
                 }

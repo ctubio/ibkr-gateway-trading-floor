@@ -4,12 +4,16 @@
 //
 //  Serves endpoints over a background thread using raw Winsock (no extra libs):
 //
-//    GET /balance            → JSON object with account number, PnL, and summary map
-//    GET /positions          → JSON array of all positions from api().getPortfolioMap()
-//    GET /position/{SYMBOL}  → JSON object for the single position matching SYMBOL
-//    GET /price/{SYMBOL}     → JSON object with a single price (or empty on miss)
-//    GET /today              → Plain-text market news for today (TraderTV watchlist)
-//    GET /week               → Plain-text market news for today + 4 previous trading days
+//    GET  /balance            → JSON object with account number, PnL, and summary map
+//    GET  /positions          → JSON array of all positions from api().getPortfolioMap()
+//    GET  /position/{SYMBOL}  → JSON object for the single position matching SYMBOL
+//    GET  /price/{SYMBOL}     → JSON object with a single price (or empty on miss)
+//    GET  /today              → Plain-text market news for today (TraderTV watchlist)
+//    GET  /week               → Plain-text market news for today + 4 previous trading days
+//    POST /trade              → Place an untransmitted limit order via IBKR
+//                               Body: {"symbol":"AAPL","side":"BUY","quantity":10,"price":175.50}
+//                               Also forwards the order to the external dashboard at
+//                               http://192.168.1.105:2025/paper?action=place_trade
 //
 //  The server listens on 0.0.0.0:PORT (default 4011) so it is reachable from
 //  the LAN.  Call HttpServer_Start() once after WinMain initialises and
@@ -535,6 +539,41 @@ static std::string HandleGetNews(int numDays) {
     return body;
 }
 
+// ── Simple JSON field extractor ──────────────────────────────────────────────
+// Extracts the value of a JSON string field: "key":"value" → value
+// Returns empty string if not found.
+static std::string JsonExtractString(const std::string& json, const std::string& key) {
+    std::string needle = "\"" + key + "\"";
+    size_t pos = json.find(needle);
+    if (pos == std::string::npos) return "";
+    pos += needle.size();
+    // skip whitespace and colon
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':' || json[pos] == '\t')) ++pos;
+    if (pos >= json.size()) return "";
+    if (json[pos] == '"') {
+        ++pos;
+        std::string val;
+        while (pos < json.size() && json[pos] != '"') val += json[pos++];
+        return val;
+    }
+    return "";
+}
+
+// Extracts the value of a JSON number field: "key":123.45 → "123.45" (as string)
+// Returns empty string if not found.
+static std::string JsonExtractNumber(const std::string& json, const std::string& key) {
+    std::string needle = "\"" + key + "\"";
+    size_t pos = json.find(needle);
+    if (pos == std::string::npos) return "";
+    pos += needle.size();
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':' || json[pos] == '\t')) ++pos;
+    if (pos >= json.size()) return "";
+    std::string val;
+    while (pos < json.size() && (std::isdigit((unsigned char)json[pos]) || json[pos] == '.' || json[pos] == '-' || json[pos] == '+' || json[pos] == 'e' || json[pos] == 'E'))
+        val += json[pos++];
+    return val;
+}
+
 // ── HTTP framing helpers ──────────────────────────────────────────────────────
 
 static std::string MakeHttpResponse(int status, const std::string& statusText,
@@ -574,6 +613,186 @@ static std::string MakeMethodNotAllowed() {
     return MakeHttpResponse(405, "Method Not Allowed", "{\"error\":\"method not allowed\"}");
 }
 
+// ── POST /trade handler ───────────────────────────────────────────────────────
+
+// Forward the trade to the external paper-trading dashboard.
+// Uses WinInet (already linked for news fetching) so no new dependencies.
+static void ForwardTradeToDashboard(const std::string& symbol,
+                                    const std::string& side,
+                                    double             quantity,
+                                    double             price) {
+    // Build JSON payload
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+             "{\"symbol\":\"%s\",\"side\":\"%s\",\"quantity\":%.0f,\"price\":%.2f}",
+             symbol.c_str(), side.c_str(), quantity, price);
+
+    // Build the raw HTTP POST request
+    // Host: 192.168.1.105:2025  Path: /paper?action=place_trade
+    const std::string host    = "192.168.1.105";
+    const int         port    = 2025;
+    const std::string urlPath = "/paper?action=place_trade";
+
+    std::string request;
+    request += "POST " + urlPath + " HTTP/1.1\r\n";
+    request += "Host: " + host + ":" + std::to_string(port) + "\r\n";
+    request += "Content-Type: application/json\r\n";
+    request += "Content-Length: " + std::to_string(strlen(payload)) + "\r\n";
+    request += "Connection: close\r\n";
+    request += "\r\n";
+    request += payload;
+
+    // Open a raw TCP socket to the dashboard
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET) {
+        LogDebug("ForwardTrade: failed to create socket");
+        return;
+    }
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons((u_short)port);
+    inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+
+    // Set a short connect timeout (2 s) so we don't block the server thread
+    DWORD timeout = 2000;
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+
+    if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
+        LogDebug("ForwardTrade: connect failed to " + host);
+        closesocket(sock);
+        return;
+    }
+
+    send(sock, request.c_str(), (int)request.size(), 0);
+
+    // Read (and discard) the response so the server knows we consumed it
+    char rbuf[512];
+    while (recv(sock, rbuf, sizeof(rbuf) - 1, 0) > 0) {}
+
+    closesocket(sock);
+    LogDebug("ForwardTrade: forwarded " + side + " " + symbol + " to dashboard");
+}
+
+// POST /trade
+// Body: {"symbol":"AAPL","side":"BUY","quantity":10,"price":175.50}
+static std::string HandlePostTrade(const std::string& body) {
+    // ── Parse JSON fields ─────────────────────────────────────────────────────
+    std::string symbol = JsonExtractString(body, "symbol");
+    std::string side   = JsonExtractString(body, "side");
+    std::string qtyStr = JsonExtractNumber(body, "quantity");
+    std::string prxStr = JsonExtractNumber(body, "price");
+    std::string stpStr = JsonExtractNumber(body, "stopPrice");
+    std::string proStr = JsonExtractNumber(body, "profitPrice");
+
+    if (symbol.empty() || side.empty() || qtyStr.empty() || prxStr.empty()) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"missing required fields: symbol, side, quantity, price\"}");
+    }
+
+    // Normalise
+    std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::toupper);
+    std::transform(side.begin(),   side.end(),   side.begin(),   ::toupper);
+    if (side != "BUY" && side != "SELL") {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"side must be BUY or SELL\"}");
+    }
+
+    double quantity = 0.0;
+    double price    = 0.0;
+    try {
+        quantity = std::stod(qtyStr);
+        price    = std::stod(prxStr);
+    } catch (...) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"quantity and price must be numeric\"}");
+    }
+
+    if (quantity <= 0.0 || price <= 0.0) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"quantity and price must be positive\"}");
+    }
+    if (quantity > 10.0) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"quantity must be less than 10\"}");
+    }
+
+    double stopPrice = 0.0;
+    try {
+        stopPrice = std::max(0.0, std::stod(stpStr));
+    } catch (...) {
+       stopPrice = 0.0;
+    }
+
+    double profitPrice = 0.0;
+    try {
+        profitPrice = std::max(0.0, std::stod(proStr));
+    } catch (...) {
+        profitPrice = 0.0;
+    }
+
+    // BUY: stop-loss must sit below entry price
+    if (stopPrice > 0.0 && price > 0.0 && side == "BUY" && stopPrice >= price) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"stopPrice must be lower than price for BUY orders\"}");
+    }
+    // SELL: stop-loss must sit above entry price
+    if (stopPrice > 0.0 && price > 0.0 && side == "SELL" && stopPrice <= price) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"stopPrice must be higher than price for SELL orders\"}");
+    }
+    // BUY: take-profit must sit above entry price
+    if (profitPrice > 0.0 && price > 0.0 && side == "BUY" && profitPrice <= price) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"profitPrice must be higher than price for BUY orders\"}");
+    }
+    // SELL: take-profit must sit below entry price
+    if (profitPrice > 0.0 && price > 0.0 && side == "SELL" && profitPrice >= price) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"profitPrice must be lower than price for SELL orders\"}");
+    }
+
+    // ── Look up conId from live portfolio ─────────────────────────────────────
+    int conId = 0;
+    {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        const auto& map = api().getPortfolioMap();
+        for (const auto& [id, pos] : map) {
+            std::string sym = pos.symbol;
+            std::transform(sym.begin(), sym.end(), sym.begin(), ::toupper);
+            if (sym == symbol) { conId = id; break; }
+        }
+    }
+
+    // ── Forward to external dashboard first ───────────────────────────────────
+    ForwardTradeToDashboard(symbol, side, quantity, price);
+
+    // ── Submit the order to IBKR (transmit = false) ───────────────────────────
+    api().submitOrder(conId, symbol, side, false, quantity, price, stopPrice, profitPrice, false);
+
+    LogDebug("POST /trade: " + side + " " + std::to_string((int)quantity) +
+             " " + symbol + " @ " + std::to_string(price) +
+             " stop=" + std::format("{:.2f}", stopPrice) +
+             " profit=" + std::format("{:.2f}", profitPrice) +
+             " conId=" + std::to_string(conId));
+
+    // ── Build success response ────────────────────────────────────────────────
+    std::string resp;
+    resp += "{";
+    resp += "\"status\":\"queued\",";
+    resp += "\"symbol\":\""   + JsonEscapeString(symbol)       + "\",";
+    resp += "\"side\":\""     + JsonEscapeString(side)         + "\",";
+    resp += "\"quantity\":"   + JsonDouble(quantity)           + ",";
+    resp += "\"price\":"      + JsonDouble(price)              + ",";
+    resp += "\"stopPrice\":"      + JsonDouble(stopPrice)      + ",";
+    resp += "\"profitPrice\":"      + JsonDouble(profitPrice)  + ",";
+    resp += "\"conId\":"      + std::to_string(conId)          + ",";
+    resp += "\"transmit\":false";
+    resp += "}";
+    return MakeOk(resp);
+}
+
 // ── Request routing ───────────────────────────────────────────────────────────
 
 static std::string RouteRequest(const std::string& rawRequest) {
@@ -594,9 +813,23 @@ static std::string RouteRequest(const std::string& rawRequest) {
     size_t qmark = fullPath.find('?');
     std::string path = (qmark != std::string::npos) ? fullPath.substr(0, qmark) : fullPath;
 
-    if (method != "GET") return MakeMethodNotAllowed();
-    
     LogDebug(std::string("HTTP request: ") + method + " " + path);
+
+    // ── POST /trade ───────────────────────────────────────────────────────────
+    if (path == "/trade" || path == "/trade/") {
+        if (method != "POST") return MakeMethodNotAllowed();
+        // Extract body: everything after the blank line separating headers from body
+        std::string body;
+        size_t bodyStart = rawRequest.find("\r\n\r\n");
+        if (bodyStart != std::string::npos) body = rawRequest.substr(bodyStart + 4);
+        else {
+            size_t alt = rawRequest.find("\n\n");
+            if (alt != std::string::npos) body = rawRequest.substr(alt + 2);
+        }
+        return HandlePostTrade(body);
+    }
+
+    if (method != "GET") return MakeMethodNotAllowed();
     
         // Route: GET /balance
     if (path == "/balance" || path == "/balance/") {
@@ -658,8 +891,30 @@ static void HandleHttpClient(SOCKET client) {
         if (n <= 0) break;
         tmp[n] = '\0';
         buf.append(tmp, n);
-        if (buf.find("\r\n\r\n") != std::string::npos) break;
-        if (buf.size() > 8192) break;
+        // For GET requests stop after headers; for POST keep reading the body too
+        if (buf.find("\r\n\r\n") != std::string::npos) {
+            // If this is a POST, also wait for the Content-Length bytes
+            if (buf.substr(0, 4) == "POST") {
+                // Parse Content-Length header
+                size_t clPos = buf.find("Content-Length:");
+                if (clPos == std::string::npos) clPos = buf.find("content-length:");
+                if (clPos != std::string::npos) {
+                    size_t valStart = buf.find_first_not_of(" \t", clPos + 15);
+                    size_t valEnd   = buf.find('\r', valStart);
+                    int contentLen  = std::stoi(buf.substr(valStart, valEnd - valStart));
+                    size_t hdEnd    = buf.find("\r\n\r\n") + 4;
+                    // Keep reading until we have the full body
+                    while ((int)(buf.size() - hdEnd) < contentLen) {
+                        int m = recv(client, tmp, sizeof(tmp) - 1, 0);
+                        if (m <= 0) break;
+                        tmp[m] = '\0';
+                        buf.append(tmp, m);
+                    }
+                }
+            }
+            break;
+        }
+        if (buf.size() > 32768) break;
     }
 
     if (!buf.empty()) {
