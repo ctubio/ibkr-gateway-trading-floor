@@ -596,16 +596,12 @@ static std::string MakeMethodNotAllowed() {
 // Forward the trade to the external paper-trading dashboard.
 // Uses WinInet (already linked for news fetching) so no new dependencies.
 static void ForwardTradeToDashboard(const std::string& symbol, const std::string& side, double quantity, double price, double stopPrice, double profitPrice) {
-    std::string stopPriceStr;
-    if (stopPrice > 0.0) {
-        stopPriceStr = ",\"stopPrice\":" + std::format("{:.2f}", stopPrice);
-    }
     std::string profitPriceStr;
     if (profitPrice > 0.0) {
         profitPriceStr = ",\"profitPrice\":" + std::format("{:.2f}", profitPrice);
     }
     // Build JSON payload
-    std::string payload = std::format(R"({{"symbol":"{}", "side":"{}", "quantity":{:.0f}, "price":{:.2f}{}{}}})", symbol, side, quantity, price, stopPriceStr, profitPriceStr);
+    std::string payload = std::format(R"({{"symbol":"{}", "side":"{}", "quantity":{:.0f}, "price":{:.2f}, "stopPrice":{:.2f}{}}})", symbol, side, quantity, price, stopPrice, profitPriceStr);
 
     // Build the raw HTTP POST request
     // Host: 192.168.1.105:2025  Path: /paper?action=place_trade
@@ -681,28 +677,23 @@ static std::string HandlePostTrade(const std::string& body) {
 
     double quantity = 0.0;
     double price    = 0.0;
+    double stopPrice = 0.0;
     try {
         quantity = std::stod(qtyStr);
         price    = std::stod(prxStr);
+        stopPrice = std::max(0.0, std::stod(stpStr));
     } catch (...) {
         return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"quantity and price must be numeric\"}");
+            "{\"error\":\"quantity and price and stopPrice must be numeric\"}");
     }
 
-    if (quantity <= 0.0 || price <= 0.0) {
+    if (quantity <= 0.0 || price <= 0.0 || stopPrice <= 0.0) {
         return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"quantity and price must be positive\"}");
+            "{\"error\":\"quantity and price and stopPrice must be positive\"}");
     }
     if (quantity > 10.0) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"quantity must be less than 10\"}");
-    }
-
-    double stopPrice = 0.0;
-    try {
-        stopPrice = std::max(0.0, std::stod(stpStr));
-    } catch (...) {
-       stopPrice = 0.0;
     }
 
     double profitPrice = 0.0;
@@ -713,22 +704,22 @@ static std::string HandlePostTrade(const std::string& body) {
     }
 
     // BUY: stop-loss must sit below entry price
-    if (stopPrice > 0.0 && price > 0.0 && side == "BUY" && stopPrice >= price) {
+    if (side == "BUY" && stopPrice >= price) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"stopPrice must be lower than price for BUY orders\"}");
     }
     // SELL: stop-loss must sit above entry price
-    if (stopPrice > 0.0 && price > 0.0 && side == "SELL" && stopPrice <= price) {
+    if (side == "SELL" && stopPrice <= price) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"stopPrice must be higher than price for SELL orders\"}");
     }
     // BUY: take-profit must sit above entry price
-    if (profitPrice > 0.0 && price > 0.0 && side == "BUY" && profitPrice <= price) {
+    if (profitPrice > 0.0 && side == "BUY" && profitPrice <= price) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"profitPrice must be higher than price for BUY orders\"}");
     }
     // SELL: take-profit must sit below entry price
-    if (profitPrice > 0.0 && price > 0.0 && side == "SELL" && profitPrice >= price) {
+    if (profitPrice > 0.0 && side == "SELL" && profitPrice >= price) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"profitPrice must be lower than price for SELL orders\"}");
     }
