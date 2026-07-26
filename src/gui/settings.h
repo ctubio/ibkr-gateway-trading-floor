@@ -223,13 +223,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
             y += 156;
 
-            // ── Debug ────────────────────────────────────────────────────────
-            CreateWindowA("BUTTON", "Debug",
+            // ── System Tools ───────────────────────────────────────────
+            CreateWindowA("BUTTON", "API Messages",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 46,
                 hWnd, NULL, hInst, NULL);
 
-            CreateWindowA("BUTTON", "View Log",
+            CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                 m + gm, y + 16, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
