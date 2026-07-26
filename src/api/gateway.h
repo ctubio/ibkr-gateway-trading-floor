@@ -1,7 +1,9 @@
 #pragma once
 
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <windowsx.h>
+#include <wininet.h>
 #include <shobjidl.h>
 #include <dwmapi.h>
 #include <initguid.h>
@@ -16,23 +18,28 @@
 #include <gdiplus.h>
 
 #include <string>
-#include <vector>
+#include <cstring>
 #include <cstdio>
-#include <map>
+#include <chrono>
+#include <ctime>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <iostream>
 #include <deque>
+#include <map>
+#include <vector>
+#include <unordered_map>
+#include <unordered_set>
+#include <thread>
+#include <atomic>
 #include <mutex>
+#include <algorithm>
+#include <functional>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <exception>
-#include <fstream>
-#include <sstream>
-#include <unordered_map>
-#include <unordered_set>
-#include <algorithm>
-#include <functional>
-#include <cstring>
-#include <filesystem>
 
 #define WM_API_UPDATE       (WM_USER +  2)
 #define WM_SYMBOL_RESULTS   (WM_USER +  3)

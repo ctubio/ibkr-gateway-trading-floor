@@ -8,10 +8,17 @@
 //    GET /positions          → JSON array of all positions from api().getPortfolioMap()
 //    GET /position/{SYMBOL}  → JSON object for the single position matching SYMBOL
 //    GET /price/{SYMBOL}     → JSON object with a single price (or empty on miss)
+//    GET /today              → Plain-text market news for today (TraderTV watchlist)
+//    GET /week               → Plain-text market news for today + 4 previous trading days
 //
-//  The server listens on 127.0.0.1:PORT (default 7779) so it is only reachable
-//  from the local machine.  Call HttpServer_Start() once after WinMain initialises
-//  and HttpServer_Stop() before the process exits.
+//  The server listens on 0.0.0.0:PORT (default 4011) so it is reachable from
+//  the LAN.  Call HttpServer_Start() once after WinMain initialises and
+//  HttpServer_Stop() before the process exits.
+//
+//  News content is cached in the Windows Registry under:
+//    HKCU\Software\ibkr-gateway-trading-floor\NewsCache
+//  One REG_SZ value per day (key = YYYY-MM-DD). Values older than 7 days are
+//  purged automatically at the end of every /today or /week request.
 //
 //  JSON is hand-built (no external library required).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -197,6 +204,337 @@ static std::string HandleGetPositionBySymbol(const std::string& symbol) {
     return "";
 }
 
+// ── News fetch helpers (mirrors fetch_news.py logic) ─────────────────────────
+
+// Registry sub-key used to store news cache entries
+static constexpr const char* NEWS_CACHE_SUBKEY = "NewsCache";
+
+// Month names table (matches Python MONTHS dict)
+static const char* s_monthNames[] = {
+    "", "january", "february", "march", "april",
+    "may", "june", "july", "august",
+    "september", "october", "november", "december"
+};
+
+// Build the TraderTV watchlist URL for a given date (YYYY, MM, DD)
+static std::string News_BuildUrl(int year, int month, int day) {
+    return std::string("https://tradertv-live.beehiiv.com/p/trader-tv-watchlist-")
+        + s_monthNames[month] + "-" + std::to_string(day)
+        + "-" + std::to_string(year);
+}
+
+// Format a date as YYYY-MM-DD string
+static std::string News_DateKey(SYSTEMTIME st) {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d", st.wYear, st.wMonth, st.wDay);
+    return buf;
+}
+
+// Format a date as "Month D, YYYY" (no leading zero on day, matching Python)
+static std::string News_FormatHeader(SYSTEMTIME st) {
+    return std::string(s_monthNames[st.wMonth][0] ? (std::string() + (char)toupper(s_monthNames[st.wMonth][0]) + (s_monthNames[st.wMonth] + 1)) : "")
+        + " " + std::to_string(st.wDay)
+        + ", " + std::to_string(st.wYear);
+}
+
+// Load a cached news entry from the registry; returns empty string on miss
+static std::string News_LoadCache(const std::string& dateKey) {
+    HKEY hKey;
+    std::string fullPath = std::string(APP_REG_ROOT) + "\\" + NEWS_CACHE_SUBKEY;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return "";
+
+    DWORD size = 0;
+    if (RegQueryValueExA(hKey, dateKey.c_str(), NULL, NULL, NULL, &size) != ERROR_SUCCESS || size == 0) {
+        RegCloseKey(hKey);
+        return "";
+    }
+    std::vector<char> buf(size);
+    RegQueryValueExA(hKey, dateKey.c_str(), NULL, NULL, (LPBYTE)buf.data(), &size);
+    RegCloseKey(hKey);
+    return std::string(buf.data());
+}
+
+// Save a news entry to the registry under the NewsCache subkey
+static void News_SaveCache(const std::string& dateKey, const std::string& content) {
+    HKEY hKey;
+    std::string fullPath = std::string(APP_REG_ROOT) + "\\" + NEWS_CACHE_SUBKEY;
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL,
+                        REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, dateKey.c_str(), 0, REG_SZ,
+                       (const BYTE*)content.c_str(), (DWORD)content.size() + 1);
+        RegCloseKey(hKey);
+    }
+}
+
+// Delete registry values whose key name (YYYY-MM-DD) is older than max_age_days.
+// Returns the number of entries deleted.
+static int News_CleanupCache(int maxAgeDays = 7) {
+    HKEY hKey;
+    std::string fullPath = std::string(APP_REG_ROOT) + "\\" + NEWS_CACHE_SUBKEY;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0,
+                      KEY_QUERY_VALUE | KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
+        return 0;
+
+    // Compute cutoff as a YYYYMMDD integer for easy comparison
+    SYSTEMTIME now;
+    GetLocalTime(&now);
+    // Roll back maxAgeDays days using FileTime arithmetic
+    FILETIME nowFT, cutoffFT;
+    SystemTimeToFileTime(&now, &nowFT);
+    ULONGLONG ns100 = ((ULONGLONG)nowFT.dwHighDateTime << 32) | nowFT.dwLowDateTime;
+    ns100 -= (ULONGLONG)maxAgeDays * 24ULL * 3600ULL * 10000000ULL;
+    cutoffFT.dwHighDateTime = (DWORD)(ns100 >> 32);
+    cutoffFT.dwLowDateTime  = (DWORD)(ns100 & 0xFFFFFFFF);
+    SYSTEMTIME cutoffST;
+    FileTimeToSystemTime(&cutoffFT, &cutoffST);
+    char cutoffBuf[12];
+    snprintf(cutoffBuf, sizeof(cutoffBuf), "%04d-%02d-%02d",
+             cutoffST.wYear, cutoffST.wMonth, cutoffST.wDay);
+    std::string cutoff(cutoffBuf);
+
+    // Enumerate all values and collect names to delete
+    std::vector<std::string> toDelete;
+    DWORD index = 0;
+    char valueName[32];
+    DWORD nameSize = sizeof(valueName);
+    while (RegEnumValueA(hKey, index++, valueName, &nameSize,
+                         NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+        std::string name(valueName);
+        // Keys are YYYY-MM-DD; lexicographic comparison works for ISO dates
+        if (name.size() == 10 && name < cutoff)
+            toDelete.push_back(name);
+        nameSize = sizeof(valueName);
+    }
+
+    for (const auto& name : toDelete)
+        RegDeleteValueA(hKey, name.c_str());
+
+    RegCloseKey(hKey);
+    return (int)toDelete.size();
+}
+
+// Fetch the TraderTV page via WinInet and extract cleaned text (mirrors Python fetch_content).
+// Returns empty string if the page is not found (404 / "doesn't exist" page).
+static std::string News_FetchContent(const std::string& url, int day, int month, int year) {
+    HINTERNET hInet = InternetOpenA("Mozilla/5.0 (compatible; OpenClawBot/1.0)", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hInet) return "";
+
+    HINTERNET hConn = InternetOpenUrlA(hInet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
+    if (!hConn) { InternetCloseHandle(hInet); return ""; }
+
+    std::string html;
+    char chunk[8192];
+    DWORD bytesRead = 0;
+    while (InternetReadFile(hConn, chunk, sizeof(chunk), &bytesRead) && bytesRead > 0)
+        html.append(chunk, bytesRead);
+
+    InternetCloseHandle(hConn);
+    InternetCloseHandle(hInet);
+
+    // Check for 404 / not-found page (beehiiv returns a full page even for missing posts)
+    if (html.find("doesn&#x27;t exist") != std::string::npos ||
+        html.find("The page you requested doesn") != std::string::npos)
+        return ""; // signal: not found
+
+    // ── Strip <style> and <script> blocks ────────────────────────────────────
+    auto stripTag = [](std::string& s, const std::string& open, const std::string& close) {
+        std::string out;
+        size_t pos = 0;
+        while (true) {
+            size_t start = s.find(open, pos);
+            if (start == std::string::npos) { out += s.substr(pos); break; }
+            out += s.substr(pos, start - pos);
+            size_t end = s.find(close, start + open.size());
+            if (end == std::string::npos) break;
+            pos = end + close.size();
+        }
+        s = std::move(out);
+    };
+    // Case-insensitive strip: strip lowercase tags (beehiiv uses lowercase)
+    stripTag(html, "<style",  "</style>");
+    stripTag(html, "<script", "</script>");
+    stripTag(html, "<STYLE",  "</STYLE>");
+    stripTag(html, "<SCRIPT", "</SCRIPT>");
+
+    // ── Remove footer: everything after the copyright line ───────────────────
+    static const std::string copyrightMark = "&#xA9; ";
+    size_t footerPos = html.find(copyrightMark);
+    // Also try literal ©
+    if (footerPos == std::string::npos) footerPos = html.find("\xC2\xA9"); // UTF-8 ©
+    if (footerPos != std::string::npos) html = html.substr(0, footerPos);
+
+    // ── Replace block-level closing tags with newlines ────────────────────────
+    auto replaceAll = [](std::string& s, const std::string& from, const std::string& to) {
+        size_t pos = 0;
+        while ((pos = s.find(from, pos)) != std::string::npos) {
+            s.replace(pos, from.size(), to);
+            pos += to.size();
+        }
+    };
+    replaceAll(html, "</p>",  "\n");
+    replaceAll(html, "</P>",  "\n");
+    replaceAll(html, "<br/>", "\n");
+    replaceAll(html, "<br />","\n");
+    replaceAll(html, "<br>",  "\n");
+    replaceAll(html, "<BR>",  "\n");
+    replaceAll(html, "&amp;",  "&");
+    replaceAll(html, "&nbsp;",  " ");
+
+    // ── Strip all remaining HTML tags ─────────────────────────────────────────
+    std::string text;
+    text.reserve(html.size());
+    bool inTag = false;
+    for (char c : html) {
+        if (c == '<') { inTag = true; text += ' '; continue; }
+        if (c == '>') { inTag = false; continue; }
+        if (!inTag) text += c;
+    }
+
+    // ── Split into lines, strip, drop empty ──────────────────────────────────
+    std::vector<std::string> lines;
+    {
+        std::istringstream ss(text);
+        std::string line;
+        while (std::getline(ss, line)) {
+            // ltrim
+            size_t s2 = line.find_first_not_of(" \t\r");
+            if (s2 != std::string::npos) line = line.substr(s2);
+            else line.clear();
+            // rtrim
+            size_t e2 = line.find_last_not_of(" \t\r");
+            if (e2 != std::string::npos) line = line.substr(0, e2 + 1);
+            else line.clear();
+            if (!line.empty()) lines.push_back(line);
+        }
+    }
+
+    // ── Find first meaningful content line ────────────────────────────────────
+    size_t startIdx = 0;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].find("Welcome to") != std::string::npos ||
+            lines[i].find("In The News") != std::string::npos) {
+            startIdx = i;
+            break;
+        }
+    }
+
+    // ── Filter noise patterns (mirrors Python skip_patterns) ─────────────────
+    // We use simple string equality / prefix checks instead of full regex.
+    auto isNoise = [](const std::string& ln) -> bool {
+        if (ln == "TraderTV Research")    return true;
+        if (ln == "Login Subscribe")      return true;
+        if (ln == "0")                    return true;
+        if (ln == "Home")                 return true;
+        if (ln == "Posts")                return true;
+        if (ln == "CLICK TO WATCH NOW!") return true;
+        if (ln.find("TraderTV.LIVE") != std::string::npos &&
+            ln.find("features a daily live trading broadcast") != std::string::npos)
+            return true;
+        if (ln.find("Join us on YouTube") != std::string::npos)
+            return true;
+        if (ln.find("every weekday from 8:00am to 4:00pm EST") != std::string::npos)
+            return true;
+        return false;
+    };
+
+    std::vector<std::string> filtered;
+    for (size_t i = startIdx; i < lines.size(); ++i) {
+        if (!isNoise(lines[i])) filtered.push_back(lines[i]);
+    }
+
+    // Join with double newlines (mirrors Python "\n\n".join(filtered_lines))
+    std::string result;
+    for (size_t i = 0; i < filtered.size(); ++i) {
+        if (i > 0) result += "\n\n";
+        result += filtered[i];
+    }
+    return result;
+}
+
+// Return a list of up to `num` trading dates counting backward from today
+// (inclusive), oldest first. Mirrors Python get_trading_days().
+static std::vector<SYSTEMTIME> News_GetTradingDays(int num) {
+    SYSTEMTIME today;
+    GetLocalTime(&today);
+
+    std::vector<SYSTEMTIME> days;
+    FILETIME ft;
+    SystemTimeToFileTime(&today, &ft);
+    ULONGLONG ns = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+
+    while ((int)days.size() < num) {
+        FILETIME cur;
+        cur.dwHighDateTime = (DWORD)(ns >> 32);
+        cur.dwLowDateTime  = (DWORD)(ns & 0xFFFFFFFF);
+        SYSTEMTIME st;
+        FileTimeToSystemTime(&cur, &st);
+        // wDayOfWeek: 0=Sun, 6=Sat
+        if (st.wDayOfWeek != 0 && st.wDayOfWeek != 6)
+            days.push_back(st);
+        // Step back one day (100ns units)
+        ns -= (ULONGLONG)24 * 3600 * 10000000;
+    }
+
+    // Reverse to get chronological order (oldest first)
+    std::reverse(days.begin(), days.end());
+    return days;
+}
+
+// Build the formatted day header string (mirrors Python print_day_header)
+static std::string News_DayHeader(SYSTEMTIME st) {
+    // Capitalise month name
+    std::string month = s_monthNames[st.wMonth];
+    if (!month.empty()) month[0] = (char)toupper(month[0]);
+
+    std::string header;
+    header += "\n";
+    header += std::string(60, '=') + "\n";
+    header += "  " + month + " " + std::to_string(st.wDay) + ", " + std::to_string(st.wYear) + "\n";
+    header += std::string(60, '=') + "\n\n";
+    return header;
+}
+
+// Shared implementation for /today and /week.
+// `numDays` = 1 for /today, 5 for /week.
+static std::string HandleGetNews(int numDays) {
+    std::vector<SYSTEMTIME> days = News_GetTradingDays(numDays);
+
+    std::string body;
+    for (const auto& st : days) {
+        std::string dateKey = News_DateKey(st);
+
+        // Try registry cache first
+        std::string content = News_LoadCache(dateKey);
+        if (content.empty()) {
+            // Fetch from the web
+            std::string url = News_BuildUrl(st.wYear, st.wMonth, st.wDay);
+            LogDebug("Fetching news: " + url);
+            content = News_FetchContent(url, st.wDay, st.wMonth, st.wYear);
+            if (content.empty()) {
+                // Page not found for this date — skip it
+                body += numDays == 1
+                    ? "\nNews not yet published for " + News_FormatHeader(st) + ", please try again after 14:00.\n"
+                    : "\nNews not found for " + News_FormatHeader(st) + "\n";
+                continue;
+            }
+            News_SaveCache(dateKey, content);
+        } else {
+            // body += "\n[Using cached data for " + News_FormatHeader(st) + "]\n";
+        }
+
+        body += News_DayHeader(st);
+        body += content;
+    }
+
+    // Cleanup old registry entries (mirrors Python cleanup_old_cache)
+    int deleted = News_CleanupCache(7);
+    if (deleted > 0)
+        body += "\n\n[Cleaned up " + std::to_string(deleted) + " expired cache entry(ies)]\n";
+
+    return body;
+}
+
 // ── HTTP framing helpers ──────────────────────────────────────────────────────
 
 static std::string MakeHttpResponse(int status, const std::string& statusText,
@@ -204,6 +542,18 @@ static std::string MakeHttpResponse(int status, const std::string& statusText,
     std::string resp;
     resp += "HTTP/1.1 " + std::to_string(status) + " " + statusText + "\r\n";
     resp += "Content-Type: application/json\r\n";
+    resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+    resp += "Access-Control-Allow-Origin: *\r\n";
+    resp += "Connection: close\r\n";
+    resp += "\r\n";
+    resp += body;
+    return resp;
+}
+
+static std::string MakePlainText(const std::string& body) {
+    std::string resp;
+    resp += "HTTP/1.1 200 OK\r\n";
+    resp += "Content-Type: text/plain; charset=utf-8\r\n";
     resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
     resp += "Access-Control-Allow-Origin: *\r\n";
     resp += "Connection: close\r\n";
@@ -282,6 +632,16 @@ static std::string RouteRequest(const std::string& rawRequest) {
             if (!body.empty()) return MakeOk(body);
             return MakeNotFound("{\"error\":\"symbol not found\"}");
         }
+    }
+
+    // Route: GET /today
+    if (path == "/today" || path == "/today/") {
+        return MakePlainText(HandleGetNews(1));
+    }
+
+    // Route: GET /week
+    if (path == "/week" || path == "/week/") {
+        return MakePlainText(HandleGetNews(5));
     }
 
     return MakeNotFound("{\"error\":\"unknown endpoint\"}");
