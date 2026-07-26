@@ -7,7 +7,6 @@
 //    GET  /balance            → JSON object with account number, PnL, and summary map
 //    GET  /positions          → JSON array of all positions from api().getPortfolioMap()
 //    GET  /position/{SYMBOL}  → JSON object for the single position matching SYMBOL
-//    GET  /price/{SYMBOL}     → JSON object with a single price (or empty on miss)
 //    GET  /today              → Plain-text market news for today (TraderTV watchlist)
 //    GET  /week               → Plain-text market news for today + 4 previous trading days
 //    POST /trade              → Place an untransmitted limit order via IBKR
@@ -69,19 +68,6 @@ static std::string JsonDouble(double v) {
 }
 
 // Serialise one PositionInfo to a JSON object string.
-static std::string PriceToJson(const TradingAPI::PositionInfo& p) {
-    TradingAPI::L1Book l1;
-    api().getWatchlistData(p.conId, l1);
-
-    std::string j;
-    j.reserve(64);
-    j += "{";
-    j += "\"" + JsonEscapeString(p.symbol) + "\":" + JsonDouble(l1.last);
-    j += "}";
-    return j;
-}
-
-// Serialise one PositionInfo to a JSON object string.
 static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     TradingAPI::L1Book l1;
     api().getWatchlistData(p.conId, l1);
@@ -101,8 +87,9 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     j += "\"shares\":"             + std::format("{:.0f}", p.shares)         + ",";
     j += "\"avgCost\":"            + JsonDouble(p.avgCost)                   + ",";
     j += "\"last\":"               + JsonDouble(l1.last)                     + ",";
+    j += "\"vwap\":"               + JsonDouble(l1.vwap)                     + ",";
     j += "\"marketValue\":"        + JsonDouble(p.shares * l1.last)          + ",";
-    j += "\"change_pct\":\""       + std::format("{:+.2f}%", l1.changePct()) + "\",";
+    j += "\"dailyChange_pct\":\""       + std::format("{:+.2f}%", l1.changePct()) + "\",";
     j += "\"dailyPnL\":"           + JsonDouble(p.pnlSingle.dailyPnL)        + ",";
     j += "\"unrealizedPnL\":"      + JsonDouble(p.pnlSingle.unrealizedPnL)   + ",";
     j += "\"unrealizedPnL_pct\":\"" + std::format("{:+.2f}%", unrealizedPct) + "\"";
@@ -170,24 +157,6 @@ static std::string HandleGetPositions() {
     }
     body += "]";
     return body;
-}
-
-// GET /price/{SYMBOL}  →  JSON object for a single price (or empty on miss)
-static std::string HandleGetPriceBySymbol(const std::string& symbol) {
-    std::string upper = symbol;
-    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
-
-    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-    const auto& map = api().getPortfolioMap();
-
-    for (const auto& [conId, pos] : map) {
-        std::string posSymbol = pos.symbol;
-        std::transform(posSymbol.begin(), posSymbol.end(), posSymbol.begin(), ::toupper);
-        if (posSymbol == upper) {
-            return PriceToJson(pos);
-        }
-    }
-    return "";
 }
 
 // GET /portfolio/{SYMBOL}  →  JSON object for a single position (or empty on miss)
@@ -849,19 +818,6 @@ static std::string RouteRequest(const std::string& rawRequest) {
 
         if (!symbol.empty()) {
             std::string body = HandleGetPositionBySymbol(symbol);
-            if (!body.empty()) return MakeOk(body);
-            return MakeNotFound("{\"error\":\"symbol not found\"}");
-        }
-    }
-
-    // Route: GET /price/{SYMBOL}
-    const std::string pricePrefix = "/price/";
-    if (path.size() > pricePrefix.size() && path.substr(0, pricePrefix.size()) == pricePrefix) {
-        std::string symbol = path.substr(pricePrefix.size());
-        while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
-
-        if (!symbol.empty()) {
-            std::string body = HandleGetPriceBySymbol(symbol);
             if (!body.empty()) return MakeOk(body);
             return MakeNotFound("{\"error\":\"symbol not found\"}");
         }
