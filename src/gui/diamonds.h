@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1662;
+int windowDiamondsWidth = 1672;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -129,7 +129,7 @@ static const DiamondCol diamondCols[] = {
     { "52w",              115, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
-    { "VWAP",              90, LVCFMT_RIGHT },  // NEW
+    { "VWAP",             100, LVCFMT_RIGHT },  // NEW
     { "Vol",               80, LVCFMT_RIGHT },
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
@@ -457,12 +457,41 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
     else setNA(DCOL_DIV_YIELD);
 
+    // ── 13 / 26 / 52-week % change vs. today's Last ──────────────────────────
+    // Reference closes (PositionInfo::closeAgoNWeek) come from a one-shot daily-
+    // bar reqHistoricalData() fetch per position, paced by the API layer (see
+    // Impl::queueWeeklyRangeFetch in private.cpp) and cached there rather than
+    // re-fetched here on every tick. 0.0 = not fetched yet -> show "--" until it
+    // arrives, same convention as every other not-yet-available cell below.
+    double closeAgo13Week = 0.0, closeAgo26Week = 0.0, closeAgo52Week = 0.0;
+    {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        auto& pm = api().getPortfolioMap();
+        auto pit = pm.find(conId);
+        if (pit != pm.end()) {
+            closeAgo13Week = pit->second.closeAgo13Week;
+            closeAgo26Week = pit->second.closeAgo26Week;
+            closeAgo52Week = pit->second.closeAgo52Week;
+        }
+    }
+    auto setWeekChangePct = [&](int col, double closeAgo) {
+        if (closeAgo > 0.0 && t.last > 0.0) {
+            double pct = (t.last - closeAgo) / closeAgo * 100.0;
+            row.sortValues[col] = pct;
+            row.textCols[col]   = std::format("{:+.2f}%", pct);
+        } else {
+            setNA(col);
+        }
+    };
+    setWeekChangePct(DCOL_CHG13WEEK, closeAgo13Week);
+    setWeekChangePct(DCOL_CHG26WEEK, closeAgo26Week);
+    setWeekChangePct(DCOL_CHG52WEEK, closeAgo52Week);
+
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
         setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
         setNA(DCOL_CHG5MIN);
         setNA(DCOL_VWAP);
-        setNA(DCOL_CHG13WEEK); setNA(DCOL_CHG26WEEK); setNA(DCOL_CHG52WEEK);
         return;
     }
 
@@ -477,29 +506,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         row.textCols[DCOL_VWAP]   = std::format("{:.2f}", t.vwap);
     } else {
         setNA(DCOL_VWAP);
-    }
-
-    // ── 13 26 52 weeks
-    if (t.high13 > 0.0 && t.low13 > 0.0) {
-        double pct13 = t.Week13RangePct();
-        row.sortValues[DCOL_CHG13WEEK] = pct13;
-        row.textCols[DCOL_CHG13WEEK]   = std::format("{:+.2f}%", pct13);
-    } else {
-        setNA(DCOL_CHG13WEEK);
-    }
-    if (t.high26 > 0.0 && t.low26 > 0.0) {
-        double pct26 = t.Week26RangePct();
-        row.sortValues[DCOL_CHG26WEEK] = pct26;
-        row.textCols[DCOL_CHG26WEEK]   = std::format("{:+.2f}%", pct26);
-    } else {
-        setNA(DCOL_CHG26WEEK);
-    }
-    if (t.high52 > 0.0 && t.low52 > 0.0) {
-        double pct52 = t.Week52RangePct();
-        row.sortValues[DCOL_CHG52WEEK] = pct52;
-        row.textCols[DCOL_CHG52WEEK]   = std::format("{:+.2f}%", pct52);
-    } else {
-        setNA(DCOL_CHG52WEEK);
     }
 
     // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
@@ -980,7 +986,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     // Only colour P&L / change columns — and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
-                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN) {
+                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         const std::string& textVal = g_DiamondDataCache[conId].textCols[cd->iSubItem];

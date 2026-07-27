@@ -126,6 +126,22 @@ public:
         double      shares            = 0.0;
         double      avgCost           = 0.0;
         PnlSinglePayload pnlSingle;
+
+        // ── 13 / 26 / 52-week % change reference closes ─────────────────────
+        // Daily-bar closing prices from ~91 / ~182 / ~364 calendar days ago,
+        // used to compute true "% change since N weeks ago" (last vs. this
+        // close), as opposed to L1Book::WeekNRangePct() below which reports
+        // where price sits *within* the N-week high/low range instead.
+        //
+        // Populated once per position via a single one-shot reqHistoricalData()
+        // daily-bar request (see TradingAPI::Impl::queueWeeklyRangeFetch()),
+        // paced several seconds apart so a ~60-symbol portfolio never gets
+        // anywhere near IBKR's historical-data pacing limits. 0.0 = not
+        // fetched yet — callers should treat that as "no data available",
+        // the same convention avgCost/shares use before positions arrive.
+        double closeAgo13Week = 0.0;
+        double closeAgo26Week = 0.0;
+        double closeAgo52Week = 0.0;
     };
 
     // lParam of WM_MARKET_TICK — handler owns and must delete.
