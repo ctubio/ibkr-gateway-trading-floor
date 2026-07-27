@@ -489,7 +489,9 @@ static std::string HandleGetNews(int numDays) {
             if (content.empty()) {
                 // Page not found for this date — skip it
                 if (numDays != 1) body += "\n" + std::string(60, '=') + "\n  ";
-                body += "News not yet published for " + News_FormatHeader(st) + ", please try GET /today again after 14:00, or call GET /week." + "\n";
+                body += "News not yet published for " + News_FormatHeader(st) + ", please try again after 14:00";
+                if (numDays != 1) body += ".\n";
+                else body += ", or call GET /week.\n";
                 if (numDays != 1) body += std::string(60, '=') + "\n\n";
                 continue;
             }
