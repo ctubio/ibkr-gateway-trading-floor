@@ -761,15 +761,14 @@ static std::string HandlePostTrade(const std::string& body) {
     // ── Build success response ────────────────────────────────────────────────
     std::string resp;
     resp += "{";
-    resp += "\"status\":\"queued\",";
+    resp += "\"status\":\"submitted\",";
     resp += "\"symbol\":\""   + JsonEscapeString(symbol)       + "\",";
     resp += "\"side\":\""     + JsonEscapeString(side)         + "\",";
     resp += "\"quantity\":"   + JsonDouble(quantity)           + ",";
     resp += "\"price\":"      + JsonDouble(price)              + ",";
     resp += "\"stopPrice\":"      + JsonDouble(stopPrice)      + ",";
     resp += "\"profitPrice\":"      + JsonDouble(profitPrice)  + ",";
-    resp += "\"conId\":"      + std::to_string(conId)          + ",";
-    resp += "\"transmit\":false";
+    resp += "\"conId\":"      + std::to_string(conId);
     resp += "}";
     return MakeOk(resp);
 }
