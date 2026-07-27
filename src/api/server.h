@@ -488,9 +488,9 @@ static std::string HandleGetNews(int numDays) {
             content = News_FetchContent(url, st.wDay, st.wMonth, st.wYear);
             if (content.empty()) {
                 // Page not found for this date — skip it
-                body += numDays == 1
-                    ? "\nNews not yet published for " + News_FormatHeader(st) + ", please try again after 14:00.\n"
-                    : "\nNews not found for " + News_FormatHeader(st) + "\n";
+                if (numDays != 1) body += "\n" + std::string(60, '=') + "\n  ";
+                body += "News not yet published for " + News_FormatHeader(st) + ", please try GET /today again after 14:00, or call GET /week." + "\n";
+                if (numDays != 1) body += std::string(60, '=') + "\n\n";
                 continue;
             }
             News_SaveCache(dateKey, content);
