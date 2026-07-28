@@ -52,12 +52,13 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         case WM_DESTROY:
             RemovePropA(hWnd, "hDebugEdit");
+            hDebugEdit = NULL;   // ← avoid a stale handle lingering after the window is destroyed
             break;
         case WM_SIZE: {
             if (hDebugEdit) {
-                RECT rc;
-                GetClientRect(hWnd, &rc);
-                SetWindowPos(hDebugEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
+                int w = LOWORD(lParam);
+                int h = HIWORD(lParam);
+                SetWindowPos(hDebugEdit, NULL, 0, 0, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
             }
             break;
         }
