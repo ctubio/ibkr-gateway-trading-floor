@@ -702,6 +702,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             RECT windowRect; 
             GetWindowRect(hWnd, &windowRect);
             if (LOWORD(wParam) != WA_INACTIVE) {
+                if (lockHotkeys) break;
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
             } else {
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40, TRUE);
@@ -903,6 +904,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (wParam == VK_SCROLL) {
                 lockHotkeys = !lockHotkeys;
                 ShowWindow(hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
+                PostMessage(hWnd, WM_ACTIVATE, lockHotkeys ? WA_INACTIVE : WA_ACTIVE, 0);
                 return 0;
             }
         }
@@ -943,27 +945,21 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                     
                 case ID_MB_DIAMONDS:
-                    if (lockHotkeys) break;
                     StartDiamonds();
                     break;
                 case ID_MB_SCANNER:
-                    if (lockHotkeys) break;
                     StartScanner();
                     break;
                 case ID_MB_MARKET:
-                    if (lockHotkeys) break;
                     StartMarket();
                     break;
                 case ID_MB_WATCHLIST:
-                    if (lockHotkeys) break;
                     StartWatchlist();
                     break;
                 case ID_MB_SETTINGS:
-                    if (lockHotkeys) break;
                     StartSettings();
                     break;
                 case ID_MB_ORDERS:
-                    if (lockHotkeys) break;
                     StartOrders();
                     break;        
                 case ID_M_DASHBOARD:
