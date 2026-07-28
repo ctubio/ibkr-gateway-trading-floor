@@ -125,7 +125,61 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     return j;
 }
 
+// ── HTTP framing helpers ──────────────────────────────────────────────────────
+
+static std::string MakeHttpResponse(int status, const std::string& statusText,
+                                    const std::string& body) {
+    std::string resp;
+    resp += "HTTP/1.1 " + std::to_string(status) + " " + statusText + "\r\n";
+    resp += "Content-Type: application/json\r\n";
+    resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+    resp += "Access-Control-Allow-Origin: *\r\n";
+    resp += "Connection: close\r\n";
+    resp += "\r\n";
+    resp += body;
+    return resp;
+}
+
+static std::string MakePlainText(const std::string& body) {
+    std::string resp;
+    resp += "HTTP/1.1 200 OK\r\n";
+    resp += "Content-Type: text/plain; charset=utf-8\r\n";
+    resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+    resp += "Access-Control-Allow-Origin: *\r\n";
+    resp += "Connection: close\r\n";
+    resp += "\r\n";
+    resp += body;
+    return resp;
+}
+
+static std::string MakeOk(const std::string& body) {
+    return MakeHttpResponse(200, "OK", body);
+}
+
+static std::string MakeNotFound(const std::string& msg = "{\"error\":\"not found\"}") {
+    return MakeHttpResponse(404, "Not Found", msg);
+}
+
+static std::string MakeMethodNotAllowed() {
+    return MakeHttpResponse(405, "Method Not Allowed", "{\"error\":\"method not allowed\"}");
+}
+
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
+
+// GET /historical/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
+// current portfolio position. Blocks this connection's server thread (never
+// the UI thread) until the async TWS response arrives or times out.
+static std::string HandleGetHistorical(const std::string& symbol) {
+    auto rows = api().getHistoricalDataSync(symbol);
+    if (rows.empty()) {
+        return MakeNotFound(
+            "{\"error\":\"no historical data available (symbol must be a current "
+            "portfolio position, and the request may have timed out)\"}");
+    }
+    std::string body = "Date,Open,High,Low,Close,Wap,Volume,TradesCount\n";
+    for (const auto& row : rows) { body += row; body += "\n"; }
+    return MakePlainText(body);
+}
 
 // GET /account  →  JSON object with account number, PnL, and full summary map
 static std::string HandleGetBalance() {
@@ -566,45 +620,6 @@ static std::string JsonExtractNumber(const std::string& json, const std::string&
     return val;
 }
 
-// ── HTTP framing helpers ──────────────────────────────────────────────────────
-
-static std::string MakeHttpResponse(int status, const std::string& statusText,
-                                    const std::string& body) {
-    std::string resp;
-    resp += "HTTP/1.1 " + std::to_string(status) + " " + statusText + "\r\n";
-    resp += "Content-Type: application/json\r\n";
-    resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    resp += "Access-Control-Allow-Origin: *\r\n";
-    resp += "Connection: close\r\n";
-    resp += "\r\n";
-    resp += body;
-    return resp;
-}
-
-static std::string MakePlainText(const std::string& body) {
-    std::string resp;
-    resp += "HTTP/1.1 200 OK\r\n";
-    resp += "Content-Type: text/plain; charset=utf-8\r\n";
-    resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    resp += "Access-Control-Allow-Origin: *\r\n";
-    resp += "Connection: close\r\n";
-    resp += "\r\n";
-    resp += body;
-    return resp;
-}
-
-static std::string MakeOk(const std::string& body) {
-    return MakeHttpResponse(200, "OK", body);
-}
-
-static std::string MakeNotFound(const std::string& msg = "{\"error\":\"not found\"}") {
-    return MakeHttpResponse(404, "Not Found", msg);
-}
-
-static std::string MakeMethodNotAllowed() {
-    return MakeHttpResponse(405, "Method Not Allowed", "{\"error\":\"method not allowed\"}");
-}
-
 // ── POST /trade handler ───────────────────────────────────────────────────────
 
 // Forward the trade to the external paper-trading dashboard.
@@ -851,6 +866,14 @@ static std::string RouteRequest(const std::string& rawRequest) {
             if (!body.empty()) return MakeOk(body);
             return MakeNotFound("{\"error\":\"symbol not found\"}");
         }
+    }
+    
+    // Route: GET /historical/{SYMBOL}
+    const std::string historicalPrefix = "/historical/";
+    if (path.size() > historicalPrefix.size() && path.substr(0, historicalPrefix.size()) == historicalPrefix) {
+        std::string symbol = path.substr(historicalPrefix.size());
+        while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
+        if (!symbol.empty()) return HandleGetHistorical(symbol);
     }
 
     // Route: GET /today

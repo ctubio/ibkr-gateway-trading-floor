@@ -339,6 +339,15 @@ public:
     //   totalQuantity = order notional, denominated in EUR (matches IB's CASH contract convention)
     void submitCurrencyOrder(const std::string& action, double totalQuantity);
 
+    // ── Historical Data (on-demand) ──────────────────────────────────────────
+        // Fetches ~1 year of daily bars for `symbol` (must be a current portfolio
+        // position — conId is looked up from getPortfolioMap()). Blocks the
+        // calling thread (safe from an HTTP handler thread, NOT the UI thread)
+        // until the async TWS response completes or timeoutMs elapses. Returns
+        // formatted rows "Date,Open,High,Low,Close,Wap,Volume,TradesCount", one
+        // per daily bar; empty on failure/timeout/symbol-not-a-position.
+    std::vector<std::string> getHistoricalDataSync(const std::string& symbol, int timeoutMs = 15000);
+
     // ── Scanner ───────────────────────────────────────────────────────────────
     // scannerIndex: 0 = NYSE, 1 = NASDAQ National Market, 2 = NASDAQ Small/Mid Caps.
     // scanCodeIndex: 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE.
