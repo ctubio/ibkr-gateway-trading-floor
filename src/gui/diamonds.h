@@ -65,11 +65,11 @@ enum DiamondColIdx {
     DCOL_BID,
     DCOL_BIDSIZE,
     DCOL_CHG5MIN,
+    DCOL_DAILYPNL,
+    DCOL_CHGPCT,
     DCOL_CHG13WEEK,
     DCOL_CHG26WEEK,
     DCOL_CHG52WEEK,
-    DCOL_DAILYPNL,
-    DCOL_CHGPCT,
     DCOL_VWAP,          // NEW — displays VWAP price, sorts by (Last - VWAP)
     DCOL_VOLUME,
     //DCOL_CLOSE,
@@ -124,11 +124,11 @@ static const DiamondCol diamondCols[] = {
     { "Bid",              100, LVCFMT_RIGHT },
     { "BidSz",             80, LVCFMT_RIGHT },
     { "5m",                80, LVCFMT_RIGHT },
+    { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
+    { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "13w",              115, LVCFMT_RIGHT },
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
-    { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "VWAP",             100, LVCFMT_RIGHT },  // NEW
     { "Vol",               80, LVCFMT_RIGHT },
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
