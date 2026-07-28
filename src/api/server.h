@@ -78,6 +78,25 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
         unrealizedPct = p.pnlSingle.unrealizedPnL / costBasis * 100.0;
     }
 
+    // True 13/26/52-week % change: last vs. the closing price from
+    // ~91/~182/~364 calendar days ago, fetched once per position via a
+    // one-shot reqHistoricalData() daily-bar request (see
+    // PositionInfo::closeAgoNWeek in gateway.h, populated by
+    // Impl::queueWeeklyRangeFetch()/ProcessWeeklyRangeBars() in private.cpp).
+    // This replaced the old L1Book::WeekNRangePct() calls below, which
+    // reported where `last` sits within the N-week high/low range (always
+    // 0-100%) rather than an actual signed period return — that's still a
+    // legitimate, different metric, which is why week13_low/week13_high etc.
+    // (from the IBKR fundamental tick fields) are kept as-is below.
+    // 0.0 = not fetched yet → reports "+0.00%", the same "not ready yet"
+    // convention unrealizedPnL_pct already uses when costBasis is 0.
+    auto weekChangePct = [&](double closeAgo) -> double {
+        return (closeAgo > 0.0 && l1.last > 0.0) ? (l1.last - closeAgo) / closeAgo * 100.0 : 0.0;
+    };
+    double week13Pct = weekChangePct(p.closeAgo13Week);
+    double week26Pct = weekChangePct(p.closeAgo26Week);
+    double week52Pct = weekChangePct(p.closeAgo52Week);
+
     std::string j;
     j.reserve(512);
     j += "{";
@@ -90,14 +109,14 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     j += "\"vwap\":"               + JsonDouble(l1.vwap)                     + ",";
     j += "\"marketValue\":"        + JsonDouble(p.shares * l1.last)          + ",";
     j += "\"week13_low\":"         + JsonDouble(l1.low13)                    + ",";
-    j += "\"week13_high\":"        + JsonDouble(l1.high13)                   + ",";
     j += "\"week26_low\":"         + JsonDouble(l1.low26)                    + ",";
-    j += "\"week26_high\":"        + JsonDouble(l1.high26)                   + ",";
     j += "\"week52_low\":"         + JsonDouble(l1.low52)                    + ",";
+    j += "\"week13_high\":"        + JsonDouble(l1.high13)                   + ",";
+    j += "\"week26_high\":"        + JsonDouble(l1.high26)                   + ",";
     j += "\"week52_high\":"        + JsonDouble(l1.high52)                   + ",";
-    j += "\"week13Change_pct\":\""       + std::format("{:+.2f}%", l1.Week13RangePct()) + "\",";
-    j += "\"week26Change_pct\":\""       + std::format("{:+.2f}%", l1.Week26RangePct()) + "\",";
-    j += "\"week52Change_pct\":\""       + std::format("{:+.2f}%", l1.Week52RangePct()) + "\",";
+    j += "\"week13Change_pct\":\""       + std::format("{:+.2f}%", week13Pct) + "\",";
+    j += "\"week26Change_pct\":\""       + std::format("{:+.2f}%", week26Pct) + "\",";
+    j += "\"week52Change_pct\":\""       + std::format("{:+.2f}%", week52Pct) + "\",";
     j += "\"dailyChange_pct\":\""  + std::format("{:+.2f}%", l1.changePct()) + "\",";
     j += "\"dailyPnL\":"           + JsonDouble(p.pnlSingle.dailyPnL)        + ",";
     j += "\"unrealizedPnL\":"      + JsonDouble(p.pnlSingle.unrealizedPnL)   + ",";
