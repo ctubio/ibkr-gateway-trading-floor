@@ -23,7 +23,8 @@ NOTIFYICONDATAW nid = { 0 };
 static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
 // glyph: E708 = QuietHours on (Segoe MDL2 Assets)
 static const wchar_t MOON_GLYPH[] = L"\uE708";
-
+// glyph: E72E = Lock on (Segoe MDL2 Assets)
+static const wchar_t LOCK_GLYPH[] = L"\uE72E";
 // glyph: E825 = Bank on (Segoe MDL2 Assets)
 static const wchar_t FX_GLYPH[] = L"\uE825";
 
@@ -31,6 +32,9 @@ static const wchar_t FX_GLYPH[] = L"\uE825";
 static HWND     gClrHwnd[160]  = {};
 static COLORREF gClrColor[160] = {};
 static int      gClrCount      = 0;
+
+// ─── Lock hotkeys ──────────────────────────────────────────────────
+static bool lockHotkeys = false;
 
 // Force the MinGW linker to keep riched20.dll when compiling with -static
 extern "C" __declspec(dllimport) long __stdcall CreateTextServices(void*, void*, void*);

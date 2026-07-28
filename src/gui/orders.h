@@ -585,6 +585,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             // ── Selection change: update inline edit panel ────────────────────
             if (hdr->code == LVN_ITEMCHANGED) {
+                if (lockHotkeys) break;
                 NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
                 // Only care about a newly-selected item.
                 if (!(nmlv->uChanged & LVIF_STATE)) break;

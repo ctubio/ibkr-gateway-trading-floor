@@ -1347,6 +1347,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         return 0;
 
     case WM_KEYDOWN: {
+        if (lockHotkeys) break;
         if (!state) break;
         if (wParam == VK_TAB) {
             if (state->orderBarVisible && state->hOrderPrice) {
@@ -1407,7 +1408,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == BN_CLICKED && state) {
+        if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == STN_CLICKED && state) {
             Market_ToggleOVN(hWnd, state);
         }
         if (LOWORD(wParam) == ID_MARKET_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)

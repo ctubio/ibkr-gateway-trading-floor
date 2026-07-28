@@ -84,6 +84,7 @@ static HWND hCoin_NetLiq  = NULL;
 static HWND hCoin_BigPnL  = NULL;
 static HWND hCoin_Pct     = NULL;
 static HWND hCoin_Speaker = NULL;   // speaker icon button (SS_NOTIFY)
+static HWND hCoin_Lock    = NULL;   // lock icon button (WM_KEYDOWN VK_SCROLL)
 static HWND hCoin_FxIcon  = NULL;   // exchange-currency icon button (SS_NOTIFY) — color never changes
 
 #define ID_COIN_NETLIQ   5100
@@ -91,6 +92,7 @@ static HWND hCoin_FxIcon  = NULL;   // exchange-currency icon button (SS_NOTIFY)
 #define ID_COIN_PCT      5102
 #define ID_COIN_SPEAKER  5103
 #define ID_COIN_FXICON   5104
+#define ID_COIN_LOCK     5105
 #define TIMER_COINS_SPEAKER  0xC015   // WM_TIMER id
 
 // ─── Exchange Currency popup (DASHBOARD_EXCHANGE_CLASS_NAME) ───────────────────
@@ -106,8 +108,8 @@ static bool      g_coinsComInit = false;
 struct CoinRow { const char* label; const char* key; int colorType; bool isSeparator; };
 
 static CoinRow coinRows[] = {
-    { "Unrealized PnL:",   "UnrealizedPnL",       1, false },
-    { "Realized PnL:",     "RealizedPnL",         1, false },
+    { "Unrealized:",   "UnrealizedPnL",           1, false },
+    { "Realized:",     "RealizedPnL",             1, false },
     { "Dividends:",        "AccruedDividend",     2, false },
     { nullptr, nullptr, 0, true },
     { "Gross Position:",   "GrossPositionValue",  0, false },
@@ -570,7 +572,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             const int m  = 12;
             const int rW = 220;
-            int lblW = 70;
+            int lblW = 80;
             int valW = rW - lblW;
 
             // Net Liquidation Label
@@ -584,6 +586,14 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + lblW, 10, valW, 22, hWnd, (HMENU)ID_COIN_NETLIQ, hInst, NULL);
             SendMessage(hCoin_NetLiq, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
+
+            // Lock icon
+            hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
+                WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
+                m + lblW - 30, 12, 22, 22, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
+            SendMessage(hCoin_Lock, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
+            SetCtrlColor(hCoin_Lock, COINS_CLR_GRAY);
+            ShowWindow(hCoin_Lock, SW_HIDE);
 
             // Daily PnL Label
             HWND hLblBigPnL = CreateWindowA("STATIC", "Daily PnL:",
@@ -889,6 +899,14 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
         }
 
+        case WM_KEYDOWN: {
+            if (wParam == VK_SCROLL) {
+                lockHotkeys = !lockHotkeys;
+                ShowWindow(hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
+                return 0;
+            }
+        }
+
         case WM_COMMAND: {
             WORD id  = LOWORD(wParam);
             WORD evt = HIWORD(wParam);
@@ -900,6 +918,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         Coins_ToggleTTS(hWnd);
                     break;
                 case ID_COIN_FXICON:
+                    if (lockHotkeys) break;
                     // Opens the currency-exchange popup. Deliberately does NOT
                     // call SetCtrlColor here — this icon's color never changes.
                     if (evt == STN_CLICKED)
@@ -924,21 +943,27 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                     
                 case ID_MB_DIAMONDS:
+                    if (lockHotkeys) break;
                     StartDiamonds();
                     break;
                 case ID_MB_SCANNER:
+                    if (lockHotkeys) break;
                     StartScanner();
                     break;
                 case ID_MB_MARKET:
+                    if (lockHotkeys) break;
                     StartMarket();
                     break;
                 case ID_MB_WATCHLIST:
+                    if (lockHotkeys) break;
                     StartWatchlist();
                     break;
                 case ID_MB_SETTINGS:
+                    if (lockHotkeys) break;
                     StartSettings();
                     break;
                 case ID_MB_ORDERS:
+                    if (lockHotkeys) break;
                     StartOrders();
                     break;        
                 case ID_M_DASHBOARD:
@@ -999,7 +1024,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
             if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons); hFontCoins_Icons = NULL; }
 
-            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Speaker = hCoin_FxIcon = NULL;
+            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Speaker = hCoin_Lock = hCoin_FxIcon = NULL;
             memset(hCoinLbl, 0, sizeof(hCoinLbl));
             memset(hCoinVal, 0, sizeof(hCoinVal));
             gClrCount = 0;
