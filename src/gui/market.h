@@ -504,26 +504,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
                     if (price > 0 && stopPrice > 0) stopPrice = st->orderSide == "BUY" ? price - stopPrice : price + stopPrice;
                     if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
-                    int conId = st->conId;
-                    std::string symbol = st->symbol;
-                    std::string orderSide = st->orderSide;
-                    bool isOvernight = st->isOvernight;
-                    std::thread([conId, symbol, orderSide, isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice]() {
-                        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-                        if (hDashboard && IsWindow(hDashboard)) {
-                            PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
-                        }
-                        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                        int max = 10;
-                        while (!hOrders || !IsWindow(hOrders)) {
-                            if (!max--) break;
-                            std::this_thread::sleep_for(std::chrono::milliseconds(121));
-                            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                        }
-                        if (hOrders && IsWindow(hOrders)) {
-                            api().submitOrder(conId, symbol, orderSide, isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
-                        }
-                    }).detach();
+                    api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
                 }
                 Market_Layout_HideBar(hMarket, st);
             }
