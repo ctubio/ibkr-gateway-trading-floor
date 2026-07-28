@@ -345,7 +345,11 @@ static void Diamonds_ApplySort(HWND hList) {
             double v1 = a.sortValues[g_DiamondsSortCol];
             double v2 = b.sortValues[g_DiamondsSortCol];
             if (v1 == v2) return false;
-            return g_DiamondsSortAsc ? (v1 < v2) : (v1 > v2);
+            if (g_DiamondsSortCol == DCOL_DIV_DATE) {
+                return g_DiamondsSortAsc ? (v1 > v2) : (v1 < v2);
+            } else {
+                return g_DiamondsSortAsc ? (v1 < v2) : (v1 > v2);
+            }
         }
     });
 

@@ -62,8 +62,8 @@ static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]
 // Returns a color for the status text (used in NM_CUSTOMDRAW).
 static COLORREF Orders_StatusColor(const std::string& orderType, const std::string& status, bool dark) {
     if (status == "Filled")  { // return RGB(196, 110, 43);
-        if (orderType == "BUY") return RGB(54, 133, 80);
-        else if (orderType == "SELL") return RGB(130, 53, 53);
+        if (orderType == "BUY") return RGB(34, 82, 50);
+        else if (orderType == "SELL") return RGB(102, 43, 43);
     } 
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
     if (status == "Cancelled" || status == "Inactive" || status == "PendingCancel")
@@ -706,6 +706,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     ListView_SetItemText(hList, idx, OCOL_AVGFILL, (LPSTR)filledStr.c_str());
                     std::string fullTypeStr = info->tif + " " + info->orderType + " " + info->status;
                     ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
+                    Orders_Repopulate(hWnd);
                 }
                 delete info;
             }
