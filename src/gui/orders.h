@@ -337,20 +337,13 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                             return 0;
                         }
 
-                        double stopPrice = (price > 0 && s_editState.fullStopPrice > 0) ? (
-                            s_editState.action == "BUY" ? price - s_editState.fullStopPrice : s_editState.fullStopPrice - price
-                            ) : 0.0;
-                        double profitPrice = (price > 0 && s_editState.fullProfitPrice > 0) ? (
-                            s_editState.action == "BUY" ? s_editState.fullProfitPrice - price : price - s_editState.fullProfitPrice
-                            ) : 0.0;
-
                         // defensive: distances should never be negative once validated above
-                        stopPrice   = std::max(0.0, stopPrice);
-                        profitPrice = std::max(0.0, profitPrice);
+                        double stopPrice   = std::max(0.0, s_editState.fullStopPrice);
+                        double profitPrice = std::max(0.0, s_editState.fullProfitPrice);
                         if ((price > 0 || stopPrice > 0) && qty > 0 && qty <= 10) {
                             if (stopPrice < 0.1) stopPrice = 0.0;
                             if (profitPrice < 0.1) profitPrice = 0.0;
-                            api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action, s_editState.isOvernight, qty, price, stopPrice, profitPrice);
+                            api().submitOrder(s_editState.conId, s_editState.symbol, s_editState.action, s_editState.isOvernight, qty, price, stopPrice, price, profitPrice);
                         }
                         HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                         int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);

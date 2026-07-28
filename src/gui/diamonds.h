@@ -939,12 +939,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     UpdateWindow(hList);
                 } else if (cmd == 300) {
                     // Quick BUY placeholder: 1 share @ $1.00.
-                    api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, false);
+                    api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, 0.0, false);
                 } else if (cmd == 301) {
                     // Quick SELL placeholder: 1 share @ 2x last price.
                     TradingAPI::L1Book quickInfo;
                     if (api().getWatchlistData(conId, quickInfo) && quickInfo.last > 0.0) {
-                        api().submitOrder(conId, sym, "SELL", false, 1.0, quickInfo.last * 2.0, 0.0, 0.0, false);
+                        api().submitOrder(conId, sym, "SELL", false, 1.0, quickInfo.last * 2.0, 0.0, 0.0, 0.0, false);
                     }
                 }
             }

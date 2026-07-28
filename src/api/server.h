@@ -748,7 +748,7 @@ static std::string HandlePostTrade(const std::string& body) {
             hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
         }
         if (hOrders && IsWindow(hOrders)) {
-            api().submitOrder(conId, symbol, side, false, quantity, price, stopPrice, profitPrice, false);
+            api().submitOrder(conId, symbol, side, false, quantity, price, stopPrice, price, profitPrice, false);
         }
     }).detach();
 

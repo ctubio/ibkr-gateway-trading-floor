@@ -501,7 +501,10 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 if ((price > 0 || stopPrice > 0) && qty > 0) {
                     if (stopPrice < 0.1) stopPrice = 0.0;
                     if (profitPrice < 0.1) profitPrice = 0.0;
-                    api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, profitPrice);
+                    double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
+                    if (price > 0 && stopPrice > 0) stopPrice = st->orderSide == "BUY" ? price - stopPrice : price + stopPrice;
+                    if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
+                    api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
                 }
                 Market_Layout_HideBar(hMarket, st);
             }
