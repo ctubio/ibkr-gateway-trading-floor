@@ -97,6 +97,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     if (hWnd && IsWindow(hWnd)) {
         if (IsIconic(hWnd)) {
             ShowWindow(hWnd, SW_RESTORE);
+            SetForegroundWindow(hWnd);
         } else {
             ShowWindow(hWnd, SW_SHOW);
         }

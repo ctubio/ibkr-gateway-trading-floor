@@ -939,12 +939,43 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     UpdateWindow(hList);
                 } else if (cmd == 300) {
                     // Quick BUY placeholder: 1 share @ $1.00.
-                    api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, 0.0, false);
+                    std::thread([conId, sym]() {
+                        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                        if (hDashboard && IsWindow(hDashboard)) {
+                            PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                        }
+                        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+                        int max = 10;
+                        while (!hOrders || !IsWindow(hOrders)) {
+                            if (!max--) break;
+                            std::this_thread::sleep_for(std::chrono::milliseconds(121));
+                            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+                        }
+                        if (hOrders && IsWindow(hOrders)) {
+                            api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, 0.0, false);
+                        }
+                    }).detach();
                 } else if (cmd == 301) {
                     // Quick SELL placeholder: 1 share @ 2x last price.
                     TradingAPI::L1Book quickInfo;
                     if (api().getWatchlistData(conId, quickInfo) && quickInfo.last > 0.0) {
-                        api().submitOrder(conId, sym, "SELL", false, 1.0, quickInfo.last * 2.0, 0.0, 0.0, 0.0, false);
+                        double sellPrice = quickInfo.last * 2.0;
+                        std::thread([conId, sym, sellPrice]() {
+                            HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                            if (hDashboard && IsWindow(hDashboard)) {
+                                PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                            }
+                            HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+                            int max = 10;
+                            while (!hOrders || !IsWindow(hOrders)) {
+                                if (!max--) break;
+                                std::this_thread::sleep_for(std::chrono::milliseconds(121));
+                                hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+                            }
+                            if (hOrders && IsWindow(hOrders)) {
+                                api().submitOrder(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0, false);
+                            }
+                        }).detach();
                     }
                 }
             }
