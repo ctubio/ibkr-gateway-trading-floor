@@ -355,8 +355,9 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                     GetClientRect(hdr->hwndFrom, &rcClient);
                     FillRect(cd->hdc, &rcClient, hDarkBrush2);
                     
-                    // Tell Windows we want to draw the individual columns next
-                    return CDRF_NOTIFYITEMDRAW; 
+                    // Tell Windows we want to draw the individual columns next, AND that we
+                    // want one more callback (CDDS_POSTPAINT) after it's done drawing them.
+                    return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
                 }
                 case CDDS_ITEMPREPAINT: {
                     HDC hdc = cd->hdc;
@@ -401,6 +402,25 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 
                     // Tell Windows to skip its default light-mode rendering
                     return CDRF_SKIPDEFAULT; 
+                }
+
+                case CDDS_POSTPAINT: {
+                    // The header runs one more internal "finishing" pass after all columns
+                    // are drawn, and repaints the strip with no column in it (to the right
+                    // of the last header) using its native background — after our PREPAINT
+                    // fill, so it wins and shows as a light/white strip. Re-fill just that
+                    // strip here, last, so nothing overrides it again.
+                    int colCount = Header_GetItemCount(hdr->hwndFrom);
+                    if (colCount > 0) {
+                        RECT rcLast;
+                        Header_GetItemRect(hdr->hwndFrom, colCount - 1, &rcLast);
+                        RECT rcClient;
+                        GetClientRect(hdr->hwndFrom, &rcClient);
+                        RECT rcTail = { rcLast.right, rcClient.top, rcClient.right, rcClient.bottom };
+                        if (rcTail.right > rcTail.left)
+                            FillRect(cd->hdc, &rcTail, hDarkBrush2);
+                    }
+                    return CDRF_DODEFAULT;
                 }
             }
         }

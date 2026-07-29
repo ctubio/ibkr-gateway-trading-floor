@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1672;
+int windowDiamondsWidth = 1510;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -163,7 +163,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_DIV_YIELD; i <= DCOL_ANNUAL_DIV; ++i) {
         ListView_SetColumnWidth(hList, i, showDiv ? diamondCols[i].width : 0);
     }
-    for (int i = DCOL_CHG13WEEK; i <= DCOL_CHG52WEEK; ++i) {
+    for (int i = DCOL_CHG13WEEK; i <= DCOL_VOLUME; ++i) { //DCOL_CHG52WEEK
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
 
@@ -175,7 +175,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     }
     if (showWeeks) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
-                      diamondCols[DCOL_CHG52WEEK].width;
+                      diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_VWAP].width + diamondCols[DCOL_VOLUME].width;
     }
     if (extraWidth > 0) extraWidth += 18; // margin, same buffer the original single-group case used
 
