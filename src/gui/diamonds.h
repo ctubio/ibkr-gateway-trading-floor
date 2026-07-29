@@ -48,7 +48,7 @@ static bool g_DiamondsChkVisible = false;
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
 #define TIMER_DIAMONDS_SORT      7010
-#define DIAMONDS_SORT_TIMER_MS   5000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
+#define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
 static ListViewFontData DiamondsFontData = { NULL, NULL, 17 };
 static HFONT DiamondsSmallFont     = NULL;
