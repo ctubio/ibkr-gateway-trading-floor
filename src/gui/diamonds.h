@@ -461,12 +461,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
     else setNA(DCOL_DIV_YIELD);
 
-    // ── 13 / 26 / 52-week % change vs. today's Last ──────────────────────────
-    // Reference closes (PositionInfo::closeAgoNWeek) come from a one-shot daily-
-    // bar reqHistoricalData() fetch per position, paced by the API layer (see
-    // Impl::queueWeeklyRangeFetch in private.cpp) and cached there rather than
-    // re-fetched here on every tick. 0.0 = not fetched yet -> show "--" until it
-    // arrives, same convention as every other not-yet-available cell below.
     double closeAgo13Week = 0.0, closeAgo26Week = 0.0, closeAgo52Week = 0.0;
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());

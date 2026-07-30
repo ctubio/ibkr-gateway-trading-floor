@@ -113,25 +113,22 @@ Advanced market scanner for finding trading opportunities based on multiple crit
 ### Registry Storage
 Preferences are persisted under: `HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor`
 
-### Build Instructions (Linux $\rightarrow$ Windows)
-Cross-compile using MinGW:
+### Build Instructions (from a Linux host to a Windows target)
+Cross-compile using `make`:
 ```sh
-# Prerequisites: x86_64-w64-mingw32-g++, cmake, make
-make
-# Output: public/bin/Trading-Floor.exe
+# Prerequisites: x86_64-w64-mingw32-g++ and make
+$ make
+# Output: bin/Trading-Floor.exe
 ```
 
-### Architecture Highlights
-- **Async Audio**: Dedicated worker thread prevents GUI freezing during sound alerts.
-- **ListView Efficiency**: Uses `LVS_EX_DOUBLEBUFFER` and `NM_CUSTOMDRAW` to ensure flicker-free, high-frequency updates.
-- **Registry Abstraction**: Generic helper functions eliminate boilerplate for 15+ persistent settings.
+> **Platform Compatibility:** This application currently only runs on Windows 7 or higher. Linux and macOS support are not yet available.
 
 ---
 
 ## 🛠 Troubleshooting
 *   **No Connection?** Check if TWS/Gateway is running and "Allow connections from localhost" is checked.
 *   **Wrong Path?** If the app can't find the gateway, it will prompt you to select the `.exe` path.
-*   **Reset App?** Delete the registry root: `Computer\HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor`
+*   **Reset App?** Delete the registry root: `Computer\HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor`.
 
 ## ⚖️ License & Legal
 - Provided as-is for educational and personal use.

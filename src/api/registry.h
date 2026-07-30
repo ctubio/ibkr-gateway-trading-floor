@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
+constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATEWAY_DASH GATEWAY_NAME;
 
 // Dark mode colors
 #define DM_BG        RGB(22,  22,  31)   // Slightly darker, flatter background

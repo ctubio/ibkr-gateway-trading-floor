@@ -3,7 +3,7 @@
 int windowDashboardWidth  = 250;
 int windowDashboardHeight = 450;
 
-void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor: Offline", L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
+void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor" GATEWAY_SPACE GATEWAY_NAME, L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
 #define WM_TRAYICON (WM_APP + 101)
 
@@ -43,7 +43,7 @@ static HFONT hFontCoins_Value   = NULL;
 static HFONT hFontCoins_Icons = NULL;   // Segoe MDL2 Assets for speaker glyph
 
 void MutexGatewayInstance() {
-    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
 
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
@@ -242,12 +242,12 @@ void BindTrayIcon(HWND hWnd) {
 }
 
 void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
-    std::string tooltip = "Trading Floor: ";
+    std::string tooltip = std::string("Trading Floor" GATEWAY_SPACE GATEWAY_NAME) + ": ";
     std::string title;
     bool connected = false;
 
     if (!api().isConnected()) {
-        title    = "Offline";
+        title    = "Disconnected";
         tooltip += title;
     } else {
         std::string acc = api().getAccountNumber();

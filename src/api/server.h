@@ -78,18 +78,6 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
         unrealizedPct = p.pnlSingle.unrealizedPnL / costBasis * 100.0;
     }
 
-    // True 13/26/52-week % change: last vs. the closing price from
-    // ~91/~182/~364 calendar days ago, fetched once per position via a
-    // one-shot reqHistoricalData() daily-bar request (see
-    // PositionInfo::closeAgoNWeek in gateway.h, populated by
-    // Impl::queueWeeklyRangeFetch()/ProcessWeeklyRangeBars() in private.cpp).
-    // This replaced the old L1Book::WeekNRangePct() calls below, which
-    // reported where `last` sits within the N-week high/low range (always
-    // 0-100%) rather than an actual signed period return — that's still a
-    // legitimate, different metric, which is why week13_low/week13_high etc.
-    // (from the IBKR fundamental tick fields) are kept as-is below.
-    // 0.0 = not fetched yet → reports "+0.00%", the same "not ready yet"
-    // convention unrealizedPnL_pct already uses when costBasis is 0.
     auto weekChangePct = [&](double closeAgo) -> double {
         return (closeAgo > 0.0 && l1.last > 0.0) ? (l1.last - closeAgo) / closeAgo * 100.0 : 0.0;
     };

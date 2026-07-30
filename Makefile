@@ -1,37 +1,49 @@
 MAJOR      = 0
 MINOR      = 0
 PATCH      = 0
-BUILD      = 116
+BUILD      = 117
 
 CXX     := x86_64-w64-mingw32-g++
 WINDRES := x86_64-w64-mingw32-windres
 
-.PHONY: all clean push MAJOR MINOR PATCH BUILD release 
+# Flags shared by both the real gateway and the simulator builds.
+COMMON_CXXFLAGS := -std=c++23 -Wl,--no-dynamicbase -Wl,--no-high-entropy-va \
+                    -mwindows \
+                    -static -static-libgcc -static-libstdc++
+COMMON_LIBS     := -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
+                    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
+                    -lshlwapi -lwininet -lcomctl32 -luxtheme -lriched20 -lgdiplus
 
-all: bin/Trading-Floor.exe
+.PHONY: all sim clean push MAJOR MINOR PATCH BUILD release
 
-bin/Trading-Floor.exe: lib/Trading-Floor-Assets.res src/main.cpp
-	@echo -n "please wait, building Trading-Floor.exe.. "
-	@rm -f bin/Trading-Floor.exe
-	@$(CXX) \
-	    src/main.cpp \
-	    lib/Trading-Floor-Assets.res \
-	    lib/Trading-Floor-Gateway.a \
-	    -std=c++23 -Wl,--no-dynamicbase -Wl,--no-high-entropy-va \
-	    -mwindows \
-	    -static -static-libgcc -static-libstdc++ \
-	    -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
-	    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
-	    -lshlwapi -lwininet -lcomctl32 -luxtheme -lriched20 -lgdiplus \
-		-s -o bin/Trading-Floor.exe
+all: bin/Trading-Floor.exe bin/Trading-Floor-Simulator.exe
+
+bin/Trading-Floor.exe: src/main.cpp lib/Trading-Floor-Assets.res lib/Trading-Floor-Gateway.a
+	@echo -n "please wait, building $@.. "
+	@rm -f $@
+	@$(CXX) $^ \
+	    $(COMMON_CXXFLAGS) \
+	    $(COMMON_LIBS) \
+		-s -o $@
 	@echo "OK"
-	@ls -la bin/Trading-Floor.exe
+	@ls -la $@
+
+bin/Trading-Floor-Simulator.exe: src/main.cpp lib/Trading-Floor-Assets.res lib/Trading-Floor-Simulator.a
+	@echo -n "please wait, building $@.. "
+	@rm -f $@
+	@$(CXX) $^ \
+	    -DGATEWAY_NAME='"Simulator"' \
+	    $(COMMON_CXXFLAGS) \
+	    $(COMMON_LIBS) \
+		-s -o $@
+	@echo "OK"
+	@ls -la $@
 
 lib/Trading-Floor-Assets.res: res/resources.rc
-	@$(WINDRES) res/resources.rc -O coff -o lib/Trading-Floor-Assets.res
+	@$(WINDRES) $^ -O coff -o $@
 
 clean:
-	@rm -f bin/Trading-Floor.exe lib/Trading-Floor-Assets.res
+	@rm -f bin/Trading-Floor.exe bin/Trading-Floor-Simulator.exe lib/Trading-Floor-Assets.res
 	@echo "Cleaned"
 
 push:
@@ -68,7 +80,7 @@ ifndef ZIPFILE
 else
 	zip -r $(ZIPFILE) bin lib res src README.md Makefile                \
 	&& curl -s -n -H "Content-Type:application/zip" -H "Authorization: token ${TRADINGFLOOR}" \
-	--data-binary "@$(PWD)/$(ZIPFILE)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/$(shell curl -s        \
-	https://api.github.com/repos/ctubio/ibkr-gateway-trading-floor/releases/latest | grep id | head -n1 | cut -d ' ' -f4 | cut -d ',' -f1 \
+	--data-binary "@$(PWD)/$(ZIPFILE)" "https://uploads.github.com/repos/ctubio/ibkr-gateway-trading-floor-private/releases/$(shell curl -s        \
+	-H "Authorization: token ${TRADINGFLOOR}" https://api.github.com/repos/ctubio/ibkr-gateway-trading-floor-private/releases/latest | grep id | head -n1 | cut -d ' ' -f4 | cut -d ',' -f1 \
 	)/assets?name=$(ZIPFILE)" && rm -v $(ZIPFILE) && (cd ../$(shell ls -r1 .. | tail -n1) && make git)
 endif

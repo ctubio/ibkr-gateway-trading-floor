@@ -23,6 +23,7 @@
 #include <chrono>
 #include <ctime>
 #include <cmath>
+#include <random>
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -40,6 +41,15 @@
 #include <format>
 #include <memory>
 #include <exception>
+
+#ifdef GATEWAY_NAME
+    #define GATEWAY_SPACE " "
+    #define GATEWAY_DASH  "-"
+#else
+    #define GATEWAY_NAME  ""
+    #define GATEWAY_SPACE ""
+    #define GATEWAY_DASH  ""
+#endif
 
 #define WM_API_UPDATE       (WM_USER +  2)
 #define WM_SYMBOL_RESULTS   (WM_USER +  3)
@@ -62,17 +72,17 @@
 #define WM_OPEN_ORDERS_WINDOW (WM_USER + 17) // Posted from background thread (e.g. HTTP server) to the
                                               // Dashboard window to request opening the Orders window on the UI thread.
 
-static const char* DASHBOARD_CLASS_NAME          = "Dashboard";
-static const char* DIAMONDS_CLASS_NAME           = "Diamonds";
-static const char* ORDERS_CLASS_NAME             = "Orders";
-static const char* WATCHLIST_CLASS_NAME          = "Watchlist";
-static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList";
-static const char* MARKET_CLASS_NAME             = "Market";
-static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol";
-static const char* SCANNER_CLASS_NAME            = "Scanner";
-static const char* SETTINGS_CLASS_NAME           = "Settings";
-static const char* DEBUGLOG_CLASS_NAME           = "DebugLog";
-static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange";
+static const char* DASHBOARD_CLASS_NAME          = "Dashboard" GATEWAY_NAME;
+static const char* DIAMONDS_CLASS_NAME           = "Diamonds" GATEWAY_NAME;
+static const char* ORDERS_CLASS_NAME             = "Orders" GATEWAY_NAME;
+static const char* WATCHLIST_CLASS_NAME          = "Watchlist" GATEWAY_NAME;
+static const char* WATCHLIST_NEW_LIST_CLASS_NAME = "Watchlist_NewList" GATEWAY_NAME;
+static const char* MARKET_CLASS_NAME             = "Market" GATEWAY_NAME;
+static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol" GATEWAY_NAME;
+static const char* SCANNER_CLASS_NAME            = "Scanner" GATEWAY_NAME;
+static const char* SETTINGS_CLASS_NAME           = "Settings" GATEWAY_NAME;
+static const char* DEBUGLOG_CLASS_NAME           = "DebugLog" GATEWAY_NAME;
+static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
 
 class TradingAPI {
 public:
