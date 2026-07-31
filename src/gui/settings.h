@@ -1,12 +1,12 @@
 #pragma once
 
 #ifndef GATEWAY_SIM
-int WindowSettingsWidth = 276;
+int WindowSettingsHeight = 530;
 #else
-int WindowSettingsWidth = 276 - 138;
+int WindowSettingsHeight = 530 - 138;
 #endif
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", WindowSettingsWidth, 530); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, WindowSettingsHeight); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 

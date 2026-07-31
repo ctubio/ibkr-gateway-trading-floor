@@ -945,13 +945,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
 
                 case ID_M_EXIT:
-                    api().disconnect();
-#ifndef GATEWAY_SIM
-                    if (Settings_KillGatewayOnExit())
-                        KillGateway();
-#endif
-                    Shell_NotifyIconW(NIM_DELETE, &nid); // Remove icon from tray
-                    PostQuitMessage(0);
+                    DestroyWindow(hWnd);
                     break;
                     
                 case ID_MB_DIAMONDS:
@@ -1011,6 +1005,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
         }
         case WM_DESTROY:
+            api().disconnect();
+#ifndef GATEWAY_SIM
+            if (Settings_KillGatewayOnExit())
+                KillGateway();
+#endif
             api().removeApiUpdateWindow(hWnd);
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS

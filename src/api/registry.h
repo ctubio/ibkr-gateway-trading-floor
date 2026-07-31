@@ -102,11 +102,11 @@ void RegDelete(const char* subPath, const char* valueName) {
 
 // Convenience wrappers
 void Settings_SaveString(const char* key, const std::string& value) {
-    RegSetString("Settings", key, value);
+    RegSetString(SETTINGS_CLASS_NAME, key, value);
 }
 
 std::string Settings_LoadString(const char* key, const std::string& defaultValue = "") {
-    return RegGetString("Settings", key, defaultValue);
+    return RegGetString(SETTINGS_CLASS_NAME, key, defaultValue);
 }
 
 void Settings_Scanner_Save(const char* key, DWORD value) {
@@ -167,27 +167,27 @@ void Settings_CheckedTabs_Save(DWORD value) {
 }
 
 void Settings_Save(const char* key, DWORD value) {
-    RegSetDword("Settings", key, value);
+    RegSetDword(SETTINGS_CLASS_NAME, key, value);
 }
 
 // ─── Decimal helpers (stored as DWORD scaled by 10000, i.e. 4 decimal places) ────
 void Settings_SaveFloat(const char* key, float value) {
     DWORD scaled = (DWORD)(value * 10000.0f);
-    RegSetDword("Settings", key, scaled);
+    RegSetDword(SETTINGS_CLASS_NAME, key, scaled);
 }
 
 float Settings_LoadFloat(const char* key, float defaultValue = 0.0f) {
-    DWORD scaled = RegGetDword("Settings", key, 0xFFFFFFFF);
+    DWORD scaled = RegGetDword(SETTINGS_CLASS_NAME, key, 0xFFFFFFFF);
     if (scaled == 0xFFFFFFFF) return defaultValue; // sentinel: never saved → use default
     return (float)scaled / 10000.0f;
 }
 
 void Settings_Delete(const char* key) {
-    RegDelete("Settings", key);
+    RegDelete(SETTINGS_CLASS_NAME, key);
 }
 
 DWORD Settings_Load(const char* key, DWORD defaultValue) {
-    return RegGetDword("Settings", key, defaultValue);
+    return RegGetDword(SETTINGS_CLASS_NAME, key, defaultValue);
 }
 
 DWORD Settings_Overnight_Load(const char* windowClassKey, DWORD defaultValue) {
@@ -674,7 +674,7 @@ void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
 
 void Save_OpenWindows(const char* className) {
     HKEY hKey;
-    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
     std::vector<std::string> windows;
 
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
@@ -744,7 +744,7 @@ void Session_RemoveWindow(HWND hWnd) {
     if (ctx.foundOther) return;
     
     HKEY hKey;
-    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
     std::vector<std::string> windows;
 
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
@@ -1043,7 +1043,7 @@ void Session_RestoreWindows(
     InitCommonControlsEx(&icex);
 
     HKEY hKey;
-    std::string fullPath = std::format("{}\\Settings", APP_REG_ROOT);
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) return;
 
     DWORD size = 0;
