@@ -57,7 +57,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
 
         RegisterWindowRAII registerWindowRAII(hInst);
 
+#ifndef GATEWAY_SIM
         HttpServerRAII httpServerRAII;
+#endif
 
         MSG msg;
         while (GetMessage(&msg, NULL, 0, 0)) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#ifndef GATEWAY_SIM
+
 #include <tlhelp32.h>
 bool IsProcessRunning(const char* processName) {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -112,7 +114,7 @@ void KillGateway() {
     }
     CloseHandle(hSnap);
 }
-
+#endif
 LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
     DWORD code = exceptionInfo->ExceptionRecord->ExceptionCode;
     std::string errorType = "UNKNOWN CRITICAL EXCEPTION";

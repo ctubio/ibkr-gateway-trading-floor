@@ -749,8 +749,16 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 Coins_SpeakDailyPnL();
             if (wParam == TIMER_WATCHDOG) { // 10000
                 if (shouldBeConnected && !api().isConnected()) {
+#ifndef GATEWAY_SIM
                     EnsureGatewayRunning(hWnd);
-                    api().connect(IsProcessRunning("ibgateway.exe") ? 4001 : 7496);
+#endif
+                    api().connect(
+#ifndef GATEWAY_SIM
+                        IsProcessRunning("ibgateway.exe") ? 4001 : 7496
+#else
+                        0
+#endif
+                    );
                     UpdateTrayIcon(hWnd);
                 } else if (!shouldBeConnected && api().isConnected()) {
                     api().disconnect();
@@ -938,8 +946,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
                 case ID_M_EXIT:
                     api().disconnect();
+#ifndef GATEWAY_SIM
                     if (Settings_KillGatewayOnExit())
                         KillGateway();
+#endif
                     Shell_NotifyIconW(NIM_DELETE, &nid); // Remove icon from tray
                     PostQuitMessage(0);
                     break;

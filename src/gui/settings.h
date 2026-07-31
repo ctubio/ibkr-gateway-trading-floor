@@ -1,6 +1,12 @@
 #pragma once
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, 530); }
+#ifndef GATEWAY_SIM
+int WindowSettingsWidth = 276;
+#else
+int WindowSettingsWidth = 276 - 138;
+#endif
+
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", WindowSettingsWidth, 530); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
@@ -91,6 +97,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             int gw = w - gm * 2; // control width inside group box
             int y  = m;
 
+#ifndef GATEWAY_SIM
             // ── Gateway ──────────────────────────────────────────────────────
             CreateWindowA("BUTTON", "Gateway",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -122,6 +129,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
             SetWindowTextA(hGatewayEdit, GetGatewayPath().c_str());
             y += 138;
+#endif
 
             // ── Display ──────────────────────────────────────────────────────
             CreateWindowA("BUTTON", "Display",
@@ -242,24 +250,36 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case WM_COMMAND:
-            if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
-                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);
-                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                Settings_Save("PlaySounds", checked);
-            }
+#ifndef GATEWAY_SIM
             if (LOWORD(wParam) == ID_SETTINGS_AUTO_GATEWAY) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_AUTO_GATEWAY);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("Gateway_AutoStart", checked);
             }
-            if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
-                StartDebugLog();
-                FlushDebugBuffer();
-            }
             if (LOWORD(wParam) == ID_SETTINGS_KILL_GATEWAY) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_KILL_GATEWAY);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("Gateway_KillOnExit", checked);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
+                HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);   
+                if (hPathEdit != NULL) {
+                    std::string path = AskGatewayPath(hWnd);
+                    if (!path.empty()) {
+                        SaveGatewayPath(path);
+                        SetWindowTextA(hPathEdit, path.c_str());
+                    }
+                }
+            }
+#endif
+            if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
+                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);
+                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
+                Settings_Save("PlaySounds", checked);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
+                StartDebugLog();
+                FlushDebugBuffer();
             }
             if (LOWORD(wParam) == ID_SETTINGS_DARK_MODE) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
@@ -330,16 +350,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             PostMessage(hw, WM_TTS_VOICE_CHANGED, 0, 0);
                         return TRUE;
                     }, 0);
-                }
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
-                HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);   
-                if (hPathEdit != NULL) {
-                    std::string path = AskGatewayPath(hWnd);
-                    if (!path.empty()) {
-                        SaveGatewayPath(path);
-                        SetWindowTextA(hPathEdit, path.c_str());
-                    }
                 }
             }
             break;

@@ -45,6 +45,7 @@
 #ifdef GATEWAY_NAME
     #define GATEWAY_SPACE " "
     #define GATEWAY_DASH  "-"
+    #define GATEWAY_SIM
 #else
     #define GATEWAY_NAME  ""
     #define GATEWAY_SPACE ""

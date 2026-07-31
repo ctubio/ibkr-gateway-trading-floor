@@ -210,6 +210,7 @@ DWORD Settings_AlwaysOnTop_Load(const char* windowClassKey, DWORD defaultValue) 
     return RegGetDword(windowClassKey, "AlwaysOnTop", defaultValue);
 }
 
+#ifndef GATEWAY_SIM
 bool Settings_KillGatewayOnExit() {
     return Settings_Load("Gateway_KillOnExit", 0) != 0;
 }
@@ -217,6 +218,7 @@ bool Settings_KillGatewayOnExit() {
 bool Settings_AutoGateway() {
     return Settings_Load("Gateway_AutoStart", 0) != 0;
 }
+#endif
 
 bool Settings_DarkMode() {
     return Settings_Load("DarkMode", 0) != 0;
