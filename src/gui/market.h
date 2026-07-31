@@ -870,6 +870,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     DeleteObject(hBgBrush);
     SetBkMode(hdc, TRANSPARENT);
 
+    // ── Sparkline ──────────────────────────────────────────────────────
+    // Draw the sparkline stretched across the RECT
+    state->sparkline.Draw(hdc, rc, 390, HEADER_H - 2);
+
     const TradingAPI::L1Book& L1 = state->l1Info;
 
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
@@ -1083,16 +1087,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     LineTo(hdc, rc.right, HEADER_H - 1);
     SelectObject(hdc, hOldPen);
     DeleteObject(hSepPen);
-
-    
-    // ── Sparkline ──────────────────────────────────────────────────────
-    // Optional: Fill background with a dark color
-    //HBRUSH bgBrush = CreateSolidBrush(RGB(15, 15, 15));
-    //FillRect(hdc, &rc, bgBrush);
-    //DeleteObject(bgBrush);
-
-    // Draw the sparkline stretched across the RECT
-    state->sparkline.Draw(hdc, rc, 390, HEADER_H - 2);
 
     EndPaint(hWnd, &ps);
 }
