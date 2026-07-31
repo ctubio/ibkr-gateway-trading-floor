@@ -113,7 +113,7 @@ static CoinRow coinRows[] = {
     { "Dividends:",        "AccruedDividend",     2, false },
     { "Accruals:",         "AccruedCash",         3, false },
     { nullptr, nullptr, 0, true },
-    { "Gross Position:",   "GrossPositionValue",  0, false },
+    { "Positions:",        "GrossPositionValue",  0, false },
     { "Buying Power:",     "BuyingPower",         0, false },
  // { "Available Funds:",  "AvailableFunds",      0, false },
  // { "Excess Liquidity:", "ExcessLiquidity",     0, false },
@@ -618,7 +618,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Daily PnL % Label
             HWND hLblPct = CreateWindowA("STATIC", "Daily PnL %:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m, 76, lblW, 18, hWnd, NULL, hInst, NULL);
+                m, 76, lblW + 10, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblPct, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
             // Daily PnL % Value
@@ -637,7 +637,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             const int rowH = 23;
             int y = 111;
             int lastRowY = y;
-            lblW  = 90;
+            lblW  = 94;
             valW  = rW - lblW;
             for (int i = 0; i < COIN_ROW_COUNT; i++) {
                 if (coinRows[i].isSeparator) {

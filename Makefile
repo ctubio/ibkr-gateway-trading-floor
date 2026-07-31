@@ -1,7 +1,7 @@
 MAJOR      = 0
 MINOR      = 0
 PATCH      = 0
-BUILD      = 122
+BUILD      = 123
 
 CXX     := x86_64-w64-mingw32-g++
 WINDRES := x86_64-w64-mingw32-windres
