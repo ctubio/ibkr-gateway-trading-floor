@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1602;
+int windowDiamondsWidth = 1522;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -59,6 +59,7 @@ enum DiamondColIdx {
     DCOL_SYMBOL = 0,
     DCOL_POSITION,
     DCOL_AVGPRICE,
+    DCOL_VWAP, // displays VWAP price, sorts by (Last - VWAP)
     DCOL_ASKSIZE,
     DCOL_ASK,
     DCOL_LAST,
@@ -67,7 +68,6 @@ enum DiamondColIdx {
     DCOL_CHG5MIN,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
-    DCOL_VWAP, // displays VWAP price, sorts by (Last - VWAP)
     DCOL_CHG13WEEK,
     DCOL_CHG26WEEK,
     DCOL_CHG52WEEK,
@@ -118,6 +118,7 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
+    { "VWAP",              95, LVCFMT_RIGHT },
     { "AskSz",             80, LVCFMT_RIGHT },
     { "Ask",              100, LVCFMT_RIGHT },
     { "Last",             100, LVCFMT_RIGHT },
@@ -126,7 +127,6 @@ static const DiamondCol diamondCols[] = {
     { "5m",                80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",         115, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
-    { "VWAP",              95, LVCFMT_RIGHT },
     { "13w",              115, LVCFMT_RIGHT },
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
@@ -135,7 +135,7 @@ static const DiamondCol diamondCols[] = {
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Unrealized %",     140, LVCFMT_RIGHT },
     { "Unrealized",       115, LVCFMT_RIGHT },
-    { "Value",             90, LVCFMT_RIGHT },
+    { "Value",             95, LVCFMT_RIGHT },
     { "Net %",             85, LVCFMT_RIGHT },
     { "Yield %",           90, LVCFMT_RIGHT },
     { "Date",             125, LVCFMT_RIGHT },
@@ -166,6 +166,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_CHG13WEEK; i <= DCOL_VOLUME; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
+    ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
 
     // Sum the extra width needed for each currently-visible group.
     int extraWidth = 0;
@@ -175,7 +176,8 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     }
     if (showWeeks) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
-                      diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_VOLUME].width;
+                      diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_VOLUME].width +
+                      diamondCols[DCOL_AVGPRICE].width;
     }
     if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
 
