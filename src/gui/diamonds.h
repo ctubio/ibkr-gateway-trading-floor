@@ -1024,8 +1024,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         // explicit avoids any locale-specific atof surprises.
                         if (!textVal.empty()) {
                             double val = atof(textVal.c_str());
-                            if      (val >= 0.0) cd->clrText = COINS_CLR_GREEN;
+                            if      (val > 0.0) cd->clrText = COINS_CLR_GREEN;
                             else if (val < 0.0) cd->clrText = COINS_CLR_RED;
+                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         if (cd->iSubItem == DCOL_CHG5MIN) {

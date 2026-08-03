@@ -944,8 +944,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     }
 
     // Determine Colors
-    COLORREF dPnlColor = (dPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
-    COLORREF uPnlColor = (uPnL >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+    COLORREF dPnlColor = (dPnL > 0.0) ? COINS_CLR_GREEN : (dPnL < 0.0 ? COINS_CLR_RED : textColor);
+    COLORREF uPnlColor = (uPnL > 0.0) ? COINS_CLR_GREEN : (uPnL < 0.0 ? COINS_CLR_RED : textColor);
+    
     if (state->position == 0.0) { uPnlColor = textColor; }
 
     // ── Volume rate / print-frequency rate (tick-by-tick, see Market_ComputeVolRates) ──
