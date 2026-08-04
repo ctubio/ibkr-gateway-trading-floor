@@ -1,7 +1,7 @@
 MAJOR      = 0
 MINOR      = 0
 PATCH      = 0
-BUILD      = 126
+BUILD      = 127
 
 CXX     := x86_64-w64-mingw32-g++
 WINDRES := x86_64-w64-mingw32-windres
@@ -16,7 +16,7 @@ COMMON_LIBS     := -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
 
 .PHONY: all sim clean push MAJOR MINOR PATCH BUILD release
 
-all: bin/Trading-Floor.exe bin/Trading-Floor-Simulator.exe
+all: bin/Trading-Floor.exe # bin/Trading-Floor-Simulator.exe
 
 bin/Trading-Floor.exe: src/main.cpp lib/Trading-Floor-Assets.res lib/Trading-Floor-Gateway.a
 	@echo -n "please wait, building $@.. "
