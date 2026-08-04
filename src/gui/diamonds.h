@@ -246,6 +246,28 @@ static void Diamonds_LoadTabMap() {
     parseIds(Settings_Tab_Load("Tab_Quarantine"), DTAB_QUARENTINE);
 }
 
+// Drops g_DiamondsTabMap entries for conIds that are no longer a held
+// position, then persists the pruned map. Nothing else prunes this map —
+// Diamonds_SaveTabMap() just rewrites whatever's currently in it — so
+// closed-out positions would otherwise accumulate in the registry forever.
+static void Diamonds_CleanupStaleTabAssignments() {
+    if (g_DiamondsTabMap.empty()) return;
+
+    std::unordered_set<int> liveConIds;
+    {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        for (auto const& [conId, info] : api().getPortfolioMap())
+            liveConIds.insert(conId);
+    }
+
+    bool changed = false;
+    for (auto it = g_DiamondsTabMap.begin(); it != g_DiamondsTabMap.end(); ) {
+        if (!liveConIds.count(it->first)) { it = g_DiamondsTabMap.erase(it); changed = true; }
+        else ++it;
+    }
+    if (changed) Diamonds_SaveTabMap();
+}
+
 // ── Symbol color persistence ──────────────────────────────────────────────────
 
 static void Diamonds_SaveSymbolColors() {
@@ -911,6 +933,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         g_DiamondsTabMap[conId] = targetTab;
                     Diamonds_SaveTabMap();
                     Diamonds_Repopulate(hWnd);
+                    Diamonds_CleanupStaleTabAssignments(); 
                     InvalidateRect(hWnd, NULL, TRUE);
                 } else if (cmd >= 100 && cmd < 100 + (int)watchlistLists.size()) {
                     // Add to watchlist list (only if not already present — menu grayed it, but guard anyway).
