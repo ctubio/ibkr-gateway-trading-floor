@@ -24,6 +24,7 @@
 #include <ctime>
 #include <cmath>
 #include <random>
+#include <regex>
 #include <fstream>
 #include <sstream>
 #include <iostream>

@@ -263,7 +263,7 @@ static const char* s_monthNames[] = {
 
 // Build the TraderTV watchlist URL for a given date (YYYY, MM, DD)
 static std::string News_BuildUrl(int year, int month, int day) {
-    return std::string("https://tradertv-live.beehiiv.com/p/trader-tv-watchlist-")
+    return std::string("https://tradertv-live.beehiiv.com/p/tradertv-watchlist-")
         + s_monthNames[month] + "-" + std::to_string(day)
         + "-" + std::to_string(year);
 }
@@ -352,7 +352,470 @@ static int News_CleanupCache(int maxAgeDays = 7) {
     return (int)toDelete.size();
 }
 
-// Fetch the TraderTV page via WinInet and extract cleaned text (mirrors Python fetch_content).
+// ─────────────────────────────────────────────────────────────────────────────
+// The helpers below re-implement, in C++, the HTML → text pipeline from
+// fetch_tradertv_watchlist.py (extract_main_content / format_market_cells /
+// add_section_linebreaks / remove_click_to_watch / remove_inline_sources /
+// remove_attribution_footers / clean_whitespace). News_FetchContent() below
+// calls them in the same order the Python script's process_watchlist() does.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Minimal HTML entity decoding (mirrors BeautifulSoup's automatic decoding) ──
+static void Utf8AppendCodepoint(std::string& out, unsigned int cp) {
+    if (cp <= 0x7F) {
+        out += (char)cp;
+    } else if (cp <= 0x7FF) {
+        out += (char)(0xC0 | (cp >> 6));
+        out += (char)(0x80 | (cp & 0x3F));
+    } else if (cp <= 0xFFFF) {
+        out += (char)(0xE0 | (cp >> 12));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    } else {
+        out += (char)(0xF0 | (cp >> 18));
+        out += (char)(0x80 | ((cp >> 12) & 0x3F));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    }
+}
+
+static std::string HtmlDecodeEntities(const std::string& in) {
+    static const std::unordered_map<std::string, unsigned int> namedEntities = {
+        {"amp", '&'}, {"lt", '<'}, {"gt", '>'}, {"quot", '"'}, {"apos", '\''},
+        {"nbsp", 0x00A0}, {"mdash", 0x2014}, {"ndash", 0x2013}, {"hellip", 0x2026},
+        {"rsquo", 0x2019}, {"lsquo", 0x2018}, {"rdquo", 0x201D}, {"ldquo", 0x201C},
+        {"copy", 0x00A9}, {"reg", 0x00AE}, {"trade", 0x2122}, {"deg", 0x00B0},
+        {"bull", 0x2022}, {"middot", 0x00B7}, {"euro", 0x20AC}, {"pound", 0x00A3},
+        {"cent", 0x00A2}, {"times", 0x00D7}, {"divide", 0x00F7},
+    };
+
+    std::string out;
+    out.reserve(in.size());
+    for (size_t i = 0; i < in.size(); ) {
+        if (in[i] == '&') {
+            size_t semi = in.find(';', i + 1);
+            if (semi != std::string::npos && semi - i <= 12) {
+                std::string body = in.substr(i + 1, semi - i - 1);
+                if (!body.empty() && body[0] == '#') {
+                    bool hex = (body.size() > 1 && (body[1] == 'x' || body[1] == 'X'));
+                    std::string numPart = body.substr(hex ? 2 : 1);
+                    if (!numPart.empty()) {
+                        try {
+                            unsigned int cp = (unsigned int)std::stoul(numPart, nullptr, hex ? 16 : 10);
+                            Utf8AppendCodepoint(out, cp);
+                            i = semi + 1;
+                            continue;
+                        } catch (...) {}
+                    }
+                } else {
+                    auto it = namedEntities.find(body);
+                    if (it != namedEntities.end()) {
+                        Utf8AppendCodepoint(out, it->second);
+                        i = semi + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+        out += in[i++];
+    }
+    return out;
+}
+
+// ── Tiny attribute / class helpers ────────────────────────────────────────────
+static std::string HtmlExtractAttr(const std::string& tag, const std::string& attrName) {
+    std::string lowerTag = tag;
+    std::transform(lowerTag.begin(), lowerTag.end(), lowerTag.begin(), ::tolower);
+    std::string needle = attrName + "=";
+    size_t pos = lowerTag.find(needle);
+    while (pos != std::string::npos) {
+        if (pos == 0 || isspace((unsigned char)tag[pos - 1])) {
+            size_t valStart = pos + needle.size();
+            if (valStart < tag.size() && (tag[valStart] == '"' || tag[valStart] == '\'')) {
+                char quote = tag[valStart];
+                size_t valEnd = tag.find(quote, valStart + 1);
+                if (valEnd != std::string::npos)
+                    return tag.substr(valStart + 1, valEnd - valStart - 1);
+            }
+        }
+        pos = lowerTag.find(needle, pos + 1);
+    }
+    return "";
+}
+
+static bool HtmlClassHasToken(const std::string& classAttr, const std::string& token) {
+    std::istringstream iss(classAttr);
+    std::string cls;
+    while (iss >> cls) {
+        if (cls == token) return true;
+    }
+    return false;
+}
+
+// Strips tags from an HTML fragment, decodes entities, and joins the
+// remaining non-empty trimmed text runs with `sep` — mirrors
+// element.get_text(sep, strip=True) closely enough for cell-text parsing.
+static std::string HtmlStripTagsToPlainText(const std::string& fragment, const std::string& sep) {
+    std::string out;
+    bool first = true;
+    size_t i = 0;
+    while (i < fragment.size()) {
+        size_t lt = fragment.find('<', i);
+        std::string chunk = (lt == std::string::npos) ? fragment.substr(i) : fragment.substr(i, lt - i);
+        std::string decoded = HtmlDecodeEntities(chunk);
+        size_t s = decoded.find_first_not_of(" \t\r\n");
+        size_t e = decoded.find_last_not_of(" \t\r\n");
+        if (s != std::string::npos) {
+            if (!first) out += sep;
+            out += decoded.substr(s, e - s + 1);
+            first = false;
+        }
+        if (lt == std::string::npos) break;
+        size_t gt = fragment.find('>', lt);
+        if (gt == std::string::npos) break;
+        i = gt + 1;
+    }
+    return out;
+}
+
+// ── Generic "find element body" with proper nested-tag depth tracking ────────
+// Finds the first <tagName ...> whose opening tag satisfies `matches`, then
+// returns the substring of HTML between it and its correctly-nested matching
+// close tag (mirrors soup.find(tagName, class_=...) + reading that element's contents).
+static std::string HtmlFindElementBodyIf(const std::string& html, const std::string& tagName,
+                                          const std::function<bool(const std::string&)>& matches) {
+    std::regex openRe("<" + tagName + R"(\b[^>]*>)", std::regex::icase);
+    auto begin = std::sregex_iterator(html.begin(), html.end(), openRe);
+    auto end   = std::sregex_iterator();
+
+    for (auto it = begin; it != end; ++it) {
+        std::string tag = it->str();
+        if (!matches(tag)) continue;
+        if (tag.size() >= 2 && tag[tag.size() - 2] == '/') return ""; // self-closed, no body
+
+        size_t contentStart = (size_t)it->position() + tag.size();
+        std::regex tagRe("<\\s*(/?)\\s*" + tagName + R"(\b[^>]*>)", std::regex::icase);
+        int depth = 1;
+        auto tb = std::sregex_iterator(html.begin() + contentStart, html.end(), tagRe);
+        auto te = std::sregex_iterator();
+        for (auto tit = tb; tit != te; ++tit) {
+            std::string t = tit->str();
+            bool isClose    = (*tit)[1].length() > 0;
+            bool selfClosed = (t.size() >= 2 && t[t.size() - 2] == '/');
+            if (isClose) {
+                if (--depth == 0) {
+                    size_t closeStart = contentStart + (size_t)tit->position();
+                    return html.substr(contentStart, closeStart - contentStart);
+                }
+            } else if (!selfClosed) {
+                depth++;
+            }
+        }
+        return html.substr(contentStart); // unterminated — take the rest of the document
+    }
+    return "";
+}
+
+// Primary: soup.find("div", class_="content")
+static std::string HtmlFindContentDiv(const std::string& html) {
+    return HtmlFindElementBodyIf(html, "div", [](const std::string& tag) {
+        return HtmlClassHasToken(HtmlExtractAttr(tag, "class"), "content");
+    });
+}
+
+// Fallback: any div whose class merely *contains* one of these words
+// (approximates the div[class*='content'] / [class*='post-body'] / [class*='article-body'] selectors).
+static std::string HtmlFindDivByClassSubstring(const std::string& html, const std::vector<std::string>& needles) {
+    return HtmlFindElementBodyIf(html, "div", [&](const std::string& tag) {
+        std::string classAttr = HtmlExtractAttr(tag, "class");
+        std::transform(classAttr.begin(), classAttr.end(), classAttr.begin(), ::tolower);
+        for (const auto& n : needles)
+            if (classAttr.find(n) != std::string::npos) return true;
+        return false;
+    });
+}
+
+static std::string HtmlFindElementBody(const std::string& html, const std::string& tagName) {
+    return HtmlFindElementBodyIf(html, tagName, [](const std::string&) { return true; });
+}
+
+// Mirrors extract_main_content()'s selector fallback chain: div.content →
+// div[class*='content'/'post-body'/'article-body'] → <article> → <body> → whole document.
+static std::string HtmlLocateArticleBody(const std::string& html) {
+    std::string body = HtmlFindContentDiv(html);
+    if (!body.empty()) return body;
+
+    body = HtmlFindDivByClassSubstring(html, {"content", "post-body", "article-body"});
+    if (!body.empty()) return body;
+
+    body = HtmlFindElementBody(html, "article");
+    if (!body.empty()) return body;
+
+    body = HtmlFindElementBody(html, "body");
+    return body.empty() ? html : body;
+}
+
+// ── format_market_cells(): reformat <td class="market-cell"> content as "name: value" ──
+static std::string HtmlFormatMarketCells(const std::string& html) {
+    static const std::regex tdOpenRe(R"(<td\b[^>]*>)", std::regex::icase);
+    static const std::regex valueStartRe(R"(^[+\-\$0-9])");
+
+    std::string out;
+    out.reserve(html.size());
+    size_t lastCopied = 0;
+
+    auto begin = std::sregex_iterator(html.begin(), html.end(), tdOpenRe);
+    auto end   = std::sregex_iterator();
+
+    for (auto it = begin; it != end; ++it) {
+        std::string tag = it->str();
+        if (!HtmlClassHasToken(HtmlExtractAttr(tag, "class"), "market-cell")) continue;
+
+        size_t tagStart = (size_t)it->position();
+        if (tagStart < lastCopied) continue;
+        size_t cellStart = tagStart + tag.size();
+        size_t closeTag = html.find("</td", cellStart);
+        if (closeTag == std::string::npos) continue;
+        size_t closeTagEnd = html.find('>', closeTag);
+        if (closeTagEnd == std::string::npos) continue;
+        closeTagEnd += 1;
+
+        std::string cellText = HtmlStripTagsToPlainText(html.substr(cellStart, closeTag - cellStart), " ");
+
+        std::istringstream iss(cellText);
+        std::vector<std::string> words;
+        std::string w;
+        while (iss >> w) words.push_back(w);
+        if (words.size() < 2) continue; // matches Python's "continue" — cell left untouched
+
+        int splitIdx = -1;
+        for (int i = 0; i < (int)words.size(); ++i) {
+            if (std::regex_search(words[i], valueStartRe) ||
+                words[i] == "Near" || words[i] == "Slightly" || words[i] == "Small-cap") {
+                splitIdx = i;
+                break;
+            }
+        }
+
+        std::string name, value;
+        if (splitIdx > 0 && splitIdx < (int)words.size()) {
+            for (int i = 0; i < splitIdx; ++i) { if (i) name += " "; name += words[i]; }
+            for (int i = splitIdx; i < (int)words.size(); ++i) { if (i > splitIdx) value += " "; value += words[i]; }
+        } else {
+            for (int i = 0; i + 1 < (int)words.size(); ++i) { if (i) name += " "; name += words[i]; }
+            value = words.back();
+        }
+
+        out.append(html, lastCopied, cellStart - lastCopied);
+        out += name + ": " + value;
+        out.append(html, closeTag, closeTagEnd - closeTag);
+        lastCopied = closeTagEnd;
+    }
+    out.append(html, lastCopied, html.size() - lastCopied);
+    return out;
+}
+
+// ── add_section_linebreaks() + content_div.get_text("\n", strip=True) ────────
+static const char* const kNewsSectionHeaders[] = {
+    "Sector & Theme Watch",
+    "Premarket Trading",
+    "Stocks in Focus",
+    "More Stocks to Watch",
+    "Economic Events - ET",
+    "Earnings Today",
+};
+
+// Walks the (already cell-formatted) article HTML, skipping tags/comments and
+// the contents of <script>/<style>, joining each non-empty stripped text run
+// with "\n" — mirroring get_text("\n", strip=True). A blank line is inserted
+// immediately before any run containing one of kNewsSectionHeaders, and before
+// the start of any <div class="sector-theme"> / <div class="story-card">,
+// mirroring the MARKER insertion + text.replace(MARKER, "\n\n") in the Python.
+static std::string HtmlExtractTextWithSectionBreaks(const std::string& html) {
+    std::string out;
+    bool pendingBreak = false;
+    bool firstPiece = true;
+
+    auto emit = [&](const std::string& raw) {
+        size_t b = raw.find_first_not_of(" \t\r\n");
+        size_t e = raw.find_last_not_of(" \t\r\n");
+        if (b == std::string::npos) return;
+        std::string s = raw.substr(b, e - b + 1);
+
+        for (const char* h : kNewsSectionHeaders) {
+            if (s.find(h) != std::string::npos) { pendingBreak = true; break; }
+        }
+
+        if (!firstPiece) out += "\n";
+        if (pendingBreak) { out += "\n\n"; pendingBreak = false; }
+        out += s;
+        firstPiece = false;
+    };
+
+    size_t i = 0;
+    while (i < html.size()) {
+        size_t lt = html.find('<', i);
+        std::string chunk = (lt == std::string::npos) ? html.substr(i) : html.substr(i, lt - i);
+        if (!chunk.empty()) emit(HtmlDecodeEntities(chunk));
+        if (lt == std::string::npos) break;
+
+        size_t gt = html.find('>', lt);
+        if (gt == std::string::npos) break;
+        std::string tag = html.substr(lt, gt - lt + 1);
+        std::string lowerTag = tag;
+        std::transform(lowerTag.begin(), lowerTag.end(), lowerTag.begin(), ::tolower);
+
+        if (lowerTag.rfind("<!--", 0) == 0) {
+            size_t closePos = html.find("-->", lt);
+            i = (closePos == std::string::npos) ? html.size() : closePos + 3;
+            continue;
+        }
+        if (lowerTag.rfind("<script", 0) == 0 || lowerTag.rfind("<style", 0) == 0) {
+            bool isScript = lowerTag.rfind("<script", 0) == 0;
+            size_t closePos = html.find(isScript ? "</script" : "</style", gt + 1);
+            if (closePos == std::string::npos) { i = html.size(); }
+            else {
+                size_t closeGt = html.find('>', closePos);
+                i = (closeGt == std::string::npos) ? html.size() : closeGt + 1;
+            }
+            continue;
+        }
+        if (lowerTag.size() > 4 && lowerTag.compare(0, 4, "<div") == 0 &&
+            (lowerTag[4] == ' ' || lowerTag[4] == '\t' || lowerTag[4] == '>' || lowerTag[4] == '/')) {
+            std::string classAttr = HtmlExtractAttr(tag, "class");
+            if (HtmlClassHasToken(classAttr, "sector-theme") || HtmlClassHasToken(classAttr, "story-card"))
+                pendingBreak = true;
+        }
+
+        i = gt + 1;
+    }
+    return out;
+}
+
+// ── remove_click_to_watch() ───────────────────────────────────────────────────
+static std::string News_RemoveClickToWatch(const std::string& text) {
+    static const std::vector<std::regex> patterns = {
+        std::regex(R"(\[CLICK TO WATCH NOW\]\([^)]+\))", std::regex::icase),
+        std::regex(R"(CLICK TO WATCH NOW)", std::regex::icase),
+        std::regex(R"(Click to watch now)", std::regex::icase),
+        std::regex(R"(https://youtube\.com/live/[^\s]+)", std::regex::icase),
+    };
+    std::string result = text;
+    for (const auto& re : patterns)
+        result = std::regex_replace(result, re, "");
+    return result;
+}
+
+// ── remove_inline_sources() ───────────────────────────────────────────────────
+static std::string News_RemoveInlineSources(const std::string& text) {
+    static const std::regex sourcesLineRe(R"(^Sources?:$)", std::regex::icase);
+    static const std::regex sourceNameRe(
+        R"(^(WSJ|Barron|MarketWatch|FT|IBD|Caterpillar IR|onsemi IR|BP 6-K|HSBC IR|Kiplinger earnings|StockMarketWatch|Investors\.|AP Hormuz))");
+
+    std::vector<std::string> lines;
+    {
+        std::istringstream ss(text);
+        std::string line;
+        while (std::getline(ss, line)) lines.push_back(line);
+    }
+
+    std::vector<std::string> output;
+    bool skipNext = false;
+    for (const auto& line : lines) {
+        size_t b = line.find_first_not_of(" \t\r\n");
+        size_t e = line.find_last_not_of(" \t\r\n");
+        std::string stripped = (b == std::string::npos) ? "" : line.substr(b, e - b + 1);
+
+        if (std::regex_search(stripped, sourcesLineRe)) { skipNext = true; continue; }
+
+        if (skipNext) {
+            bool endsWithSemi = !stripped.empty() && stripped.back() == ';';
+            if (endsWithSemi || std::regex_search(stripped, sourceNameRe)) continue;
+            skipNext = false;
+        }
+        if (stripped == "Source") continue;
+
+        output.push_back(line);
+    }
+
+    std::string result;
+    for (size_t i = 0; i < output.size(); ++i) { if (i) result += "\n"; result += output[i]; }
+    return result;
+}
+
+// ── remove_attribution_footers() ──────────────────────────────────────────────
+static std::string News_RemoveAttributionFooters(const std::string& text) {
+    static const std::vector<std::regex> footerMarkers = {
+        std::regex(R"(^Principal sources:)", std::regex::icase),
+        std::regex(R"(^Sources:)", std::regex::icase),
+        std::regex(R"(^Source:)", std::regex::icase),
+        std::regex(R"(^\[Source\])", std::regex::icase),
+        std::regex(R"(^<<<END_EXTERNAL)", std::regex::icase),
+        std::regex(R"(^SECURITY NOTICE:)", std::regex::icase),
+        std::regex(R"(^<<<EXTERNAL_UNTRUSTED_CONTENT)", std::regex::icase),
+        std::regex(R"(^---)", std::regex::icase),
+        std::regex(R"(^\[NYSE holiday)", std::regex::icase),
+        std::regex(R"(^\[Trading Economics)", std::regex::icase),
+        std::regex(R"(^\[MarketWatch)", std::regex::icase),
+        std::regex(R"(^\[WSJ)", std::regex::icase),
+        std::regex(R"(^\[Barron)", std::regex::icase),
+        std::regex(R"(^\[MarketWatch movers)", std::regex::icase),
+        std::regex(R"(^\[WSJ stocks)", std::regex::icase),
+    };
+
+    std::vector<std::string> lines;
+    {
+        std::istringstream ss(text);
+        std::string line;
+        while (std::getline(ss, line)) lines.push_back(line);
+    }
+
+    std::vector<std::string> output;
+    bool footerStarted = false;
+    for (const auto& line : lines) {
+        size_t b = line.find_first_not_of(" \t\r\n");
+        size_t e = line.find_last_not_of(" \t\r\n");
+        std::string stripped = (b == std::string::npos) ? "" : line.substr(b, e - b + 1);
+
+        for (const auto& marker : footerMarkers) {
+            if (std::regex_search(stripped, marker)) { footerStarted = true; break; }
+        }
+        if (!footerStarted) output.push_back(line);
+    }
+
+    std::string result;
+    for (size_t i = 0; i < output.size(); ++i) { if (i) result += "\n"; result += output[i]; }
+    return result;
+}
+
+// ── clean_whitespace() ────────────────────────────────────────────────────────
+static std::string News_CleanWhitespace(const std::string& text) {
+    static const std::regex manyNewlines(R"(\n{3,})");
+    std::string collapsed = std::regex_replace(text, manyNewlines, "\n\n");
+
+    std::vector<std::string> lines;
+    {
+        std::istringstream ss(collapsed);
+        std::string line;
+        while (std::getline(ss, line)) {
+            size_t e = line.find_last_not_of(" \t\r");
+            lines.push_back(e == std::string::npos ? "" : line.substr(0, e + 1));
+        }
+    }
+
+    std::string joined;
+    for (size_t i = 0; i < lines.size(); ++i) { if (i) joined += "\n"; joined += lines[i]; }
+
+    size_t b = joined.find_first_not_of(" \t\r\n");
+    size_t e = joined.find_last_not_of(" \t\r\n");
+    return (b == std::string::npos) ? "" : joined.substr(b, e - b + 1);
+}
+
+// Fetch the TraderTV page via WinInet, then run the exact same pipeline as
+// fetch_tradertv_watchlist.py's process_watchlist(): locate the article body,
+// reformat market-data table cells, extract text (with section-header blank
+// lines), strip the "click to watch" call-out, strip inline source lists,
+// strip the attribution footer, then normalise whitespace.
 // Returns empty string if the page is not found (404 / "doesn't exist" page).
 static std::string News_FetchContent(const std::string& url, int day, int month, int year) {
     HINTERNET hInet = InternetOpenA("Mozilla/5.0 (compatible; OpenClawBot/1.0)", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
@@ -375,119 +838,16 @@ static std::string News_FetchContent(const std::string& url, int day, int month,
         html.find("The page you requested doesn") != std::string::npos)
         return ""; // signal: not found
 
-    // ── Strip <style> and <script> blocks ────────────────────────────────────
-    auto stripTag = [](std::string& s, const std::string& open, const std::string& close) {
-        std::string out;
-        size_t pos = 0;
-        while (true) {
-            size_t start = s.find(open, pos);
-            if (start == std::string::npos) { out += s.substr(pos); break; }
-            out += s.substr(pos, start - pos);
-            size_t end = s.find(close, start + open.size());
-            if (end == std::string::npos) break;
-            pos = end + close.size();
-        }
-        s = std::move(out);
-    };
-    // Case-insensitive strip: strip lowercase tags (beehiiv uses lowercase)
-    stripTag(html, "<style",  "</style>");
-    stripTag(html, "<script", "</script>");
-    stripTag(html, "<STYLE",  "</STYLE>");
-    stripTag(html, "<SCRIPT", "</SCRIPT>");
+    std::string articleHtml = HtmlLocateArticleBody(html);
+    articleHtml = HtmlFormatMarketCells(articleHtml);
+    std::string text = HtmlExtractTextWithSectionBreaks(articleHtml);
 
-    // ── Remove footer: everything after the copyright line ───────────────────
-    static const std::string copyrightMark = "&#xA9; ";
-    size_t footerPos = html.find(copyrightMark);
-    // Also try literal ©
-    if (footerPos == std::string::npos) footerPos = html.find("\xC2\xA9"); // UTF-8 ©
-    if (footerPos != std::string::npos) html = html.substr(0, footerPos);
+    text = News_RemoveClickToWatch(text);
+    text = News_RemoveInlineSources(text);
+    text = News_RemoveAttributionFooters(text);
+    text = News_CleanWhitespace(text);
 
-    // ── Replace block-level closing tags with newlines ────────────────────────
-    auto replaceAll = [](std::string& s, const std::string& from, const std::string& to) {
-        size_t pos = 0;
-        while ((pos = s.find(from, pos)) != std::string::npos) {
-            s.replace(pos, from.size(), to);
-            pos += to.size();
-        }
-    };
-    replaceAll(html, "</p>",  "\n");
-    replaceAll(html, "</P>",  "\n");
-    replaceAll(html, "<br/>", "\n");
-    replaceAll(html, "<br />","\n");
-    replaceAll(html, "<br>",  "\n");
-    replaceAll(html, "<BR>",  "\n");
-    replaceAll(html, "&amp;",  "&");
-    replaceAll(html, "&nbsp;",  " ");
-
-    // ── Strip all remaining HTML tags ─────────────────────────────────────────
-    std::string text;
-    text.reserve(html.size());
-    bool inTag = false;
-    for (char c : html) {
-        if (c == '<') { inTag = true; text += ' '; continue; }
-        if (c == '>') { inTag = false; continue; }
-        if (!inTag) text += c;
-    }
-
-    // ── Split into lines, strip, drop empty ──────────────────────────────────
-    std::vector<std::string> lines;
-    {
-        std::istringstream ss(text);
-        std::string line;
-        while (std::getline(ss, line)) {
-            // ltrim
-            size_t s2 = line.find_first_not_of(" \t\r");
-            if (s2 != std::string::npos) line = line.substr(s2);
-            else line.clear();
-            // rtrim
-            size_t e2 = line.find_last_not_of(" \t\r");
-            if (e2 != std::string::npos) line = line.substr(0, e2 + 1);
-            else line.clear();
-            if (!line.empty()) lines.push_back(line);
-        }
-    }
-
-    // ── Find first meaningful content line ────────────────────────────────────
-    size_t startIdx = 0;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        if (lines[i].find("Welcome to") != std::string::npos ||
-            lines[i].find("In The News") != std::string::npos) {
-            startIdx = i;
-            break;
-        }
-    }
-
-    // ── Filter noise patterns (mirrors Python skip_patterns) ─────────────────
-    // We use simple string equality / prefix checks instead of full regex.
-    auto isNoise = [](const std::string& ln) -> bool {
-        if (ln == "TraderTV Research")    return true;
-        if (ln == "Login Subscribe")      return true;
-        if (ln == "0")                    return true;
-        if (ln == "Home")                 return true;
-        if (ln == "Posts")                return true;
-        if (ln == "CLICK TO WATCH NOW!") return true;
-        if (ln.find("TraderTV.LIVE") != std::string::npos &&
-            ln.find("features a daily live trading broadcast") != std::string::npos)
-            return true;
-        if (ln.find("Join us on YouTube") != std::string::npos)
-            return true;
-        if (ln.find("every weekday from 8:00am to 4:00pm EST") != std::string::npos)
-            return true;
-        return false;
-    };
-
-    std::vector<std::string> filtered;
-    for (size_t i = startIdx; i < lines.size(); ++i) {
-        if (!isNoise(lines[i])) filtered.push_back(lines[i]);
-    }
-
-    // Join with double newlines (mirrors Python "\n\n".join(filtered_lines))
-    std::string result;
-    for (size_t i = 0; i < filtered.size(); ++i) {
-        if (i > 0) result += "\n\n";
-        result += filtered[i];
-    }
-    return result;
+    return text;
 }
 
 // Return a list of up to `num` trading dates counting backward from today
