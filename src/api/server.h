@@ -928,9 +928,8 @@ static std::string HandleGetNews(int numDays) {
     }
 
     // Cleanup old registry entries (mirrors Python cleanup_old_cache)
-    int deleted = News_CleanupCache(7);
-    if (deleted > 0)
-        body += "\n\n[Cleaned up " + std::to_string(deleted) + " expired cache entry(ies)]\n";
+    /*int deleted = */News_CleanupCache(7);
+    //if (deleted > 0) body += "\n\n[Cleaned up " + std::to_string(deleted) + " expired cache entry(ies)]\n";
 
     return body;
 }

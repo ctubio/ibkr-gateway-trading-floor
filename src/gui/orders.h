@@ -762,7 +762,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
         
-
         case WM_COMMAND: {
             if (s_editState.panelVisible && (LOWORD(wParam) == ID_ORDERS_PRICE_EDIT || LOWORD(wParam) == ID_ORDERS_QTY_EDIT) && HIWORD(wParam) == EN_CHANGE) {
                 UpdatePriceLabel(hWnd);
