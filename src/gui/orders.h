@@ -78,6 +78,30 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
 
 
 // ── Inline edit panel ─────────────────────────────────────────────────────────
+
+
+static void UpdatePriceLabel(HWND hWnd) {
+    if (!s_editState.panelVisible) return;
+    HWND hPriceLbl = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+    HWND hQtyEdit = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+
+    if (!hPriceLbl || !hPriceEdit || !hQtyEdit) return;
+
+    char priceBuf[32] = {}, qtyBuf[32] = {};
+    GetWindowTextA(hPriceEdit, priceBuf, sizeof(priceBuf));
+    GetWindowTextA(hQtyEdit, qtyBuf, sizeof(qtyBuf));
+
+    double price = 0;
+    double qty   = 0;
+    try {
+        price = std::stod(priceBuf);
+        qty = std::stod(qtyBuf);
+    } catch (...) { price = 0; qty = 0; }
+
+    SetWindowTextA(hPriceLbl, FormatWithCommas(price * qty).c_str());
+}
+
 // Price and Qty edit fields shown at the bottom of the Orders window when an
 // editable order is selected.  Hidden (and the ListView expands to fill) when
 // no order is selected or the order is in a terminal / non-editable state.
@@ -106,24 +130,31 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int editH  = 37;
     int lblW   = 50;
     int editW  = 120;
-    int gapX   = 14;
     int startX = 18;
 
     int x = startX;
     if (hHint) {
-        MoveWindow(hHint, x, py + 5, 160, 24, TRUE);
+        int hintW = 210;
+        MoveWindow(hHint, x, py + 5, hintW, 24, TRUE);
         ShowWindow(hHint, show);
-        x += 160 + 5;
+        x += hintW + 5;
     }
-    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hPriceLbl,  show); } x += lblW + 5;
-    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); } x += editW + gapX;
+    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); }
+    x += editW + 10;
 
     // Qty is hidden when partialFill.
     bool showQty = showPanel && !s_editState.partialFill;
     int  qshow   = showQty ? SW_SHOW : SW_HIDE;
-    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); } x += lblW + 5;
-    if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); } x += editW + gapX;
+    if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); }
+    x += lblW + 5;
+    if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); }
+    x += editW - 40 + 5;
+
     
+    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW + 40,  24,    TRUE); ShowWindow(hPriceLbl,  show); }
+    x += lblW + 5;
+    
+    if (show) UpdatePriceLabel(hWnd);
 }
 
 // Returns true if the given status string allows modification.
@@ -390,6 +421,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             if (val < 0.0) val = 0.0;
             std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:.0f}", val);
             SetWindowTextA(hWnd, s.c_str());
+            UpdatePriceLabel(GetParent(hWnd));
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
             return 0;
@@ -425,10 +457,15 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
 
     HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hHint) {
-        std::string hint = order.symbol + " " + order.action + " " + order.orderType;
+        std::string hint = order.symbol + " " + order.action + " " + order.orderType + " Price:";
         SetWindowTextA(hHint, hint.c_str());
         SetCtrlColor(hHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
         InvalidateRect(hHint, NULL, TRUE);
+    }
+    HWND hQtyLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
+    if (hQtyLabel) {
+        SetCtrlColor(hQtyLabel, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
+        InvalidateRect(hQtyLabel, NULL, TRUE);
     }
     Orders_LayoutPanel(hWnd, true);
     InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
@@ -493,9 +530,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
 
             // ── Inline edit panel controls (initially hidden) ──────────────────
-            CreateWindowA("STATIC", "Price:",
-                WS_CHILD | SS_RIGHT,
-                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);
             HWND hEditPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 // Added ES_MULTILINE here
                 WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE, 
@@ -508,6 +542,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 // Added ES_MULTILINE here
                 WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE, 
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
+            HWND hPriceLabel = CreateWindowA("STATIC", "0",
+                WS_CHILD | SS_RIGHT,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);    
+            SetCtrlColor(hPriceLabel, COINS_CLR_ORANGE);
 
             // Subclass edit fields to intercept keyboard navigation.
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT), EditField_SubclassProc, 1, 0);
@@ -724,6 +762,14 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
         
+
+        case WM_COMMAND: {
+            if (s_editState.panelVisible && (LOWORD(wParam) == ID_ORDERS_PRICE_EDIT || LOWORD(wParam) == ID_ORDERS_QTY_EDIT) && HIWORD(wParam) == EN_CHANGE) {
+                UpdatePriceLabel(hWnd);
+            }
+            break;
+        }
+
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
             

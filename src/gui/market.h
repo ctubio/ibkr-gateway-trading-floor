@@ -1298,6 +1298,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hOrderRisk = CreateWindowA("STATIC", "",
             WS_CHILD | SS_LEFT,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+        SetCtrlColor(state->hOrderRisk, COINS_CLR_ORANGE);
 
         // Apply font to order bar controls
         if (state->hOrderFont) {
