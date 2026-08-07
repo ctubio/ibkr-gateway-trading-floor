@@ -757,7 +757,11 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 Orders_Repopulate(hWnd);
             } else {
                 HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                if (hList) ListView_DeleteAllItems(hList);
+                if (hList) {
+                    ListView_DeleteAllItems(hList);
+                    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+                    RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                }
             }
             break;
         }
