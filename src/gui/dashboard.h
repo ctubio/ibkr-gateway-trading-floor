@@ -1,7 +1,7 @@
 #pragma once
 
 int windowDashboardWidth  = 250;
-int windowDashboardHeight = 450;
+int windowDashboardHeight = 390;
 
 void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor" GATEWAY_SPACE GATEWAY_NAME, L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
@@ -79,13 +79,39 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 }
 
-// ─── Header controls ──────────────────────────────────────────────────────────
-static HWND hCoin_NetLiq  = NULL;
-static HWND hCoin_BigPnL  = NULL;
-static HWND hCoin_Pct     = NULL;
-static HWND hCoin_Speaker = NULL;   // speaker icon button (SS_NOTIFY)
-static HWND hCoin_Lock    = NULL;   // lock icon button (WM_KEYDOWN VK_SCROLL)
-static HWND hCoin_FxIcon  = NULL;   // exchange-currency icon button (SS_NOTIFY) — color never changes
+// ─── Dashboard controls ────────────────────────────────────────────────────────
+static HWND hLblNetLiq        = NULL;
+static HWND hCoin_NetLiq      = NULL;
+static HWND hCoin_BigPnL      = NULL;
+static HWND hCoin_Pct         = NULL;
+static HWND hCoin_Realized    = NULL;
+static HWND hCoin_Speaker     = NULL;   // speaker icon button (SS_NOTIFY)
+static HWND hCoin_Lock        = NULL;   // lock icon button (WM_KEYDOWN VK_SCROLL)
+
+static HWND hLblPositions      = NULL;
+static HWND hCoin_Positions   = NULL;
+static HWND hCoin_Unrealized  = NULL;
+static HWND hCoin_Dividends   = NULL;
+static HWND hCoin_Accruals    = NULL;
+static HWND hCoin_BuyingPower = NULL;
+static HWND hCoin_MaintMargin = NULL;
+
+static HWND hLblCash           = NULL;
+static HWND hCoin_Cash        = NULL;
+static HWND hCoin_EUR         = NULL;
+static HWND hCoin_USD         = NULL;
+static HWND hCoin_FxIcon      = NULL;   // exchange-currency icon button (SS_NOTIFY) — color never changes
+
+static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
+    if (!hWnd || !text) return 0;
+    HDC hdc = GetDC(hWnd);
+    HFONT hOld = (HFONT)SelectObject(hdc, hFont);
+    SIZE sz = { 0, 0 };
+    GetTextExtentPoint32A(hdc, text, (int)strlen(text), &sz);
+    SelectObject(hdc, hOld);
+    ReleaseDC(hWnd, hdc);
+    return sz.cx;
+}
 
 #define ID_COIN_NETLIQ   5100
 #define ID_COIN_BIGPNL   5101
@@ -103,33 +129,6 @@ static HWND hCoin_FxIcon  = NULL;   // exchange-currency icon button (SS_NOTIFY)
 static ISpVoice* g_pCoinsVoice  = nullptr;
 static bool      g_coinsTtsOn   = false;
 static bool      g_coinsComInit = false;
-
-// ─── Row data ─────────────────────────────────────────────────────────────────
-struct CoinRow { const char* label; const char* key; int colorType; bool isSeparator; };
-
-static CoinRow coinRows[] = {
-    { "Unrealized:",   "UnrealizedPnL",           1, false },
-    { "Realized:",     "RealizedPnL",             1, false },
-    { "Dividends:",        "AccruedDividend",     2, false },
-    { "Accruals:",         "AccruedCash",         3, false },
-    { nullptr, nullptr, 0, true },
-    { "Positions:",        "GrossPositionValue",  0, false },
-    { "Buying Power:",     "BuyingPower",         0, false },
- // { "Available Funds:",  "AvailableFunds",      0, false },
- // { "Excess Liquidity:", "ExcessLiquidity",     0, false },
- // { "Init Margin:",      "InitMarginReq",       0, false },
-    { "Maint Margin:",     "MaintMarginReq",      0, false },
-    { nullptr, nullptr, 0, true },
-    { "EUR Cash:",         "EUR_CashBalance",     3, false },
-    { "USD Cash:",         "USD_CashBalance",     3, false },
-    { "Total Cash:",        "CashBalance",        3, false },
-};
-static const int COIN_ROW_COUNT = (int)(sizeof(coinRows) / sizeof(coinRows[0]));
-
-#define ID_COINS_LABEL_BASE 5000
-
-static HWND hCoinLbl[COIN_ROW_COUNT] = {};
-static HWND hCoinVal[COIN_ROW_COUNT] = {};
 
 // ─── TTS helpers ──────────────────────────────────────────────────────────────
 
@@ -303,9 +302,19 @@ void Coins_UpdateLabels(HWND hWnd) {
     
     UpdateTrayIcon(hWnd, currency);
     
+    const int m = 10;
+    int y1 = 8;
+    int box1H = 94;
+    int y2 = y1 + box1H + 12;
+    int box2H = 124;
+    int y3 = y2 + box2H + 12;
+
     if (hCoin_NetLiq) {
         std::string formattedNum = FormatWithCommas(netLiq);
         SetWindowTextA(hCoin_NetLiq, formattedNum.c_str());
+        int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
+        SetWindowPos(hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        InvalidateRect(hCoin_NetLiq, NULL, TRUE);
     }
 
     COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
@@ -324,51 +333,80 @@ void Coins_UpdateLabels(HWND hWnd) {
         SetCtrlColor(hCoin_Pct, pnlClr);
         InvalidateRect(hCoin_Pct, NULL, TRUE);
     }
+    if (hCoin_Realized) {
+        std::string formattedNum = FormatWithCommas(realized);
+        COLORREF clr = realized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
+        SetWindowTextA(hCoin_Realized, formattedNum.c_str());
+        SetCtrlColor(hCoin_Realized, clr);
+        InvalidateRect(hCoin_Realized, NULL, TRUE);
+    }
 
-    for (int i = 0; i < COIN_ROW_COUNT; i++) {
-        if (coinRows[i].isSeparator || !hCoinVal[i]) continue;
+    if (hCoin_Positions) {
+        double grossPos = tryParse("GrossPositionValue");
+        std::string formattedNum = FormatWithCommas(grossPos);
+        SetWindowTextA(hCoin_Positions, formattedNum.c_str());
+        int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
+        SetWindowPos(hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        InvalidateRect(hCoin_Positions, NULL, TRUE);
+    }
+    if (hCoin_Unrealized) {
+        std::string formattedNum = FormatWithCommas(unrealized);
+        COLORREF clr = unrealized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
+        SetWindowTextA(hCoin_Unrealized, formattedNum.c_str());
+        SetCtrlColor(hCoin_Unrealized, clr);
+        InvalidateRect(hCoin_Unrealized, NULL, TRUE);
+    }
+    if (hCoin_Dividends) {
+        double div = tryParse("AccruedDividend");
+        std::string formattedNum = FormatWithCommas(div);
+        SetWindowTextA(hCoin_Dividends, formattedNum.c_str());
+        SetCtrlColor(hCoin_Dividends, COINS_CLR_PURPLE);
+        InvalidateRect(hCoin_Dividends, NULL, TRUE);
+    }
+    if (hCoin_Accruals) {
+        double acc = tryParse("AccruedCash");
+        std::string formattedNum = FormatWithCommas(acc);
+        COLORREF clr = acc > 0.0 ? COINS_CLR_GREEN : (acc < 0.0 ? COINS_CLR_RED : COLOR_THEME);
+        SetWindowTextA(hCoin_Accruals, formattedNum.c_str());
+        SetCtrlColor(hCoin_Accruals, clr);
+        InvalidateRect(hCoin_Accruals, NULL, TRUE);
+    }
+    if (hCoin_BuyingPower) {
+        double bp = tryParse("BuyingPower");
+        std::string formattedNum = FormatWithCommas(bp);
+        SetWindowTextA(hCoin_BuyingPower, formattedNum.c_str());
+    }
+    if (hCoin_MaintMargin) {
+        double mm = tryParse("MaintMarginReq");
+        std::string formattedNum = FormatWithCommas(mm);
+        SetWindowTextA(hCoin_MaintMargin, formattedNum.c_str());
+    }
 
-        std::string raw;
-        if      (strcmp(coinRows[i].key, "UnrealizedPnL") == 0) raw = std::to_string(unrealized);
-        else if (strcmp(coinRows[i].key, "RealizedPnL")   == 0) raw = std::to_string(realized);
-        else {
-            auto it = summary.find(coinRows[i].key);
-            raw = (it != summary.end()) ? it->second : "--";
-        }
-
-        char buf[80] = "--";
-        COLORREF clr = COLOR_THEME;  // default: let theme paint it
-        try {
-            double d = std::stod(raw);
-            if (coinRows[i].colorType == 1) {
-                std::string formattedNum = FormatWithCommas(d);
-                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
-                clr = d >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            } else if (coinRows[i].colorType == 2) {
-                std::string formattedNum = FormatWithCommas(d);
-                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
-                clr = COINS_CLR_PURPLE;
-            } else if (coinRows[i].colorType == 3) {
-                std::string suffixStr;
-                if (strcmp(coinRows[i].key, "CashBalance") == 0) {
-                    suffixStr = " " + currency;
-                } else if (strncmp(coinRows[i].key, "EUR_", 4) == 0) {
-                    suffixStr = " EUR";
-                } else if (strncmp(coinRows[i].key, "USD_", 4) == 0) {
-                    suffixStr = " USD";
-                }
-                std::string formattedNum = FormatWithCommas(d) + suffixStr;
-                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
-                clr = d > 0.0 ? COINS_CLR_GREEN : (d < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            } else {
-                std::string formattedNum = FormatWithCommas(d);
-                strncpy(buf, formattedNum.c_str(), sizeof(buf) - 1);
-            }
-        } catch (...) {}
-        
-        SetCtrlColor(hCoinVal[i], clr);
-        SetWindowTextA(hCoinVal[i], buf);
-        InvalidateRect(hCoinVal[i], NULL, TRUE);
+    if (hCoin_Cash) {
+        double cash = tryParse("CashBalance");
+        std::string formattedNum = FormatWithCommas(cash) + " " + currency;
+        COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : COLOR_THEME);
+        SetWindowTextA(hCoin_Cash, formattedNum.c_str());
+        SetCtrlColor(hCoin_Cash, clr);
+        int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
+        SetWindowPos(hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        InvalidateRect(hCoin_Cash, NULL, TRUE);
+    }
+    if (hCoin_EUR) {
+        double eur = tryParse("EUR_CashBalance");
+        std::string formattedNum = FormatWithCommas(eur);
+        COLORREF clr = eur > 0.0 ? COINS_CLR_GREEN : (eur < 0.0 ? COINS_CLR_RED : COLOR_THEME);
+        SetWindowTextA(hCoin_EUR, formattedNum.c_str());
+        SetCtrlColor(hCoin_EUR, clr);
+        InvalidateRect(hCoin_EUR, NULL, TRUE);
+    }
+    if (hCoin_USD) {
+        double usd = tryParse("USD_CashBalance");
+        std::string formattedNum = FormatWithCommas(usd);
+        COLORREF clr = usd > 0.0 ? COINS_CLR_GREEN : (usd < 0.0 ? COINS_CLR_RED : COLOR_THEME);
+        SetWindowTextA(hCoin_USD, formattedNum.c_str());
+        SetCtrlColor(hCoin_USD, clr);
+        InvalidateRect(hCoin_USD, NULL, TRUE);
     }
 }
 
@@ -568,122 +606,206 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hFontCoins_Pct     = MakeFont(12, true);
             hFontCoins_Value   = MakeFont(12, true);
             hFontCoins_Label   = MakeFont(11, false);
-            hFontCoins_Icons = Coins_MakeMDL2Font(11);
+            hFontCoins_Icons   = Coins_MakeMDL2Font(11);
 
-            const int m  = 12;
-            const int rW = 220;
-            int lblW = 80;
-            int valW = rW - lblW;
+            const int m    = 10;
+            const int boxW = 226;
 
-            // Net Liquidation Label
-            HWND hLblNetLiq = CreateWindowA("STATIC", "Net Liq:",
+            // ─── Box 1: Net Liq & PnL ──────────────────────────────────────────
+            int y1 = 8;
+            int box1H = 94;
+            CreateWindowA("BUTTON", "", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y1, boxW, box1H, hWnd, NULL, hInst, NULL);
+
+            hLblNetLiq = CreateWindowA("STATIC", "Today:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m, 12, lblW, 18, hWnd, NULL, hInst, NULL);
+                m + 10, y1, 60, 16, hWnd, NULL, hInst, NULL);
             SendMessage(hLblNetLiq, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
-            // Net Liquidation Value
             hCoin_NetLiq = CreateWindowA("STATIC", "--",
-                WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                m + lblW, 10, valW, 22, hWnd, (HMENU)ID_COIN_NETLIQ, hInst, NULL);
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 62, y1 - 4, 30, 18, hWnd, (HMENU)ID_COIN_NETLIQ, hInst, NULL);
             SendMessage(hCoin_NetLiq, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
 
-            // Lock icon
+            // Lock icon (hidden by default)
             hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-                m + lblW - 30, 12, 22, 22, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
+                m + boxW - 25, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
             SendMessage(hCoin_Lock, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
             SetCtrlColor(hCoin_Lock, COINS_CLR_GRAY);
             ShowWindow(hCoin_Lock, SW_HIDE);
 
-            // Daily PnL Label
-            HWND hLblBigPnL = CreateWindowA("STATIC", "Daily PnL:",
+            // Row 1: PnL: 🔊 +0.00
+            HWND hLblBigPnL = CreateWindowA("STATIC", "PnL:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m, 46, lblW, 18, hWnd, NULL, hInst, NULL);
+                m + 12, y1 + 24, 30, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblBigPnL, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
-            // Speaker icon - placed immediately to the left of the BigPnL block
             hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-                m + lblW - 10, 48, 22, 22, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
+                m + 42, y1 + 24, 20, 20, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
             SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
             SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
 
-            // Daily PnL Value - bounding box reduced slightly so the text pulls tight to the speaker icon
             hCoin_BigPnL = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOTIFY,
-                m + lblW + 10, 36, valW - 10, 40, hWnd, (HMENU)ID_COIN_BIGPNL, hInst, NULL);
+                m + 70, y1 + 16, boxW - 82, 32, hWnd, (HMENU)ID_COIN_BIGPNL, hInst, NULL);
             SendMessage(hCoin_BigPnL, WM_SETFONT, (WPARAM)hFontCoins_BigPnL, TRUE);
             SetCtrlColor(hCoin_BigPnL, COINS_CLR_GREEN);
 
-            // Daily PnL % Label
-            HWND hLblPct = CreateWindowA("STATIC", "Daily PnL %:",
+            // Row 2: PnL %: +0.00%
+            HWND hLblPct = CreateWindowA("STATIC", "PnL %:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m, 76, lblW + 10, 18, hWnd, NULL, hInst, NULL);
+                m + 12, y1 + 48, 50, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblPct, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
-            // Daily PnL % Value
             hCoin_Pct = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                m + lblW, 76, valW, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
+                m + 70, y1 + 48, boxW - 82, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
             SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFontCoins_Pct, TRUE);
             SetCtrlColor(hCoin_Pct, COINS_CLR_GREEN);
 
-            // Separator after header
-            CreateWindowA("STATIC", "",
-                WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
-                m, 103, rW, 2, hWnd, NULL, hInst, NULL);
+            // Row 3: Realized: 0.00
+            HWND hLblRealized = CreateWindowA("STATIC", "Realized:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y1 + 68, 65, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblRealized, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
-            // Body rows
-            const int rowH = 23;
-            int y = 111;
-            int lastRowY = y;
-            lblW  = 94;
-            valW  = rW - lblW;
-            for (int i = 0; i < COIN_ROW_COUNT; i++) {
-                if (coinRows[i].isSeparator) {
-                    CreateWindowA("STATIC", "",
-                        WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
-                        m, y + 5, rW, 2, hWnd, NULL, hInst, NULL);
-                    y += 16;
-                    continue;
-                }
+            hCoin_Realized = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 70, y1 + 68, boxW - 82, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Realized, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
-                hCoinLbl[i] = CreateWindowA("STATIC", coinRows[i].label,
-                    WS_CHILD | WS_VISIBLE | SS_LEFT,
-                    m, y + 2, lblW, 18, hWnd, NULL, hInst, NULL);
-                SendMessage(hCoinLbl[i], WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
-                // No SetCtrlColor – let the theme paint it
 
-                hCoinVal[i] = CreateWindowA("STATIC", "--",
-                    WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                    m + lblW, y + 2, valW, 18, hWnd,
-                    (HMENU)(UINT_PTR)(ID_COINS_LABEL_BASE + i), hInst, NULL);
-                SendMessage(hCoinVal[i], WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
-                // No SetCtrlColor – let the theme paint it (accent rows get colored on first update)
+            // ─── Box 2: Positions & Margin ─────────────────────────────────────
+            int y2 = y1 + box1H + 12; // y2 = 114
+            int box2H = 124;
+            CreateWindowA("BUTTON", "", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y2, boxW, box2H, hWnd, NULL, hInst, NULL);
 
-                lastRowY = y;
-                y += rowH;
-            }
+            hLblPositions = CreateWindowA("STATIC", "Positions:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 10, y2, 70, 16, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblPositions, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
-            // Exchange-currency icon — right side of the last account-summary row.
-            // Color is set once here and intentionally never touched again on click.
+            hCoin_Positions = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 77, y2 - 4, 30, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Positions, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
+
+            // Row 1: Unrealized: 0.00
+            HWND hLblUnrealized = CreateWindowA("STATIC", "Unrealized:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y2 + 20, 75, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblUnrealized, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_Unrealized = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 90, y2 + 20, boxW - 102, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Unrealized, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+            // Row 2: Dividends: 33.75
+            HWND hLblDividends = CreateWindowA("STATIC", "Dividends:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y2 + 40, 75, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblDividends, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_Dividends = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 90, y2 + 40, boxW - 102, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Dividends, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+            // Row 3: Accruals: -1.64
+            HWND hLblAccruals = CreateWindowA("STATIC", "Accruals:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y2 + 60, 75, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblAccruals, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_Accruals = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 90, y2 + 60, boxW - 102, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Accruals, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+            // Row 4: Buying Power: 86,483.04
+            HWND hLblBP = CreateWindowA("STATIC", "Buying Power:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y2 + 80, 85, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblBP, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_BuyingPower = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 97, y2 + 80, boxW - 109, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+            // Row 5: Maint Margin: 4,403.05
+            HWND hLblMM = CreateWindowA("STATIC", "Maint Margin:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y2 + 100, 85, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblMM, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_MaintMargin = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 97, y2 + 100, boxW - 109, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_MaintMargin, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+
+            // ─── Box 3: Cash ───────────────────────────────────────────────────
+            int y3 = y2 + box2H + 12; // y3 = 250
+            int box3H = 64;
+            CreateWindowA("BUTTON", "", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y3, boxW, box3H, hWnd, NULL, hInst, NULL);
+
+            hLblCash = CreateWindowA("STATIC", "Cash:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 10, y3, 45, 16, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblCash, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_Cash = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 53, y3 - 4, 30, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Cash, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
+
+            // Row 1: EUR: 285.31
+            HWND hLblEUR = CreateWindowA("STATIC", "EUR:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y3 + 20, 35, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblEUR, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            hCoin_EUR = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 50, y3 + 20, boxW - 62, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_EUR, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+            // Row 2: USD: 🏦 -11,559.66
+            HWND hLblUSD = CreateWindowA("STATIC", "USD:",
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                m + 12, y3 + 40, 35, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hLblUSD, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
             hCoin_FxIcon = CreateWindowW(L"STATIC", FX_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-                m + lblW - 18, lastRowY + 3, 20, 20, hWnd, (HMENU)ID_COIN_FXICON, hInst, NULL);
+                m + 47, y3 + 39, 20, 20, hWnd, (HMENU)ID_COIN_FXICON, hInst, NULL);
             SendMessage(hCoin_FxIcon, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
             SetCtrlColor(hCoin_FxIcon, COINS_CLR_GRAY);
 
-            y += 12;
+            hCoin_USD = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                m + 70, y3 + 40, boxW - 82, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_USD, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+
+
+            // ─── Bottom action buttons ──────────────────────────────────────────
+            int yBtn = y3 + box3H + 12; // yBtn = 326
             int steps = 1;
             int stepz = 0;
-            addButtons(hWnd, hInst, "Orders",         (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_ORDERS,    103);
-            addButtons(hWnd, hInst, "Diamonds",       (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_DIAMONDS,  104);
+            addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
+            addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
             
-            addButtons(hWnd, hInst, "Watchlist",  8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_WATCHLIST, 105);
-            addButtons(hWnd, hInst, "Market",     8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_MARKET,    106);
-            addButtons(hWnd, hInst, "Scanner",   8 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_SCANNER,    107);
+            addButtons(hWnd, hInst, "Watchlist", 8 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_WATCHLIST, 105);
+            addButtons(hWnd, hInst, "Market",    8 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    106);
+            addButtons(hWnd, hInst, "Scanner",   8 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SCANNER,    107);
 
-            addButtons(hWnd, hInst, "Settings",  14 + (7 * steps++) + (26 * stepz++) + m, y, (HMENU)ID_MB_SETTINGS,  108);
+            addButtons(hWnd, hInst, "Settings", 14 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  108);
 
             api().addApiUpdateWindow(hWnd);
 
@@ -713,11 +835,27 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_API_UPDATE:
             UpdateTrayIcon(hWnd);
             if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
-                if (hCoin_NetLiq) SetWindowTextA(hCoin_NetLiq, "--");
-                if (hCoin_BigPnL) SetWindowTextA(hCoin_BigPnL, "--");
-                if (hCoin_Pct)    SetWindowTextA(hCoin_Pct,    "--");
-                for (int i = 0; i < COIN_ROW_COUNT; i++)
-                    if (hCoinVal[i]) SetWindowTextA(hCoinVal[i], "--");
+                const int m    = 10;
+                const int boxW = 226;
+                int box1H = 94;
+                int y1 = 8;
+                int y2 = y1 + box1H + 12; // y2 = 114
+                int box2H = 124;
+                int y3 = y2 + box2H + 12; // y3 = 250
+                int box3H = 64;
+                if (hCoin_NetLiq)      { SetWindowTextA(hCoin_NetLiq,      "--"); SetWindowPos(hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_NetLiq, NULL, TRUE); }
+                if (hCoin_BigPnL)      SetWindowTextA(hCoin_BigPnL,      "--");
+                if (hCoin_Pct)         SetWindowTextA(hCoin_Pct,         "--");
+                if (hCoin_Realized)    SetWindowTextA(hCoin_Realized,    "--");
+                if (hCoin_Positions)   { SetWindowTextA(hCoin_Positions,   "--"); SetWindowPos(hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_Positions, NULL, TRUE); }
+                if (hCoin_Unrealized)  SetWindowTextA(hCoin_Unrealized,  "--");
+                if (hCoin_Dividends)   SetWindowTextA(hCoin_Dividends,   "--");
+                if (hCoin_Accruals)    SetWindowTextA(hCoin_Accruals,    "--");
+                if (hCoin_BuyingPower) SetWindowTextA(hCoin_BuyingPower, "--");
+                if (hCoin_MaintMargin) SetWindowTextA(hCoin_MaintMargin, "--");
+                if (hCoin_Cash)        { SetWindowTextA(hCoin_Cash,        "--"); SetWindowPos(hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_Cash, NULL, TRUE); }
+                if (hCoin_EUR)         SetWindowTextA(hCoin_EUR,         "--");
+                if (hCoin_USD)         SetWindowTextA(hCoin_USD,         "--");
             }
             break;
         case WM_API_SOUND: {
@@ -856,12 +994,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
                     AppendMenuW(hMenu, MF_STRING, ID_M_EXIT, L"Exit");
 
-                    // 3. TrackPopupMenu with TPM_RETURNCMD
                     int selectedCmd = TrackPopupMenu(hMenu, 
                         TPM_BOTTOMALIGN | TPM_LEFTALIGN | TPM_RETURNCMD | TPM_NONOTIFY, 
                         pt.x, pt.y, 0, hWnd, NULL);
 
-                    // 4. Route the command
                     switch (selectedCmd) {
                         case 0:
                             // User clicked completely outside the menu
@@ -901,7 +1037,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                             break;
                     }
 
-                    // 5. Destroy the menu at the end of every loop so it can be rebuilt clean
                     DestroyMenu(hMenu);
                 }
             }
@@ -923,24 +1058,21 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             switch (id) {
                 case ID_COIN_SPEAKER:
                 case ID_COIN_BIGPNL:
-                    // Both the speaker glyph and the Daily PnL number toggle TTS when clicked
                     if (evt == STN_CLICKED)
                         Coins_ToggleTTS(hWnd);
                     break;
                 case ID_COIN_FXICON:
                     if (lockHotkeys) break;
-                    // Opens the currency-exchange popup. Deliberately does NOT
-                    // call SetCtrlColor here — this icon's color never changes.
                     if (evt == STN_CLICKED)
                         StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
                 case ID_M_CONNECT:
-                    shouldBeConnected = true; // Turn the auto-watchdog back on
+                    shouldBeConnected = true;
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
                     break;
 
                 case ID_M_DISCONNECT:
-                    shouldBeConnected = false; // Stop the watchdog from auto-reconnecting
+                    shouldBeConnected = false;
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
                     break;
 
@@ -988,7 +1120,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
                     break;
                 
-                // Handle dynamically generated Market menu items
                 default:
                     if (LOWORD(wParam) >= ID_M_MARKET_BASE && LOWORD(wParam) < ID_M_MARKET_BASE + ID_M_MARKET_MAX) {
                         auto tsWindows = EnumerateMarketWindows();
@@ -1027,11 +1158,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hFontCoins_Pct)     { DeleteObject(hFontCoins_Pct);     hFontCoins_Pct     = NULL; }
             if (hFontCoins_Label)   { DeleteObject(hFontCoins_Label);   hFontCoins_Label   = NULL; }
             if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
-            if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons); hFontCoins_Icons = NULL; }
+            if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons);   hFontCoins_Icons   = NULL; }
 
-            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Speaker = hCoin_Lock = hCoin_FxIcon = NULL;
-            memset(hCoinLbl, 0, sizeof(hCoinLbl));
-            memset(hCoinVal, 0, sizeof(hCoinVal));
+            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
+            hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
+            hCoin_Cash = hCoin_EUR = hCoin_USD = hCoin_FxIcon = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);
