@@ -830,6 +830,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int y3 = y2 + box2H + 12; // y3 = 250
             int box3H = 64;
             if (LOWORD(wParam) != WA_INACTIVE) {
+                if (lockHotkeys) break;
                 ShowWindow(hLblDividends, SW_SHOW);
                 ShowWindow(hLblAccruals, SW_SHOW);
                 ShowWindow(hCoin_Accruals, SW_SHOW);
@@ -846,7 +847,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_FxIcon, NULL, m + 47, y3 + 39, 20, 20, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                if (lockHotkeys) break;
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
             } else {
                 ShowWindow(hLblDividends, SW_HIDE);
