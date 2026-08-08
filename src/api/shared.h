@@ -327,7 +327,7 @@ static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wP
         }
 
         // Define where the text will be placed (standard Win32 offset is usually left + 9)
-        RECT textRect = { rc.left + 9, rc.top, rc.left + 9 + textSize.cx + 4, rc.top + textSize.cy };
+        RECT textRect = { rc.left + 9, rc.top, rc.left + 9 + textSize.cx + 8, rc.top + textSize.cy };
 
         // 5. Exclude the text area so the border doesn't draw a line through our label
         if (len > 0) {

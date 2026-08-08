@@ -40,7 +40,7 @@ static HFONT hFontCoins_BigPnL  = NULL;
 static HFONT hFontCoins_Pct     = NULL;
 static HFONT hFontCoins_Label   = NULL;
 static HFONT hFontCoins_Value   = NULL;
-static HFONT hFontCoins_Icons = NULL;   // Segoe MDL2 Assets for speaker glyph
+static HFONT hFontCoins_Icons   = NULL;   // Segoe MDL2 Assets for speaker glyph
 
 void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
@@ -82,6 +82,13 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
 static HWND hCoinBox1 = NULL;
 static HWND hCoinBox2 = NULL;
 static HWND hCoinBox3 = NULL;
+
+static HWND hLblDividends = NULL;
+static HWND hLblAccruals  = NULL;
+static HWND hLblBP        = NULL;
+static HWND hLblMM        = NULL;
+static HWND hLblEUR = NULL;
+static HWND hLblUSD = NULL;
 
 static HWND hCoin_NetLiq      = NULL;
 static HWND hCoin_BigPnL      = NULL;
@@ -699,7 +706,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hCoin_Unrealized, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
             // Row 2: Dividends: 33.75
-            HWND hLblDividends = CreateWindowA("STATIC", "Dividends:",
+            hLblDividends = CreateWindowA("STATIC", "Dividends:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 40, 75, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblDividends, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
@@ -710,7 +717,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hCoin_Dividends, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
             // Row 3: Accruals: -1.64
-            HWND hLblAccruals = CreateWindowA("STATIC", "Accruals:",
+            hLblAccruals = CreateWindowA("STATIC", "Accruals:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 60, 75, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblAccruals, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
@@ -721,7 +728,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hCoin_Accruals, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
             // Row 4: Buying Power: 86,483.04
-            HWND hLblBP = CreateWindowA("STATIC", "Buying Power:",
+            hLblBP = CreateWindowA("STATIC", "Buying Power:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 80, 100, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblBP, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
@@ -732,7 +739,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
             // Row 5: Maint Margin: 4,403.05
-            HWND hLblMM = CreateWindowA("STATIC", "Maintenance:", //  Margin:
+            hLblMM = CreateWindowA("STATIC", "Maintenance:", //  Margin:
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 100, 85, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblMM, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
@@ -757,7 +764,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hCoin_Cash, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
 
             // Row 1: EUR: 285.31
-            HWND hLblEUR = CreateWindowA("STATIC", "EUR:",
+            hLblEUR = CreateWindowA("STATIC", "EUR:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 20, 35, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblEUR, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
@@ -768,7 +775,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hCoin_EUR, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
             // Row 2: USD: 🏦 -11,559.66
-            HWND hLblUSD = CreateWindowA("STATIC", "USD:",
+            hLblUSD = CreateWindowA("STATIC", "USD:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 40, 35, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblUSD, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
@@ -814,11 +821,51 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_ACTIVATE: {
             RECT windowRect; 
             GetWindowRect(hWnd, &windowRect);
+            const int m    = 10;
+            const int boxW = 226;
+            int y1 = 8;
+            int box1H = 94;
+            int y2 = y1 + box1H + 12; // y2 = 114
+            int box2H = 124;
+            int y3 = y2 + box2H + 12; // y3 = 250
+            int box3H = 64;
             if (LOWORD(wParam) != WA_INACTIVE) {
+                ShowWindow(hLblDividends, SW_SHOW);
+                ShowWindow(hLblAccruals, SW_SHOW);
+                ShowWindow(hCoin_Accruals, SW_SHOW);
+                ShowWindow(hCoin_Dividends, SW_SHOW);
+                ShowWindow(hCoin_Cash, SW_SHOW);
+                SetWindowPos(hCoinBox2, NULL, m, y2, boxW, box2H, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblBP, NULL,  m + 12, y2 + 80, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_BuyingPower, NULL, m + 105, y2 + 80, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblMM, NULL, m + 12, y2 + 100, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_MaintMargin, NULL, m + 97, y2 + 100, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoinBox3, NULL, m, y3, boxW, box3H, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblEUR, NULL, m + 12, y3 + 20, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_EUR, NULL, m + 50, y3 + 20, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_FxIcon, NULL, m + 47, y3 + 39, 20, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 if (lockHotkeys) break;
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
             } else {
-                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40, TRUE);
+                ShowWindow(hLblDividends, SW_HIDE);
+                ShowWindow(hLblAccruals, SW_HIDE);
+                ShowWindow(hCoin_Accruals, SW_HIDE);
+                ShowWindow(hCoin_Dividends, SW_HIDE);
+                ShowWindow(hCoin_Cash, SW_HIDE);
+                SetWindowPos(hCoinBox2, NULL, m, y2, boxW, box2H - 40, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblBP, NULL,  m + 12, y2 + 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_BuyingPower, NULL, m + 105, y2 + 40, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblMM, NULL, m + 12, y2 + 60, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_MaintMargin, NULL, m + 97, y2 + 60, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoinBox3, NULL, m, y3 - 40, boxW, box3H, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblEUR, NULL, m + 12, y3 + 20 - 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_EUR, NULL, m + 50, y3 + 20 - 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40 - 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_FxIcon, NULL, m + 47, y3 + 39 - 40, 20, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40 - 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40 - 40, TRUE);
             }
             break;
         }
@@ -1151,9 +1198,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
             if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons);   hFontCoins_Icons   = NULL; }
 
-            hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
+            hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
-            hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = hCoin_FxIcon = NULL;
+            hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = hCoin_FxIcon = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);

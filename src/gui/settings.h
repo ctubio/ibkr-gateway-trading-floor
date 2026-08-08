@@ -108,7 +108,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 #ifndef GATEWAY_SIM
             // ── Gateway ──────────────────────────────────────────────────────
-            hSettingBox1 = CreateWindowA("BUTTON", "Gateway",
+            hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 130,
                 hWnd, NULL, hInst, NULL);
@@ -143,7 +143,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 #endif
 
             // ── Display ──────────────────────────────────────────────────────
-            hSettingBox2 = CreateWindowA("BUTTON", "Display",
+            hSettingBox2 = CreateWindowA("BUTTON", "Display:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 46,
                 hWnd, NULL, hInst, NULL);
@@ -159,7 +159,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 54;
 
             // ── Audio ────────────────────────────────────────────────────────
-            hSettingBox3 = CreateWindowA("BUTTON", "Audio",
+            hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 78,
                 hWnd, NULL, hInst, NULL);
@@ -218,7 +218,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 86;
 
             // ── Trading ──────────────────────────────────────────────────────
-            hSettingBox4 = CreateWindowA("BUTTON", "Trading",
+            hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 148,
                 hWnd, NULL, hInst, NULL);
@@ -250,7 +250,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 156;
 
             // ── System Tools ───────────────────────────────────────────
-            hSettingBox5 = CreateWindowA("BUTTON", "API Messages",
+            hSettingBox5 = CreateWindowA("BUTTON", "API Messages:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 46,
                 hWnd, NULL, hInst, NULL);
