@@ -71,7 +71,6 @@ enum DiamondColIdx {
     DCOL_CHG13WEEK,
     DCOL_CHG26WEEK,
     DCOL_CHG52WEEK,
-    DCOL_VOLUME,
     //DCOL_CLOSE,
     //DCOL_OPEN,
     DCOL_UNREALIZED_PL_PCT,
@@ -130,7 +129,6 @@ static const DiamondCol diamondCols[] = {
     { "13w",              115, LVCFMT_RIGHT },
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
-    { "Vol",               80, LVCFMT_RIGHT },
     //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
     //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
     { "Unrealized %",     140, LVCFMT_RIGHT },
@@ -163,7 +161,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_DIV_YIELD; i <= DCOL_ANNUAL_DIV; ++i) {
         ListView_SetColumnWidth(hList, i, showDiv ? diamondCols[i].width : 0);
     }
-    for (int i = DCOL_CHG13WEEK; i <= DCOL_VOLUME; ++i) {
+    for (int i = DCOL_CHG13WEEK; i <= DCOL_CHG52WEEK; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
     ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
@@ -176,7 +174,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     }
     if (showWeeks) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
-                      diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_VOLUME].width +
+                      diamondCols[DCOL_CHG52WEEK].width + 
                       diamondCols[DCOL_AVGPRICE].width;
     }
     if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
@@ -479,9 +477,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_ASK,     t.ask,     "{:.2f}");
     setCol(DCOL_BID,     t.bid,     "{:.2f}");
     setCol(DCOL_BIDSIZE, t.bidSize, "{:.0f}");
-    
-    row.textCols[DCOL_VOLUME] = formatVolume(t.volume);
-    row.sortValues[DCOL_VOLUME] = t.volume; 
 
     setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}");
     setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}");
@@ -1075,7 +1070,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_VOLUME) {
+                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
