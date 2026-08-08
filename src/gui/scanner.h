@@ -17,8 +17,6 @@ static const char* g_ScannerLocationLabels[SCANNER_LOC_COUNT] = { "NYSE", "NASDA
 enum ScannerScanCodeIdx {
     SCANCODE_TOP_PERC_GAIN = 0,
     SCANCODE_TOP_PERC_LOSE,
-    SCANCODE_TOP_PERC_GAIN_SINCE_OPEN,
-    SCANCODE_TOP_PERC_LOSE_SINCE_OPEN,
     SCANCODE_TOP_VOLUME,
     SCANCODE_PRICE_RANGE,
     SCANCODE_MOST_ACTIVE_USD,
@@ -30,8 +28,6 @@ enum ScannerScanCodeIdx {
 static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = {
     "GAIN",
     "LOSE",
-    "GAIN OPEN",
-    "LOSE OPEN",
     "VOLUME",
     "PRICE",
     "USD",
@@ -42,8 +38,6 @@ static const char* g_ScannerScanCodeLabels[SCANCODE_COUNT] = {
 static const char* g_ScannerScanCodes[SCANCODE_COUNT] = {
     "TOP_PERC_GAIN",
     "TOP_PERC_LOSE",
-    "TOP_PERC_GAIN_SINCE_OPEN",
-    "TOP_PERC_LOSE_SINCE_OPEN",
     "TOP_VOLUME_RATE",
     "HOT_BY_PRICE_RANGE",
     "MOST_ACTIVE_AVG_USD",
