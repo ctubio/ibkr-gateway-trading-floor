@@ -670,7 +670,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             hCoin_Realized = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                m + 70, y1 + 68, boxW - 82, 18, hWnd, NULL, hInst, NULL);
+                m + 77, y1 + 68, boxW - 89, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hCoin_Realized, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
 
@@ -723,16 +723,16 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Row 4: Buying Power: 86,483.04
             HWND hLblBP = CreateWindowA("STATIC", "Buying Power:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m + 12, y2 + 80, 85, 18, hWnd, NULL, hInst, NULL);
+                m + 12, y2 + 80, 100, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblBP, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
             hCoin_BuyingPower = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                m + 97, y2 + 80, boxW - 109, 18, hWnd, NULL, hInst, NULL);
+                m + 105, y2 + 80, boxW - 117, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
             // Row 5: Maint Margin: 4,403.05
-            HWND hLblMM = CreateWindowA("STATIC", "Maint Margin:",
+            HWND hLblMM = CreateWindowA("STATIC", "Maintenance:", //  Margin:
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 100, 85, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblMM, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
