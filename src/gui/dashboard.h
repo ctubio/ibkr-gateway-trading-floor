@@ -13,14 +13,13 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_MB_DIAMONDS   1003
 #define ID_MB_SETTINGS   1004
 #define ID_MB_SCANNER    1005
-#define ID_MB_WATCHLIST  1006
 #define ID_MB_MARKET     1007
-#define ID_MB_ORDERS     1008
-#define ID_M_ORDERS      1009
+#define ID_MB_EXCHANGE   1008
+#define ID_MB_ORDERS     1009
+#define ID_M_ORDERS      1010
 #define ID_M_DIAMONDS    1011
 #define ID_M_SETTINGS    1012
 #define ID_M_SCANNER     1013
-#define ID_M_WATCHLIST   1014
 #define ID_M_MARKET      1015
 #define ID_M_DEBUGLOG    1016
 
@@ -107,7 +106,6 @@ static HWND hCoin_MaintMargin = NULL;
 static HWND hCoin_Cash        = NULL;
 static HWND hCoin_EUR         = NULL;
 static HWND hCoin_USD         = NULL;
-static HWND hCoin_FxIcon      = NULL;   // exchange-currency icon button (SS_NOTIFY) — color never changes
 
 static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
     if (!hWnd || !text) return 0;
@@ -124,8 +122,7 @@ static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
 #define ID_COIN_BIGPNL   5101
 #define ID_COIN_PCT      5102
 #define ID_COIN_SPEAKER  5103
-#define ID_COIN_FXICON   5104
-#define ID_COIN_LOCK     5105
+#define ID_COIN_LOCK     5104
 #define TIMER_COINS_SPEAKER  0xC015   // WM_TIMER id
 
 // ─── Exchange Currency popup (DASHBOARD_EXCHANGE_CLASS_NAME) ───────────────────
@@ -780,12 +777,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 12, y3 + 40, 35, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblUSD, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
-            hCoin_FxIcon = CreateWindowW(L"STATIC", FX_GLYPH,
-                WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-                m + 47, y3 + 39, 20, 20, hWnd, (HMENU)ID_COIN_FXICON, hInst, NULL);
-            SendMessage(hCoin_FxIcon, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
-            SetCtrlColor(hCoin_FxIcon, COINS_CLR_GRAY);
-
             hCoin_USD = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 70, y3 + 40, boxW - 82, 18, hWnd, NULL, hInst, NULL);
@@ -798,12 +789,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int stepz = 0;
             addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
             addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
-            
-            addButtons(hWnd, hInst, "Watchlist", 9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_WATCHLIST, 105);
-            addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    106);
-            addButtons(hWnd, hInst, "Scanner",   9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SCANNER,    107);
+            addButtons(hWnd, hInst, "Exchange",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  109);
+            addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    105);
+            addButtons(hWnd, hInst, "Scanner",   9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SCANNER,    106);
 
-            addButtons(hWnd, hInst, "Settings", 18 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  108);
+            addButtons(hWnd, hInst, "Settings", 18 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  107);
 
             api().addApiUpdateWindow(hWnd);
 
@@ -845,7 +835,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SetWindowPos(hLblEUR, NULL, m + 12, y3 + 20, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_EUR, NULL, m + 50, y3 + 20, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_FxIcon, NULL, m + 47, y3 + 39, 20, 20, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
             } else {
@@ -863,7 +852,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SetWindowPos(hLblEUR, NULL, m + 12, y3 + 20 - 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_EUR, NULL, m + 50, y3 + 20 - 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40 - 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_FxIcon, NULL, m + 47, y3 + 39 - 40, 20, 20, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40 - 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40 - 40, TRUE);
             }
@@ -914,7 +902,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         case WM_SETCURSOR: {
             int id = GetDlgCtrlID((HWND)wParam);
-            if  (id == ID_COIN_SPEAKER || id == ID_COIN_BIGPNL || id == ID_COIN_FXICON) {
+            if  (id == ID_COIN_SPEAKER || id == ID_COIN_BIGPNL) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
             }
@@ -1010,8 +998,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (FindWindowA(DASHBOARD_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? L"[ ★ ] Dashboard" : L"[  ] Dashboard");
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds");
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders");
-                    if (FindWindowA(WATCHLIST_CLASS_NAME, NULL)) AppendMenuW(hMenu, MF_STRING, ID_M_WATCHLIST, IsWindowAlwaysOnTop(WATCHLIST_CLASS_NAME) ? L"[ ★ ] Watchlist" : L"[  ] Watchlist");
-
 
                     auto tsWindows = EnumerateMarketWindows();
                     std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
@@ -1046,7 +1032,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_DASHBOARD:
                         case ID_M_DIAMONDS:
                         case ID_M_ORDERS:
-                        case ID_M_WATCHLIST:
                         case ID_M_SCANNER:
                         case ID_M_SETTINGS:
                         case ID_M_DEBUGLOG:
@@ -1099,11 +1084,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (evt == STN_CLICKED)
                         Coins_ToggleTTS(hWnd);
                     break;
-                case ID_COIN_FXICON:
-                    if (lockHotkeys) break;
-                    if (evt == STN_CLICKED)
-                        StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
-                    break;
                 case ID_M_CONNECT:
                     shouldBeConnected = true;
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
@@ -1121,14 +1101,14 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_DIAMONDS:
                     StartDiamonds();
                     break;
+                case ID_MB_EXCHANGE:
+                    StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
+                    break;
                 case ID_MB_SCANNER:
                     StartScanner();
                     break;
                 case ID_MB_MARKET:
                     StartMarket();
-                    break;
-                case ID_MB_WATCHLIST:
-                    StartWatchlist();
                     break;
                 case ID_MB_SETTINGS:
                     StartSettings();
@@ -1144,9 +1124,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_M_SCANNER:
                     ToggleWindowAlwaysOnTop(SCANNER_CLASS_NAME);
-                    break;
-                case ID_M_WATCHLIST:
-                    ToggleWindowAlwaysOnTop(WATCHLIST_CLASS_NAME);
                     break;
                 case ID_M_SETTINGS:
                     ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME);
@@ -1200,7 +1177,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
-            hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = hCoin_FxIcon = NULL;
+            hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);

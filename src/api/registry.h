@@ -117,14 +117,6 @@ DWORD Settings_Scanner_Load(const char* key, DWORD defaultValue = 0) {
     return RegGetDword(SCANNER_CLASS_NAME, key, defaultValue);
 }
 
-void Settings_LastList_Save(const std::string& value) {
-    RegSetString(WATCHLIST_CLASS_NAME, "LastList", value);
-}
-
-std::string Settings_LastList_Load(const std::string& defaultValue = "") {
-    return RegGetString(WATCHLIST_CLASS_NAME, "LastList", defaultValue);
-}
-
 std::string Settings_Tab_Load(const char* key, const std::string& defaultValue = "") {
     return RegGetString(DIAMONDS_CLASS_NAME, key, defaultValue);
 }
@@ -774,78 +766,6 @@ void Session_RemoveWindow(HWND hWnd) {
     }
 }
 
-void Watchlist_DeleteList(const char* listName) {
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_WRITE, &hKey) == ERROR_SUCCESS) {
-        RegDeleteValueA(hKey, listName);
-        RegCloseKey(hKey);
-    }
-}
-
-void Watchlist_SaveFullList(const char* listName, const std::vector<std::string>& items) {
-    std::string multiStr;
-    for (const auto& item : items) {
-        multiStr += item;
-        multiStr += '\0';
-    }
-    multiStr += '\0';
-
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, listName, 0, REG_MULTI_SZ,
-            (const BYTE*)multiStr.data(), (DWORD)multiStr.size());
-        RegCloseKey(hKey);
-    }
-}
-
-// Returns every list name stored under the Watchlist registry key.
-// Shared by Watchlist_LoadAllLists (combo box) and any caller that only needs the names.
-std::vector<std::string> Watchlist_LoadAllListNames() {
-    std::vector<std::string> names;
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
-        return names;
-    char valueName[256];
-    DWORD index = 0, nameSize = sizeof(valueName);
-    while (RegEnumValueA(hKey, index++, valueName, &nameSize,
-                         NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
-        names.push_back(valueName);
-        nameSize = sizeof(valueName);
-    }
-    RegCloseKey(hKey);
-    return names;
-}
-
-std::vector<std::string> Watchlist_ReadListEntries(const char* listName) {
-    std::vector<std::string> entries;
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
-        return entries;
-    DWORD type, size = 0;
-    RegQueryValueExA(hKey, listName, NULL, &type, NULL, &size);
-    if (size > 0) {
-        std::vector<char> buf(size);
-        RegQueryValueExA(hKey, listName, NULL, &type, (LPBYTE)buf.data(), &size);
-        const char* p = buf.data();
-        while (*p) { entries.push_back(p); p += strlen(p) + 1; }
-    }
-    RegCloseKey(hKey);
-    return entries;
-}
-void Settings_NewList_Save(const char* newName) {
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}\\SymbolLists", APP_REG_ROOT, WATCHLIST_CLASS_NAME);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        const char empty[2] = { '\0', '\0' };
-        RegSetValueExA(hKey, newName, 0, REG_MULTI_SZ, (const BYTE*)empty, 2);
-        RegCloseKey(hKey);
-    }
-}
-
 // ── Market splitter persistence ───────────────────────────────────────────
 // splitY are stored as DWORD scaled ×10000 so floats survive REG_DWORD.
 // Keys are per-symbol so multiple open windows never collide.
@@ -1035,7 +955,6 @@ void Session_RestoreWindows(
     const std::function<void()>& StartScanner,
     const std::function<void()>& StartSettings,
     const std::function<void(const std::string&, int)>& StartMarket,
-    const std::function<void()>& StartWatchlist,
     const std::function<void()>& StartOrders,
     const std::function<void()>& StartDebugLog
 ) {
@@ -1064,9 +983,6 @@ void Session_RestoreWindows(
         }
         else if (cls == SETTINGS_CLASS_NAME)  { 
             StartSettings(); 
-        }
-        else if (cls == WATCHLIST_CLASS_NAME)    { 
-            StartWatchlist(); 
         }
         else if (cls == ORDERS_CLASS_NAME)    { 
             StartOrders(); 

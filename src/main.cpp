@@ -8,7 +8,6 @@
 
 #include "gui/settings.h"
 #include "gui/market.h"
-#include "gui/watchlist.h"
 #include "gui/diamonds.h"
 #include "gui/orders.h"
 #include "gui/scanner.h"
@@ -19,28 +18,24 @@ class RegisterWindowRAII {
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
         RegisterWindowClass(hInst_, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
-        RegisterWindowClass(hInst_, WndProcExchange,    DASHBOARD_EXCHANGE_CLASS_NAME, 106, true);
+        RegisterWindowClass(hInst_, WndProcExchange,    DASHBOARD_EXCHANGE_CLASS_NAME, 109, true);
         RegisterWindowClass(hInst_, WndProcOrders,      ORDERS_CLASS_NAME,             103);
         RegisterWindowClass(hInst_, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
-        RegisterWindowClass(hInst_, WndProcWatchlist,   WATCHLIST_CLASS_NAME,          105);
-        RegisterWindowClass(hInst_, WndProcNewList,     WATCHLIST_NEW_LIST_CLASS_NAME, 105, true);
-        RegisterWindowClass(hInst_, WndProcMarket,      MARKET_CLASS_NAME,             106);
-        RegisterWindowClass(hInst_, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      106, true);
-        RegisterWindowClass(hInst_, WndProcScanner,     SCANNER_CLASS_NAME,            107);
-        RegisterWindowClass(hInst_, WndProcSettings,    SETTINGS_CLASS_NAME,           108);
-        RegisterWindowClass(hInst_, WndProcDebugLog,    DEBUGLOG_CLASS_NAME,           109, true);
+        RegisterWindowClass(hInst_, WndProcMarket,      MARKET_CLASS_NAME,             105);
+        RegisterWindowClass(hInst_, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      105, true);
+        RegisterWindowClass(hInst_, WndProcScanner,     SCANNER_CLASS_NAME,            106);
+        RegisterWindowClass(hInst_, WndProcSettings,    SETTINGS_CLASS_NAME,           107);
+        RegisterWindowClass(hInst_, WndProcDebugLog,    DEBUGLOG_CLASS_NAME,           108, true);
         
         StartDashboard(hInst_);
 
-        Session_RestoreWindows(StartDiamonds, StartScanner, StartSettings, StartMarket, StartWatchlist, StartOrders, StartDebugLog);
+        Session_RestoreWindows(StartDiamonds, StartScanner, StartSettings, StartMarket, StartOrders, StartDebugLog);
     }
     ~RegisterWindowRAII() {
         UnregisterClass(DASHBOARD_CLASS_NAME, hInst_);
         UnregisterClass(DASHBOARD_EXCHANGE_CLASS_NAME, hInst_);
         UnregisterClass(ORDERS_CLASS_NAME, hInst_);
         UnregisterClass(DIAMONDS_CLASS_NAME, hInst_);
-        UnregisterClass(WATCHLIST_CLASS_NAME, hInst_);
-        UnregisterClass(WATCHLIST_NEW_LIST_CLASS_NAME, hInst_);
         UnregisterClass(MARKET_CLASS_NAME, hInst_);
         UnregisterClass(MARKET_SEARCH_CLASS_NAME, hInst_);
         UnregisterClass(SCANNER_CLASS_NAME, hInst_);

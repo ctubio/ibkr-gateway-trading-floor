@@ -852,19 +852,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (row >= 0) {
                 int conId = g_DiamondDisplayOrder[row];
                 const std::string& sym = g_DiamondDataCache[conId].textCols[DCOL_SYMBOL];
-                // Build the full registry entry string for this symbol.
-                std::string exchange;
-                {
-                    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-                    auto& pmap = api().getPortfolioMap();
-                    auto pit = pmap.find(conId);
-                    if (pit != pmap.end()) exchange = pit->second.exchange;
-                }
-                std::string entry = std::to_string(conId) + "." + sym;
-                if (!exchange.empty()) entry += "." + exchange;
-
-                // Read watchlist lists fresh every time.
-                std::vector<std::string> watchlistLists = Watchlist_LoadAllListNames();
 
                 // Determine current group assignment for this item.
                 auto mapIt = g_DiamondsTabMap.find(conId);
@@ -876,7 +863,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 // ── Build context menu ────────────────────────────────────────
                 // IDs 1-3:   group assignment
-                // IDs 100+:  "Add to Watchlist: <name>"
                 // IDs 200-206: color options (200+idx for colors, 206 = None)
                 HMENU hMenu = CreatePopupMenu();
 
@@ -899,19 +885,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to High-Yield Dividends");
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
-
-                if (!watchlistLists.empty()) {
-                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
-                    for (int i = 0; i < (int)watchlistLists.size(); ++i) {
-                        // Gray this entry if the symbol is already in that list.
-                        auto listEntries = Watchlist_ReadListEntries(watchlistLists[i].c_str());
-                        bool alreadyIn = false;
-                        for (const auto& e : listEntries)
-                            if (e == entry) { alreadyIn = true; break; }
-                        std::string label = "Add to Watchlist: " + watchlistLists[i];
-                        AppendMenuA(hMenu, MF_STRING | (alreadyIn ? MF_GRAYED : 0), 100 + i, label.c_str());
-                    }
-                }
 
                 // ── Color submenu ─────────────────────────────────────────────
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
@@ -943,17 +916,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     Diamonds_Repopulate(hWnd);
                     InvalidateRect(hWnd, NULL, TRUE);
                     Diamonds_CleanupStaleTabAssignments(); 
-                } else if (cmd >= 100 && cmd < 100 + (int)watchlistLists.size()) {
-                    // Add to watchlist list (only if not already present — menu grayed it, but guard anyway).
-                    const std::string& listName = watchlistLists[cmd - 100];
-                    auto entries = Watchlist_ReadListEntries(listName.c_str());
-                    bool exists = false;
-                    for (const auto& e : entries) if (e == entry) { exists = true; break; }
-                    if (!exists) {
-                        entries.push_back(entry);
-                        Watchlist_SaveFullList(listName.c_str(), entries);
-                        Watchlist_NotifyListChanged(listName);
-                    }
                 } else if (cmd >= 200 && cmd <= 200 + DIAMONDS_COLOR_COUNT) {
                     // Color assignment.
                     int pickedIdx = cmd - 200;

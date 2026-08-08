@@ -61,12 +61,6 @@ Deep-dive analysis of held positions with advanced grouping.
 *   **Symbol Colors**: Assign one of six colors (Red, Green, Blue, Purple, Gold, Brown) per position for visual categorization.
 *   **Deferred Sort**: Header-click to sort by any column; zero-flicker re-sorting via timer.
 
-### 👀 Watchlist (Market Monitoring)
-Real-time quote monitoring with cross-window synchronization.
-*   **Smart Entry**: Inline symbol entry with real-time auto-complete.
-*   **Named Lists**: Create multiple saved watchlists (stored in Registry) shared across Scanner and Market windows.
-*   **Fast Navigation**: Double-click any symbol to instantly spawn a dedicated Market window.
-
 ### 🏦 Market (High-Frequency Data)
 The core data engine for active trading. Supports infinite concurrent instances.
 *   **Level 1 Data**: Real-time streaming quotes (Last, Bid, Ask, High, Low, Volume).

@@ -25,8 +25,6 @@ static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
 static const wchar_t MOON_GLYPH[] = L"\uE708";
 // glyph: E72E = Lock on (Segoe MDL2 Assets)
 static const wchar_t LOCK_GLYPH[] = L"\uE72E";
-// glyph: E825 = Bank on (Segoe MDL2 Assets)
-static const wchar_t FX_GLYPH[] = L"\uE825";
 
 // ─── Per-control color table ──────────────────────────────────────────────────
 static HWND     gClrHwnd[160]  = {};
@@ -129,18 +127,12 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
          || strcmp(className, ORDERS_CLASS_NAME)    == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
          || strcmp(className, MARKET_CLASS_NAME)    == 0
-         || strcmp(className, WATCHLIST_CLASS_NAME) == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
         if (strcmp(className, DEBUGLOG_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_TOPMOST;
             dwStyle   = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
-        }
-        if (strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) == 0) {
-            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
-            dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
-            hWndParent = FindWindowA(WATCHLIST_CLASS_NAME, NULL);
         }
         if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
@@ -150,7 +142,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }
 
-    if (strcmp(className, WATCHLIST_NEW_LIST_CLASS_NAME) != 0 && strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) != 0)
+    if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) != 0)
         SetWindowTaskbarId(hWnd, taskbarId);
         
     return hWnd;
