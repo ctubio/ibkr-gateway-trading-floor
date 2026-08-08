@@ -79,8 +79,10 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 }
 
-// ─── Dashboard controls ────────────────────────────────────────────────────────
-static HWND hLblNetLiq        = NULL;
+static HWND hCoinBox1 = NULL;
+static HWND hCoinBox2 = NULL;
+static HWND hCoinBox3 = NULL;
+
 static HWND hCoin_NetLiq      = NULL;
 static HWND hCoin_BigPnL      = NULL;
 static HWND hCoin_Pct         = NULL;
@@ -88,7 +90,6 @@ static HWND hCoin_Realized    = NULL;
 static HWND hCoin_Speaker     = NULL;   // speaker icon button (SS_NOTIFY)
 static HWND hCoin_Lock        = NULL;   // lock icon button (WM_KEYDOWN VK_SCROLL)
 
-static HWND hLblPositions      = NULL;
 static HWND hCoin_Positions   = NULL;
 static HWND hCoin_Unrealized  = NULL;
 static HWND hCoin_Dividends   = NULL;
@@ -96,7 +97,6 @@ static HWND hCoin_Accruals    = NULL;
 static HWND hCoin_BuyingPower = NULL;
 static HWND hCoin_MaintMargin = NULL;
 
-static HWND hLblCash           = NULL;
 static HWND hCoin_Cash        = NULL;
 static HWND hCoin_EUR         = NULL;
 static HWND hCoin_USD         = NULL;
@@ -614,13 +614,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 1: Net Liq & PnL ──────────────────────────────────────────
             int y1 = 8;
             int box1H = 94;
-            CreateWindowA("BUTTON", "", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            hCoinBox1 = CreateWindowA("BUTTON", "Today:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y1, boxW, box1H, hWnd, NULL, hInst, NULL);
-
-            hLblNetLiq = CreateWindowA("STATIC", "Today:",
-                WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m + 10, y1, 60, 16, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblNetLiq, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SetWindowSubclass(hCoinBox1, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hCoinBox1, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
             hCoin_NetLiq = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -680,13 +677,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 2: Positions & Margin ─────────────────────────────────────
             int y2 = y1 + box1H + 12; // y2 = 114
             int box2H = 124;
-            CreateWindowA("BUTTON", "", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y2, boxW, box2H, hWnd, NULL, hInst, NULL);
-
-            hLblPositions = CreateWindowA("STATIC", "Positions:",
-                WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m + 10, y2, 70, 16, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblPositions, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SetWindowSubclass(hCoinBox2, DarkGroupBoxSubclassProc, 2, 0);
+            SendMessage(hCoinBox2, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
             hCoin_Positions = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -752,13 +746,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 3: Cash ───────────────────────────────────────────────────
             int y3 = y2 + box2H + 12; // y3 = 250
             int box3H = 64;
-            CreateWindowA("BUTTON", "", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y3, boxW, box3H, hWnd, NULL, hInst, NULL);
-
-            hLblCash = CreateWindowA("STATIC", "Cash:",
-                WS_CHILD | WS_VISIBLE | SS_LEFT,
-                m + 10, y3, 45, 16, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblCash, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SetWindowSubclass(hCoinBox3, DarkGroupBoxSubclassProc, 3, 0);
+            SendMessage(hCoinBox3, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
 
             hCoin_Cash = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -801,11 +792,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
             addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
             
-            addButtons(hWnd, hInst, "Watchlist", 8 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_WATCHLIST, 105);
-            addButtons(hWnd, hInst, "Market",    8 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    106);
-            addButtons(hWnd, hInst, "Scanner",   8 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SCANNER,    107);
+            addButtons(hWnd, hInst, "Watchlist", 9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_WATCHLIST, 105);
+            addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    106);
+            addButtons(hWnd, hInst, "Scanner",   9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SCANNER,    107);
 
-            addButtons(hWnd, hInst, "Settings", 14 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  108);
+            addButtons(hWnd, hInst, "Settings", 18 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  108);
 
             api().addApiUpdateWindow(hWnd);
 
@@ -1162,7 +1153,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
-            hCoin_Cash = hCoin_EUR = hCoin_USD = hCoin_FxIcon = NULL;
+            hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = hCoin_FxIcon = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);

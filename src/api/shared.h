@@ -299,6 +299,79 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     RegisterClass(&wc);
 }
 
+static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
+                                                 UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
+    if (msg == WM_PAINT && Settings_DarkMode()) {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hCtrl, &ps);
+        RECT rc;
+        GetClientRect(hCtrl, &rc);
+
+        // 1. Fill background with dark mode background
+        FillRect(hdc, &rc, hDarkBrush);
+
+        // 2. Get the GroupBox text
+        TCHAR text[256];
+        int len = GetWindowText(hCtrl, text, 256);
+
+        // 3. Get the control's font and select it into the DC
+        HFONT hFont = (HFONT)SendMessage(hCtrl, WM_GETFONT, 0, 0);
+        HGDIOBJ hOldFont = SelectObject(hdc, hFont);
+
+        // 4. Calculate text dimensions to correctly place the border and text
+        SIZE textSize = {0};
+        if (len > 0) {
+            GetTextExtentPoint32(hdc, text, len, &textSize);
+        } else {
+            textSize.cy = 14; // Fallback height if there is no text
+        }
+
+        // Define where the text will be placed (standard Win32 offset is usually left + 9)
+        RECT textRect = { rc.left + 9, rc.top, rc.left + 9 + textSize.cx + 4, rc.top + textSize.cy };
+
+        // 5. Exclude the text area so the border doesn't draw a line through our label
+        if (len > 0) {
+            ExcludeClipRect(hdc, textRect.left, textRect.top, textRect.right, textRect.bottom);
+        }
+
+        // 6. Draw gray border (RGB(100, 100, 100))
+        HPEN hPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+        HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+        HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
+
+        // Shift the top down by half the text height so the line intersects the vertical center of the text
+        Rectangle(hdc, rc.left, rc.top + (textSize.cy / 2), rc.right, rc.bottom);
+
+        SelectObject(hdc, hOldBrush);
+        SelectObject(hdc, hOldPen);
+        DeleteObject(hPen);
+
+        // 7. Restore the clipping region so we can draw the text
+        SelectClipRgn(hdc, NULL);
+
+        // 8. Draw the text
+        if (len > 0) {
+            SetTextColor(hdc, RGB(255, 255, 255)); // Set to your preferred dark mode text color
+            SetBkMode(hdc, TRANSPARENT);
+            
+            // Shift slightly to the right for padding inside the clipped area
+            RECT drawRect = textRect;
+            drawRect.left += 2;
+            DrawText(hdc, text, len, &drawRect, DT_LEFT | DT_TOP | DT_SINGLELINE);
+        }
+
+        // Cleanup font
+        SelectObject(hdc, hOldFont);
+
+        EndPaint(hCtrl, &ps);
+        return 0;
+    }
+    if (msg == WM_NCDESTROY) {
+        RemoveWindowSubclass(hCtrl, DarkGroupBoxSubclassProc, uIdSubclass);
+    }
+    return DefSubclassProc(hCtrl, msg, wParam, lParam);
+}
+
 LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_ERASEBKGND: {

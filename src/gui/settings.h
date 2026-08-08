@@ -23,8 +23,14 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
 #define ID_SETTINGS_RISK_VALUE        4012
 
+static HWND hSettingBox1 = NULL;
+static HWND hSettingBox2 = NULL;
+static HWND hSettingBox3 = NULL;
+static HWND hSettingBox4 = NULL;
+static HWND hSettingBox5 = NULL;
 static HWND hDebugEdit = NULL;
 static HWND hGatewayEdit = NULL;
+static HFONT hFontSettings_Label   = NULL;
 static std::vector<TtsVoiceEntry> g_settingsVoices; // populated once on WM_CREATE
 
 // ─── Debug Log ────────────────────────────────────────────────────────────────
@@ -91,6 +97,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+            
+            hFontSettings_Label   = MakeFont(11, false);
+
             int m  = 8;   // outer margin
             int gm = 14;  // inner margin inside a group box
             int w  = 252; // usable width inside client area
@@ -99,10 +108,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 #ifndef GATEWAY_SIM
             // ── Gateway ──────────────────────────────────────────────────────
-            CreateWindowA("BUTTON", "Gateway",
+            hSettingBox1 = CreateWindowA("BUTTON", "Gateway",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 130,
                 hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox1, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox1, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
 
             HWND hChkAutoGtw = CreateWindowA("BUTTON", "Auto-start IBKR Gateway",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
@@ -132,10 +143,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 #endif
 
             // ── Display ──────────────────────────────────────────────────────
-            CreateWindowA("BUTTON", "Display",
+            hSettingBox2 = CreateWindowA("BUTTON", "Display",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 46,
                 hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
 
             HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
@@ -146,10 +159,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 54;
 
             // ── Audio ────────────────────────────────────────────────────────
-            CreateWindowA("BUTTON", "Audio",
+            hSettingBox3 = CreateWindowA("BUTTON", "Audio",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 78,
                 hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox3, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox3, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
 
             HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
@@ -203,10 +218,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 86;
 
             // ── Trading ──────────────────────────────────────────────────────
-            CreateWindowA("BUTTON", "Trading",
+            hSettingBox4 = CreateWindowA("BUTTON", "Trading",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 148,
                 hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
 
             // Row helper: label + edit
             auto MakeRow = [&](const char* label, UINT id, int rowY, bool isInt) -> HWND {
@@ -233,10 +250,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 156;
 
             // ── System Tools ───────────────────────────────────────────
-            CreateWindowA("BUTTON", "API Messages",
+            hSettingBox5 = CreateWindowA("BUTTON", "API Messages",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 46,
                 hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox5, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox5, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
 
             CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
@@ -246,7 +265,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
 
         case WM_DESTROY:
-            hDebugEdit = NULL;
+            hSettingBox1 = hSettingBox2 = hSettingBox3 = hSettingBox4 = hSettingBox5 = hDebugEdit = NULL;
+            if (hFontSettings_Label)   { DeleteObject(hFontSettings_Label);   hFontSettings_Label   = NULL; }
             break;
 
         case WM_COMMAND:
