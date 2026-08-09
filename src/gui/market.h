@@ -31,7 +31,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 static const int HEADER_H = 52;   // two-row header height
 static const int EXEC_W   = 126;  // Fixed width of the Executions panel (far left)
 static const int L2_W     = 140;  // Fixed width of the Level 2 depth panel (beside exec)
-static const int ORDER_BAR_H = 80;
+static const int ORDER_BAR_H = 86;
 
 // ── Volume / print-frequency rate windows ─────────────────────────────────────
 // "Recent" is the short trailing window whose rate we compare against
@@ -105,7 +105,16 @@ struct TsState {
     HWND  hOrderStopPrice   = NULL;
     HWND  hOrderProfitPrice = NULL;
     HWND  hOrderQty         = NULL;
-    HWND  hOrderRisk        = NULL;   // right of hOrderLabel: notional / risk / sizing readout
+    HWND  hOrderRisk        = NULL; // right of hOrderLabel: Notional value only
+     // Hint overlays: transparent 12pt labels painted on top of the price/qty/
+     // stop/profit inputs, corner-anchored. Input itself stays untouched —
+     // still centered / fully editable underneath.
+    HWND  hLossLabel        = NULL; // bottom-left of hOrderPrice: lossPct% \n lossDollars R
+    HWND  hProfitLabel      = NULL; // bottom-right of hOrderPrice: profitPct% \n profitDollars P
+    HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
+    HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
+    HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
+    HFONT hHintFont         = NULL; // 12pt — hint overlay labels
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
 
@@ -231,6 +240,34 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
     if (count > 50) ListView_DeleteItem(hList, count - 1);
 }
 
+// Re-asserts the hint label(s) belonging to a given order-bar edit on top of
+// it. Called after anything that can change that edit's text selection —
+// mouse click/drag/double-click, keyboard navigation, focus change — none of
+// which necessarily route through a WM_PAINT we could otherwise intercept,
+// since EDIT draws its selection highlight directly via GetDC.
+static void Market_RedrawHintsFor(HWND hEdit) {
+    HWND hMarket = GetParent(hEdit);
+    auto it = tsStates.find(hMarket);
+    if (it == tsStates.end() || !it->second) return;
+    TsState* state = it->second;
+
+    auto redraw = [](HWND h) {
+        if (!h || !IsWindowVisible(h)) return;
+        InvalidateRect(h, NULL, TRUE);
+        UpdateWindow(h);
+    };
+    if (hEdit == state->hOrderPrice) {
+        redraw(state->hLossLabel);
+        redraw(state->hProfitLabel);
+    } else if (hEdit == state->hOrderQty) {
+        redraw(state->hOptQtyLabel);
+    } else if (hEdit == state->hOrderStopPrice) {
+        redraw(state->hOptStopLabel);
+    } else if (hEdit == state->hOrderProfitPrice) {
+        redraw(state->hRRLabel);
+    }
+}
+
 // ── Right block geometry (shared by paint and layout) ────────────────────────
 // Ask/Bid block is fixed-width, anchored to the right edge.
 // label(28) + price(74) + " x "(16) + size(44) = 162 px + 6 margin = 168 from right
@@ -301,21 +338,41 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     if (state->hOrderLabel && state->hOrderPrice && state->hOrderStopPrice && state->hOrderProfitPrice && state->hOrderQty) {
         const int m    = 8;
         int BAR_H = (state->isOvernight ? ORDER_BAR_H / 2 : ORDER_BAR_H);
-        const int editH = (BAR_H - 6) / (state->isOvernight ? 1 : 2);
-        const int editY = rc.bottom - BAR_H + (BAR_H - editH * (state->isOvernight ? 1 : 2)) / 2;
+        const int editH = (BAR_H - 8) / (state->isOvernight ? 1 : 2);
+        const int editY = rc.bottom - 1 - BAR_H + (BAR_H - editH * (state->isOvernight ? 1 : 2)) / 2;
         const int lblY  = rc.bottom - BAR_H + (BAR_H - 18) / 2;
         const int lblW = 150;
-        const int priceW = 150;
-        const int riskW = 190;
+        const int priceW = 180;
+        const int riskW = 130;
         const int startY = rc.right - (priceW * 2) - m;
 
         SetWindowPos(state->hOrderLabel,       NULL, m,                                  lblY,   lblW,    18, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderRisk,        NULL, m + lblW + m,                       lblY - (state->isOvernight ? 0 : 26), riskW, BAR_H, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderRisk,        NULL, m + lblW + m,                       lblY, riskW, BAR_H, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hOrderPrice,       NULL, startY,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hOrderQty,         NULL, startY + priceW + m,         editY,  priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         if (!state->isOvernight) {
-            SetWindowPos(state->hOrderStopPrice,   NULL, startY,              editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-            SetWindowPos(state->hOrderProfitPrice, NULL, startY + priceW + m, editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            const int stopY = editY + editH + 4;
+            SetWindowPos(state->hOrderStopPrice,   NULL, startY,              stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderProfitPrice, NULL, startY + priceW + m, stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+
+            // ── Hint overlay labels: 12pt, corner-anchored on their input ───
+            const int hint2H = 32; // two-line hints (pct% \n value)
+            const int hint1H = 16; // single-line hint (risk/reward ratio)
+            const int hintW = std::max(40, priceW / 2 - 6);
+            const int hintMargin = 4;
+
+            // Price input: loss (bottom-left) / profit (bottom-right)
+            SetWindowPos(state->hLossLabel, NULL, startY + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hProfitLabel, NULL, startY + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+
+            // Qty input: sizing at target risk (bottom-left)
+            SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+
+            // Stop input: stop distance at target risk (bottom-right)
+            SetWindowPos(state->hOptStopLabel, NULL, startY + priceW - hintW - hintMargin, stopY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+
+            // Profit input: risk/reward ratio (bottom-left)
+            SetWindowPos(state->hRRLabel, NULL, startY + priceW + m + hintMargin, stopY + editH - hint1H - 2, 50, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
         }
 
         CenterEditText(state->hOrderPrice);
@@ -352,69 +409,78 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         if (it != summary.end()) netLiq = std::atof(it->second.c_str());
     }
 
-    const float riskPct = Settings_LoadFloat("RiskPct", 1.0f);   // target risk per trade, % of NLV
+    const float riskPct = Settings_LoadFloat("RiskPct", 1.0f); // target risk per trade, % of NLV
 
-    std::string text;
+    // ── hOrderRisk: Notional value only ─────────────────────────────────────
+    std::string notionalText = (price > 0.0 && qty > 0.0) ? FormatWithCommas(price * qty) : "--";
+    SetWindowTextA(state->hOrderRisk, notionalText.c_str());
+    InvalidateRect(state->hOrderRisk, NULL, TRUE);
 
-    // 1) Notional value = qty * entry price
-    if (price > 0.0 && qty > 0.0)
-        text += FormatWithCommas(price * qty);
-    else
-        text += "--";
+    if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
-    if (!state->isOvernight) {
-        // 2) Total possible loss at the current stop distance, in $ and % of NLV
-        if (stopDist > 0.0 && qty > 0.0) {
-            double lossDollars = stopDist * qty;
-            std::string lossPctStr = (netLiq > 0.0)
-                ? std::format("{:.2f}%", lossDollars / netLiq * 100.0)
-                : "--";
-            text += std::format("\r\n{} = {:.2f} R", lossPctStr, lossDollars);
-        } else {
-            if (stopDist > 0.0) text += "\r\n-- R";
-            else text += "\r\n!! R"; // ∞
-        }
+    // 1) Loss @ stop distance — bottom-left of Price input
+    std::string lossPctStr = "--", lossValStr = "!! R";
+    if (stopDist > 0.0 && qty > 0.0) {
+        double lossDollars = stopDist * qty;
+        lossPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", lossDollars / netLiq * 100.0) : "--";
+        lossValStr = std::format("{:.2f} R", lossDollars);
+    } else if (stopDist > 0.0) {
+        lossValStr = "-- R";
+    }
 
-        if (profitDist > 0.0 && qty > 0.0) {
-            double profitDollars = profitDist * qty;
-            std::string profitPctStr = (netLiq > 0.0)
-                ? std::format("{:.2f}%", profitDollars / netLiq * 100.0)
-                : "--";
-            text += std::format("\r\n{} = {:.2f} P", profitPctStr, profitDollars);
-        } else {
-            if (profitDist > 0.0) text += "\r\n-- P";
-            else text += "\r\n!! P"; // ∞
-        }
+    // 2) Profit @ profit distance — bottom-right of Price input
+    std::string profitPctStr = "--", profitValStr = "!! P";
+    if (profitDist > 0.0 && qty > 0.0) {
+        double profitDollars = profitDist * qty;
+        profitPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", profitDollars / netLiq * 100.0) : "--";
+        profitValStr = std::format("{:.2f} P", profitDollars);
+    } else if (profitDist > 0.0) {
+        profitValStr = "-- P";
+    }
 
-        if (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0) {
-            double rr = profitDist / stopDist;
-            text += std::format(" x{:.2f}", rr);
-        } else {
-            text += " x--";
-        }
+    // 3) Risk/reward ratio — bottom-left of Profit input
+    std::string rrText = (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0)
+        ? std::format("x{:.2f}", profitDist / stopDist)
+        : "x--";
 
-        text += "\r\n";
-
-        // 3) Position size that would risk exactly riskPct of NLV at this stop distance
+    // 4) Position size at target risk — bottom-left of Qty input
+    std::string optQtyText;
+    {
+        std::string pctStr = std::format("{:.2f}%", riskPct);
         if (stopDist > 0.0 && netLiq > 0.0) {
             int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
-            text += std::format("{:.2f}% = {} Q", riskPct, optQty);
+            optQtyText = pctStr + "\r\n" + std::format("{} Q", optQty);
         } else {
-            text += std::format("{:.2f}% = -- Q", riskPct);
-        }
-
-        text += " | ";
-
-        // 4) Stop distance that would risk exactly riskPct of NLV at this position size
-        if (qty > 0.0 && netLiq > 0.0) {
-            double optStop = (netLiq * riskPct / 100.0) / qty;
-            text += std::format("{:.2f} S", optStop);
-        } else {
-            text += "-- S";
+            optQtyText = pctStr + "\r\n-- Q";
         }
     }
 
-    SetWindowTextA(state->hOrderRisk, text.c_str());
+    // 5) Stop distance at target risk — bottom-right of Stop input
+    std::string optStopText;
+    {
+        std::string pctStr = std::format("{:.2f}%", riskPct);
+        if (qty > 0.0 && netLiq > 0.0) {
+            double optStop = (netLiq * riskPct / 100.0) / qty;
+            optStopText = pctStr + "\r\n" + std::format("{:.2f} S", optStop);
+        } else {
+            optStopText = pctStr + "\r\n-- S";
+        }
+    }
+
+    // Update text, and force the underlying edit to repaint first so the
+    // transparent label never leaves stale text ghosted behind the new value.
+    auto setHint = [](HWND hLabel, HWND hUnderEdit, const std::string& text) {
+        if (!hLabel) return;
+        SetWindowTextA(hLabel, text.c_str());
+        if (hUnderEdit) InvalidateRect(hUnderEdit, NULL, TRUE);
+        InvalidateRect(hLabel, NULL, TRUE);
+    };
+
+    setHint(state->hLossLabel, state->hOrderPrice, lossPctStr + "\r\n" + lossValStr);
+    setHint(state->hProfitLabel, state->hOrderPrice, profitPctStr + "\r\n" + profitValStr);
+    setHint(state->hRRLabel, state->hOrderProfitPrice, rrText);
+    setHint(state->hOptQtyLabel, state->hOrderQty, optQtyText);
+    setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText);
 }
 
 static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
@@ -443,6 +509,11 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
 
     ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hLossLabel,      state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hProfitLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hRRLabel,        state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptQtyLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptStopLabel,   state->isOvernight ? SW_HIDE : SW_SHOW);
     SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("StopPrice", 1.0f)).c_str());
     SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
     Market_UpdateOrderRiskLabel(state);
@@ -460,10 +531,14 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hOrderStopPrice, SW_HIDE);
     ShowWindow(state->hOrderProfitPrice, SW_HIDE);
     ShowWindow(state->hOrderRisk, SW_HIDE);
+    ShowWindow(state->hLossLabel, SW_HIDE);
+    ShowWindow(state->hProfitLabel, SW_HIDE);
+    ShowWindow(state->hRRLabel, SW_HIDE);
+    ShowWindow(state->hOptQtyLabel, SW_HIDE);
+    ShowWindow(state->hOptStopLabel, SW_HIDE);
     state->orderBarVisible = false;
     Market_Layout(hWnd, state);
 }
-
 // Subclass for the order-bar price and qty edit controls.
 // uIdSubclass == 1 → price (step 0.01, 2 dec)
 // uIdSubclass == 2 → qty   (step 1,    0 dec)
@@ -502,7 +577,6 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
 
                 for (int i = 0; i < order.size(); ++i) {
                     if (hWnd == order[i]) {
-                        // Find next index, wrap around to 0
                         hNext = order[(i + 1) % order.size()];
                         break;
                     }
@@ -514,6 +588,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     SendMessageA(hNext, EM_SETSEL, len, len);
                 }
             }
+            Market_RedrawHintsFor(hWnd);
+            InvalidateRect(hWnd, NULL, TRUE);
             return 0;
         }
         if (wParam == VK_RETURN) {
@@ -536,7 +612,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     double safety = Settings_LoadFloat("Safety", 2.0f);
                     if (st->orderSide == "BUY") {
                         if (price > 0 && price > st->l1Info.last + safety) {
-                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f}$ above the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
                             return 0;
                         }
                         if (stopPrice > 0 && stopPrice >= price) {
@@ -550,7 +626,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     }
                     if (st->orderSide == "SELL") {
                         if (price > 0 && price < st->l1Info.last - safety) {
-                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f}$ below the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
                             return 0;
                         }
                         if (stopPrice > 0 && stopPrice <= price) {
@@ -580,9 +656,11 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
             if (st) Market_UpdateOrderRiskLabel(st);
+            Market_RedrawHintsFor(hWnd);
+            InvalidateRect(hWnd, NULL, TRUE);
             return 0;
         }
-        
+
         if (wParam == VK_CONTROL) {
             if (st) {
                 bool isRight = (lParam & (1 << 24)) != 0;
@@ -601,10 +679,27 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 }
             }
         }
+        // Any other key (Left/Right/Home/End/Shift+Arrow, etc.) falls
+        // through to the catch-all below, since those move/extend the
+        // selection too and need the same hint redraw.
     }
+
+    // Plain hover (no button held) can't change the selection — skip it so
+    // we don't force a repaint on every hover pixel.
+    if (msg == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
+        return DefSubclassProc(hWnd, msg, wParam, lParam);
+
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hWnd, OrderBar_EditSubclassProc, uIdSubclass);
-    return DefSubclassProc(hWnd, msg, wParam, lParam);
+
+    // Catch-all: typed characters, selection-moving keys not swallowed
+    // above, and — the key fix — mouse click / drag-select / double-click /
+    // focus change. EDIT draws its blue selection highlight directly via
+    // GetDC for all of these, without necessarily going through WM_PAINT, so
+    // we re-assert the hint label(s) on top right after every one of them.
+    LRESULT res = DefSubclassProc(hWnd, msg, wParam, lParam);
+    Market_RedrawHintsFor(hWnd);
+    return res;
 }
 
 // ── Search Popup ──────────────────────────────────────────────────────────────
@@ -1333,30 +1428,56 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 42, 26, hWnd, NULL, hInst, NULL);
 
         state->hOrderPrice = CreateWindowA("EDIT", "0.00",
-            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+            WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
 
         state->hOrderQty = CreateWindowA("EDIT", "1",
-            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE | ES_NUMBER,
+            WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
-        
+
         state->hOrderStopPrice = CreateWindowA("EDIT", "0.00",
-            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+            WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderStopPrice, OrderBar_EditSubclassProc, 1, 0);
-        
+
         state->hOrderProfitPrice = CreateWindowA("EDIT", "0.00",
-            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+            WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 
-        // Risk readout — read-only, left-aligned, wraps over 4 lines via \r\n.
+        // Risk readout — read-only, left-aligned. Notional value only now.
         state->hOrderRisk = CreateWindowA("STATIC", "",
             WS_CHILD | SS_LEFT,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetCtrlColor(state->hOrderRisk, COINS_CLR_ORANGE);
+
+        // ── Hint overlay labels ─────────────────────────────────────────────
+        // Created AFTER the edits above, so they sit on top in z-order.
+        // WS_EX_TRANSPARENT means they never erase their own background — the
+        // edit's own painted content (color, caret, selection highlight)
+        // shows through underneath the label text. Combined with
+        // WS_CLIPSIBLINGS on the edits above, the edit's own repaints never
+        // draw over the area a label occupies, so a label is never hidden.
+        auto makeHintLabel = [&](UINT align, COLORREF color) -> HWND {
+            HWND h = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
+                WS_CHILD | align | SS_NOPREFIX,
+                0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+            SetCtrlColor(h, color);
+            return h;
+        };
+        state->hLossLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
+        state->hProfitLabel = makeHintLabel(SS_RIGHT, COINS_CLR_ORANGE);
+        state->hRRLabel   = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
+        state->hOptQtyLabel = makeHintLabel(SS_LEFT, COINS_CLR_GRAY);
+        state->hOptStopLabel = makeHintLabel(SS_RIGHT, COINS_CLR_GRAY);
+
+        state->hHintFont = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+        for (HWND h : { state->hLossLabel, state->hProfitLabel, state->hRRLabel, state->hOptQtyLabel, state->hOptStopLabel })
+            SendMessage(h, WM_SETFONT, (WPARAM)state->hHintFont, TRUE);
 
         // Apply font to order bar controls
         if (state->hOrderFont) {
@@ -1496,6 +1617,21 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     SetTextColor(hdc, DM_TEXT);
                     SetBkColor(hdc, isBuy ? COINS_BG_DARK_RED : COINS_BG_DARK_GREEN);
                     return (LRESULT)(isBuy ? hBrushDarkRed : hBrushDarkGreen);
+                }
+            }
+            break;
+        }
+
+        case WM_CTLCOLORSTATIC: {
+            if (state) {
+                HWND hCtrl = (HWND)lParam;
+                if (hCtrl == state->hLossLabel || hCtrl == state->hProfitLabel || hCtrl == state->hRRLabel ||
+                    hCtrl == state->hOptQtyLabel || hCtrl == state->hOptStopLabel) {
+                    HDC hdc = (HDC)wParam;
+                    SetBkMode(hdc, TRANSPARENT);
+                    COLORREF clr = GetCtrlColor(hCtrl);
+                    SetTextColor(hdc, clr != COLOR_THEME ? clr : COINS_CLR_ORANGE);
+                    return (LRESULT)GetStockObject(NULL_BRUSH); // no fill = truly transparent
                 }
             }
             break;
@@ -1743,9 +1879,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hValuesFont)      DeleteObject(state->hValuesFont);
             if (state->hOrderFont)       DeleteObject(state->hOrderFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
+            if (state->hHintFont) DeleteObject(state->hHintFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hOrderRisk = NULL;
+            state->hLossLabel = state->hProfitLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             delete state;
             tsStates.erase(hWnd);
         }
