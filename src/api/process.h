@@ -82,7 +82,7 @@ struct EnsureOnceFlag {
 
 bool alreadyEnsureGatewayRunning = false;
 void EnsureGatewayRunning(HWND hParent) {
-    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe")) return;
+    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe") || IsProcessRunning("updater.exe")) return;
     EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
     std::string path = GetGatewayPath();
     if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
