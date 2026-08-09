@@ -419,24 +419,26 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
     // 1) Loss @ stop distance — bottom-left of Price input
-    std::string lossPctStr = "--", lossValStr = "!! R";
+    std::string lossPctStr = "--", lossValStr = "!!";
     if (stopDist > 0.0 && qty > 0.0) {
         double lossDollars = stopDist * qty;
         lossPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", lossDollars / netLiq * 100.0) : "--";
-        lossValStr = std::format("{:.2f} R", lossDollars);
+        lossValStr = std::format("{:.2f}", lossDollars);
     } else if (stopDist > 0.0) {
-        lossValStr = "-- R";
+        lossValStr = "--";
     }
+    lossValStr = lossPctStr + "\r\n" + lossValStr;
 
     // 2) Profit @ profit distance — bottom-right of Price input
-    std::string profitPctStr = "--", profitValStr = "!! P";
+    std::string profitPctStr = "--", profitValStr = "--";
     if (profitDist > 0.0 && qty > 0.0) {
         double profitDollars = profitDist * qty;
         profitPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", profitDollars / netLiq * 100.0) : "--";
-        profitValStr = std::format("{:.2f} P", profitDollars);
+        profitValStr = std::format("{:.2f}", profitDollars);
     } else if (profitDist > 0.0) {
-        profitValStr = "-- P";
+        profitValStr = "--";
     }
+    profitValStr = profitPctStr + "\r\n" + profitValStr;
 
     // 3) Risk/reward ratio — bottom-left of Profit input
     std::string rrText = "x";
@@ -460,8 +462,10 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         if (stopDist > 0.0 && netLiq > 0.0) {
             int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
             optQtyText = /*pctStr +*/ std::format("{}", optQty);
+            SetCtrlColor(state->hOptQtyLabel, qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY);
         } else {
             optQtyText = /*pctStr +*/ "--";
+            SetCtrlColor(state->hOptQtyLabel, COINS_CLR_GRAY);
         }
     }
 
@@ -476,8 +480,10 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         if (qty > 0.0 && netLiq > 0.0) {
             double optStop = (netLiq * riskPct / 100.0) / qty;
             optStopText = /*pctStr +*/ std::format("{:.2f}", optStop);
+            SetCtrlColor(state->hOptStopLabel, stopDist > optStop ? COINS_CLR_RED : COINS_CLR_GRAY);
         } else {
             optStopText = /*pctStr +*/ "--";
+            SetCtrlColor(state->hOptStopLabel, COINS_CLR_GRAY);
         }
     }
 
@@ -490,8 +496,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         InvalidateRect(hLabel, NULL, TRUE);
     };
 
-    setHint(state->hLossLabel, state->hOrderPrice, lossPctStr + "\r\n" + lossValStr);
-    setHint(state->hProfitLabel, state->hOrderPrice, profitPctStr + "\r\n" + profitValStr);
+    setHint(state->hLossLabel, state->hOrderPrice, lossValStr);
+    setHint(state->hProfitLabel, state->hOrderPrice, profitValStr);
     setHint(state->hRRLabel, state->hOrderProfitPrice, rrText);
     setHint(state->hOptQtyLabel, state->hOrderQty, optQtyText);
     setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText);
