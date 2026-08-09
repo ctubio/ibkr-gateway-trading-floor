@@ -20,7 +20,7 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_SETTINGS    1012
 #define ID_M_MARKET      1015
 #define ID_M_DEBUGLOG    1016
-
+#define ID_MB_LINKS      1017
 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
@@ -29,7 +29,20 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_MARKET_BASE 1500
 #define ID_M_MARKET_MAX   100
 
+#define ID_M_LINKS_BASE  1700   // one command ID per quick link below
+
 bool shouldBeConnected = true;
+
+struct QuickLink { const char* label; const char* url; };
+static const QuickLink g_QuickLinks[] = {
+    { "Today", "https://www.investing.com/dividends-calendar" },
+    { "WSB",   "https://www.reddit.com/r/wallstreetbets"      },
+    { "Scan",  "https://stockscan.io/all-stocks"              },
+    { "Map",   "https://finviz.com/map.ashx?t=sec"            },
+    { "Data",  "https://www.benzinga.com/quote"               },
+    { "Paper", "http://192.168.1.105:2025/paper"              },
+};
+static const int LINKS_COUNT = (int)(sizeof(g_QuickLinks) / sizeof(g_QuickLinks[0]));
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 static HFONT hFontCoins_NetLiq  = NULL;
@@ -1100,6 +1113,25 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_EXCHANGE:
                     StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
+                case ID_MB_LINKS: {
+                    HWND hBtn = GetDlgItem(hWnd, ID_MB_LINKS);
+                    RECT rc; GetWindowRect(hBtn, &rc);
+
+                    HMENU hMenu = CreatePopupMenu();
+                    for (int i = 0; i < LINKS_COUNT; ++i)
+                        AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, g_QuickLinks[i].label);
+
+                    SetForegroundWindow(hWnd);
+                    int cmd = TrackPopupMenu(hMenu,
+                        TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
+                        rc.left, rc.bottom, 0, hWnd, NULL);
+                    DestroyMenu(hMenu);
+
+                    if (cmd >= ID_M_LINKS_BASE && cmd < ID_M_LINKS_BASE + LINKS_COUNT) {
+                        ShellExecuteA(NULL, "open", g_QuickLinks[cmd - ID_M_LINKS_BASE].url, NULL, NULL, SW_SHOWNORMAL);
+                    }
+                    break;
+                }
                 case ID_MB_MARKET:
                     StartMarket();
                     break;
