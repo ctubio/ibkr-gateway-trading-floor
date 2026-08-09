@@ -109,8 +109,8 @@ struct TsState {
      // Hint overlays: transparent 12pt labels painted on top of the price/qty/
      // stop/profit inputs, corner-anchored. Input itself stays untouched —
      // still centered / fully editable underneath.
-    HWND  hLossLabel        = NULL; // bottom-left of hOrderPrice: lossPct% \n lossDollars R
-    HWND  hProfitLabel      = NULL; // bottom-right of hOrderPrice: profitPct% \n profitDollars P
+    HWND  hProfitLossPercentLabel        = NULL; // bottom-left of hOrderPrice: lossPct% \n lossDollars R
+    HWND  hProfitLossValueLabel      = NULL; // bottom-right of hOrderPrice: profitPct% \n profitDollars P
     HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
     HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
     HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
@@ -256,8 +256,8 @@ static void Market_RedrawHintsFor(HWND hEdit) {
         UpdateWindow(h);
     };
     if (hEdit == state->hOrderPrice) {
-        redraw(state->hLossLabel);
-        redraw(state->hProfitLabel);
+        redraw(state->hProfitLossPercentLabel);
+        redraw(state->hProfitLossValueLabel);
     } else if (hEdit == state->hOrderQty) {
         redraw(state->hOptQtyLabel);
     } else if (hEdit == state->hOrderStopPrice) {
@@ -361,8 +361,8 @@ static void Market_Layout(HWND hWnd, TsState* state) {
             const int hintMargin = 4;
 
             // Price input: loss (bottom-left) / profit (bottom-right)
-            SetWindowPos(state->hLossLabel, NULL, startY + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
-            SetWindowPos(state->hProfitLabel, NULL, startY + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hProfitLossPercentLabel, NULL, startY + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hProfitLossValueLabel, NULL, startY + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Qty input: sizing at target risk (bottom-left)
             SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -418,26 +418,27 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
     // 1) Loss @ stop distance — bottom-left of Price input
-    std::string lossPctStr = "--", lossValStr = "!!";
+    std::string lossPctStr = "--", profitPercentageStr = "!!";
     if (stopDist > 0.0 && qty > 0.0) {
         double lossDollars = stopDist * qty;
         lossPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", lossDollars / netLiq * 100.0) : "--";
-        lossValStr = std::format("{:.2f}", lossDollars);
+        profitPercentageStr = std::format("{:.2f}", lossDollars);
     } else if (stopDist > 0.0) {
-        lossValStr = "--";
+        profitPercentageStr = "--";
     }
-    lossValStr = lossPctStr + "\r\n" + lossValStr;
 
     // 2) Profit @ profit distance — bottom-right of Price input
-    std::string profitPctStr = "--", profitValStr = "--";
+    std::string profitPctStr = "--", profitValueStr = "--";
     if (profitDist > 0.0 && qty > 0.0) {
         double profitDollars = profitDist * qty;
         profitPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", profitDollars / netLiq * 100.0) : "--";
-        profitValStr = std::format("{:.2f}", profitDollars);
+        profitValueStr = std::format("{:.2f}", profitDollars);
     } else if (profitDist > 0.0) {
-        profitValStr = "--";
+        profitValueStr = "--";
     }
-    profitValStr = profitPctStr + "\r\n" + profitValStr;
+
+    std::string profitLossValueStr      = profitValueStr + "\r\n" + profitPercentageStr;
+    std::string profitLossPercentageStr = profitPctStr + "\r\n" + lossPctStr;
 
     // 3) Risk/reward ratio — bottom-left of Profit input
     std::string rrText = "x";
@@ -495,8 +496,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         InvalidateRect(hLabel, NULL, TRUE);
     };
 
-    setHint(state->hLossLabel, state->hOrderPrice, lossValStr);
-    setHint(state->hProfitLabel, state->hOrderPrice, profitValStr);
+    setHint(state->hProfitLossPercentLabel, state->hOrderPrice, profitLossPercentageStr);
+    setHint(state->hProfitLossValueLabel, state->hOrderPrice, profitLossValueStr);
     setHint(state->hRRLabel, state->hOrderProfitPrice, rrText);
     setHint(state->hOptQtyLabel, state->hOrderQty, optQtyText);
     setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText);
@@ -528,8 +529,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
 
     ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hLossLabel,      state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hProfitLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hProfitLossPercentLabel,      state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hProfitLossValueLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hRRLabel,        state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOptQtyLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOptStopLabel,   state->isOvernight ? SW_HIDE : SW_SHOW);
@@ -550,8 +551,8 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hOrderStopPrice, SW_HIDE);
     ShowWindow(state->hOrderProfitPrice, SW_HIDE);
     ShowWindow(state->hOrderRisk, SW_HIDE);
-    ShowWindow(state->hLossLabel, SW_HIDE);
-    ShowWindow(state->hProfitLabel, SW_HIDE);
+    ShowWindow(state->hProfitLossPercentLabel, SW_HIDE);
+    ShowWindow(state->hProfitLossValueLabel, SW_HIDE);
     ShowWindow(state->hRRLabel, SW_HIDE);
     ShowWindow(state->hOptQtyLabel, SW_HIDE);
     ShowWindow(state->hOptStopLabel, SW_HIDE);
@@ -1487,8 +1488,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(h, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
             return h;
         };
-        state->hLossLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
-        state->hProfitLabel = makeHintLabel(SS_RIGHT, COINS_CLR_ORANGE);
+        state->hProfitLossPercentLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
+        state->hProfitLossValueLabel = makeHintLabel(SS_RIGHT, COINS_CLR_ORANGE);
         state->hRRLabel   = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
         state->hOptQtyLabel = makeHintLabel(SS_LEFT, COINS_CLR_GRAY);
         state->hOptStopLabel = makeHintLabel(SS_RIGHT, COINS_CLR_GRAY);
@@ -1639,7 +1640,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             if (state) {
                 HWND hCtrl = (HWND)lParam;
-                if (hCtrl == state->hLossLabel || hCtrl == state->hProfitLabel || hCtrl == state->hRRLabel ||
+                if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hRRLabel ||
                     hCtrl == state->hOptQtyLabel || hCtrl == state->hOptStopLabel) {
                     HDC hdc = (HDC)wParam;
                     SetBkMode(hdc, TRANSPARENT);
@@ -1896,7 +1897,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hOrderRisk = NULL;
-            state->hLossLabel = state->hProfitLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
+            state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             delete state;
             tsStates.erase(hWnd);
         }
