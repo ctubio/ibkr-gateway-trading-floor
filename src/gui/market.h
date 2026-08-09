@@ -334,14 +334,16 @@ static void Market_Layout(HWND hWnd, TsState* state) {
 static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (!state || !state->hOrderRisk) return;
 
-    char pBuf[32] = {}, qBuf[32] = {}, sBuf[32] = {};
+    char pBuf[32] = {}, qBuf[32] = {}, sBuf[32] = {}, profitBuf[32] = {};
     GetWindowTextA(state->hOrderPrice,     pBuf, sizeof(pBuf));
     GetWindowTextA(state->hOrderQty,       qBuf, sizeof(qBuf));
     GetWindowTextA(state->hOrderStopPrice, sBuf, sizeof(sBuf));
+    GetWindowTextA(state->hOrderProfitPrice, profitBuf, sizeof(profitBuf));
 
     double price    = std::atof(pBuf);
     double qty      = std::atof(qBuf);
     double stopDist = std::atof(sBuf);
+    double profitDist = std::atof(profitBuf);
 
     double netLiq = 0.0;
     {
@@ -373,20 +375,40 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
             else text += "\r\n!! R"; // ∞
         }
 
+        if (profitDist > 0.0 && qty > 0.0) {
+            double profitDollars = profitDist * qty;
+            std::string profitPctStr = (netLiq > 0.0)
+                ? std::format("{:.2f}%", profitDollars / netLiq * 100.0)
+                : "--";
+            text += std::format("\r\n{} = {:.2f} P", profitPctStr, profitDollars);
+        } else {
+            if (profitDist > 0.0) text += "\r\n-- P";
+            else text += "\r\n!! P"; // ∞
+        }
+
+        if (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0) {
+            double rr = profitDist / stopDist;
+            text += std::format("\r\nx{:.2f}", rr);
+        } else {
+            text += "\r\nx--";
+        }
+
         text += "\r\n";
 
         // 3) Position size that would risk exactly riskPct of NLV at this stop distance
         if (stopDist > 0.0 && netLiq > 0.0) {
             int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
-            text += std::format("{:.2f}% = {} Q\r\n", riskPct, optQty);
+            text += std::format("{:.2f}% = {} Q", riskPct, optQty);
         } else {
-            text += "-- Q\r\n";
+            text += std::format("{:.2f}% = -- Q", riskPct);
         }
+
+        text += " | ";
 
         // 4) Stop distance that would risk exactly riskPct of NLV at this position size
         if (qty > 0.0 && netLiq > 0.0) {
             double optStop = (netLiq * riskPct / 100.0) / qty;
-            text += std::format("{:.2f}% = {:.2f} S", riskPct, optStop);
+            text += std::format("{:.2f} S", optStop);
         } else {
             text += "-- S";
         }
@@ -1449,7 +1471,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // identify them by HWND (lParam) instead of LOWORD(wParam).
         if (state && HIWORD(wParam) == EN_CHANGE) {
             HWND hCtrl = (HWND)lParam;
-            if (hCtrl == state->hOrderPrice || hCtrl == state->hOrderQty || hCtrl == state->hOrderStopPrice)
+            if (hCtrl == state->hOrderPrice || hCtrl == state->hOrderQty || hCtrl == state->hOrderStopPrice || hCtrl == state->hOrderProfitPrice)
                 Market_UpdateOrderRiskLabel(state);
         }
         break;
