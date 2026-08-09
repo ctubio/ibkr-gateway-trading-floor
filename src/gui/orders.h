@@ -154,6 +154,9 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW + 40,  24,    TRUE); ShowWindow(hPriceLbl,  show); }
     x += lblW + 5;
     
+    CenterEditText(hPriceEdit);
+    CenterEditText(hQtyEdit);
+
     if (show) UpdatePriceLabel(hWnd);
 }
 
@@ -530,18 +533,17 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
 
             // ── Inline edit panel controls (initially hidden) ──────────────────
-            HWND hEditPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                // Added ES_MULTILINE here
-                WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE, 
+            HWND hEditPrice = CreateWindowA("EDIT", "",
+                WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE, 
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_EDIT, hInst, NULL);
 
             CreateWindowA("STATIC", "Qty:",
                 WS_CHILD | SS_RIGHT,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_LABEL, hInst, NULL);
-            HWND hEditQty = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                // Added ES_MULTILINE here
-                WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE, 
+            HWND hEditQty = CreateWindowA("EDIT", "",
+                WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE, 
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
+
             HWND hPriceLabel = CreateWindowA("STATIC", "0",
                 WS_CHILD | SS_RIGHT,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);    
@@ -769,6 +771,21 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_COMMAND: {
             if (s_editState.panelVisible && (LOWORD(wParam) == ID_ORDERS_PRICE_EDIT || LOWORD(wParam) == ID_ORDERS_QTY_EDIT) && HIWORD(wParam) == EN_CHANGE) {
                 UpdatePriceLabel(hWnd);
+            }
+            break;
+        }
+
+        // Paint the Price edit's background: dark green for BUY, dark red for SELL.
+        // Anything else (Qty, or the price edit while the panel is hidden) falls
+        // through to the default dark/light handling in HandleCommonMessages.
+        case WM_CTLCOLOREDIT: {
+            HWND hCtrl = (HWND)lParam;
+            if (s_editState.panelVisible && hCtrl == GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT)) {
+                HDC hdc = (HDC)wParam;
+                bool isBuy = (s_editState.action == "BUY");
+                SetTextColor(hdc, DM_TEXT);
+                SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
+                return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
             }
             break;
         }

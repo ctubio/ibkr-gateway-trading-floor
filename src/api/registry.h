@@ -15,6 +15,8 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATE
 
 HBRUSH hDarkBrush = NULL;
 HBRUSH hDarkBrush2 = NULL;
+HBRUSH hBrushDarkGreen = NULL; // dark green background for BUY-side price inputs
+HBRUSH hBrushDarkRed = NULL;   // dark red background for SELL-side price inputs
 
 static std::deque<std::string> debugBuffer; // stores messages when window is closed
 

@@ -16,6 +16,9 @@ NOTIFYICONDATAW nid = { 0 };
 #define COINS_CLR_PURPLE      RGB(185, 105, 225)
 #define COINS_CLR_ORANGE      RGB(255, 165, 0)
 #define COINS_CLR_YELLOW      RGB(201, 183, 41)
+// Dark background fills for order-side colored input boxes
+#define COINS_BG_DARK_GREEN RGB( 34, 82, 50)
+#define COINS_BG_DARK_RED   RGB(102, 43, 43)
 // Sentinel: no custom col or – let HandleDarkModeMessages / system theme paint this control
 #define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
 
@@ -59,7 +62,9 @@ static COLORREF GetCtrlColor(HWND hw) {
 void InitDarkBrushes() {
     hDarkBrush  = CreateSolidBrush(DM_BG);
     hDarkBrush2 = CreateSolidBrush(DM_BG2);
-    
+    hBrushDarkGreen = CreateSolidBrush(COINS_BG_DARK_GREEN);
+    hBrushDarkRed   = CreateSolidBrush(COINS_BG_DARK_RED);
+
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
@@ -577,4 +582,20 @@ std::string formatVolume(long long volume) {
     } else {
         return std::to_string(volume);
     }
+}
+
+void CenterEditText(HWND hEdit) {
+    if (!hEdit) return;
+    RECT erc = {};
+    GetClientRect(hEdit, &erc);
+    HDC hdc = GetDC(hEdit);
+    HFONT hFont = (HFONT)SendMessage(hEdit, WM_GETFONT, 0, 0);
+    HGDIOBJ oldFont = SelectObject(hdc, hFont ? hFont : GetStockObject(SYSTEM_FONT));
+    TEXTMETRICA tm = {};
+    GetTextMetricsA(hdc, &tm);
+    SelectObject(hdc, oldFont);
+    ReleaseDC(hEdit, hdc);
+    int pad = std::max(0, (int)((erc.bottom - erc.top) - tm.tmHeight) / 2 - 2);
+    RECT rect = { 0, pad, erc.right, erc.bottom - pad };
+    SendMessageA(hEdit, EM_SETRECTNP, 0, (LPARAM)&rect);
 }

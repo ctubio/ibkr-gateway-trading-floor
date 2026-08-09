@@ -317,6 +317,13 @@ static void Market_Layout(HWND hWnd, TsState* state) {
             SetWindowPos(state->hOrderStopPrice,   NULL, startY,              editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
             SetWindowPos(state->hOrderProfitPrice, NULL, startY + priceW + m, editY + editH + 4, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         }
+
+        CenterEditText(state->hOrderPrice);
+        CenterEditText(state->hOrderQty);
+        if (!state->isOvernight) {
+            CenterEditText(state->hOrderStopPrice);
+            CenterEditText(state->hOrderProfitPrice);
+        }
     }
 }
 
@@ -1303,23 +1310,23 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             WS_CHILD | SS_CENTER | SS_CENTERIMAGE,
             0, 0, 42, 26, hWnd, NULL, hInst, NULL);
 
-        state->hOrderPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+        state->hOrderPrice = CreateWindowA("EDIT", "0.00",
+            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
 
-        state->hOrderQty = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "1",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE | ES_NUMBER,
+        state->hOrderQty = CreateWindowA("EDIT", "1",
+            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
         
-        state->hOrderStopPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+        state->hOrderStopPrice = CreateWindowA("EDIT", "0.00",
+            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderStopPrice, OrderBar_EditSubclassProc, 1, 0);
         
-        state->hOrderProfitPrice = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "0.00",
-            WS_CHILD | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+        state->hOrderProfitPrice = CreateWindowA("EDIT", "0.00",
+            WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 
@@ -1446,6 +1453,31 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 Market_UpdateOrderRiskLabel(state);
         }
         break;
+
+        // Paint order-bar edit backgrounds by orderSide.
+        // Price: BUY = dark green, SELL = dark red
+        // Stop: BUY = dark red, SELL = dark green
+        // Profit: BUY = dark red, SELL = dark green
+        // Qty (and anything else) falls through to the default dark/light handling.
+        case WM_CTLCOLOREDIT: {
+            if (state) {
+                HWND hCtrl = (HWND)lParam;
+                HDC hdc = (HDC)wParam;
+                bool isBuy = (state->orderSide == "BUY");
+
+                if (hCtrl == state->hOrderPrice) {
+                    SetTextColor(hdc, DM_TEXT);
+                    SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
+                    return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
+                }
+                if (hCtrl == state->hOrderStopPrice || hCtrl == state->hOrderProfitPrice) {
+                    SetTextColor(hdc, DM_TEXT);
+                    SetBkColor(hdc, isBuy ? COINS_BG_DARK_RED : COINS_BG_DARK_GREEN);
+                    return (LRESULT)(isBuy ? hBrushDarkRed : hBrushDarkGreen);
+                }
+            }
+            break;
+        }
 
     case WM_TIMER:
         if (wParam == TIMER_MARKET_SPEAKER && state && state->ttsOn)
