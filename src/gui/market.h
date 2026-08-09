@@ -366,10 +366,10 @@ static void Market_Layout(HWND hWnd, TsState* state) {
             SetWindowPos(state->hProfitLabel, NULL, startY + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Qty input: sizing at target risk (bottom-left)
-            SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint1H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Stop input: stop distance at target risk (bottom-right)
-            SetWindowPos(state->hOptStopLabel, NULL, startY + priceW - hintW - hintMargin, stopY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOptStopLabel, NULL, startY + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Profit input: risk/reward ratio (bottom-left)
             SetWindowPos(state->hRRLabel, NULL, startY + priceW + m + hintMargin, stopY + editH - hint1H - 2, 50, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -446,24 +446,32 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     // 4) Position size at target risk — bottom-left of Qty input
     std::string optQtyText;
     {
-        std::string pctStr = std::format("{:.2f}%", riskPct);
+        /*std::string pctStr = std::format("{:.2f}", riskPct);
+        if (pctStr.ends_with(".00")) {
+            pctStr.erase(pctStr.length() - 3);
+        }
+        pctStr += "% = ";*/
         if (stopDist > 0.0 && netLiq > 0.0) {
             int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
-            optQtyText = pctStr + "\r\n" + std::format("{} Q", optQty);
+            optQtyText = /*pctStr +*/ std::format("{}", optQty);
         } else {
-            optQtyText = pctStr + "\r\n-- Q";
+            optQtyText = /*pctStr +*/ "--";
         }
     }
 
     // 5) Stop distance at target risk — bottom-right of Stop input
     std::string optStopText;
     {
-        std::string pctStr = std::format("{:.2f}%", riskPct);
+        /*std::string pctStr = std::format("{:.2f}", riskPct);
+        if (pctStr.ends_with(".00")) {
+            pctStr.erase(pctStr.length() - 3);
+        }
+        pctStr += "% = ";  */ 
         if (qty > 0.0 && netLiq > 0.0) {
             double optStop = (netLiq * riskPct / 100.0) / qty;
-            optStopText = pctStr + "\r\n" + std::format("{:.2f} S", optStop);
+            optStopText = /*pctStr +*/ std::format("{:.2f}", optStop);
         } else {
-            optStopText = pctStr + "\r\n-- S";
+            optStopText = /*pctStr +*/ "--";
         }
     }
 
