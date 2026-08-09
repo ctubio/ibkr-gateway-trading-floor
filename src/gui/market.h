@@ -114,7 +114,6 @@ struct TsState {
     HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
     HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
     HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
-    HFONT hHintFont         = NULL; // 12pt — hint overlay labels
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
 
@@ -1384,9 +1383,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hStatusNormalFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hHintFont = CreateFontA(-13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
@@ -1488,7 +1484,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | align | SS_NOPREFIX,
                 0, 0, 10, 10, hWnd, NULL, hInst, NULL);
             SetCtrlColor(h, color);
-            SendMessage(h, WM_SETFONT, (WPARAM)state->hHintFont, TRUE);
+            SendMessage(h, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
             return h;
         };
         state->hLossLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
@@ -1897,7 +1893,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hValuesFont)      DeleteObject(state->hValuesFont);
             if (state->hOrderFont)       DeleteObject(state->hOrderFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
-            if (state->hHintFont) DeleteObject(state->hHintFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hOrderRisk = NULL;
