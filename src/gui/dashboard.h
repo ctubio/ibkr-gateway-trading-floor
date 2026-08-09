@@ -12,14 +12,12 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_DASHBOARD   1001
 #define ID_MB_DIAMONDS   1003
 #define ID_MB_SETTINGS   1004
-#define ID_MB_SCANNER    1005
 #define ID_MB_MARKET     1007
 #define ID_MB_EXCHANGE   1008
 #define ID_MB_ORDERS     1009
 #define ID_M_ORDERS      1010
 #define ID_M_DIAMONDS    1011
 #define ID_M_SETTINGS    1012
-#define ID_M_SCANNER     1013
 #define ID_M_MARKET      1015
 #define ID_M_DEBUGLOG    1016
 
@@ -789,9 +787,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int stepz = 0;
             addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
             addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
-            addButtons(hWnd, hInst, "Exchange",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  109);
+            addButtons(hWnd, hInst, "Exchange",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  106);
             addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    105);
-            addButtons(hWnd, hInst, "Scanner",   9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SCANNER,    106);
+            addButtons(hWnd, hInst, "Links",   9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_LINKS,    109);
 
             addButtons(hWnd, hInst, "Settings", 18 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  107);
 
@@ -1011,7 +1009,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         AppendMenuW(hMenu, MF_STRING, ID_M_MARKET_BASE + (int)i, label.c_str());
                     }
                     
-                    if (FindWindowA(SCANNER_CLASS_NAME, NULL))   AppendMenuW(hMenu, MF_STRING, ID_M_SCANNER,   IsWindowAlwaysOnTop(SCANNER_CLASS_NAME)   ? L"[ ★ ] Scanner"   : L"[  ] Scanner");
                     if (FindWindowA(SETTINGS_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_SETTINGS,  IsWindowAlwaysOnTop(SETTINGS_CLASS_NAME)  ? L"[ ★ ] Settings"  : L"[  ] Settings");
                     if (FindWindowA(DEBUGLOG_CLASS_NAME, NULL))  AppendMenuW(hMenu, MF_STRING, ID_M_DEBUGLOG,  IsWindowAlwaysOnTop(DEBUGLOG_CLASS_NAME)  ? L"[ ★ ] Debug Log" : L"[  ] Debug Log");
 
@@ -1032,7 +1029,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_DASHBOARD:
                         case ID_M_DIAMONDS:
                         case ID_M_ORDERS:
-                        case ID_M_SCANNER:
                         case ID_M_SETTINGS:
                         case ID_M_DEBUGLOG:
                             SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
@@ -1104,9 +1100,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_EXCHANGE:
                     StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
-                case ID_MB_SCANNER:
-                    StartScanner();
-                    break;
                 case ID_MB_MARKET:
                     StartMarket();
                     break;
@@ -1121,9 +1114,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_M_DIAMONDS:
                     ToggleWindowAlwaysOnTop(DIAMONDS_CLASS_NAME);
-                    break;
-                case ID_M_SCANNER:
-                    ToggleWindowAlwaysOnTop(SCANNER_CLASS_NAME);
                     break;
                 case ID_M_SETTINGS:
                     ToggleWindowAlwaysOnTop(SETTINGS_CLASS_NAME);

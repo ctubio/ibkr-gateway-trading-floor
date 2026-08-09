@@ -123,8 +123,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
         DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
-        if (strcmp(className, SCANNER_CLASS_NAME)   == 0
-         || strcmp(className, ORDERS_CLASS_NAME)    == 0
+        if (strcmp(className, ORDERS_CLASS_NAME)    == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
          || strcmp(className, MARKET_CLASS_NAME)    == 0
         ) {

@@ -33,7 +33,6 @@ A modern desktop trading companion built on the Interactive Brokers C++ API. It 
 *   **Account Intelligence**: Live margin metrics and Net Liquidation Value with SAPI Text-to-Speech (TTS) alerts.
 *   **Portfolio Management**: Position tracking with dividends and custom tab grouping.
 *   **Order Tracking**: Real-time status monitoring with in-place modifications and rapid cancellation.
-*   **Market Intelligence**: Advanced scanner for finding trading opportunities based on multiple criteria.
 *   **Robust Infrastructure**: Auto-reconnecting watchdog, registry-based persistence, and async audio notifications.
 
 ---
@@ -68,13 +67,6 @@ The core data engine for active trading. Supports infinite concurrent instances.
 *   **Time & Sales**: Three real-time tick-by-tick streams — All, ≥100 shares, ≥1000 shares — with dynamic vertical/horizontal splitters to customize your view per symbol.
 *   **Quick Order Bar**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask). Includes Stop-Loss and Take-Profit price fields for bracket orders.
 *   **Audio Alerts**: Independent per-window TTS for price announcements.
-
-### 🚀 Scanner (Symbol Discovery)
-Advanced market scanner for finding trading opportunities based on multiple criteria.
-*   **Multi-Criteria Filtering**: Combine conditions across price, volume, volatility, and fundamental metrics.
-*   **Real-time Results**: Live updating scan results as market data streams in.
-*   **Customizable Views**: Save and manage multiple predefined scan configurations.
-*   **Quick Actions**: Double-click any result to open a dedicated Market window for that symbol.
 
 ### ⚙️ Settings & 🐞 Debug Log
 *   **Settings**: Configure Dark Mode, TTS voice selection, default order quantity, Stop/Profit price defaults, Gateway path, and auto-start IBKR Gateway.

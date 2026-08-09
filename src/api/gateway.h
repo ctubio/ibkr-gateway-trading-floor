@@ -64,7 +64,6 @@
 #define WM_MARKET_L1        (WM_USER + 10)
 #define WM_MARKET_L2        (WM_USER + 11)   // Level 2 depth change — handler calls getLevel2Snapshot()
 #define WM_PNL_SINGLE       (WM_USER + 12)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
-#define WM_SCANNER_DATA     (WM_USER + 13)   // Scanner subscription refreshed — handler calls getScannerResults()
 #define WM_API_EXECUTION    (WM_USER + 14)
 #define WM_FX_RATE_UPDATE   (WM_USER + 15)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
 #define WM_API_UNSENT_ORDER (WM_USER + 16)   // Posted to the Orders window for an untransmitted (transmit=false)
@@ -79,7 +78,6 @@ static const char* DIAMONDS_CLASS_NAME           = "Diamonds" GATEWAY_NAME;
 static const char* ORDERS_CLASS_NAME             = "Orders" GATEWAY_NAME;
 static const char* MARKET_CLASS_NAME             = "Market" GATEWAY_NAME;
 static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol" GATEWAY_NAME;
-static const char* SCANNER_CLASS_NAME            = "Scanner" GATEWAY_NAME;
 static const char* SETTINGS_CLASS_NAME           = "Settings" GATEWAY_NAME;
 static const char* DEBUGLOG_CLASS_NAME           = "DebugLog" GATEWAY_NAME;
 static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
@@ -160,18 +158,6 @@ public:
         double      price    = 0.0;
         double      size     = 0.0;
         std::string time;
-        std::string exchange;
-    };
-
-    // Row returned by the market scanner (rank + contract identity only —
-    // no price data; the Scanner window requests L1 market data for the
-    // returned conIds via the existing setWatchlistWindow() mechanism, which
-    // fires one-time snapshot reqMktData() calls paced 100ms apart rather
-    // than a permanent streaming subscription).
-    struct ScannerRow {
-        int         rank    = 0;
-        int         conId   = 0;
-        std::string symbol;
         std::string exchange;
     };
 
@@ -358,14 +344,6 @@ public:
         // per daily bar; empty on failure/timeout/symbol-not-a-position.
     std::vector<std::string> getHistoricalDataSync(const std::string& symbol, int timeoutMs = 15000);
 
-    // ── Scanner ───────────────────────────────────────────────────────────────
-    // scannerIndex: 0 = NYSE, 1 = NASDAQ National Market, 2 = NASDAQ Small/Mid Caps.
-    // scanCodeIndex: 0 = TOP_PERC_GAIN, 1 = TOP_PERC_LOSE, 2 = MOST_ACTIVE.
-    // Cancels any previous subscription from this same API instance before requesting the new one.
-    void runScanner(int scannerIndex, std::string scanCode = "TOP_PERC_GAIN");
-    void cancelScanner();
-    std::vector<ScannerRow> getScannerResults();
-    
 private:
     struct Impl;
     std::unique_ptr<Impl> pImpl;

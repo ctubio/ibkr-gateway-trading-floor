@@ -109,14 +109,6 @@ std::string Settings_LoadString(const char* key, const std::string& defaultValue
     return RegGetString(SETTINGS_CLASS_NAME, key, defaultValue);
 }
 
-void Settings_Scanner_Save(const char* key, DWORD value) {
-    RegSetDword(SCANNER_CLASS_NAME, key, value);
-}
-
-DWORD Settings_Scanner_Load(const char* key, DWORD defaultValue = 0) {
-    return RegGetDword(SCANNER_CLASS_NAME, key, defaultValue);
-}
-
 std::string Settings_Tab_Load(const char* key, const std::string& defaultValue = "") {
     return RegGetString(DIAMONDS_CLASS_NAME, key, defaultValue);
 }
@@ -952,7 +944,6 @@ static std::vector<TtsVoiceEntry> TTS_EnumerateVoices() {
 
 void Session_RestoreWindows(
     const std::function<void()>& StartDiamonds,
-    const std::function<void()>& StartScanner,
     const std::function<void()>& StartSettings,
     const std::function<void(const std::string&, int)>& StartMarket,
     const std::function<void()>& StartOrders,
@@ -977,9 +968,6 @@ void Session_RestoreWindows(
         std::string cls = p;
         if (cls == DIAMONDS_CLASS_NAME)  { 
             StartDiamonds(); 
-        }
-        else if (cls == SCANNER_CLASS_NAME)      { 
-            StartScanner(); 
         }
         else if (cls == SETTINGS_CLASS_NAME)  { 
             StartSettings(); 
