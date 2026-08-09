@@ -72,7 +72,7 @@ static std::string JsonDouble(double v) {
 // Serialise one PositionInfo to a JSON object string.
 static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     TradingAPI::L1Book l1;
-    api().getWatchlistData(p.conId, l1);
+    api().getMarketData(p.conId, l1);
 
     double unrealizedPct = 0;
     double costBasis = p.avgCost * std::fabs(p.shares);

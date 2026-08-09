@@ -1382,7 +1382,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         int conId = (int)lParam;
         if (!conId || !state || state->conId != conId) break;
         TradingAPI::L1Book fresh;
-        if (api().getWatchlistData(state->conId, fresh)) {
+        if (api().getMarketData(state->conId, fresh)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
             if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
             if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;

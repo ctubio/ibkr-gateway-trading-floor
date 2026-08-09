@@ -162,10 +162,10 @@ public:
     };
 
     // ── Level 1 quote (per market window) ────────────────────────────────────
-    // Populated via reqMktData ticks; retrieved with getWatchlistData().
+    // Populated via reqMktData ticks; retrieved with getMarketData().
     // One row in the watchlist / diamonds watchlist.
     // Posted via WM_MARKET_L1 (lParam = new std::string("conId.symbol")).
-    // Handler calls getWatchlistData(conId, out) then deletes the string.
+    // Handler calls getMarketData(conId, out) then deletes the string.
     struct L1Book {
         std::string symbol;
 
@@ -296,17 +296,9 @@ public:
     void setMarketWindow(HWND hWnd, int conId, const std::string& symbol);
     void unsetMarketWindow(HWND hWnd);
 
-    // ── Watchlist (watchlist) ────────────────────────────────────────────────────
-    // Fires one-time snapshot reqMktData() calls (paced 100ms apart) for each
-    // entry rather than a permanent streaming subscription, to stay off the
-    // concurrent-market-data-line limit. Call again (e.g. on every list edit)
-    // to refresh. Diamonds does not use this — it keeps live streaming data.
-    void setWatchlistWindow(HWND hWnd, const std::unordered_map<int, std::string>& entries);
-    void unsetWatchlistWindow(HWND hWnd);
-
     // ── Level 1 (market window) ────────────────────────────────
 
-    bool getWatchlistData(int conId, L1Book& out);
+    bool getMarketData(int conId, L1Book& out);
     
     // ── Level 2 data (market window) ────────────────────────────────
 

@@ -606,7 +606,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
         // Pre-fill market data if already cached — this also seeds the estimated
         // PnL columns for the first open (before WM_PNL_SINGLE arrives).
         TradingAPI::L1Book tickInfo;
-        if (api().getWatchlistData(pos.conId, tickInfo)) {
+        if (api().getMarketData(pos.conId, tickInfo)) {
             Diamonds_UpdateMarketCols(pos.conId, tickInfo);
         }
 
@@ -750,7 +750,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         int conId = (int)lParam;
         if (!conId) break;
         TradingAPI::L1Book info;
-        if (api().getWatchlistData(conId, info)) {
+        if (api().getMarketData(conId, info)) {
             Diamonds_UpdateMarketCols(conId, info);
             // ZERO-FLICKER FIX: Invalidate ONLY the row that changed, perfectly smoothly
             auto it = std::find(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), conId);
@@ -866,7 +866,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 double quickLastPrice = 0.0;
                 {
                     TradingAPI::L1Book quickInfo;
-                    if (api().getWatchlistData(conId, quickInfo)) quickLastPrice = quickInfo.last;
+                    if (api().getMarketData(conId, quickInfo)) quickLastPrice = quickInfo.last;
                 }
                 std::string sellLabel = sym + (
                     (quickLastPrice > 0.0)
@@ -947,7 +947,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 } else if (cmd == 301) {
                     // Quick SELL placeholder: 1 share @ 2x last price.
                     TradingAPI::L1Book quickInfo;
-                    if (api().getWatchlistData(conId, quickInfo) && quickInfo.last > 0.0) {
+                    if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                         double sellPrice = quickInfo.last * 2.0;
                         std::thread([conId, sym, sellPrice]() {
                             HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
