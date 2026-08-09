@@ -41,6 +41,8 @@ static const QuickLink g_QuickLinks[] = {
     { "Map",   "https://finviz.com/map.ashx?t=sec"            },
     { "Data",  "https://www.benzinga.com/quote"               },
     { "Paper", "http://192.168.1.105:2025/paper"              },
+    { "Chat",  "https://192.168.1.105/openclaw/chat"          },
+    { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
 static const int LINKS_COUNT = (int)(sizeof(g_QuickLinks) / sizeof(g_QuickLinks[0]));
 
@@ -1118,8 +1120,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     RECT rc; GetWindowRect(hBtn, &rc);
 
                     HMENU hMenu = CreatePopupMenu();
-                    for (int i = 0; i < LINKS_COUNT; ++i)
-                        AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, g_QuickLinks[i].label);
+                    for (int i = 0; i < LINKS_COUNT; ++i) {
+                        if (g_QuickLinks[i].label == "Paper" || g_QuickLinks[i].label == "GitHub")
+                            AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+                        AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, g_QuickLinks[i].label);   
+                    }
 
                     SetForegroundWindow(hWnd);
                     int cmd = TrackPopupMenu(hMenu,
