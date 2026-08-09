@@ -404,7 +404,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
     
     SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
-    int qty = (int)Settings_Load("OrderQty", 100);
+    int qty = (int)Settings_Load("OrderQty", 20);
     SetWindowTextA(state->hOrderQty, std::format("{}", qty).c_str());
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
@@ -488,7 +488,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             return 0;
         }
         if (wParam == VK_RETURN) {
-            if (st) {
+            if (st || st->l1Info.last <= 0.0) {
                 char pBuf[32] = {}, qBuf[32] = {}, psBuf[32] = {}, ppBuf[32] = {};
                 GetWindowTextA(st->hOrderPrice,       pBuf, sizeof(pBuf));
                 GetWindowTextA(st->hOrderQty,         qBuf, sizeof(qBuf));
@@ -504,6 +504,35 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
                     if (price > 0 && stopPrice > 0) stopPrice = st->orderSide == "BUY" ? price - stopPrice : price + stopPrice;
                     if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
+                    double safety = Settings_LoadFloat("Safety", 2.0f);
+                    if (st->orderSide == "BUY") {
+                        if (price > 0 && price > st->l1Info.last + safety) {
+                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f}$ above the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                            return 0;
+                        }
+                        if (stopPrice > 0 && stopPrice >= price) {
+                            MessageBoxA(hMarket, "Stop price must be below the entry price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
+                            return 0;
+                        }
+                        if (profitPrice > 0 && profitPrice <= price) {
+                            MessageBoxA(hMarket, "Profit price must be above the entry price for a BUY order.", "Invalid Profit Price", MB_ICONERROR);
+                            return 0;
+                        }
+                    }
+                    if (st->orderSide == "SELL") {
+                        if (price > 0 && price < st->l1Info.last - safety) {
+                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f}$ below the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                            return 0;
+                        }
+                        if (stopPrice > 0 && stopPrice <= price) {
+                            MessageBoxA(hMarket, "Stop price must be above the entry price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
+                            return 0;
+                        }
+                        if (profitPrice > 0 && profitPrice >= price) {
+                            MessageBoxA(hMarket, "Profit price must be below the entry price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
+                            return 0;
+                        }
+                    }
                     api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
                 }
                 Market_Layout_HideBar(hMarket, st);

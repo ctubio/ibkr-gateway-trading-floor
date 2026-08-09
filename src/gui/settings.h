@@ -1,9 +1,9 @@
 #pragma once
 
 #ifndef GATEWAY_SIM
-int WindowSettingsHeight = 530;
+int WindowSettingsHeight = 565;
 #else
-int WindowSettingsHeight = 530 - 138;
+int WindowSettingsHeight = 569 - 138;
 #endif
 
 void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, WindowSettingsHeight); }
@@ -22,6 +22,7 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_GATEWAY_PATH      4010
 #define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
 #define ID_SETTINGS_RISK_VALUE        4012
+#define ID_SETTINGS_SAFETY_VALUE      4013
 
 static HWND hSettingBox1 = NULL;
 static HWND hSettingBox2 = NULL;
@@ -220,7 +221,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Trading ──────────────────────────────────────────────────────
             hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 148,
+                m, y, w, 37 * 5,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
@@ -238,28 +239,30 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
             };
 
-            HWND hQtyEdit    = MakeRow("Order Qty:",  ID_SETTINGS_QTY_VALUE,    18, true);
-            HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,   51, false);
-            HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE, 84, false);
-            HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,  117, false);
+            HWND hQtyEdit    = MakeRow("Order Qty:",  ID_SETTINGS_QTY_VALUE,     20, true);
+            HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,    53, false);
+            HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE,  86, false);
+            HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,   119, false);
+            HWND hSafetyEdit = MakeRow("Safety:",     ID_SETTINGS_SAFETY_VALUE, 152, false);
+            y += 152 + 40;
 
-            SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 100)).c_str());
+            SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 20)).c_str());
             SetWindowTextA(hStopEdit,   std::format("{:.2f}", Settings_LoadFloat("StopPrice",  1.0f)).c_str());
             SetWindowTextA(hProfitEdit, std::format("{:.2f}", Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
             SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
-            y += 156;
+            SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
 
             // ── System Tools ───────────────────────────────────────────
             hSettingBox5 = CreateWindowA("BUTTON", "API Messages:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 46,
+                m, y, w, 50,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox5, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox5, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
 
             CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                m + gm, y + 16, gw, 22,
+                m + gm, y + 20, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
             break;
         }
@@ -353,6 +356,17 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     pct = (float)atof(buf); // atof handles decimals
                 }
                 Settings_SaveFloat("RiskPct", pct);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_SAFETY_VALUE) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_SAFETY_VALUE);
+                int len = GetWindowTextLength(hEdit);
+                float safety = 2.0f;
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    safety = (float)atof(buf); // atof handles decimals
+                }
+                Settings_SaveFloat("Safety", safety);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);
