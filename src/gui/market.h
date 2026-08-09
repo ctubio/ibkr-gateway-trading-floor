@@ -388,9 +388,9 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
 
         if (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0) {
             double rr = profitDist / stopDist;
-            text += std::format("\r\nx{:.2f}", rr);
+            text += std::format(" x{:.2f}", rr);
         } else {
-            text += "\r\nx--";
+            text += " x--";
         }
 
         text += "\r\n";
