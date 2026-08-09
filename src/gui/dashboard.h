@@ -1,7 +1,7 @@
 #pragma once
 
 int windowDashboardWidth  = 250;
-int windowDashboardHeight = 390;
+int windowDashboardHeight = 382;
 
 void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor" GATEWAY_SPACE GATEWAY_NAME, L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
@@ -322,9 +322,9 @@ void Coins_UpdateLabels(HWND hWnd) {
     const int m = 10;
     int y1 = 8;
     int box1H = 94;
-    int y2 = y1 + box1H + 12;
+    int y2 = y1 + box1H + 9;
     int box2H = 124;
-    int y3 = y2 + box2H + 12;
+    int y3 = y2 + box2H + 9;
 
     if (hCoin_NetLiq) {
         std::string formattedNum = FormatWithCommas(netLiq);
@@ -692,7 +692,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
 
             // ─── Box 2: Positions & Margin ─────────────────────────────────────
-            int y2 = y1 + box1H + 12; // y2 = 114
+            int y2 = y1 + box1H + 9; // y2 = 114
             int box2H = 124;
             hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y2, boxW, box2H, hWnd, NULL, hInst, NULL);
@@ -761,7 +761,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
 
             // ─── Box 3: Cash ───────────────────────────────────────────────────
-            int y3 = y2 + box2H + 12; // y3 = 250
+            int y3 = y2 + box2H + 9; // y3 = 250
             int box3H = 64;
             hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y3, boxW, box3H, hWnd, NULL, hInst, NULL);
@@ -784,7 +784,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 50, y3 + 20, boxW - 62, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hCoin_EUR, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
 
-            // Row 2: USD: 🏦 -11,559.66
+            // Row 2: USD: -11,559.66
             hLblUSD = CreateWindowA("STATIC", "USD:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 40, 35, 18, hWnd, NULL, hInst, NULL);
@@ -797,7 +797,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
 
             // ─── Bottom action buttons ──────────────────────────────────────────
-            int yBtn = y3 + box3H + 12; // yBtn = 326
+            int yBtn = y3 + box3H + 10; // yBtn = 326
             int steps = 1;
             int stepz = 0;
             addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
@@ -828,9 +828,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             const int boxW = 226;
             int y1 = 8;
             int box1H = 94;
-            int y2 = y1 + box1H + 12; // y2 = 114
+            int y2 = y1 + box1H + 9; // y2 = 114
             int box2H = 124;
-            int y3 = y2 + box2H + 12; // y3 = 250
+            int y3 = y2 + box2H + 9; // y3 = 250
             int box3H = 64;
             if (LOWORD(wParam) != WA_INACTIVE) {
                 if (lockHotkeys) break;
@@ -866,7 +866,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SetWindowPos(hCoin_EUR, NULL, m + 50, y3 + 20 - 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40 - 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40 - 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40 - 40, TRUE);
+                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40 - 38, TRUE);
             }
             break;
         }
@@ -878,9 +878,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 const int boxW = 226;
                 int box1H = 94;
                 int y1 = 8;
-                int y2 = y1 + box1H + 12; // y2 = 114
+                int y2 = y1 + box1H + 9; // y2 = 114
                 int box2H = 124;
-                int y3 = y2 + box2H + 12; // y3 = 250
+                int y3 = y2 + box2H + 9; // y3 = 250
                 int box3H = 64;
                 if (hCoin_NetLiq)      { SetWindowTextA(hCoin_NetLiq,      "--"); SetWindowPos(hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_NetLiq, NULL, TRUE); }
                 if (hCoin_BigPnL)      SetWindowTextA(hCoin_BigPnL,      "--");
