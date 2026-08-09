@@ -31,7 +31,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 static const int HEADER_H = 52;   // two-row header height
 static const int EXEC_W   = 126;  // Fixed width of the Executions panel (far left)
 static const int L2_W     = 140;  // Fixed width of the Level 2 depth panel (beside exec)
-static const int ORDER_BAR_H = 86;
+static const int ORDER_BAR_H = 84;
 
 // ── Volume / print-frequency rate windows ─────────────────────────────────────
 // "Recent" is the short trailing window whose rate we compare against
@@ -338,7 +338,7 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     if (state->hOrderLabel && state->hOrderPrice && state->hOrderStopPrice && state->hOrderProfitPrice && state->hOrderQty) {
         const int m    = 8;
         int BAR_H = (state->isOvernight ? ORDER_BAR_H / 2 : ORDER_BAR_H);
-        const int editH = (BAR_H - 8) / (state->isOvernight ? 1 : 2);
+        const int editH = (BAR_H - 6) / (state->isOvernight ? 1 : 2);
         const int editY = rc.bottom - 1 - BAR_H + (BAR_H - editH * (state->isOvernight ? 1 : 2)) / 2;
         const int lblY  = rc.bottom - BAR_H + (BAR_H - 18) / 2;
         const int lblW = 150;
@@ -366,10 +366,10 @@ static void Market_Layout(HWND hWnd, TsState* state) {
             SetWindowPos(state->hProfitLabel, NULL, startY + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Qty input: sizing at target risk (bottom-left)
-            SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint1H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Stop input: stop distance at target risk (bottom-right)
-            SetWindowPos(state->hOptStopLabel, NULL, startY + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOptStopLabel, NULL, startY + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Profit input: risk/reward ratio (bottom-left)
             SetWindowPos(state->hRRLabel, NULL, startY + priceW + m + hintMargin, stopY + editH - hint1H - 2, 50, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -439,9 +439,15 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     }
 
     // 3) Risk/reward ratio — bottom-left of Profit input
-    std::string rrText = (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0)
-        ? std::format("x{:.2f}", profitDist / stopDist)
-        : "x--";
+    std::string rrText = "x";
+    if (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0) {
+        double rrRatio = profitDist / stopDist;
+        rrText += std::format("{:.2f}", rrRatio);
+        SetCtrlColor(state->hRRLabel, rrRatio < 1.0 ? COINS_CLR_RED : (rrRatio >= 2.0 ? COINS_CLR_GREEN : COINS_CLR_ORANGE));
+    } else {
+        rrText += "--";
+        SetCtrlColor(state->hRRLabel, COINS_CLR_ORANGE);
+    }
 
     // 4) Position size at target risk — bottom-left of Qty input
     std::string optQtyText;
@@ -1372,6 +1378,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hStatusNormalFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+        state->hHintFont = CreateFontA(-13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
         state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
@@ -1473,6 +1482,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | align | SS_NOPREFIX,
                 0, 0, 10, 10, hWnd, NULL, hInst, NULL);
             SetCtrlColor(h, color);
+            SendMessage(h, WM_SETFONT, (WPARAM)state->hHintFont, TRUE);
             return h;
         };
         state->hLossLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
@@ -1480,12 +1490,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hRRLabel   = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
         state->hOptQtyLabel = makeHintLabel(SS_LEFT, COINS_CLR_GRAY);
         state->hOptStopLabel = makeHintLabel(SS_RIGHT, COINS_CLR_GRAY);
-
-        state->hHintFont = CreateFontA(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        for (HWND h : { state->hLossLabel, state->hProfitLabel, state->hRRLabel, state->hOptQtyLabel, state->hOptStopLabel })
-            SendMessage(h, WM_SETFONT, (WPARAM)state->hHintFont, TRUE);
 
         // Apply font to order bar controls
         if (state->hOrderFont) {
