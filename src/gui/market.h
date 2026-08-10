@@ -613,7 +613,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             return 0;
         }
         if (wParam == VK_RETURN) {
-            if (st || st->l1Info.last <= 0.0) {
+            if (st && st->l1Info.last > 0.0) {
                 char pBuf[32] = {}, qBuf[32] = {}, psBuf[32] = {}, ppBuf[32] = {};
                 GetWindowTextA(st->hOrderPrice,       pBuf, sizeof(pBuf));
                 GetWindowTextA(st->hOrderQty,         qBuf, sizeof(qBuf));
@@ -656,6 +656,26 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                             }
                             if (profitPrice > 0 && profitPrice >= price) {
                                 MessageBoxA(hMarket, "Profit price must be below the entry price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
+                                return 0;
+                            }
+                        }
+                    } else {
+                        if (st->orderSide == "SELL") {
+                            if (stopPrice > 0 && stopPrice >= st->l1Info.last) {
+                                MessageBoxA(hMarket, "Stop price must be below the last price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
+                                return 0;
+                            }
+                            if (profitPrice > 0 && profitPrice >= st->l1Info.last) {
+                                MessageBoxA(hMarket, "Profit price must be below the last price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
+                                return 0;
+                            }
+                        } else if (st->orderSide == "BUY") {
+                            if (stopPrice > 0 && stopPrice <= st->l1Info.last) {
+                                MessageBoxA(hMarket, "Stop price must be above the last price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
+                                return 0;
+                            }
+                            if (profitPrice > 0 && profitPrice <= st->l1Info.last) {
+                                MessageBoxA(hMarket, "Profit price must be above the last price for a BUY order.", "Invalid Profit Price", MB_ICONERROR);
                                 return 0;
                             }
                         }
