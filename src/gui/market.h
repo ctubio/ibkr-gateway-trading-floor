@@ -661,8 +661,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                         }
                     } else {
                         if (st->orderSide == "SELL") {
-                            if (stopPrice > 0 && stopPrice >= st->l1Info.last) {
-                                MessageBoxA(hMarket, "Stop price must be below the last price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
+                            if (stopPrice > 0 && stopPrice <= st->l1Info.last) {
+                                MessageBoxA(hMarket, "Stop price must be above the last price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
                                 return 0;
                             }
                             if (profitPrice > 0 && profitPrice >= st->l1Info.last) {
@@ -670,8 +670,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                                 return 0;
                             }
                         } else if (st->orderSide == "BUY") {
-                            if (stopPrice > 0 && stopPrice <= st->l1Info.last) {
-                                MessageBoxA(hMarket, "Stop price must be above the last price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
+                            if (stopPrice > 0 && stopPrice >= st->l1Info.last) {
+                                MessageBoxA(hMarket, "Stop price must be below the last price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
                                 return 0;
                             }
                             if (profitPrice > 0 && profitPrice <= st->l1Info.last) {
