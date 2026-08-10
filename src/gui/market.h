@@ -630,32 +630,34 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     if (price > 0 && stopPrice > 0) stopPrice = st->orderSide == "BUY" ? price - stopPrice : price + stopPrice;
                     if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
                     double safety = Settings_LoadFloat("Safety", 2.0f);
-                    if (st->orderSide == "BUY") {
-                        if (price > 0 && price > st->l1Info.last + safety) {
-                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
-                            return 0;
+                    if (price > 0) {
+                        if (st->orderSide == "BUY") {
+                            if (price > st->l1Info.last + safety) {
+                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                                return 0;
+                            }
+                            if (stopPrice > 0 && stopPrice >= price) {
+                                MessageBoxA(hMarket, "Stop price must be below the entry price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
+                                return 0;
+                            }
+                            if (profitPrice > 0 && profitPrice <= price) {
+                                MessageBoxA(hMarket, "Profit price must be above the entry price for a BUY order.", "Invalid Profit Price", MB_ICONERROR);
+                                return 0;
+                            }
                         }
-                        if (stopPrice > 0 && stopPrice >= price) {
-                            MessageBoxA(hMarket, "Stop price must be below the entry price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
-                            return 0;
-                        }
-                        if (profitPrice > 0 && profitPrice <= price) {
-                            MessageBoxA(hMarket, "Profit price must be above the entry price for a BUY order.", "Invalid Profit Price", MB_ICONERROR);
-                            return 0;
-                        }
-                    }
-                    if (st->orderSide == "SELL") {
-                        if (price > 0 && price < st->l1Info.last - safety) {
-                            MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
-                            return 0;
-                        }
-                        if (stopPrice > 0 && stopPrice <= price) {
-                            MessageBoxA(hMarket, "Stop price must be above the entry price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
-                            return 0;
-                        }
-                        if (profitPrice > 0 && profitPrice >= price) {
-                            MessageBoxA(hMarket, "Profit price must be below the entry price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
-                            return 0;
+                        if (st->orderSide == "SELL") {
+                            if (price < st->l1Info.last - safety) {
+                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                                return 0;
+                            }
+                            if (stopPrice > 0 && stopPrice <= price) {
+                                MessageBoxA(hMarket, "Stop price must be above the entry price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
+                                return 0;
+                            }
+                            if (profitPrice > 0 && profitPrice >= price) {
+                                MessageBoxA(hMarket, "Profit price must be below the entry price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
+                                return 0;
+                            }
                         }
                     }
                     api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
