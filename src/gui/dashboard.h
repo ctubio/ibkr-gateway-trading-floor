@@ -811,13 +811,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             api().addApiUpdateWindow(hWnd);
 
             BindTrayIcon(hWnd);
-                    
-            SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
-            SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
 
             if (RegGetDword(DASHBOARD_CLASS_NAME, "Speaker", 0)) {
                 Coins_ToggleTTS(hWnd);
             }
+                    
+            SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
+            std::thread([hWnd]() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(721));
+                SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
+            }).detach();
+
             break;
         }
         
