@@ -794,28 +794,37 @@ bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitY) {
 
 constexpr int MARKET_REGISTRY_MAX_AGE_DAYS = 21;
 
-// Stamps "today" (Y/M/D) into the given Market window's own registry subkey
-// (e.g. "Market_NVDA"). Called once when the window is created.
+// Stamps "today" as a single "YYYY-MM-DD" string into the given Market
+// window's own registry subkey (e.g. "Market_NVDA"). Called once when the
+// window is created.
 void Settings_Market_SaveOpenDate(const std::string& windowKey) {
     SYSTEMTIME st;
     GetLocalTime(&st);
-    RegSetDword(windowKey.c_str(), "OpenedYear", st.wYear);
-    RegSetDword(windowKey.c_str(), "OpenedMonth", st.wMonth);
-    RegSetDword(windowKey.c_str(), "OpenedDay", st.wDay);
+    std::string dateStr = std::format("{:04d}-{:02d}-{:02d}", st.wYear, st.wMonth, st.wDay);
+    RegSetString(windowKey.c_str(), "OpenedDate", dateStr);
 }
 
 // Reads back the stamped open-date for one Market_* subkey, expressed as
 // days-since-epoch (via std::chrono) for easy age comparison. Returns false
 // if no valid date has been stamped (e.g. an older key predating this
-// feature), so the caller can leave it alone rather than delete it blindly.
+// feature, or a malformed value), so the caller can leave it alone rather
+// than delete it blindly.
 static bool Market_ReadOpenDateDays(const std::string& windowKey, long& outDays) {
-    DWORD y = RegGetDword(windowKey.c_str(), "OpenedYear", 0);
-    DWORD m = RegGetDword(windowKey.c_str(), "OpenedMonth", 0);
-    DWORD d = RegGetDword(windowKey.c_str(), "OpenedDay", 0);
+    std::string dateStr = RegGetString(windowKey.c_str(), "OpenedDate", "");
+    if (dateStr.size() != 10 || dateStr[4] != '-' || dateStr[7] != '-') return false;
+
+    int y = 0, m = 0, d = 0;
+    try {
+        y = std::stoi(dateStr.substr(0, 4));
+        m = std::stoi(dateStr.substr(5, 2));
+        d = std::stoi(dateStr.substr(8, 2));
+    } catch (...) {
+        return false;
+    }
     if (y == 0 || m == 0 || d == 0) return false;
 
     std::chrono::year_month_day ymd{
-        std::chrono::year{(int)y}, std::chrono::month{(unsigned)m}, std::chrono::day{(unsigned)d}};
+        std::chrono::year{y}, std::chrono::month{(unsigned)m}, std::chrono::day{(unsigned)d}};
     if (!ymd.ok()) return false;
 
     std::chrono::sys_days sd = ymd;
