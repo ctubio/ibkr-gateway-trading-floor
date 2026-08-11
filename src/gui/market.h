@@ -388,7 +388,7 @@ static void Market_Layout(HWND hWnd, TsState* state) {
 // hOrderStopPrice holds a $ distance from entry (not an absolute stop price),
 // matching how it is already fed into api().submitOrder() as stopPrice.
 static void Market_UpdateOrderRiskLabel(TsState* state) {
-    if (!state || !state->hOrderRisk) return;
+    if (!state || !state->hOrderRisk || state->l1Info.last <= 0.0) return;
 
     char pBuf[32] = {}, qBuf[32] = {}, sBuf[32] = {}, profitBuf[32] = {};
     GetWindowTextA(state->hOrderPrice,     pBuf, sizeof(pBuf));
@@ -400,6 +400,11 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     double qty      = std::atof(qBuf);
     double stopDist = std::atof(sBuf);
     double profitDist = std::atof(profitBuf);
+    double stopDistOriginal = stopDist;
+    if (price <= 0.0) {
+        stopDist = state->orderSide == "BUY" ? state->l1Info.last - stopDist : stopDist - state->l1Info.last;
+        profitDist = state->orderSide == "BUY" ? profitDist - state->l1Info.last : state->l1Info.last - profitDist;
+    }
 
     double netLiq = 0.0;
     {
@@ -418,13 +423,13 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
     // 1) Loss @ stop distance — bottom-left of Price input
-    std::string lossPctStr = "--", profitPercentageStr = "!!";
+    std::string lossPctStr = "--", lossValueStr = "!!";
     if (stopDist > 0.0 && qty > 0.0) {
         double lossDollars = stopDist * qty;
         lossPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", lossDollars / netLiq * 100.0) : "--";
-        profitPercentageStr = std::format("{:.2f}", lossDollars);
+        lossValueStr = std::format("{:.2f}", lossDollars);
     } else if (stopDist > 0.0) {
-        profitPercentageStr = "--";
+        lossValueStr = "--";
     }
 
     // 2) Profit @ profit distance — bottom-right of Price input
@@ -433,11 +438,9 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         double profitDollars = profitDist * qty;
         profitPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", profitDollars / netLiq * 100.0) : "--";
         profitValueStr = std::format("{:.2f}", profitDollars);
-    } else if (profitDist > 0.0) {
-        profitValueStr = "--";
     }
 
-    std::string profitLossValueStr      = profitValueStr + "\r\n" + profitPercentageStr;
+    std::string profitLossValueStr      = profitValueStr + "\r\n" + lossValueStr;
     std::string profitLossPercentageStr = profitPctStr + "\r\n" + lossPctStr;
 
     // 3) Risk/reward ratio — bottom-left of Profit input
@@ -452,37 +455,29 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     }
 
     // 4) Position size at target risk — bottom-left of Qty input
-    std::string optQtyText;
+    std::string optQtyText = "--";
     {
-        /*std::string pctStr = std::format("{:.2f}", riskPct);
-        if (pctStr.ends_with(".00")) {
-            pctStr.erase(pctStr.length() - 3);
-        }
-        pctStr += "% = ";*/
         if (stopDist > 0.0 && netLiq > 0.0) {
             int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
-            optQtyText = /*pctStr +*/ std::format("{}", optQty);
+            optQtyText = std::format("{}", optQty);
             SetCtrlColor(state->hOptQtyLabel, qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY);
         } else {
-            optQtyText = /*pctStr +*/ "--";
             SetCtrlColor(state->hOptQtyLabel, COINS_CLR_GRAY);
         }
     }
 
     // 5) Stop distance at target risk — bottom-right of Stop input
-    std::string optStopText;
+    std::string optStopText = "--";
     {
-        /*std::string pctStr = std::format("{:.2f}", riskPct);
-        if (pctStr.ends_with(".00")) {
-            pctStr.erase(pctStr.length() - 3);
-        }
-        pctStr += "% = ";  */ 
         if (qty > 0.0 && netLiq > 0.0) {
             double optStop = (netLiq * riskPct / 100.0) / qty;
-            optStopText = /*pctStr +*/ std::format("{:.2f}", optStop);
-            SetCtrlColor(state->hOptStopLabel, stopDist > optStop ? COINS_CLR_RED : COINS_CLR_GRAY);
+            if (price <= 0.0) {
+                optStop = state->orderSide == "BUY" ? state->l1Info.last - optStop : state->l1Info.last + optStop;
+            }
+            optStopText = std::format("{:.2f}", optStop);
+            SetCtrlColor(state->hOptStopLabel, (price > 0 ? stopDistOriginal > optStop : (state->orderSide == "BUY" ? optStop > stopDistOriginal : stopDistOriginal > optStop)) ? COINS_CLR_RED : COINS_CLR_GRAY);
+
         } else {
-            optStopText = /*pctStr +*/ "--";
             SetCtrlColor(state->hOptStopLabel, COINS_CLR_GRAY);
         }
     }
