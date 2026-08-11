@@ -784,6 +784,84 @@ bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitY) {
     return true;
 }
 
+// ── Market window "opened date" tracking + pruning ───────────────────────────
+// Every per-symbol Market_* registry subkey (window position, splitter,
+// overnight flag, etc.) is otherwise permanent, so these accumulate forever
+// as more symbols get viewed over time. To bound that growth: the date a
+// Market window is opened is stamped into its own subkey, and whenever any
+// Market window closes we sweep all Market_* subkeys and delete the ones
+// whose stamped date is more than MARKET_REGISTRY_MAX_AGE_DAYS old.
+
+constexpr int MARKET_REGISTRY_MAX_AGE_DAYS = 21;
+
+// Stamps "today" (Y/M/D) into the given Market window's own registry subkey
+// (e.g. "Market_NVDA"). Called once when the window is created.
+void Settings_Market_SaveOpenDate(const std::string& windowKey) {
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    RegSetDword(windowKey.c_str(), "OpenedYear", st.wYear);
+    RegSetDword(windowKey.c_str(), "OpenedMonth", st.wMonth);
+    RegSetDword(windowKey.c_str(), "OpenedDay", st.wDay);
+}
+
+// Reads back the stamped open-date for one Market_* subkey, expressed as
+// days-since-epoch (via std::chrono) for easy age comparison. Returns false
+// if no valid date has been stamped (e.g. an older key predating this
+// feature), so the caller can leave it alone rather than delete it blindly.
+static bool Market_ReadOpenDateDays(const std::string& windowKey, long& outDays) {
+    DWORD y = RegGetDword(windowKey.c_str(), "OpenedYear", 0);
+    DWORD m = RegGetDword(windowKey.c_str(), "OpenedMonth", 0);
+    DWORD d = RegGetDword(windowKey.c_str(), "OpenedDay", 0);
+    if (y == 0 || m == 0 || d == 0) return false;
+
+    std::chrono::year_month_day ymd{
+        std::chrono::year{(int)y}, std::chrono::month{(unsigned)m}, std::chrono::day{(unsigned)d}};
+    if (!ymd.ok()) return false;
+
+    std::chrono::sys_days sd = ymd;
+    outDays = (long)sd.time_since_epoch().count();
+    return true;
+}
+
+// Enumerates every "<MARKET_CLASS_NAME>_*" subkey under APP_REG_ROOT and
+// deletes (subtree + all its values) any whose stamped open date is older
+// than MARKET_REGISTRY_MAX_AGE_DAYS days. Call this whenever a Market window
+// closes, so stale per-symbol entries stop accumulating forever.
+void Settings_Market_CleanupOldWindows() {
+    HKEY hRoot;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, APP_REG_ROOT, 0, KEY_READ, &hRoot) != ERROR_SUCCESS)
+        return;
+
+    const std::string prefix = std::string(MARKET_CLASS_NAME) + "_";
+
+    std::vector<std::string> toDelete;
+    char subKeyName[256];
+    DWORD index = 0;
+    while (true) {
+        DWORD nameSize = sizeof(subKeyName);
+        if (RegEnumKeyExA(hRoot, index++, subKeyName, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+            break;
+
+        std::string name(subKeyName);
+        if (!name.starts_with(prefix)) continue; // not a per-symbol Market_* key
+
+        long openedDays;
+        if (!Market_ReadOpenDateDays(name, openedDays)) continue; // no date stamped — leave alone
+
+        auto today = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+        long todayDays = (long)today.time_since_epoch().count();
+
+        if (todayDays - openedDays > MARKET_REGISTRY_MAX_AGE_DAYS)
+            toDelete.push_back(name);
+    }
+    RegCloseKey(hRoot);
+
+    for (const auto& name : toDelete) {
+        std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, name);
+        RegDeleteTreeA(HKEY_CURRENT_USER, fullPath.c_str());
+    }
+}
+
 // ── TTS voice persistence ─────────────────────────────────────────────────────
 // Saves/loads the SAPI token ID (registry path string) for the selected TTS voice.
 // Default is empty string → caller should fall back to Herena-Catalan search.

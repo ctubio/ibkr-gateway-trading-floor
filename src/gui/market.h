@@ -1379,6 +1379,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (data) {
             state->symbol = data->symbol;
             state->conId  = data->conId;
+            Settings_Market_SaveOpenDate(data->winKey);
         }
         tsStates[hWnd] = state;
 
@@ -1904,12 +1905,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->hTtsVoice->Release();
                 state->hTtsVoice = nullptr;
             }
-            if (state->hBigFont)     DeleteObject(state->hBigFont);
-            if (state->hExtraFont)     DeleteObject(state->hExtraFont);
-            if (state->hStatusFont)      DeleteObject(state->hStatusFont);
-            if (state->hStatusNormalFont)      DeleteObject(state->hStatusNormalFont);
-            if (state->hValuesFont)      DeleteObject(state->hValuesFont);
-            if (state->hOrderFont)       DeleteObject(state->hOrderFont);
+            if (state->hBigFont) DeleteObject(state->hBigFont);
+            if (state->hExtraFont) DeleteObject(state->hExtraFont);
+            if (state->hStatusFont) DeleteObject(state->hStatusFont);
+            if (state->hStatusNormalFont) DeleteObject(state->hStatusNormalFont);
+            if (state->hValuesFont) DeleteObject(state->hValuesFont);
+            if (state->hOrderFont) DeleteObject(state->hOrderFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
@@ -1919,6 +1920,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             tsStates.erase(hWnd);
         }
         UpdateMarketRegistry();
+        Settings_Market_CleanupOldWindows();
         break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);   
