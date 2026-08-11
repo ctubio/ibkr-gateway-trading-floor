@@ -1046,7 +1046,13 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hWnd, &ps);
 
+    // Double-buffering: draw the entire header to a memory DC then blit once
     RECT rc; GetClientRect(hWnd, &rc);
+    HDC hdcOrig = hdc;
+    HDC hdcMem = CreateCompatibleDC(hdcOrig);
+    HBITMAP hbm = CreateCompatibleBitmap(hdcOrig, rc.right, HEADER_H);
+    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, hbm);
+    hdc = hdcMem; // redirect all subsequent drawing to the memory DC
     const bool     dark       = Settings_DarkMode();
     const COLORREF bgColor    = dark ? DM_BG   : GetSysColor(COLOR_BTNFACE);
     const COLORREF textColor  = dark ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
@@ -1061,7 +1067,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SetBkMode(hdc, TRANSPARENT);
 
     const TradingAPI::L1Book& L1 = state->l1Info;
-
+    // Update sparkline with latest price and draw it first so labels paint on top
+    if (L1.last > 0.0) state->sparkline.AddPrice(L1.last);
+    state->sparkline.Draw(hdc, rc, 390, HEADER_H - 2);
+    
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
 
     // ── Color helpers ─────────────────────────────────────────────────────────
@@ -1217,7 +1226,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     if (L1.last > 0.0) {
         chg    = L1.change();
         chgPct = L1.changePct();
-        state->sparkline.AddPrice(L1.last);
     }
 
     // Measure large last price
@@ -1275,9 +1283,13 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SelectObject(hdc, hOldPen);
     DeleteObject(hSepPen);
 
-    // ── Sparkline ──────────────────────────────────────────────────────
-    // Draw the sparkline stretched across the RECT
-    state->sparkline.Draw(hdc, rc, 390, HEADER_H - 2);
+    // Blit the composed header to the window in a single operation
+    BitBlt(hdcOrig, 0, 0, rc.right, HEADER_H, hdc, 0, 0, SRCCOPY);
+
+    // Cleanup memory DC
+    SelectObject(hdcMem, hbmOld);
+    DeleteObject(hbm);
+    DeleteDC(hdcMem);
 
     EndPaint(hWnd, &ps);
 }
