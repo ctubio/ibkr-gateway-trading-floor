@@ -901,10 +901,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (hCoin_USD)         SetWindowTextA(hCoin_USD,         "--");
             }
             break;
-        case WM_API_SOUND: {
-            PlaySound_Async((int)lParam);
-            break;
-        }
+            
         case WM_API_LOG: {
             std::string* msg = (std::string*)lParam;
             LogDebug(msg->c_str());

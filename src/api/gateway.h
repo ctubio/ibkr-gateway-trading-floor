@@ -58,19 +58,18 @@
 #define WM_API_LOG          (WM_USER +  4)
 #define WM_ACCOUNT_SUMMARY  (WM_USER +  5)
 #define WM_PNL_UPDATE       (WM_USER +  6)
-#define WM_API_SOUND        (WM_USER +  7)
-#define WM_DIAMONDS_UPDATE  (WM_USER +  8)
-#define WM_MARKET_TICK      (WM_USER +  9)
-#define WM_MARKET_L1        (WM_USER + 10)
-#define WM_MARKET_L2        (WM_USER + 11)   // Level 2 depth change — handler calls getLevel2Snapshot()
-#define WM_PNL_SINGLE       (WM_USER + 12)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
-#define WM_API_EXECUTION    (WM_USER + 14)
-#define WM_FX_RATE_UPDATE   (WM_USER + 15)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
-#define WM_API_UNSENT_ORDER (WM_USER + 16)   // Posted to the Orders window for an untransmitted (transmit=false)
+#define WM_DIAMONDS_UPDATE  (WM_USER +  7)
+#define WM_MARKET_TICK      (WM_USER +  8)
+#define WM_MARKET_L1        (WM_USER +  9)
+#define WM_MARKET_L2        (WM_USER + 10)   // Level 2 depth change — handler calls getLevel2Snapshot()
+#define WM_PNL_SINGLE       (WM_USER + 11)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
+#define WM_API_EXECUTION    (WM_USER + 12)
+#define WM_FX_RATE_UPDATE   (WM_USER + 13)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
+#define WM_API_UNSENT_ORDER (WM_USER + 14)   // Posted to the Orders window for an untransmitted (transmit=false)
                                               // order. lParam = heap-allocated TradingAPI::OrderInfo* — handler
                                               // owns it and must delete it. Purely cosmetic: never written to
                                               // ordersMap, so it's naturally cleared on the next Orders_Repopulate().
-#define WM_OPEN_ORDERS_WINDOW (WM_USER + 17) // Posted from background thread (e.g. HTTP server) to the
+#define WM_OPEN_ORDERS_WINDOW (WM_USER + 15) // Posted from background thread (e.g. HTTP server) to the
                                               // Dashboard window to request opening the Orders window on the UI thread.
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard" GATEWAY_NAME;
