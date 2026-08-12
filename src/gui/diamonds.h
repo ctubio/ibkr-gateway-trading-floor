@@ -97,6 +97,11 @@ struct DiamondRowCache {
     std::string symbol;
     double sortValues[DCOL_COUNT] = {0.0};  // Raw doubles for fast sorting
     std::string textCols[DCOL_COUNT];       // Pre-formatted strings for instant UI painting
+
+    // Day high/low — used only to color DCOL_LAST based on where `last` sits
+    // within today's range (see WM_NOTIFY / NM_CUSTOMDRAW).
+    double dayHigh = 0.0;
+    double dayLow = 0.0;
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
@@ -508,9 +513,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             setNA(col);
         }
     };
-    setWeekChangePct(DCOL_CHG13WEEK, closeAgo13Week);
-    setWeekChangePct(DCOL_CHG26WEEK, closeAgo26Week);
-    setWeekChangePct(DCOL_CHG52WEEK, closeAgo52Week);
+    // Day high/low, used by the Last column's custom-draw color (see WM_NOTIFY/NM_CUSTOMDRAW).
+    row.dayHigh = t.high;
+    row.dayLow = t.low;
 
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
@@ -1049,7 +1054,26 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_LAST || cd->iSubItem == DCOL_BID) {
+                    if (cd->iSubItem == DCOL_LAST) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        const auto& cacheRow = g_DiamondDataCache[conId];
+                        double last = cacheRow.sortValues[DCOL_LAST];
+                        double high = cacheRow.dayHigh;
+                        double low = cacheRow.dayLow;
+
+                        if (last > 0.0 && high > 0.0 && low > 0.0 && high > low) {
+                            double pct = (last - low) / (high - low) * 100.0; // 0% at low, 100% at high
+                            if (pct <= 25.0) cd->clrText = COINS_CLR_RED;
+                            else if (pct >= 75.0) cd->clrText = COINS_CLR_GREEN;
+                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                        } else {
+                            cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                        }
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_BID) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         const std::string& textValB = g_DiamondDataCache[conId].textCols[DCOL_BIDSIZE];
@@ -1057,7 +1081,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (!textValB.empty() && !textValA.empty()) {
                             double valB = atof(textValB.c_str());
                             double valA = atof(textValA.c_str());
-                            if      (valA > valB) cd->clrText = COINS_CLR_RED;
+                            if (valA > valB) cd->clrText = COINS_CLR_RED;
                             else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
                             else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
