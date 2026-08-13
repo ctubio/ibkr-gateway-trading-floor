@@ -103,6 +103,7 @@ struct DiamondRowCache {
     double dayHigh = 0.0;
     double dayLow = 0.0;
     double prevClose = 0.0;
+    bool halted = false;
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
@@ -518,6 +519,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.dayHigh = t.high;
     row.dayLow = t.low;
     row.prevClose = t.prevClose;
+    row.halted = t.halted;
 
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
@@ -1039,7 +1041,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
-                        cd->clrText = COINS_CLR_BLUE;
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        bool halted = g_DiamondDataCache[conId].halted;
+                        cd->clrText = halted ? COINS_CLR_ORANGE : COINS_CLR_BLUE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
                         return CDRF_NEWFONT;
