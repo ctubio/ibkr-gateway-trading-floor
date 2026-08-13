@@ -608,16 +608,16 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (hdr->code == LVN_KEYDOWN) {
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
                 if (kd->wVKey == VK_ESCAPE) {
-                    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                    int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
-                    if (sel >= 0) {
-                        LVITEMA lvi = {};
-                        lvi.mask  = LVIF_PARAM;
-                        lvi.iItem = sel;
-                        if (ListView_GetItem(hList, &lvi)) {
-                            api().cancelOrder((int)lvi.lParam);
-                            Orders_HideInlinePanel(hWnd);
+                    if (s_editState.panelVisible && s_editState.orderId != 0) {
+                        // Unsent placeholder never reached TWS — nothing to cancel there.
+                        if (s_editState.isUnsent) {
+                            HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+                            int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
+                            if (sel >= 0) ListView_DeleteItem(hList, sel);
+                        } else {
+                            api().cancelOrder(s_editState.orderId);
                         }
+                        Orders_HideInlinePanel(hWnd);
                     }
                 }
                 return 0;
