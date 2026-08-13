@@ -1065,13 +1065,17 @@ static std::string HandlePostTrade(const std::string& body) {
             "{\"error\":\"quantity and price and stopPrice must be numeric\"}");
     }
 
-    if (quantity <= 0.0 || price <= 0.0 || stopPrice <= 0.0) {
+    if (quantity <= 0.0 || price <= 0.0) {
         return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"quantity and price and stopPrice must be positive\"}");
+            "{\"error\":\"quantity and price must be positive\"}");
     }
     if (quantity > 10.0) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"quantity must be less than 10\"}");
+    }
+    if (stopPrice <= 0.0 && side == "BUY") {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"stopPrice must be positive for BUY orders\"}");
     }
 
     double profitPrice = 0.0;
@@ -1082,24 +1086,28 @@ static std::string HandlePostTrade(const std::string& body) {
     }
 
     // BUY: stop-loss must sit below entry price
-    if (side == "BUY" && stopPrice >= price) {
-        return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"stopPrice must be lower than price for BUY orders\"}");
-    }
-    // SELL: stop-loss must sit above entry price
-    if (side == "SELL" && stopPrice <= price) {
-        return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"stopPrice must be higher than price for SELL orders\"}");
+    if (stopPrice > 0.0) {
+        if (side == "BUY" && stopPrice >= price) {
+            return MakeHttpResponse(400, "Bad Request",
+                "{\"error\":\"stopPrice must be lower than price for BUY orders\"}");
+        }
+        // SELL: stop-loss must sit above entry price
+        if (side == "SELL" && stopPrice <= price) {
+            return MakeHttpResponse(400, "Bad Request",
+                "{\"error\":\"stopPrice must be higher than price for SELL orders\"}");
+        }
     }
     // BUY: take-profit must sit above entry price
-    if (profitPrice > 0.0 && side == "BUY" && profitPrice <= price) {
-        return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"profitPrice must be higher than price for BUY orders\"}");
-    }
-    // SELL: take-profit must sit below entry price
-    if (profitPrice > 0.0 && side == "SELL" && profitPrice >= price) {
-        return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"profitPrice must be lower than price for SELL orders\"}");
+    if (profitPrice > 0.0) {
+        if (side == "BUY" && profitPrice <= price) {
+            return MakeHttpResponse(400, "Bad Request",
+                "{\"error\":\"profitPrice must be higher than price for BUY orders\"}");
+        }
+        // SELL: take-profit must sit below entry price
+        if (side == "SELL" && profitPrice >= price) {
+            return MakeHttpResponse(400, "Bad Request",
+                "{\"error\":\"profitPrice must be lower than price for SELL orders\"}");
+        }
     }
 
     // ── Look up conId from live portfolio ─────────────────────────────────────
