@@ -1056,15 +1056,21 @@ static std::string HandlePostTrade(const std::string& body) {
     double quantity = 0.0;
     double price    = 0.0;
     double stopPrice = 0.0;
+    
     try {
         quantity = std::stod(qtyStr);
         price    = std::stod(prxStr);
-        stopPrice = std::max(0.0, std::stod(stpStr));
     } catch (...) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"quantity and price and stopPrice must be numeric\"}");
     }
 
+    try {
+        stopPrice = std::max(0.0, std::stod(stpStr));
+    } catch (...) {
+        stopPrice = 0.0;
+    }
+    
     if (quantity <= 0.0 || price <= 0.0) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"quantity and price must be positive\"}");
