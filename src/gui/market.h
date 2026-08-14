@@ -1,7 +1,7 @@
 #pragma once
 
 int windowMarketWidth = 690;
-int windowMarketHeight = 500;
+int windowMarketHeight = 520;
 
 void StartMarketSearch(); // Forward declaration
 void StartMarket(const std::string& symbol = "", int conId = 0);
