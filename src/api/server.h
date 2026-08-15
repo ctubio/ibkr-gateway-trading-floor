@@ -707,11 +707,22 @@ static std::string News_RemoveClickToWatch(const std::string& text) {
 }
 
 // ── remove_inline_sources() ───────────────────────────────────────────────────
+// Every citation on the site is rendered as a separate <a> link, so once tags
+// are stripped each source name lands on its own text line, joined to its
+// neighbours by a literal ";" line wherever the page shows "A; B; C" between
+// links (e.g. "AP" / ";" / "WSJ" / ";" / "Barron's"). That lone-";" line
+// never occurs in ordinary prose, so rather than whitelisting every outlet
+// name (the previous approach — it broke the moment an un-listed source, e.g.
+// "AP", "MarketBeat", "TradingView premarket screen", "NYSE trading
+// calendar", showed up and leaked straight through, along with everything
+// after it), detect and drop the whole contiguous NAME/";"/NAME/";"/... run,
+// from the name right before the first ";" to the name right after the last
+// ";". This also catches the unlabelled reference list beehiiv appends after
+// "AFTER HOURS:" in Earnings Today, which has the identical NAME/";" shape
+// but no "Sources:" label at all. A bare "Sources:"/"Source:" label (with or
+// without a following ";"-joined run) is always dropped too, along with the
+// single citation immediately after it.
 static std::string News_RemoveInlineSources(const std::string& text) {
-    static const std::regex sourcesLineRe(R"(^Sources?:$)", std::regex::icase);
-    static const std::regex sourceNameRe(
-        R"(^(WSJ|Barron|MarketWatch|FT|IBD|Caterpillar IR|onsemi IR|BP 6-K|HSBC IR|Kiplinger earnings|StockMarketWatch|Investors\.|AP Hormuz))");
-
     std::vector<std::string> lines;
     {
         std::istringstream ss(text);
@@ -719,27 +730,57 @@ static std::string News_RemoveInlineSources(const std::string& text) {
         while (std::getline(ss, line)) lines.push_back(line);
     }
 
-    std::vector<std::string> output;
-    bool skipNext = false;
-    for (const auto& line : lines) {
-        size_t b = line.find_first_not_of(" \t\r\n");
-        size_t e = line.find_last_not_of(" \t\r\n");
-        std::string stripped = (b == std::string::npos) ? "" : line.substr(b, e - b + 1);
+    auto strip = [](const std::string& s) -> std::string {
+        size_t b = s.find_first_not_of(" \t\r\n");
+        size_t e = s.find_last_not_of(" \t\r\n");
+        return (b == std::string::npos) ? std::string() : s.substr(b, e - b + 1);
+    };
 
-        if (std::regex_search(stripped, sourcesLineRe)) { skipNext = true; continue; }
+    size_t n = lines.size();
+    std::vector<bool> drop(n, false);
+    static const std::regex sourcesLabelRe(R"(^Sources?:$)", std::regex::icase);
 
-        if (skipNext) {
-            bool endsWithSemi = !stripped.empty() && stripped.back() == ';';
-            if (endsWithSemi || std::regex_search(stripped, sourceNameRe)) continue;
-            skipNext = false;
+    for (size_t i = 0; i < n; ++i) {
+        std::string cur = strip(lines[i]);
+
+        if (std::regex_match(cur, sourcesLabelRe)) {
+            drop[i] = true;
+            if (i + 1 < n && !strip(lines[i + 1]).empty()) drop[i + 1] = true; // bare single source
+            continue;
         }
-        if (stripped == "Source") continue;
 
-        output.push_back(line);
+        if (cur != ";" || drop[i]) continue;
+
+        // Walk left absorbing NAME/";" pairs.
+        size_t first = i;
+        while (first > 0) {
+            std::string prev = strip(lines[first - 1]);
+            if (prev.empty() || prev == ";") break;
+            --first;
+            if (first > 0 && strip(lines[first - 1]) == ";") { --first; continue; }
+            break;
+        }
+        // Walk right absorbing NAME/";" pairs.
+        size_t last = i;
+        while (last + 1 < n) {
+            std::string next = strip(lines[last + 1]);
+            if (next.empty() || next == ";") break;
+            ++last;
+            if (last + 1 < n && strip(lines[last + 1]) == ";") { ++last; continue; }
+            break;
+        }
+
+        for (size_t k = first; k <= last; ++k) drop[k] = true;
+        if (first > 0 && std::regex_match(strip(lines[first - 1]), sourcesLabelRe))
+            drop[first - 1] = true;
     }
 
+    std::vector<std::string> output;
+    for (size_t i = 0; i < n; ++i)
+        if (!drop[i]) output.push_back(lines[i]);
+
     std::string result;
-    for (size_t i = 0; i < output.size(); ++i) { if (i) result += "\n"; result += output[i]; }
+    for (size_t idx = 0; idx < output.size(); ++idx) { if (idx) result += "\n"; result += output[idx]; }
     return result;
 }
 
