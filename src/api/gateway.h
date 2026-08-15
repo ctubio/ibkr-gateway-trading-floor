@@ -333,7 +333,7 @@ public:
         // until the async TWS response completes or timeoutMs elapses. Returns
         // formatted rows "Date,Open,High,Low,Close,Wap,Volume,TradesCount", one
         // per daily bar; empty on failure/timeout/symbol-not-a-position.
-    std::vector<std::string> getHistoricalDataSync(const std::string& symbol, int timeoutMs = 15000);
+    std::vector<std::string> getHistoricalDataSync(const std::string& symbol, bool isYear, int timeoutMs = 15000);
 
 private:
     struct Impl;

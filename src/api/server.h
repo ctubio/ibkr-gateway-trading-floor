@@ -156,15 +156,15 @@ static std::string MakeMethodNotAllowed() {
 
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
 
-// GET /history/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
+// GET /chart/year/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
 // current portfolio position. Blocks this connection's server thread (never
 // the UI thread) until the async TWS response arrives or times out.
-static std::string HandleGetHistory(const std::string& symbol) {
-    auto rows = api().getHistoricalDataSync(symbol);
+static std::string HandleGetHistory(const std::string& symbol, bool isYear) {
+    auto rows = api().getHistoricalDataSync(symbol, isYear);
     if (rows.empty()) {
         return MakeNotFound(
             "{\"error\":\"no historical data available (symbol must be a current "
-            "portfolio position, and the request may have timed out)\"}");
+            "portfolio position, or the request may have timed out)\"}");
     }
     std::string body = "Date,Open,High,Low,Close,Wap,Volume,TradesCount\n";
     for (const auto& row : rows) { body += row; body += "\n"; }
@@ -1231,21 +1231,28 @@ static std::string RouteRequest(const std::string& rawRequest) {
         }
     }
     
-    // Route: GET /history/{SYMBOL}
-    const std::string historyPrefix = "/history/";
-    if (path.size() > historyPrefix.size() && path.substr(0, historyPrefix.size()) == historyPrefix) {
-        std::string symbol = path.substr(historyPrefix.size());
+    // Route: GET /chart/year//{SYMBOL}
+    const std::string chartYearPrefix = "/chart/year/";
+    if (path.size() > chartYearPrefix.size() && path.substr(0, chartYearPrefix.size()) == chartYearPrefix) {
+        std::string symbol = path.substr(chartYearPrefix.size());
         while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
-        if (!symbol.empty()) return HandleGetHistory(symbol);
+        if (!symbol.empty()) return HandleGetHistory(symbol, true);
     }
 
-    // Route: GET /today
-    if (path == "/today" || path == "/today/") {
+    const std::string chartDayPrefix = "/chart/day/";
+    if (path.size() > chartDayPrefix.size() && path.substr(0, chartDayPrefix.size()) == chartDayPrefix) {
+        std::string symbol = path.substr(chartDayPrefix.size());
+        while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
+        if (!symbol.empty()) return HandleGetHistory(symbol, false);
+    }
+
+    // Route: GET /news/today
+    if (path == "/news/today" || path == "/news/today/") {
         return MakePlainText(HandleGetNews(1));
     }
 
-    // Route: GET /week
-    if (path == "/week" || path == "/week/") {
+    // Route: GET /news/week
+    if (path == "/news/week" || path == "/news/week/") {
         return MakePlainText(HandleGetNews(5));
     }
 
