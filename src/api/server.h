@@ -788,6 +788,37 @@ static std::string News_RemoveAttributionFooters(const std::string& text) {
     return result;
 }
 
+// ── Site-chrome trimming (nav / title / byline / footer boilerplate) ────────
+// beehiiv's post template can (and, as of ~Aug 13 2026, did) change so the
+// "content" div located by HtmlLocateArticleBody() ends up wrapping more than
+// just the article — the top nav, Login/Subscribe bar, breadcrumbs, post
+// title + author byline + share icons, and any sponsor block preceding it,
+// plus the "TraderTV Live Morning Research Note" sign-off, logo, copyright,
+// and policy/beehiiv links trailing it. Chasing the exact CSS class after
+// every template tweak is fragile, so instead trim on the two literal
+// markers that are stable across every daily post regardless of surrounding
+// markup: real content always opens with the "Morning Market Setup" heading
+// and always ends right before the "TraderTV Live Morning Research Note"
+// sign-off line. If a marker isn't found (e.g. a future rename), that half
+// is left untouched rather than guessed at.
+static std::string News_TrimSiteChrome(const std::string& text) {
+    std::string result = text;
+
+    static const char* kBodyStartMarker = "Morning Market Setup";
+    size_t startPos = result.find(kBodyStartMarker);
+    if (startPos != std::string::npos) {
+        result.erase(0, startPos);
+    }
+
+    static const char* kFooterStartMarker = "TraderTV Live Morning Research Note";
+    size_t footerPos = result.find(kFooterStartMarker);
+    if (footerPos != std::string::npos) {
+        result.erase(footerPos);
+    }
+
+    return result;
+}
+
 // ── clean_whitespace() ────────────────────────────────────────────────────────
 static std::string News_CleanWhitespace(const std::string& text) {
     static const std::regex manyNewlines(R"(\n{3,})");
@@ -842,6 +873,7 @@ static std::string News_FetchContent(const std::string& url, int day, int month,
     articleHtml = HtmlFormatMarketCells(articleHtml);
     std::string text = HtmlExtractTextWithSectionBreaks(articleHtml);
 
+    text = News_TrimSiteChrome(text); // strip nav/title/byline + footer chrome
     text = News_RemoveClickToWatch(text);
     text = News_RemoveInlineSources(text);
     text = News_RemoveAttributionFooters(text);
@@ -918,7 +950,13 @@ static std::string HandleGetNews(int numDays) {
                 if (numDays != 1) body += std::string(60, '=') + "\n\n";
                 continue;
             }
-            News_SaveCache(dateKey, content);
+            // Guard against permanently caching a fetch that still carries
+    // site chrome the trim markers didn't catch (e.g. yet another
+    // template change) — better to re-fetch next call than freeze
+    // bad content in the registry for up to 7 days.
+    bool looksClean = content.find("Powered by beehiiv") == std::string::npos &&
+                      content.find("TraderTV Live Morning Research Note") == std::string::npos;
+    if (looksClean) News_SaveCache(dateKey, content);
         } else {
             // body += "\n[Using cached data for " + News_FormatHeader(st) + "]\n";
         }
