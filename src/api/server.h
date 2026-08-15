@@ -159,8 +159,8 @@ static std::string MakeMethodNotAllowed() {
 // GET /chart/year/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
 // current portfolio position. Blocks this connection's server thread (never
 // the UI thread) until the async TWS response arrives or times out.
-static std::string HandleGetHistory(const std::string& symbol, bool isYear) {
-    auto rows = api().getHistoricalDataSync(symbol, isYear);
+static std::string HandleGetHistory(const std::string& symbol, const std::string& timeframe) {
+    auto rows = api().getHistoricalDataSync(symbol, timeframe);
     if (rows.empty()) {
         return MakeNotFound(
             "{\"error\":\"no historical data available (symbol must be a current "
@@ -1236,14 +1236,28 @@ static std::string RouteRequest(const std::string& rawRequest) {
     if (path.size() > chartYearPrefix.size() && path.substr(0, chartYearPrefix.size()) == chartYearPrefix) {
         std::string symbol = path.substr(chartYearPrefix.size());
         while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
-        if (!symbol.empty()) return HandleGetHistory(symbol, true);
+        if (!symbol.empty()) return HandleGetHistory(symbol, "1 Y");
+    }
+
+    const std::string chartMonthPrefix = "/chart/month/";
+    if (path.size() > chartMonthPrefix.size() && path.substr(0, chartMonthPrefix.size()) == chartMonthPrefix) {
+        std::string symbol = path.substr(chartMonthPrefix.size());
+        while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
+        if (!symbol.empty()) return HandleGetHistory(symbol, "1 M");
+    }
+
+    const std::string chartWeekPrefix = "/chart/week/";
+    if (path.size() > chartWeekPrefix.size() && path.substr(0, chartWeekPrefix.size()) == chartWeekPrefix) {
+        std::string symbol = path.substr(chartWeekPrefix.size());
+        while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
+        if (!symbol.empty()) return HandleGetHistory(symbol, "1 W");
     }
 
     const std::string chartDayPrefix = "/chart/day/";
     if (path.size() > chartDayPrefix.size() && path.substr(0, chartDayPrefix.size()) == chartDayPrefix) {
         std::string symbol = path.substr(chartDayPrefix.size());
         while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
-        if (!symbol.empty()) return HandleGetHistory(symbol, false);
+        if (!symbol.empty()) return HandleGetHistory(symbol, "1 D");
     }
 
     // Route: GET /news/today
