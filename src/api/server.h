@@ -156,10 +156,10 @@ static std::string MakeMethodNotAllowed() {
 
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
 
-// GET /historical/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
+// GET /history/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
 // current portfolio position. Blocks this connection's server thread (never
 // the UI thread) until the async TWS response arrives or times out.
-static std::string HandleGetHistorical(const std::string& symbol) {
+static std::string HandleGetHistory(const std::string& symbol) {
     auto rows = api().getHistoricalDataSync(symbol);
     if (rows.empty()) {
         return MakeNotFound(
@@ -1231,12 +1231,12 @@ static std::string RouteRequest(const std::string& rawRequest) {
         }
     }
     
-    // Route: GET /historical/{SYMBOL}
-    const std::string historicalPrefix = "/historical/";
-    if (path.size() > historicalPrefix.size() && path.substr(0, historicalPrefix.size()) == historicalPrefix) {
-        std::string symbol = path.substr(historicalPrefix.size());
+    // Route: GET /history/{SYMBOL}
+    const std::string historyPrefix = "/history/";
+    if (path.size() > historyPrefix.size() && path.substr(0, historyPrefix.size()) == historyPrefix) {
+        std::string symbol = path.substr(historyPrefix.size());
         while (!symbol.empty() && symbol.back() == '/') symbol.pop_back();
-        if (!symbol.empty()) return HandleGetHistorical(symbol);
+        if (!symbol.empty()) return HandleGetHistory(symbol);
     }
 
     // Route: GET /today
