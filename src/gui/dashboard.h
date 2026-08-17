@@ -49,7 +49,6 @@ static const int LINKS_COUNT = (int)(sizeof(g_QuickLinks) / sizeof(g_QuickLinks[
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 static HFONT hFontCoins_NetLiq  = NULL;
 static HFONT hFontCoins_BigPnL  = NULL;
-static HFONT hFontCoins_Pct     = NULL;
 static HFONT hFontCoins_Label   = NULL;
 static HFONT hFontCoins_Value   = NULL;
 static HFONT hFontCoins_Icons   = NULL;   // Segoe MDL2 Assets for speaker glyph
@@ -330,7 +329,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = FormatWithCommas(netLiq);
         SetWindowTextA(hCoin_NetLiq, formattedNum.c_str());
         int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
-        SetWindowPos(hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_NetLiq, NULL, TRUE);
     }
 
@@ -363,7 +362,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = FormatWithCommas(grossPos);
         SetWindowTextA(hCoin_Positions, formattedNum.c_str());
         int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
-        SetWindowPos(hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_Positions, NULL, TRUE);
     }
     if (hCoin_Unrealized) {
@@ -406,7 +405,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         SetWindowTextA(hCoin_Cash, formattedNum.c_str());
         SetCtrlColor(hCoin_Cash, clr);
         int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
-        SetWindowPos(hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_Cash, NULL, TRUE);
     }
     if (hCoin_EUR) {
@@ -620,7 +619,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             hFontCoins_NetLiq  = MakeFont(14, true);
             hFontCoins_BigPnL  = MakeFont(21, true);
-            hFontCoins_Pct     = MakeFont(12, true);
             hFontCoins_Value   = MakeFont(12, true);
             hFontCoins_Label   = MakeFont(11, false);
             hFontCoins_Icons   = Coins_MakeMDL2Font(11);
@@ -676,7 +674,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoin_Pct = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 70, y1 + 48, boxW - 82, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
-            SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFontCoins_Pct, TRUE);
+            SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
             SetCtrlColor(hCoin_Pct, COINS_CLR_GREEN);
 
             // Row 3: Realized: 0.00
@@ -1198,7 +1196,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Free fonts
             if (hFontCoins_NetLiq)  { DeleteObject(hFontCoins_NetLiq);  hFontCoins_NetLiq  = NULL; }
             if (hFontCoins_BigPnL)  { DeleteObject(hFontCoins_BigPnL);  hFontCoins_BigPnL  = NULL; }
-            if (hFontCoins_Pct)     { DeleteObject(hFontCoins_Pct);     hFontCoins_Pct     = NULL; }
             if (hFontCoins_Label)   { DeleteObject(hFontCoins_Label);   hFontCoins_Label   = NULL; }
             if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
             if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons);   hFontCoins_Icons   = NULL; }
