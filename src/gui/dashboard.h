@@ -52,6 +52,7 @@ static HFONT hFontCoins_BigPnL  = NULL;
 static HFONT hFontCoins_Label   = NULL;
 static HFONT hFontCoins_Value   = NULL;
 static HFONT hFontCoins_Icons   = NULL;   // Segoe MDL2 Assets for speaker glyph
+static bool showDecimals = true;
 
 void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
@@ -326,7 +327,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     int y3 = y2 + box2H + 9;
 
     if (hCoin_NetLiq) {
-        std::string formattedNum = FormatWithCommas(netLiq);
+        std::string formattedNum = FormatWithCommas(netLiq, showDecimals);
         SetWindowTextA(hCoin_NetLiq, formattedNum.c_str());
         int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
         SetWindowPos(hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -359,14 +360,14 @@ void Coins_UpdateLabels(HWND hWnd) {
 
     if (hCoin_Positions) {
         double grossPos = tryParse("GrossPositionValue");
-        std::string formattedNum = FormatWithCommas(grossPos);
+        std::string formattedNum = FormatWithCommas(grossPos, showDecimals);
         SetWindowTextA(hCoin_Positions, formattedNum.c_str());
         int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
         SetWindowPos(hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_Positions, NULL, TRUE);
     }
     if (hCoin_Unrealized) {
-        std::string formattedNum = FormatWithCommas(unrealized);
+        std::string formattedNum = FormatWithCommas(unrealized, showDecimals);
         COLORREF clr = unrealized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
         SetWindowTextA(hCoin_Unrealized, formattedNum.c_str());
         SetCtrlColor(hCoin_Unrealized, clr);
@@ -389,18 +390,18 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     if (hCoin_BuyingPower) {
         double bp = tryParse("BuyingPower");
-        std::string formattedNum = FormatWithCommas(bp);
+        std::string formattedNum = FormatWithCommas(bp, showDecimals);
         SetWindowTextA(hCoin_BuyingPower, formattedNum.c_str());
     }
     if (hCoin_MaintMargin) {
         double mm = tryParse("MaintMarginReq");
-        std::string formattedNum = FormatWithCommas(mm);
+        std::string formattedNum = FormatWithCommas(mm, showDecimals);
         SetWindowTextA(hCoin_MaintMargin, formattedNum.c_str());
     }
 
     if (hCoin_Cash) {
         double cash = tryParse("CashBalance");
-        std::string formattedNum = FormatWithCommas(cash) + " " + currency;
+        std::string formattedNum = FormatWithCommas(cash, showDecimals) + " " + currency;
         COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : COLOR_THEME);
         SetWindowTextA(hCoin_Cash, formattedNum.c_str());
         SetCtrlColor(hCoin_Cash, clr);
@@ -410,7 +411,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     if (hCoin_EUR) {
         double eur = tryParse("EUR_CashBalance");
-        std::string formattedNum = FormatWithCommas(eur);
+        std::string formattedNum = FormatWithCommas(eur, showDecimals);
         COLORREF clr = eur > 0.0 ? COINS_CLR_GREEN : (eur < 0.0 ? COINS_CLR_RED : COLOR_THEME);
         SetWindowTextA(hCoin_EUR, formattedNum.c_str());
         SetCtrlColor(hCoin_EUR, clr);
@@ -418,7 +419,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     if (hCoin_USD) {
         double usd = tryParse("USD_CashBalance");
-        std::string formattedNum = FormatWithCommas(usd);
+        std::string formattedNum = FormatWithCommas(usd, showDecimals);
         COLORREF clr = usd > 0.0 ? COINS_CLR_GREEN : (usd < 0.0 ? COINS_CLR_RED : COLOR_THEME);
         SetWindowTextA(hCoin_USD, formattedNum.c_str());
         SetCtrlColor(hCoin_USD, clr);
@@ -852,6 +853,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
+                showDecimals = true;
             } else {
                 ShowWindow(hLblDividends, SW_HIDE);
                 ShowWindow(hLblAccruals, SW_HIDE);
@@ -869,6 +871,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SetWindowPos(hLblUSD, NULL, m + 12, y3 + 40 - 40, 35, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 SetWindowPos(hCoin_USD, NULL, m + 70, y3 + 40 - 40, boxW - 82, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 40 - 38, TRUE);
+                showDecimals = false;
+            }
+            if (api().isMarketDataConnected() && api().isTradingConnected()) {
+                Coins_UpdateLabels(hWnd);
             }
             break;
         }

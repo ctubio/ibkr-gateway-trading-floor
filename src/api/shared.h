@@ -526,9 +526,9 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
     return 0;
 }
 
-std::string FormatWithCommas(double value) {
+std::string FormatWithCommas(double value, bool showDecimals = true) {
     // Format to 2 decimal places first
-    std::string s = std::format("{:.2f}", value);
+    std::string s = showDecimals ? std::format("{:.2f}", value) : std::format("{:.0f}", value);
 
     // Find the decimal point
     int dotPos = s.find('.');
