@@ -1394,7 +1394,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         tsStates[hWnd] = state;
 
         // ── Header fonts ──────────────────────────────────────────────────────
-        state->hBigFont = MakeFont(16, true);
+        state->hBigFont = MakeFont(15, true);
         state->hExtraFont = MakeFont(21, true);
         state->hOrderFont = MakeFont(16, true);
         state->hStatusFont = MakeFont(11, true);
