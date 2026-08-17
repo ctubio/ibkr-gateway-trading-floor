@@ -218,7 +218,16 @@ HFONT CreateBoldFont(HFONT hNormalFont) {
     return CreateFontIndirectA(&lf);
 }
 
-static HFONT MakeFont(int ptSize, bool bold) {
+static HFONT Coins_MakeMDL2Font(int ptSize) {
+    HDC hdc = GetDC(NULL);
+    int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+    return CreateFontW(h, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
+}
+
+static HFONT MakeFont(int ptSize, bool bold, const char* family = "Proxima Nova") {
     HDC hdc = GetDC(NULL);
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
     ReleaseDC(NULL, hdc);
@@ -226,7 +235,7 @@ static HFONT MakeFont(int ptSize, bool bold) {
         bold ? FW_BOLD : FW_NORMAL,
         FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, "Proxima Nova");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, family);
 }
 
 BOOL CALLBACK SetFontCallback(HWND hwndChild, LPARAM lParam) {
@@ -235,19 +244,12 @@ BOOL CALLBACK SetFontCallback(HWND hwndChild, LPARAM lParam) {
     return TRUE;
 }
 
-static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize, std::string fontFamily = "Proxima Nova") { //"Segoe UI"
+static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize) { //"Segoe UI"
     if (hFont) {
         DeleteObject(hFont);
     }
 
-    // Calculate the correct height based on the device context
-    HDC hdc = GetDC(hList);
-    int fontHeight = -MulDiv(fontSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-    ReleaseDC(hList, hdc);
-
-    hFont = CreateFontA(fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, 
-        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, fontFamily.c_str());
+    hFont = MakeFont(fontSize, false);
     
     if (hBoldFont) {
         DeleteObject(hBoldFont);

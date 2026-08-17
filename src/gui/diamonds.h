@@ -669,12 +669,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
-        HDC hdc = GetDC(NULL);
-        int h = -MulDiv(std::max(6, DiamondsFontData.fontSize - 3), GetDeviceCaps(hdc, LOGPIXELSY), 72);
-        ReleaseDC(NULL, hdc);
-        DiamondsSmallFont = CreateFontA(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+        DiamondsSmallFont = MakeFont(std::max(6, DiamondsFontData.fontSize - 3), false);
         
         LVCOLUMNA lvc = {};
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;

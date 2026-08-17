@@ -81,7 +81,6 @@ struct TsState {
     HFONT hExtraFont     = NULL;   // ~26pt bold — large last price
     HFONT hStatusFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
     HFONT hStatusNormalFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
-    HFONT hValuesFont      = NULL;   // ~16pt regular — change / bid-ask labels / stats
     HFONT hOrderFont       = NULL;   // ~20pt bold — order entry controls
     HFONT hSpeakerFont = NULL;   // Segoe MDL2 Assets — speaker glyph
 
@@ -1099,7 +1098,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT pr = { RB_X + RB_LABEL_W, 1, RB_X + RB_LABEL_W + RB_PRICE_W, rowH };
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hValuesFont);
+        SelectObject(hdc, state->hStatusFont);
         std::string askSzStr = std::format(" x {}", Market_FmtQty(L1.askSize));
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
         DrawTextA(hdc, askSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1117,7 +1116,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT pr = { RB_X + RB_LABEL_W, rowH, RB_X + RB_LABEL_W + RB_PRICE_W, HEADER_H - 1 };
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hValuesFont);
+        SelectObject(hdc, state->hStatusFont);
         std::string bidSzStr = std::format(" x {}", Market_FmtQty(L1.bidSize));
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
         DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1396,27 +1395,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         tsStates[hWnd] = state;
 
         // ── Header fonts ──────────────────────────────────────────────────────
-        state->hBigFont = CreateFontA(-22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hExtraFont = CreateFontA(-26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hOrderFont = CreateFontA(-20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hValuesFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hStatusFont = CreateFontA(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hStatusNormalFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
-        state->hSpeakerFont = CreateFontW(-14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
+        state->hBigFont = MakeFont(16, true);
+        state->hExtraFont = MakeFont(21, true);
+        state->hOrderFont = MakeFont(16, true);
+        state->hStatusFont = MakeFont(11, true);
+        state->hStatusNormalFont = MakeFont(12, false);
+        state->hSpeakerFont = Coins_MakeMDL2Font(11);
 
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hExecList    = Market_CreateExecList(hWnd, hInst);
@@ -1431,9 +1415,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SetWindowSubclass(state->hExecList,    Market_ListForwardCtrlProc, 14, 0);
 
         {
-            HFONT hListFont = CreateFontA(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Proxima Nova");
+            HFONT hListFont = MakeFont(11, false);
             SendMessage(state->hTsList,      WM_SETFONT, (WPARAM)hListFont, TRUE);
             SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hListFont, TRUE);
             SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hListFont, TRUE);
@@ -1533,7 +1515,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
         }
         if (state->hOrderRisk)
-            SendMessage(state->hOrderRisk, WM_SETFONT, (WPARAM)state->hValuesFont, TRUE);
+            SendMessage(state->hOrderRisk, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
 
         // Restore splitter + filter
         if (!state->symbol.empty()) {
@@ -1921,7 +1903,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hExtraFont) DeleteObject(state->hExtraFont);
             if (state->hStatusFont) DeleteObject(state->hStatusFont);
             if (state->hStatusNormalFont) DeleteObject(state->hStatusNormalFont);
-            if (state->hValuesFont) DeleteObject(state->hValuesFont);
             if (state->hOrderFont) DeleteObject(state->hOrderFont);
             if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
