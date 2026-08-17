@@ -82,7 +82,6 @@ struct TsState {
     HFONT hStatusFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
     HFONT hStatusNormalFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
     HFONT hOrderFont       = NULL;   // ~20pt bold — order entry controls
-    HFONT hSpeakerFont = NULL;   // Segoe MDL2 Assets — speaker glyph
 
     // ── TTS state ─────────────────────────────────────────────────────────────
     ISpVoice* hTtsVoice    = nullptr;
@@ -1400,7 +1399,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hOrderFont = MakeFont(16, true);
         state->hStatusFont = MakeFont(11, true);
         state->hStatusNormalFont = MakeFont(12, false);
-        state->hSpeakerFont = Coins_MakeMDL2Font(11);
 
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hExecList    = Market_CreateExecList(hWnd, hInst);
@@ -1431,7 +1429,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hOVNButton = CreateWindowW(L"STATIC", MOON_GLYPH,
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
             0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_OVERNIGHT, hInst, NULL);
-        SendMessage(state->hOVNButton, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
+        SendMessage(state->hOVNButton, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
         SetCtrlColor(state->hOVNButton, COINS_CLR_GRAY);
         {
             HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
@@ -1451,7 +1449,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hSpeakerBtn = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
             0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_SPEAKER, hInst, NULL);
-        SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)state->hSpeakerFont, TRUE);
+        SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
         SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
 
         // ── Order entry bar (hidden until Ctrl key pressed) ───────────────────
@@ -1904,7 +1902,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hStatusFont) DeleteObject(state->hStatusFont);
             if (state->hStatusNormalFont) DeleteObject(state->hStatusNormalFont);
             if (state->hOrderFont) DeleteObject(state->hOrderFont);
-            if (state->hSpeakerFont) DeleteObject(state->hSpeakerFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hOrderRisk = NULL;

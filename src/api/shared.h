@@ -227,6 +227,8 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 }
 
+static HFONT hFont_Icons = Coins_MakeMDL2Font(11);   // Segoe MDL2 Assets for speaker/moon/lock glyphs
+
 static HFONT MakeFont(int ptSize, bool bold, const char* family = "Proxima Nova") {
     HDC hdc = GetDC(NULL);
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);

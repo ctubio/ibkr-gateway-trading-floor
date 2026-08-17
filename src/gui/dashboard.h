@@ -51,7 +51,6 @@ static HFONT hFontCoins_NetLiq  = NULL;
 static HFONT hFontCoins_BigPnL  = NULL;
 static HFONT hFontCoins_Label   = NULL;
 static HFONT hFontCoins_Value   = NULL;
-static HFONT hFontCoins_Icons   = NULL;   // Segoe MDL2 Assets for speaker glyph
 static bool showDecimals = true;
 
 void MutexGatewayInstance() {
@@ -613,7 +612,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hFontCoins_BigPnL  = MakeFont(21, true);
             hFontCoins_Value   = MakeFont(12, true);
             hFontCoins_Label   = MakeFont(11, false);
-            hFontCoins_Icons   = Coins_MakeMDL2Font(11);
 
             const int m    = 10;
             const int boxW = 226;
@@ -635,7 +633,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + boxW - 25, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
-            SendMessage(hCoin_Lock, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
+            SendMessage(hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
             SetCtrlColor(hCoin_Lock, COINS_CLR_GRAY);
             ShowWindow(hCoin_Lock, SW_HIDE);
 
@@ -648,7 +646,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + 42, y1 + 24, 20, 20, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
-            SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFontCoins_Icons, TRUE);
+            SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
             SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
 
             hCoin_BigPnL = CreateWindowA("STATIC", "--",
@@ -1195,7 +1193,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (hFontCoins_BigPnL)  { DeleteObject(hFontCoins_BigPnL);  hFontCoins_BigPnL  = NULL; }
             if (hFontCoins_Label)   { DeleteObject(hFontCoins_Label);   hFontCoins_Label   = NULL; }
             if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
-            if (hFontCoins_Icons)   { DeleteObject(hFontCoins_Icons);   hFontCoins_Icons   = NULL; }
+            
+            if (hFont_Icons)   { DeleteObject(hFont_Icons);   hFont_Icons   = NULL; }
 
             hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
