@@ -218,21 +218,26 @@ private:
             outColor = Gdiplus::Color(255, grayC, grayC, grayC);
         }
     }
-    // NEW
-    bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice) const {
+
+    bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice, bool strict = true) const {
+        if (priceHistory.empty()) return false;
+
         ULONGLONG minMs = minutesAgo * 60000ULL;
-        if (now < minMs) return false;
-        ULONGLONG target = now - minMs;
-        if (priceHistory.empty() || priceHistory.front().date > target) return false;
+        
+        ULONGLONG target = (now > minMs) ? (now - minMs) : 0;
+
+        if (strict && (now < minMs || priceHistory.front().date > target)) return false;
 
         size_t bestIdx = 0;
         ULONGLONG bestDiff = (priceHistory[0].date > target)
             ? (priceHistory[0].date - target) : (target - priceHistory[0].date);
+        
         for (size_t i = 1; i < priceHistory.size(); ++i) {
             ULONGLONG diff = (priceHistory[i].date > target)
                 ? (priceHistory[i].date - target) : (target - priceHistory[i].date);
             if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
         }
+        
         outPrice = priceHistory[bestIdx].price;
         return true;
     }
@@ -347,6 +352,7 @@ public:
     // false if there isn't yet enough history reaching that far back (so
     // callers can show "--" until it's ready, same pattern as the dots).
     bool GetPriceMinutesAgo(int minutesAgo, double& outPrice) const {
-        return GetPriceAgo(GetTickCount64(), (ULONGLONG)minutesAgo, outPrice);
+        // Pass strict = false so the 5-minute column returns data immediately
+        return GetPriceAgo(GetTickCount64(), (ULONGLONG)minutesAgo, outPrice, false);
     }
 };
