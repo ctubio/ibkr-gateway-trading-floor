@@ -569,7 +569,7 @@ std::string formatVolume(long long volume) {
     auto formatScaled = [](double value, char suffix) -> std::string {
         char buf[32];
         // 1 decimal place, but drop it if it's a whole number (e.g. "5M" not "5.0M")
-        if (std::fabs(value - std::round(value)) < 0.05) {
+        if ((suffix == 'K' && value >= 1) || std::fabs(value - std::round(value)) < 0.05) {
             std::snprintf(buf, sizeof(buf), "%.0f%c", value, suffix);
         } else {
             std::snprintf(buf, sizeof(buf), "%.1f%c", value, suffix);
