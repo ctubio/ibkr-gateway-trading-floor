@@ -509,6 +509,11 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             setNA(col);
         }
     };
+
+    setWeekChangePct(DCOL_CHG13WEEK, closeAgo13Week);
+    setWeekChangePct(DCOL_CHG26WEEK, closeAgo26Week);
+    setWeekChangePct(DCOL_CHG52WEEK, closeAgo52Week);
+
     // Day high/low, used by the Last column's custom-draw color (see WM_NOTIFY/NM_CUSTOMDRAW).
     row.dayHigh = t.high;
     row.dayLow = t.low;
