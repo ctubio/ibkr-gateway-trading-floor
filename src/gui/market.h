@@ -893,11 +893,21 @@ struct VolRateResult {
     bool   ready     = false;
     double volRatio  = 0.0;   // recent shares/sec  ÷ baseline shares/sec
     double freqRatio = 0.0;   // recent prints/sec  ÷ baseline prints/sec
+    double vol5min   = 0.0;   // total shares traded in the trailing window currently held in
+                               // volHistory. volHistory is pruned elsewhere (WM_MARKET_TICK) to
+                               // only ever contain entries within VOL_RATE_BASELINE_MS (~5 min),
+                               // so this sum IS the trailing 5-minute volume — no new tracking
+                               // needed. Computed unconditionally (unlike volRatio/freqRatio
+                               // below): a partial sum during the first 5 min after a clear is
+                               // still a meaningful number, not a misleading ratio off a thin
+                               // denominator.
 };
 
 static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& hist, ULONGLONG trackingStart, ULONGLONG now) {
     VolRateResult r;
     if (hist.empty()) return r;
+
+    for (const auto& t : hist) r.vol5min += t.size;
 
     // Not enough history yet to trust a baseline — avoid a misleadingly huge
     // ratio off a thin denominator (mirrors Sparkline::GetPriceAgo's approach
@@ -1172,7 +1182,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "C:", Market_Fmt(L1.prevClose), closeColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
         { "W:", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor  },
-        { "", formatVolume(L1.volume),  COINS_CLR_BLUE  },
+        { "", formatVolume((long long)volRates.vol5min), COINS_CLR_BLUE  },  // was: formatVolume(L1.volume)
         { "", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
         { "", freqRateStr,          freqRateClr },   // Print-frequency rate: recent trades/sec ÷ baseline trades/sec
     };
