@@ -119,6 +119,8 @@ struct TsState {
 };
 static std::map<HWND, TsState*> tsStates;
 
+static std::string lastTime;
+
 static LRESULT CALLBACK Market_ListForwardCtrlProc(
     HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
@@ -552,6 +554,7 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     state->orderBarVisible = false;
     Market_Layout(hWnd, state);
 }
+
 // Subclass for the order-bar price and qty edit controls.
 // uIdSubclass == 1 → price (step 0.01, 2 dec)
 // uIdSubclass == 2 → qty   (step 1,    0 dec)
@@ -892,12 +895,11 @@ static std::string Market_FmtQty(double v) {
 struct VolRateResult {
     bool   ready     = false;
     double volRatio  = 0.0;   // recent shares/sec  ÷ baseline shares/sec
-    double freqRatio = 0.0;   // recent prints/sec  ÷ baseline prints/sec
     double vol5min   = 0.0;   // total shares traded in the trailing window currently held in
                                // volHistory. volHistory is pruned elsewhere (WM_MARKET_TICK) to
                                // only ever contain entries within VOL_RATE_BASELINE_MS (~5 min),
                                // so this sum IS the trailing 5-minute volume — no new tracking
-                               // needed. Computed unconditionally (unlike volRatio/freqRatio
+                               // needed. Computed unconditionally (unlike volRatio
                                // below): a partial sum during the first 5 min after a clear is
                                // still a meaningful number, not a misleading ratio off a thin
                                // denominator.
@@ -924,11 +926,10 @@ static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& 
 
     ULONGLONG recentCutoff = now - VOL_RATE_RECENT_MS;
     double recentVol = 0.0, baselineVol = 0.0;
-    int    recentCount = 0,  baselineCount = 0;
 
     for (const auto& t : hist) {
-        if (t.time >= recentCutoff) { recentVol += t.size; recentCount++; }
-        else                        { baselineVol += t.size; baselineCount++; }
+        if (t.time >= recentCutoff) { recentVol += t.size;  }
+        else                        { baselineVol += t.size; }
     }
 
     double recentSec   = VOL_RATE_RECENT_MS / 1000.0;
@@ -936,12 +937,9 @@ static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& 
 
     double recentVolRate    = recentVol    / recentSec;
     double baselineVolRate  = baselineVol  / baselineSec;
-    double recentFreqRate   = recentCount  / recentSec;
-    double baselineFreqRate = baselineCount / baselineSec;
 
     r.ready     = true;
     r.volRatio  = (baselineVolRate  > 0.0001) ? (recentVolRate  / baselineVolRate)  : (recentVolRate  > 0.0 ? 9.9 : 0.0);
-    r.freqRatio = (baselineFreqRate > 0.0001) ? (recentFreqRate / baselineFreqRate) : (recentFreqRate > 0.0 ? 9.9 : 0.0);
     return r;
 }
 
@@ -1166,41 +1164,30 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     VolRateResult volRates = Market_ComputeVolRates(state->volHistory, state->volTrackingStart, nowTick);
 
     auto rateColor = [&](double ratio) -> COLORREF {
-        if (ratio >= 3.0) return COINS_CLR_ORANGE;      // hot: 3x+ normal pace
-        if (ratio >= 1.5) return COINS_CLR_YELLOW;   // warming up
-        return textColor;                             // normal pace
+        if (ratio >= 3.0) return COINS_CLR_PINK;      // hot: 3x+ normal pace
+        if (ratio >= 1.5) return COINS_CLR_PURPLE;   // warming up
+        return COINS_CLR_BLUE;                             // normal pace
     };
-
-    std::string volRateStr  = volRates.ready ? std::format("{:.1f}x", volRates.volRatio)  : "--";
-    std::string freqRateStr = volRates.ready ? std::format("{:.1f}x", volRates.freqRatio) : "--";
-    COLORREF    volRateClr  = volRates.ready ? rateColor(volRates.volRatio)  : textColor;
-    COLORREF    freqRateClr = volRates.ready ? rateColor(volRates.freqRatio) : textColor;
 
     // Row 1: O  C  H  L
     struct StatItem { const char* label; std::string value; COLORREF color; };
     StatItem row1[] = {
         { "C:", Market_Fmt(L1.prevClose), closeColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
-        { "W:", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor  },
-        { "", formatVolume((long long)volRates.vol5min), COINS_CLR_BLUE  },  // was: formatVolume(L1.volume)
-        { "", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
-        { "", freqRateStr,          freqRateClr },   // Print-frequency rate: recent trades/sec ÷ baseline trades/sec
+        { " W:", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor  },
+        { "V:", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE  },  // was: formatVolume(L1.volume)
+        { " P:", Market_FmtQty(state->position),      textColor  },
     };
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),  openColor  },
         { "L:", Market_Fmt(L1.low),   lowColor   },
-        { "", (Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str(),      textColor  },
-        { "", bufD,                 dPnlColor  },
-        { "", bufU,                 uPnlColor  },
+        { " D:", bufD,                 dPnlColor  },
+        { "U:", bufU,                 uPnlColor  },
     };
 
-    std::string imbalance;
-    if (L1.auctionShares > 0 && L1.auctionPrice > 0) {
-        imbalance = std::string("          IMBALANCE: ") + Market_FmtQty(L1.auctionShares) + " @ " + Market_Fmt(L1.auctionPrice);
-    }
-    SetWindowTextA(hWnd, (state->symbol + ": " +  Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice) + imbalance).c_str());
+    SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
 
     // Helper: draw a row of stat pairs starting at (startX, y0).
     // Returns the x position after the last pair.
@@ -1717,7 +1704,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
                 else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
             }
-            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList, tick->price, tick->size, tick->time, tick->side);
+            lastTime = tick->time;
+            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
 
@@ -1761,10 +1749,29 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     if (dark)
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                     COLORREF rowColor = (COLORREF)cd->nmcd.lItemlParam;
-                    if (rowColor && cd->iSubItem != 0)
+                    if (cd->iSubItem == 0) {
+                        char timeText[64] = {};
+                        ListView_GetItemText(hdr->hwndFrom, (int)cd->nmcd.dwItemSpec, 2, timeText, sizeof(timeText));
+                        bool isMatch = false;
+                        const char* last = lastTime.c_str();
+                        // Fast check: Are the first 6 characters ("HH:MM:") identical
+                        if (strncmp(last, timeText, 6) == 0) {
+                            int s_last = (last[6] - '0') * 10 + (last[7] - '0');
+                            int s_text = (timeText[6] - '0') * 10 + (timeText[7] - '0');
+                            if (s_text == s_last || s_text == s_last - 1) {
+                                isMatch = true;
+                            }
+                        }
+                        if (isMatch) {
+                            cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                        } else {
+                            cd->clrText = COINS_CLR_GRAY;
+                        }
+                    }
+                    else if (rowColor && cd->iSubItem != 0)
                         cd->clrText = rowColor;
-                    else if (dark)
-                        cd->clrText = DM_TEXT;
+                    else
+                        cd->clrText = dark ? DM_TEXT : LM_TEXT;
                     return CDRF_DODEFAULT;
             }
             break;
