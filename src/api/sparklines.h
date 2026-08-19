@@ -269,15 +269,15 @@ public:
         if (data.size() < 2) return;
 
         // Reserve the right portion for the numeric text; sparkline fills the rest, including a small part of the previous cell to the left.
-        const int rightMargin = -20;  // px gap from cell right edge
+        const int rightMargin = 20;  // px gap from cell right edge
         const int topPad     = 3;
         const int botPad     = 3;
 
-        float W = (float)(cellRect.right - cellRect.left - rightMargin);
+        float W = (float)(cellRect.right - cellRect.left + rightMargin);
         float H = (float)(cellRect.bottom - cellRect.top  - topPad     - botPad);
         if (W < 4 || H < 4) return;
 
-        float ox = (float)(cellRect.left + rightMargin);
+        float ox = (float)(cellRect.left - rightMargin);
         float oy = (float)(cellRect.top  + topPad);
 
         // NEW: reserve a small strip on the right for the 5 reference dots
