@@ -633,72 +633,6 @@ static void Diamonds_Repopulate(HWND hWnd) {
     SetWindowTextA(hWnd, title.c_str());
 }
 
-// ── Double-buffered sparkline overlay ─────────────────────────────────────────
-static void Diamonds_DrawSparklineDoubleBuffered(HDC hdc, const RECT& cellRect, const MiniSparkline& spark) {
-    const int bleed = 20; // matches MiniSparkline's internal rightMargin bleed
-    RECT drawRect = cellRect;
-    drawRect.left -= bleed;
-    int w = drawRect.right - drawRect.left;
-    int h = drawRect.bottom - drawRect.top;
-    if (w <= 0 || h <= 0) return;
-
-    HDC hMemDC = CreateCompatibleDC(hdc);
-    if (!hMemDC) return;
-    HBITMAP hBmp = CreateCompatibleBitmap(hdc, w, h);
-    if (!hBmp) { DeleteDC(hMemDC); return; }
-    HBITMAP hOldBmp = (HBITMAP)SelectObject(hMemDC, hBmp);
-
-    BitBlt(hMemDC, 0, 0, w, h, hdc, drawRect.left, drawRect.top, SRCCOPY);
-
-    RECT localCellRect = {
-        cellRect.left   - drawRect.left, cellRect.top    - drawRect.top,
-        cellRect.right  - drawRect.left, cellRect.bottom - drawRect.top
-    };
-    spark.Draw(hMemDC, localCellRect);
-
-    BitBlt(hdc, drawRect.left, drawRect.top, w, h, hMemDC, 0, 0, SRCCOPY);
-
-    SelectObject(hMemDC, hOldBmp);
-    DeleteObject(hBmp);
-    DeleteDC(hMemDC);
-}
-
-// Draws sparkline overlays for every currently-visible row in a single pass,
-// strictly after the ListView's own WM_PAINT has fully completed and been
-// flushed to screen. This sidesteps the LVS_EX_DOUBLEBUFFER + ITEMPOSTPAINT
-// race entirely: by the time we get here, there's nothing left for our draw
-// to race against, so it's always the last thing painted, once.
-static LRESULT CALLBACK DiamondsSparklineOverlayProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-    if (uMsg == WM_PAINT) {
-        LRESULT res = DefSubclassProc(hList, uMsg, wParam, lParam);
-
-        int top = ListView_GetTopIndex(hList);
-        int count = ListView_GetCountPerPage(hList) + 1; // include partial row at bottom
-        int bottom = top + count;
-        if (bottom >= (int)g_DiamondDisplayOrder.size())
-            bottom = (int)g_DiamondDisplayOrder.size() - 1;
-
-        if (top >= 0 && bottom >= top) {
-            HDC hdc = GetDC(hList);
-            for (int row = top; row <= bottom; ++row) {
-                int conId = g_DiamondDisplayOrder[row];
-                auto sit = g_DiamondsSparklines.find(conId);
-                if (sit == g_DiamondsSparklines.end() || !sit->second.HasData()) continue;
-
-                RECT cellRect;
-                if (!ListView_GetSubItemRect(hList, row, DCOL_POSITION, LVIR_BOUNDS, &cellRect)) continue;
-                Diamonds_DrawSparklineDoubleBuffered(hdc, cellRect, sit->second);
-            }
-            ReleaseDC(hList, hdc);
-        }
-        return res;
-    }
-    if (uMsg == WM_NCDESTROY) {
-        RemoveWindowSubclass(hList, DiamondsSparklineOverlayProc, uIdSubclass);
-    }
-    return DefSubclassProc(hList, uMsg, wParam, lParam);
-}
-
 // ── Window procedure ──────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -726,7 +660,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_SetRowHeight(hList, 28);
         ApplyListViewFont(hList, DiamondsFontData.hFont, DiamondsFontData.hBoldFont, DiamondsFontData.fontSize);
         SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
-        SetWindowSubclass(hList, DiamondsSparklineOverlayProc, 1, 0);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
@@ -1190,7 +1123,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                     RECT cellRect;
                     ListView_GetSubItemRect(GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST), rowIndex, DCOL_POSITION, LVIR_BOUNDS, &cellRect);
-                    Diamonds_DrawSparklineDoubleBuffered(cd->nmcd.hdc, cellRect, sit->second);
+                    // The list view already paints through its own double buffer.
+                    // Drawing through a second buffer here can copy an intermediate
+                    // frame back over the row while the list is being invalidated.
+                    sit->second.Draw(cd->nmcd.hdc, cellRect);
                     return CDRF_DODEFAULT;
                 }
             }
