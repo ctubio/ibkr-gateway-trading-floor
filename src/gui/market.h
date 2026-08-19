@@ -1174,9 +1174,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     StatItem row1[] = {
         { "C:", Market_Fmt(L1.prevClose), closeColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
+        { " P:", Market_FmtQty(state->position),      textColor  },
         { " W:", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor  },
         { "V:", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE  },  // was: formatVolume(L1.volume)
-        { " P:", Market_FmtQty(state->position),      textColor  },
     };
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
