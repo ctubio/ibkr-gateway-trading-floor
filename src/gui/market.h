@@ -1074,9 +1074,14 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // ── Color helpers ─────────────────────────────────────────────────────────
     COLORREF openColor = (L1.open > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.open ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
     COLORREF closeColor = (L1.prevClose > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.prevClose ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
-    COLORREF vwapColor  = (L1.vwap > 0.0 && L1.last > 0.0) ? (L1.last >= L1.vwap ? COINS_CLR_GREEN : COINS_CLR_RED) : COINS_CLR_ORANGE;
-    COLORREF highColor = (L1.high > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.high ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
-    COLORREF lowColor  = (L1.low  > 0.0 && L1.last > 0.0) ? (L1.last >= L1.low ? COINS_CLR_GREEN : COINS_CLR_RED)   : textColor;
+    COLORREF vwapColor  = (L1.vwap > 0.0 && L1.last > 0.0) ? (L1.last >= L1.vwap ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
+    COLORREF lowColor = textColor;
+    COLORREF highColor = textColor;
+    if (L1.low > 0.0 && L1.high > 0.0 && L1.last > 0.0) {
+        bool closerToLow = std::abs(L1.last - L1.low) <= std::abs(L1.high - L1.last);
+        lowColor = closerToLow ? COINS_CLR_ORANGE : COINS_CLR_YELLOW;
+        highColor = closerToLow ? COINS_CLR_YELLOW : COINS_CLR_ORANGE;
+    }
     // COLORREF posColor  = (state->position > 0.0) ? COINS_CLR_GREEN : (state->position < 0.0) ? COINS_CLR_RED : textColor;
     // COLORREF avgPrColor = textColor;
     // if (displayLast > 0.0 && state->avgPrice > 0.0) avgPrColor = (displayLast >= state->avgPrice) ? COINS_CLR_GREEN : COINS_CLR_RED;
@@ -1151,8 +1156,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     VolRateResult volRates = Market_ComputeVolRates(state->volHistory, state->volTrackingStart, nowTick);
 
     auto rateColor = [&](double ratio) -> COLORREF {
-        if (ratio >= 3.0) return COINS_CLR_RED;      // hot: 3x+ normal pace
-        if (ratio >= 1.5) return COINS_CLR_ORANGE;   // warming up
+        if (ratio >= 3.0) return COINS_CLR_ORANGE;      // hot: 3x+ normal pace
+        if (ratio >= 1.5) return COINS_CLR_YELLOW;   // warming up
         return textColor;                             // normal pace
     };
 
@@ -1166,8 +1171,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     StatItem row1[] = {
         { "C:", Market_Fmt(L1.prevClose), closeColor  },
         { "H:", Market_Fmt(L1.high),      highColor  },
-        { "W:", Market_Fmt(L1.vwap),    vwapColor  },
-        { "", formatVolume(L1.volume),  textColor  },
+        { "W:", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor  },
+        { "", formatVolume(L1.volume),  COINS_CLR_BLUE  },
         { "", volRateStr,           volRateClr  },   // Volume rate: recent shares/sec ÷ baseline shares/sec
         { "", freqRateStr,          freqRateClr },   // Print-frequency rate: recent trades/sec ÷ baseline trades/sec
     };

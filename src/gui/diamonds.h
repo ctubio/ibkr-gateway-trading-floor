@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1512;
+int windowDiamondsWidth = 1497;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -124,7 +124,7 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
-    { "VWAP",              95, LVCFMT_RIGHT },
+    { "VWAP",              80, LVCFMT_RIGHT },
     { "AskSz",             80, LVCFMT_RIGHT },
     { "Ask",              100, LVCFMT_RIGHT },
     { "Last",             100, LVCFMT_RIGHT },
@@ -537,7 +537,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     if (t.vwap > 0.0) {
         double vwapDiff = t.last - t.vwap;
         row.sortValues[DCOL_VWAP] = vwapDiff;
-        row.textCols[DCOL_VWAP]   = std::format("{:.2f}", t.vwap);
+        row.textCols[DCOL_VWAP]   = std::format("{:+.2f}", vwapDiff);
     } else {
         setNA(DCOL_VWAP);
     }
