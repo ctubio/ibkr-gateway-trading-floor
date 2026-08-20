@@ -1312,6 +1312,10 @@ static void Market_SpeakLast(TsState* state) {
     if (state->l1Info.last <= 0.0) return;
     std::string s = std::format("{:.2f}", state->l1Info.last);
     std::wstring ws(s.begin(), s.end());
+    size_t dotPos = ws.find(L".00");
+    if (dotPos != std::wstring::npos) {
+        ws.erase(dotPos);
+    }
     ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
     std::replace(ws.begin(), ws.end(), L'.', L',');
     state->hTtsVoice->Speak(ws.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
