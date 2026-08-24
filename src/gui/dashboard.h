@@ -934,6 +934,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 #else
                         0
 #endif
+                    , (int)Settings_Load("ClientId", 0)
+                    , (int)Settings_Load("GroupId", 4)
                     );
                     UpdateTrayIcon(hWnd);
                 } else if (!shouldBeConnected && api().isConnected()) {

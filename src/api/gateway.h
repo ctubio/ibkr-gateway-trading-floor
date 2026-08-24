@@ -250,7 +250,7 @@ public:
 
     // ── Connection ────────────────────────────────────────────────────────────
 
-    bool connect(int port);
+    bool connect(int port, int clientId = 0, int groupId = 4);
     void disconnect();
     bool isConnected()           const;
     bool isMarketDataConnected() const;
@@ -323,6 +323,15 @@ public:
     //   action        = "BUY"  (spend USD, receive EUR) or "SELL" (spend EUR, receive USD)
     //   totalQuantity = order notional, denominated in EUR (matches IB's CASH contract convention)
     void submitCurrencyOrder(const std::string& action, double totalQuantity);
+
+    // ── Display Group Linking (TWS "linked" window groups) ───────────────────
+    // Subscribes this client to TWS's display-group event stream for the given
+    // group id (the color-coded "linked windows" feature in TWS/Gateway).
+    void subscribeToGroupEvents(int groupId);
+    // Pushes contract `conId` (on `exchange`) to every other TWS window/app
+    // currently linked to the same group, so they switch their symbol to match.
+    // Must be called after subscribeToGroupEvents() has been issued.
+    void updateDisplayGroup(int conId, const std::string& exchange = "SMART");
 
     // ── Historical Data (on-demand) ──────────────────────────────────────────
         // Fetches ~1 year of daily bars for `symbol` (must be a current portfolio

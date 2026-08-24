@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef GATEWAY_SIM
-int WindowSettingsHeight = 565;
+int WindowSettingsHeight = 625;
 #else
 int WindowSettingsHeight = 569 - 138;
 #endif
@@ -23,6 +23,8 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
 #define ID_SETTINGS_RISK_VALUE        4012
 #define ID_SETTINGS_SAFETY_VALUE      4013
+#define ID_SETTINGS_GROUP_ID          4014
+#define ID_SETTINGS_CLIENT_ID         4015
 
 static HWND hSettingBox1 = NULL;
 static HWND hSettingBox2 = NULL;
@@ -111,7 +113,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Gateway ──────────────────────────────────────────────────────
             hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 130,
+                m, y, w, 190,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox1, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox1, WM_SETFONT, (WPARAM)hFontSettings_Label, TRUE);
@@ -140,7 +142,31 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 m + gm, y + 98, gw, 20,
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
             SetWindowTextA(hGatewayEdit, GetGatewayPath().c_str());
-            y += 138;
+
+            // Client ID — passed as the second parameter to api().connect().
+            CreateWindowA("STATIC", "Client ID:",
+                WS_CHILD | WS_VISIBLE,
+                m + gm, y + 128, 72, 20,
+                hWnd, NULL, hInst, NULL);
+            HWND hClientIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                m + gm + 76, y + 125, 80, 26,
+                hWnd, (HMENU)ID_SETTINGS_CLIENT_ID, hInst, NULL);
+            SetWindowTextA(hClientIdEdit, std::format("{}", (int)Settings_Load("ClientId", 0)).c_str());
+
+            // Group ID — TWS "linked window" group color id, used for
+            // subscribeToGroupEvents()/updateDisplayGroup().
+            CreateWindowA("STATIC", "Group ID:",
+                WS_CHILD | WS_VISIBLE,
+                m + gm, y + 158, 72, 20,
+                hWnd, NULL, hInst, NULL);
+            HWND hGroupIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
+                m + gm + 76, y + 155, 80, 26,
+                hWnd, (HMENU)ID_SETTINGS_GROUP_ID, hInst, NULL);
+            SetWindowTextA(hGroupIdEdit, std::format("{}", (int)Settings_Load("GroupId", 4)).c_str());
+
+            y += 198; // was 138
 #endif
 
             // ── Display ──────────────────────────────────────────────────────
@@ -293,6 +319,28 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SetWindowTextA(hPathEdit, path.c_str());
                     }
                 }
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_GROUP_ID) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_GROUP_ID);
+                int len = GetWindowTextLength(hEdit);
+                int groupId = 4;
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    groupId = atoi(buf);
+                }
+                Settings_Save("GroupId", groupId);
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_CLIENT_ID) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_CLIENT_ID);
+                int len = GetWindowTextLength(hEdit);
+                int clientId = 0;
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    clientId = atoi(buf);
+                }
+                Settings_Save("ClientId", clientId);
             }
 #endif
             if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {

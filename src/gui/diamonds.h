@@ -802,6 +802,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->idFrom != ID_DIAMONDS_RESULTS_LIST) break;
 
+        // ── Row selected: push symbol to TWS-linked windows/apps ─────────────
+        if (hdr->code == LVN_ITEMCHANGED) {
+            NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
+            if ((nmlv->uChanged & LVIF_STATE) && (nmlv->uNewState & LVIS_SELECTED) &&
+                nmlv->iItem >= 0 && nmlv->iItem < (int)g_DiamondDisplayOrder.size()) {
+                int conId = g_DiamondDisplayOrder[nmlv->iItem];
+                api().updateDisplayGroup(conId);
+            }
+        }
+
         // --- VIRTUAL LIST TEXT REQUEST ---
         if (hdr->code == LVN_GETDISPINFO) {
             NMLVDISPINFO* pdi = (NMLVDISPINFO*)lParam;
