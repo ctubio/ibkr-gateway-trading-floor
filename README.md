@@ -18,7 +18,7 @@ Before launching the application, ensure the following:
 1. Download the latest `Trading-Floor.exe`.
 2. Place it in your preferred directory (e.g., `C:\Program Files\Trading-Floor\`).
 3. Run `Trading-Floor.exe`.
-4. The app will automatically attempt to connect to `127.0.0.1:4001` or `7496`.
+4. The app will automatically attempt to connect to `127.0.0.1:4001` or `127.0.0.1:7496`.
 
 > **Tip:** Enable **Auto-start IBKR Gateway** in Settings to let the app manage the gateway process for you.
 
@@ -76,21 +76,48 @@ The core data engine for active trading. Supports infinite concurrent instances.
 
 ## ⌨️ Key Shortcuts & Tips
 
+### 🖱 Global
+| Key | Action |
+| :--- | :--- |
+| `Scroll Lock` | Toggle **hotlock** — freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The 💰 dashboard shows a small lock icon while hotlock is active. |
+
 ### 🖱 Navigation & UI
 | Action | Shortcut | Note |
 | :--- | :--- | :--- |
 | **Sort Column** | `Click Header` | Click again to reverse direction |
-| **Remove Item** | `Delete` | Removes selected row/watchlist |
-| **Quick Order Bar**| `L-Ctrl` / `R-Ctrl` | Toggles entry bar in Market window |
+| **Quick Order Bar**| `Left Ctrl` / `Right Ctrl` | Toggles the order entry bar in the Market window (Left = BUY, Right = SELL) |
+| **Search Symbol** | *(Market window)* | Opens a popup list to jump to another symbol |
 
-### 📝 Order Editing
+### 🏦 Market
 | Key | Action |
 | :--- | :--- |
-| `Double-Click` | Enter edit mode for Price/Quantity |
-| `Tab` | Cycle between Price and Quantity fields |
-| `Enter` | Confirm and submit modification |
-| `Esc` | Cancel order |
-| `Up / Down` | Increment/Decrement values (0.01 / 1 unit) |
+| `Esc` | Cancel **all** open orders for the current symbol |
+| `Tab` | Jump from the list into the order-bar price field |
+| `Left Ctrl` / `Right Ctrl` | Toggle the BUY / SELL quick-order bar (pre-filled with best bid/ask) |
+| `Up / Down` | Change the order-bar price |
+| `Shift` + `Up / Down` | Step price by **1.0** instead of 0.01 |
+
+### 📝 Orders
+| Key | Action |
+| :--- | :--- |
+| `Click` / Select an order | Opens the inline edit panel at the bottom (shown automatically for editable orders) |
+| `Tab` | Cycle between the Price and Quantity fields |
+| `Enter` | Confirm and submit the modification |
+| `Esc` | Cancel the selected order (or discard the edit panel) |
+| `Up / Down` | Increment / decrement the focused value |
+| `Ctrl` + `Up / Down` | Move the selected order up or down in the list |
+| `Shift` + `Up / Down` | Step the price by 1.0 (Quantity steps by 1) |
+
+> **Note:** The Orders list has no delete key. Cancelling an order is done with `Esc`, not `Delete`.
+
+### 💎 Diamonds (right-click menu)
+Right-click a position to open a context menu:
+| Action |
+| :--- |
+| **Quick BUY 1** — placeholder BUY order for 1 share at the last price |
+| **Quick SELL 1** — placeholder SELL order for 1 share at 2× the last price |
+| **Move to Growth / High-Yield Dividends / Quarantine** — reassign the group |
+| **Set Color** — pick one of six colors (Red, Green, Blue, Purple, Gold, Brown) or None |
 
 ---
 
