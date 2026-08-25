@@ -76,17 +76,10 @@ The core data engine for active trading. Supports infinite concurrent instances.
 
 ## ⌨️ Key Shortcuts & Tips
 
-### 🖱 Global
+### 💰 Global
 | Key | Action |
 | :--- | :--- |
-| `Scroll Lock` | Toggle **hotlock** — freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The 💰 dashboard shows a small lock icon while hotlock is active. |
-
-### 🖱 Navigation & UI
-| Action | Shortcut | Note |
-| :--- | :--- | :--- |
-| **Sort Column** | `Click Header` | Click again to reverse direction |
-| **Quick Order Bar**| `Left Ctrl` / `Right Ctrl` | Toggles the order entry bar in the Market window (Left = BUY, Right = SELL) |
-| **Search Symbol** | *(Market window)* | Opens a popup list to jump to another symbol |
+| `Scroll Lock` | Toggle **hotlock** — freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The dashboard shows a small lock icon while hotlock is active. |
 
 ### 🏦 Market
 | Key | Action |
