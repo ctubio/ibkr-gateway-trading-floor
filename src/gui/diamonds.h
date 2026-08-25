@@ -59,12 +59,12 @@ enum DiamondColIdx {
     DCOL_SYMBOL = 0,
     DCOL_POSITION,
     DCOL_AVGPRICE,
-    DCOL_VWAP, // displays VWAP price, sorts by (Last - VWAP)
     DCOL_ASKSIZE,
     DCOL_ASK,
     DCOL_LAST,
     DCOL_BID,
     DCOL_BIDSIZE,
+    DCOL_VWAP,
     DCOL_CHG5MIN,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
@@ -124,12 +124,12 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
-    { "VWAP",              80, LVCFMT_RIGHT },
     { "Asks",             70, LVCFMT_RIGHT },
     { "Ask",              100, LVCFMT_RIGHT },
     { "Last",             100, LVCFMT_RIGHT },
     { "Bid",              100, LVCFMT_RIGHT },
     { "Bids",             70, LVCFMT_RIGHT },
+    { "VWAP",              80, LVCFMT_RIGHT },
     { "5m",                80, LVCFMT_RIGHT },
     { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change",           105, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
