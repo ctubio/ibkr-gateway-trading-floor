@@ -1552,6 +1552,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         else { PAINTSTRUCT ps; BeginPaint(hWnd, &ps); EndPaint(hWnd, &ps); }
         return 0;
 
+    // Push this window's symbol to every other TWS-linked window/app whenever
+    // this Market window becomes the active one (mirrors the same call made
+    // on row selection in the Diamonds list — see WM_NOTIFY/LVN_ITEMCHANGED there).
+    case WM_ACTIVATE:
+        if (state && LOWORD(wParam) != WA_INACTIVE && state->conId != 0) {
+            api().updateDisplayGroup(state->conId);
+        }
+        break;
+
     case WM_KEYDOWN: {
         if (lockHotkeys) break;
         if (!state) break;
