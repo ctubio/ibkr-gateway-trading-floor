@@ -419,7 +419,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             char buf[32] = {};
             GetWindowTextA(hWnd, buf, sizeof(buf));
             double val  = atof(buf);
-            double step = (uIdSubclass == 1) ? 0.01 : 1.0;  // price vs qty
+            double step = uIdSubclass == 1 ? (((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01) : 1.0;  // price vs qty
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
             std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:.0f}", val);
