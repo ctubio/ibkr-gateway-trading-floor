@@ -19,6 +19,49 @@ bool IsProcessRunning(const char* processName) {
     return found;
 }
 
+// Returns the full image path of a running process, or empty on failure
+// (e.g. no permission to query it — fine here, since anything we can't
+// query isn't something IBKR spawned under the install folder anyway).
+static std::string GetProcessFullPath(DWORD pid) {
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProc) return "";
+    char path[MAX_PATH] = {};
+    DWORD size = sizeof(path);
+    std::string result;
+    if (QueryFullProcessImageNameA(hProc, 0, path, &size))
+        result.assign(path, size);
+    CloseHandle(hProc);
+    return result;
+}
+
+// Returns true if any currently running process's image lives under rootDir
+// (case-insensitive prefix match). Catches TWS/IB Gateway's self-update
+// helper process(es) regardless of what IBKR names them for a given build —
+// IsProcessRunning() alone only matches the fixed names we already know.
+static bool IsAnyProcessRunningUnder(const std::string& rootDir) {
+    if (rootDir.empty()) return false;
+
+    std::string rootLower = rootDir;
+    std::transform(rootLower.begin(), rootLower.end(), rootLower.begin(), ::tolower);
+    if (rootLower.back() != '\\') rootLower += '\\';
+
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return false;
+
+    PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
+    bool found = false;
+    if (Process32First(hSnap, &pe)) {
+        do {
+            std::string imgPath = GetProcessFullPath(pe.th32ProcessID);
+            if (imgPath.empty()) continue;
+            std::transform(imgPath.begin(), imgPath.end(), imgPath.begin(), ::tolower);
+            if (imgPath.rfind(rootLower, 0) == 0) { found = true; break; }
+        } while (Process32Next(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
+    return found;
+}
+
 std::string GetGatewayPath() {
     HKEY hKey;
     std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
@@ -82,13 +125,19 @@ struct EnsureOnceFlag {
 
 bool alreadyEnsureGatewayRunning = false;
 void EnsureGatewayRunning(HWND hParent) {
-    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway() || IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe") || IsProcessRunning("updater.exe")) return;
+    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway()) return;
+
+    std::string path   = GetGatewayPath();
+    std::string installRoot = path.empty() ? "" : std::filesystem::path(path).parent_path().string();
+
+    if (IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe") || IsAnyProcessRunningUnder(installRoot))
+        return;
+
     EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
-    std::string path = GetGatewayPath();
     if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxA(hParent, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
         path = AskGatewayPath(hParent);
-        if (path.empty()) return; 
+        if (path.empty()) return;
         SaveGatewayPath(path);
     }
     LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");

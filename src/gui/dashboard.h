@@ -932,7 +932,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 #endif
                     api().connect(
 #ifndef GATEWAY_SIM
-                        IsProcessRunning("ibgateway.exe") ? 4001 : 7496
+                        std::filesystem::path(GetGatewayPath()).filename() == "ibgateway.exe" ? 4001 : 7496
 #else
                         0
 #endif
