@@ -101,8 +101,6 @@ The core data engine for active trading. Supports infinite concurrent instances.
 | `Ctrl` + `Up / Down` | Move the selected order up or down in the list |
 | `Shift` + `Up / Down` | Step the price by 1.0 (Quantity steps by 1) |
 
-> **Note:** The Orders list has no delete key. Cancelling an order is done with `Esc`, not `Delete`.
-
 ### 💎 Diamonds (right-click menu)
 Right-click a position to open a context menu:
 | Action |
