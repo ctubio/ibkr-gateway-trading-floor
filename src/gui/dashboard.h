@@ -78,6 +78,8 @@ void MutexGatewayInstance() {
         if (hMutex) CloseHandle(hMutex);
         
         CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1021));
     }
 }
 
