@@ -8,6 +8,7 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define WM_TRAYICON (WM_APP + 101)
 
 #define TIMER_WATCHDOG 1
+#define TIMER_MARKET_CLOCK 2 // Live US market-session clock (1s tick)
 
 #define ID_M_DASHBOARD   1001
 #define ID_MB_DIAMONDS   1003
@@ -92,6 +93,7 @@ static HWND hLblAccruals  = NULL;
 static HWND hLblBP        = NULL;
 static HWND hLblMM        = NULL;
 static HWND hLblEUR = NULL;
+static HWND hClockTip = NULL;
 static HWND hLblUSD = NULL;
 
 static HWND hCoin_NetLiq      = NULL;
@@ -109,6 +111,7 @@ static HWND hCoin_BuyingPower = NULL;
 static HWND hCoin_MaintMargin = NULL;
 
 static HWND hCoin_Cash        = NULL;
+static HWND hCoin_Clock       = NULL;
 static HWND hCoin_EUR         = NULL;
 static HWND hCoin_USD         = NULL;
 
@@ -121,6 +124,97 @@ static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
     SelectObject(hdc, hOld);
     ReleaseDC(hWnd, hdc);
     return sz.cx;
+}
+
+// ─── US market-session clock ─────────────────────────────────────────────
+
+static void UpdateMarketClock(HWND hWnd) {
+    if (!hCoin_Clock) return;
+
+    // Get current time in New York (Eastern Time)
+    auto now = std::chrono::system_clock::now();
+    std::chrono::zoned_time zt{"America/New_York", now};
+    auto ny_time = zt.get_local_time();
+    
+    // Extract exact time of day
+    auto dp = std::chrono::floor<std::chrono::days>(ny_time);
+    auto time_of_day = std::chrono::hh_mm_ss{ny_time - dp};
+    
+    int total_secs = time_of_day.hours().count() * 3600 + 
+                     time_of_day.minutes().count() * 60 + 
+                     time_of_day.seconds().count();
+
+    // Define NY Market Boundaries in seconds from Midnight
+    const int T_PREMARKET = 4 * 3600;                     // 04:00 ET
+    const int T_OPEN_IMBAL = 9 * 3600;                    // 09:00 ET (20m before 09:20)
+    const int T_OPEN_BELL = 9 * 3600 + 20 * 60;           // 09:20 ET (10m before 09:30)
+    const int T_OPEN = 9 * 3600 + 30 * 60;                // 09:30 ET
+    
+    const int T_CLOSE_IMBAL = 15 * 3600 + 30 * 60;        // 15:30 ET (20m before 15:50)
+    const int T_CLOSE_BELL = 15 * 3600 + 50 * 60;         // 15:50 ET (10m before 16:00)
+    const int T_CLOSE = 16 * 3600;                        // 16:00 ET
+    const int T_AFTERHOURS_END = 20 * 3600;               // 20:00 ET
+    
+    std::string phase;
+    int target_secs = 0;
+    // State Machine to determine current phase & countdown target
+    if (total_secs < T_PREMARKET) {
+        phase = "OVERNIGHT"; target_secs = T_PREMARKET;
+        SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+    } else if (total_secs < T_OPEN_IMBAL) {
+        phase = "Pre-Market"; target_secs = T_OPEN; // Countdown to Open
+        SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
+    } else if (total_secs < T_OPEN_BELL) {
+        phase = "IMBALANCE"; target_secs = T_OPEN;
+        SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
+    } else if (total_secs < T_OPEN) {
+        phase = "OPENING BELL"; target_secs = T_OPEN;
+        SetCtrlColor(hCoin_Clock, COINS_CLR_PURPLE);
+    } else if (total_secs < T_CLOSE_IMBAL) {
+        phase = "OPEN"; target_secs = T_CLOSE; // Countdown to Close
+        BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
+        SetCtrlColor(hCoin_Clock, dark ? DM_TEXT : LM_TEXT);
+    } else if (total_secs < T_CLOSE_BELL) {
+        phase = "IMBALANCE"; target_secs = T_CLOSE;
+        SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
+    } else if (total_secs < T_CLOSE) {
+        phase = "CLOSING BELL"; target_secs = T_CLOSE;
+        SetCtrlColor(hCoin_Clock, COINS_CLR_PURPLE);
+    } else if (total_secs < T_AFTERHOURS_END) {
+        phase = "After-Hours"; target_secs = T_AFTERHOURS_END;
+        SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
+    } else {
+        phase = "OVERNIGHT"; target_secs = T_PREMARKET + (24 * 3600); // Tomorrow's pre-market
+        SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+    }
+
+    // Calculate time left
+    int secs_left = target_secs - total_secs;
+    int h_left = secs_left / 3600;
+    int m_left = (secs_left % 3600) / 60;
+
+    // Format output string (HH:MM PHASE:)
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%02d:%02d", h_left, m_left);
+
+    static bool clockToolAdded = false;
+
+    TOOLINFOA ti = {};
+    ti.cbSize   = sizeof(ti);
+    ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
+    ti.hwnd     = hWnd;
+    ti.uId      = (UINT_PTR)hCoin_Clock;
+    ti.lpszText = (LPSTR)phase.c_str();
+
+    if (!clockToolAdded) {
+        SendMessage(hClockTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
+        clockToolAdded = true;
+    } else {
+        SendMessage(hClockTip, TTM_UPDATETIPTEXTA, 0, (LPARAM)&ti);
+    }
+
+    SetWindowTextA(hCoin_Clock, buf);
+    InvalidateRect(hCoin_Clock, NULL, TRUE);
 }
 
 #define ID_COIN_NETLIQ   5100
@@ -639,6 +733,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SetCtrlColor(hCoin_Lock, COINS_CLR_GRAY);
             ShowWindow(hCoin_Lock, SW_HIDE);
 
+            hCoin_Clock = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY,
+                m + boxW - 60, y1, 40, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(hCoin_Clock, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+
+            // Add tooltip
+            hClockTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
+                WS_POPUP | TTS_ALWAYSTIP,
+                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                hWnd, NULL, hInst, NULL);
+
             // Row 1: PnL: 🔊 +0.00
             HWND hLblBigPnL = CreateWindowA("STATIC", "PnL:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -805,7 +910,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (RegGetDword(DASHBOARD_CLASS_NAME, "Speaker", 0)) {
                 Coins_ToggleTTS(hWnd);
             }
-                    
+            
+            SetTimer(hWnd, TIMER_MARKET_CLOCK, 21000, NULL); // live market clock
+            SendMessage(hWnd, WM_TIMER, TIMER_MARKET_CLOCK, 0);
+
             SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
             std::thread([hWnd]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(721));
@@ -923,6 +1031,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break; 
         }
         case WM_TIMER:
+            if (wParam == TIMER_MARKET_CLOCK) { // 1000 -> 1s tick
+                UpdateMarketClock(hWnd);
+            }
             if (wParam == TIMER_COINS_SPEAKER) // 21000
                 Coins_SpeakDailyPnL();
             if (wParam == TIMER_WATCHDOG) { // 10000
@@ -1207,7 +1318,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
-            hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = NULL;
+            hClockTip = hCoin_Clock = hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);
