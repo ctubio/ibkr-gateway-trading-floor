@@ -160,7 +160,7 @@ static void UpdateMarketClock(HWND hWnd) {
     // State Machine to determine current phase & countdown target
     if (total_secs < T_PREMARKET) {
         phase = "OVERNIGHT"; target_secs = T_PREMARKET;
-        SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
     } else if (total_secs < T_OPEN_IMBAL) {
         phase = "Pre-Market"; target_secs = T_OPEN; // Countdown to Open
         SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
@@ -184,7 +184,7 @@ static void UpdateMarketClock(HWND hWnd) {
         SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
     } else {
         phase = "OVERNIGHT"; target_secs = T_PREMARKET + (24 * 3600); // Tomorrow's pre-market
-        SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
     }
 
     // Calculate time left
