@@ -1040,7 +1040,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         bool halted = g_DiamondDataCache[conId].halted;
-                        cd->clrText = halted ? COINS_CLR_ORANGE : COINS_CLR_BLUE;
+                        cd->clrText = halted ? COINS_CLR_GRAY : COINS_CLR_BLUE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
                         return CDRF_NEWFONT;
