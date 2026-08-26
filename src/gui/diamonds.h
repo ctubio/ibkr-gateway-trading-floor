@@ -520,9 +520,21 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.prevClose = t.prevClose;
     row.halted = t.halted;
 
+    double shares = row.sortValues[DCOL_POSITION];
+    double netLiq = 0.0;
+    auto summary = api().getAccountSummary();
+    if (summary.count("NetLiquidation")) {
+        try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
+    }
+
+    double mktVal = shares * (t.last > 0 ? t.last : t.prevClose);
+    double pctNetLiq = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
+
+    setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
+    setCol(DCOL_PCT_NETLIQ, pctNetLiq, "{:.2f}%", true);
+    
     if (t.last <= 0.0) {
-        setNA(DCOL_LAST); setNA(DCOL_CHGPCT); 
-        setNA(DCOL_MKTVAL); setNA(DCOL_PCT_NETLIQ);
+        setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
         setNA(DCOL_CHG5MIN);
         setNA(DCOL_VWAP);
         return;
@@ -554,23 +566,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         }
     }
 
-    double shares = row.sortValues[DCOL_POSITION];
-    double avgCost = row.sortValues[DCOL_AVGPRICE];
-    
-    double netLiq = 0.0;
-    auto summary = api().getAccountSummary();
-    if (summary.count("NetLiquidation")) {
-        try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
-    }
-
-    double mktVal = shares * t.last;
-    double pctNetLiq = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
-
     if (t.prevClose > 0.0) setCol(DCOL_CHGPCT, t.changePct(), "{:+.2f}%", true);
     else setNA(DCOL_CHGPCT);
-
-    setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
-    setCol(DCOL_PCT_NETLIQ, pctNetLiq, "{:.2f}%", true);
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
