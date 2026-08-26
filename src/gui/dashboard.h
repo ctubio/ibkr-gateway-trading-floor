@@ -93,7 +93,6 @@ static HWND hLblAccruals  = NULL;
 static HWND hLblBP        = NULL;
 static HWND hLblMM        = NULL;
 static HWND hLblEUR = NULL;
-static HWND hClockTip = NULL;
 static HWND hLblUSD = NULL;
 
 static HWND hCoin_NetLiq      = NULL;
@@ -187,6 +186,8 @@ static void UpdateMarketClock(HWND hWnd) {
         SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
     }
 
+    SetWindowTextA(hWnd, phase.c_str());
+
     // Calculate time left
     int secs_left = target_secs - total_secs;
     int h_left = secs_left / 3600;
@@ -195,22 +196,6 @@ static void UpdateMarketClock(HWND hWnd) {
     // Format output string (HH:MM PHASE:)
     char buf[64];
     snprintf(buf, sizeof(buf), "%02d:%02d", h_left, m_left);
-
-    static bool clockToolAdded = false;
-
-    TOOLINFOA ti = {};
-    ti.cbSize   = sizeof(ti);
-    ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
-    ti.hwnd     = hWnd;
-    ti.uId      = (UINT_PTR)hCoin_Clock;
-    ti.lpszText = (LPSTR)phase.c_str();
-
-    if (!clockToolAdded) {
-        SendMessage(hClockTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
-        clockToolAdded = true;
-    } else {
-        SendMessage(hClockTip, TTM_UPDATETIPTEXTA, 0, (LPARAM)&ti);
-    }
 
     SetWindowTextA(hCoin_Clock, buf);
     InvalidateRect(hCoin_Clock, NULL, TRUE);
@@ -344,21 +329,17 @@ void BindTrayIcon(HWND hWnd) {
 
 void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
     std::string tooltip = std::string("Trading Floor" GATEWAY_SPACE GATEWAY_NAME) + ": ";
-    std::string title;
     bool connected = false;
 
     if (!api().isConnected()) {
-        title    = "Disconnected";
-        tooltip += title;
+        tooltip += "Disconnected";
     } else {
         std::string acc = api().getAccountNumber();
         if (acc.empty()) {
-            title    = "Connecting..";
-            tooltip += title;
+            tooltip += "Connecting..";
         } else {
             connected = api().isMarketDataConnected() && api().isTradingConnected();
             tooltip = acc + " | " + currency + " | " + (connected ? "Connected" : "Disconnected");
-            title   = acc;
         }
     }
     std::wstring wTooltip(tooltip.begin(), tooltip.end());
@@ -372,8 +353,6 @@ void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
 
     IconUpdateContext ctx = { connected, onlineIcons, offlineIcons };
     EnumWindows(IconsEnumWindowsProc, (LPARAM)&ctx);
-            
-    SetWindowTextA(hWnd, title.c_str());
 }
 
 // ─── Labels update ─────────────────────────────────────────────────────────────
@@ -736,12 +715,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY,
                 m + boxW - 60, y1, 40, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hCoin_Clock, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
-
-            // Add tooltip
-            hClockTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
-                WS_POPUP | TTS_ALWAYSTIP,
-                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                hWnd, NULL, hInst, NULL);
 
             // Row 1: PnL: 🔊 +0.00
             HWND hLblBigPnL = CreateWindowA("STATIC", "PnL:",
@@ -1317,7 +1290,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
-            hClockTip = hCoin_Clock = hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = NULL;
+            hCoin_Clock = hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);
