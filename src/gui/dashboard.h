@@ -168,17 +168,16 @@ static void UpdateMarketClock(HWND hWnd) {
         phase = "IMBALANCE"; target_secs = T_OPEN;
         SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
     } else if (total_secs < T_OPEN) {
-        phase = "OPENING BELL"; target_secs = T_OPEN;
+        phase = "Opening Bell"; target_secs = T_OPEN;
         SetCtrlColor(hCoin_Clock, COINS_CLR_PURPLE);
     } else if (total_secs < T_CLOSE_IMBAL) {
-        phase = "OPEN"; target_secs = T_CLOSE; // Countdown to Close
-        BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
-        SetCtrlColor(hCoin_Clock, dark ? DM_TEXT : LM_TEXT);
+        phase = "Market Open"; target_secs = T_CLOSE; // Countdown to Close
+        SetCtrlColor(hCoin_Clock, COINS_CLR_YELLOW);
     } else if (total_secs < T_CLOSE_BELL) {
         phase = "IMBALANCE"; target_secs = T_CLOSE;
         SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
     } else if (total_secs < T_CLOSE) {
-        phase = "CLOSING BELL"; target_secs = T_CLOSE;
+        phase = "Closing Bell"; target_secs = T_CLOSE;
         SetCtrlColor(hCoin_Clock, COINS_CLR_PURPLE);
     } else if (total_secs < T_AFTERHOURS_END) {
         phase = "After-Hours"; target_secs = T_AFTERHOURS_END;
