@@ -397,7 +397,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     GetWindowTextA(state->hOrderProfitPrice, profitBuf, sizeof(profitBuf));
 
     double price    = std::atof(pBuf);
-    double qty      = std::atof(qBuf);
+    double qty      = std::abs(std::atof(qBuf));
     double stopDist = std::atof(sBuf);
     double profitDist = std::atof(profitBuf);
     double stopDistOriginal = stopDist;
@@ -514,8 +514,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
     
     SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
-    int qty = (int)Settings_Load("OrderQty", 20);
-    SetWindowTextA(state->hOrderQty, std::format("{}", qty).c_str());
+    int qty = ((int)Settings_Load("OrderQty", 20)) * (side == "BUY" ? 1 : -1);
+    SetWindowTextA(state->hOrderQty, std::format("{:+}", qty).c_str());
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
     ShowWindow(state->hOrderRisk,  SW_SHOW);
@@ -616,7 +616,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                 GetWindowTextA(st->hOrderStopPrice,   psBuf, sizeof(psBuf));
                 GetWindowTextA(st->hOrderProfitPrice, ppBuf, sizeof(ppBuf));
                 double price = std::atof(pBuf);
-                double qty = std::atof(qBuf);
+                double qty = std::abs(std::atof(qBuf));
                 double stopPrice = std::atof(psBuf);
                 double profitPrice = std::atof(ppBuf);
                 if ((price > 0 || stopPrice > 0) && qty > 0) {
@@ -686,10 +686,11 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             char buf[32] = {};
             GetWindowTextA(hWnd, buf, sizeof(buf));
             double val  = atof(buf);
+            if (uIdSubclass == 2) val = std::abs(val);
             double step = (uIdSubclass == 1) ? (((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01) : 1.0;
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:.0f}", val);
+            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:+}", val * (st->orderSide == "BUY" ? 1 : -1));
             SetWindowTextA(hWnd, s.c_str());
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);

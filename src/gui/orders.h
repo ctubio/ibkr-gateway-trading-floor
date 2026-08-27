@@ -96,7 +96,7 @@ static void UpdatePriceLabel(HWND hWnd) {
     double qty   = 0;
     try {
         price = std::stod(priceBuf);
-        qty = std::stod(qtyBuf);
+        qty = std::abs(std::stod(qtyBuf));
     } catch (...) { price = 0; qty = 0; }
 
     SetWindowTextA(hPriceLbl, FormatWithCommas(price * qty).c_str());
@@ -353,7 +353,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 double qty = s_editState.originalQty;
                 if (!s_editState.partialFill && hQtyEdit) {
                     GetWindowTextA(hQtyEdit, qBuf, sizeof(qBuf));
-                    qty = atof(qBuf);
+                    qty = std::abs(atof(qBuf));
                 }
                 if (qty > 0) {
                     if (s_editState.isUnsent) {
@@ -419,10 +419,11 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             char buf[32] = {};
             GetWindowTextA(hWnd, buf, sizeof(buf));
             double val  = atof(buf);
+            if (uIdSubclass == 2) val = std::abs(val);
             double step = uIdSubclass == 1 ? (((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01) : 1.0;  // price vs qty
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:.0f}", val);
+            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:+}", val * (s_editState.action == "BUY" ? 1 : -1));
             SetWindowTextA(hWnd, s.c_str());
             UpdatePriceLabel(GetParent(hWnd));
             int len = GetWindowTextLengthA(hWnd);
@@ -455,7 +456,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     else                 priceStr = "0.00";
     if (hPriceEdit) SetWindowTextA(hPriceEdit, priceStr.c_str());
 
-    std::string qtyStr = std::format("{:.0f}", order.totalQty);
+    std::string qtyStr = std::format("{:+}", order.totalQty * (order.action == "BUY" ? 1 : -1));
     if (hQtyEdit) SetWindowTextA(hQtyEdit, qtyStr.c_str());
 
     HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
