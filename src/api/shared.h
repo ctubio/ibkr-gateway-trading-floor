@@ -202,24 +202,6 @@ HICON CreateGrayIcon(HICON hOriginal) {
 
     return hGray;
 }
-
-struct ListViewFontData {
-    HFONT hFont;
-    HFONT hBoldFont;
-    int fontSize;
-};
-
-HFONT CreateBoldFont(HFONT hNormalFont) {
-    LOGFONTA lf;
-    if (!GetObjectA(hNormalFont, sizeof(LOGFONTA), &lf)) {
-        return NULL; 
-    }
-    
-    lf.lfWeight = FW_BOLD; 
-    
-    return CreateFontIndirectA(&lf);
-}
-
 static HFONT Coins_MakeMDL2Font(int ptSize) {
     HDC hdc = GetDC(NULL);
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
@@ -231,46 +213,69 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
 
 static HFONT hFont_Icons = Coins_MakeMDL2Font(11);   // Segoe MDL2 Assets for speaker/moon/lock glyphs
 
-static HFONT MakeFont(int ptSize, bool bold, const char* family = "Proxima Nova") {
-    HDC hdc = GetDC(NULL);
-    int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-    ReleaseDC(NULL, hdc);
-    return CreateFontA(h, 0, 0, 0,
-        bold ? FW_BOLD : FW_NORMAL,
-        FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, family);
-}
+class ScopedFont {
+    HFONT hFont = NULL;
 
-BOOL CALLBACK SetFontCallback(HWND hwndChild, LPARAM lParam) {
-    HFONT hFont = (HFONT)lParam;
-    SendMessage(hwndChild, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
-    return TRUE;
-}
-
-static void ApplyListViewFont(HWND hList, HFONT& hFont, HFONT& hBoldFont, int fontSize) { //"Segoe UI"
-    if (hFont) {
-        DeleteObject(hFont);
+public:
+    // Constructor handles the DPI-aware height calculation and font creation directly
+    ScopedFont(int ptSize, bool bold, const char* family = "Proxima Nova") {
+        HDC hdc = GetDC(NULL);
+        int h = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+        ReleaseDC(NULL, hdc);
+        
+        hFont = CreateFontA(
+            h, 0, 0, 0,
+            bold ? FW_BOLD : FW_NORMAL,
+            FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, family
+        );
     }
 
-    hFont = MakeFont(fontSize, false);
-    
-    if (hBoldFont) {
-        DeleteObject(hBoldFont);
+    // Destructor automatically cleans up the GDI resource
+    ~ScopedFont() {
+        if (hFont) {
+            DeleteObject(hFont);
+        }
     }
-    hBoldFont = CreateBoldFont(hFont);
-    
-    SendMessage(hList, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
 
-    HWND hHeader = ListView_GetHeader(hList);
-    int colCount = Header_GetItemCount(hHeader);
-    for (int i = 0; i < colCount; i++) {
-        ListView_SetColumnWidth(hList, i, LVSCW_AUTOSIZE_USEHEADER);
+    // Prevent copying to avoid double-deletion crashes
+    ScopedFont(const ScopedFont&) = delete;
+    ScopedFont& operator=(const ScopedFont&) = delete;
+
+    // Allow moving
+    ScopedFont(ScopedFont&& other) noexcept : hFont(other.hFont) {
+        other.hFont = NULL;
     }
     
-    // Redraw the control completely
-    InvalidateRect(hList, NULL, TRUE);
-}
+    ScopedFont& operator=(ScopedFont&& other) noexcept {
+        if (this != &other) {
+            if (hFont) DeleteObject(hFont);
+            hFont = other.hFont;
+            other.hFont = NULL;
+        }
+        return *this;
+    }
+
+    // Implicit conversion to HFONT
+    operator HFONT() const { return hFont; }
+    
+    // Explicit getter 
+    HFONT get() const { return hFont; }
+};
+
+static ScopedFont hFont11pt(11, false);
+static ScopedFont hFont11ptbold(11, true);
+static ScopedFont hFont12pt(12, false);
+static ScopedFont hFont12ptbold(12, true);
+static ScopedFont hFont14pt(14, false);
+static ScopedFont hFont14ptbold(14, true);
+static ScopedFont hFont15ptbold(15, true);
+static ScopedFont hFont16ptbold(16, true);
+static ScopedFont hFont17pt(17, false);
+static ScopedFont hFont17ptbold(17, true);
+static ScopedFont hFont18ptbold(18, true);
+static ScopedFont hFont21ptbold(21, true);
 
 // Suppresses WM_ERASEBKGND on list views so custom-draw repaints stay flicker-free.
 // (Previously also handled Ctrl+MouseWheel zoom — that feature has been removed;

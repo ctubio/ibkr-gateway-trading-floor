@@ -50,9 +50,6 @@ static bool g_DiamondsChkVisible = false;
 #define TIMER_DIAMONDS_SORT      7010
 #define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 5 seconds (or sooner if user clicks a column header)
 
-static ListViewFontData DiamondsFontData = { NULL, NULL, 17 };
-static HFONT DiamondsSmallFont     = NULL;
-
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
@@ -347,25 +344,6 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
     Diamonds_Layout(hWnd);
 }
 
-// ── Sort helpers ──────────────────────────────────────────────────────────────
-
-static void Diamonds_SetSortArrow(HWND hList, int col, bool asc) {
-    HWND hHdr = ListView_GetHeader(hList);
-    int n = Header_GetItemCount(hHdr);
-    for (int i = 0; i < n; ++i) {
-        HDITEM hdi = {}; hdi.mask = HDI_FORMAT;
-        Header_GetItem(hHdr, i, &hdi);
-        hdi.fmt &= ~(HDF_SORTUP | HDF_SORTDOWN);
-        if (i == col) hdi.fmt |= asc ? HDF_SORTUP : HDF_SORTDOWN;
-        Header_SetItem(hHdr, i, &hdi);
-    }
-}
-
-// Numeric columns — strip leading +/% suffix chars before atof.
-static bool Diamonds_ColIsNumeric(int col) {
-    return col != DCOL_SYMBOL && col != DCOL_DIV_DATE;
-}
-
 // ── Virtual Sort ──────────────────────────────────────────────────────────────
 
 static void Diamonds_ApplySort(HWND hList) {
@@ -390,7 +368,6 @@ static void Diamonds_ApplySort(HWND hList) {
         }
     });
 
-    Diamonds_SetSortArrow(hList, g_DiamondsSortCol, g_DiamondsSortAsc);
     // ZERO-FLICKER FIX: Delegate to the paint timer instead of invalidating instantly
     g_DiamondsDirty = true;
 }
@@ -660,13 +637,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         SetTimer(hWnd, TIMER_DIAMONDS_PAINT, DIAMONDS_PAINT_TIMER_MS, NULL);
 
         Diamonds_SetRowHeight(hList, 28);
-        ApplyListViewFont(hList, DiamondsFontData.hFont, DiamondsFontData.hBoldFont, DiamondsFontData.fontSize);
+        SendMessage(hList, WM_SETFONT, (WPARAM)hFont17pt.get(), TRUE);
+        SendMessage(ListView_GetHeader(hList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
-        DiamondsSmallFont = MakeFont(std::max(6, DiamondsFontData.fontSize - 3), false);
-        
         LVCOLUMNA lvc = {};
         lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
         for (int i = 0; i < DCOL_COUNT; ++i) {
@@ -997,7 +973,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     // ── Symbol column: apply per-symbol color override ────────
                     if (cd->iSubItem == DCOL_SYMBOL) {
-                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hBoldFont);
+                        SelectObject(cd->nmcd.hdc, hFont17ptbold.get());
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         
@@ -1026,9 +1002,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         if (cd->iSubItem == DCOL_CHG5MIN) {
-                            SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
+                            SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         } else {
-                            SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
+                            SelectObject(cd->nmcd.hdc, hFont17pt.get());
                         }
                         // For the Position cell also request post-paint so we can
                         // overlay the mini sparkline after the text is drawn.
@@ -1042,7 +1018,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         bool halted = g_DiamondDataCache[conId].halted;
                         cd->clrText = halted ? COINS_CLR_GRAY : COINS_CLR_BLUE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_VWAP) {
@@ -1054,7 +1030,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrText = (diff >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_LAST) {
@@ -1079,7 +1055,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
+                        SelectObject(cd->nmcd.hdc, hFont17pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_BID) {
@@ -1095,13 +1071,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsFontData.hFont);
+                        SelectObject(cd->nmcd.hdc, hFont17pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_PCT_NETLIQ) {
                         cd->clrText = COINS_CLR_GRAY;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
@@ -1112,13 +1088,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
                             cd->clrText   = LM_TEXT;
                         }
-                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
                         cd->clrText = COINS_CLR_PURPLE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, DiamondsSmallFont);
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     return CDRF_DODEFAULT;
@@ -1188,16 +1164,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             ImageList_Destroy(g_DiamondsRowHeightImageList);
             g_DiamondsRowHeightImageList = NULL;
         }
-        if (DiamondsFontData.hFont) {
-            DeleteObject(DiamondsFontData.hFont);
-        }
-        if (DiamondsFontData.hBoldFont) {
-            DeleteObject(DiamondsFontData.hBoldFont);
-        }
-        if (DiamondsSmallFont) {
-            DeleteObject(DiamondsSmallFont);
-        }
-        break;
         break;
     }
 

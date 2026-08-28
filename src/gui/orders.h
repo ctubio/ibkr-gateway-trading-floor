@@ -36,14 +36,8 @@ static OrdersEditState s_editState;
 // that wipes the phantom row from the ListView.
 static std::map<int, TradingAPI::OrderInfo> s_unsentOrders;
 
-static ListViewFontData OrdersFontData = { NULL, NULL, 14 };
-static HFONT fontInputs   = NULL;
-
 // Column indices, matching orderCols[] order below.
 enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_AVGFILL, OCOL_STATUS };
-
-// Smaller font used for the Status column. Kept in sync with OrdersFontData's
-static HFONT OrdersSmallFont     = NULL;
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -504,13 +498,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 0, 0, 760, 420,
                 hWnd, (HMENU)ID_ORDERS_LIST, hInst, NULL);
 
-            ApplyListViewFont(hList, OrdersFontData.hFont, OrdersFontData.hBoldFont, OrdersFontData.fontSize);
+            SendMessage(hList, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(ListView_GetHeader(hList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
             SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
             SetWindowSubclass(hList, OrdersList_SubclassProc, 1, 0);
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-
-            OrdersSmallFont = MakeFont(std::max(6, OrdersFontData.fontSize - 3), false);
 
             LVCOLUMNA lvc = {};
             lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
@@ -532,7 +525,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE, 
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_EDIT, hInst, NULL);
 
-            CreateWindowA("STATIC", "Qty:",
+            HWND hEditQtyLabel = CreateWindowA("STATIC", "Qty:",
                 WS_CHILD | SS_RIGHT,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_LABEL, hInst, NULL);
             HWND hEditQty = CreateWindowA("EDIT", "",
@@ -548,16 +541,15 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT), EditField_SubclassProc, 1, 0);
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT),   EditField_SubclassProc, 2, 0);
 
-            CreateWindowA("STATIC", "",
+            HWND hTotalLabel = CreateWindowA("STATIC", "",
                 WS_CHILD | SS_LEFT,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_HINT_LABEL, hInst, NULL);
 
-            // Apply font to all children.
-            EnumChildWindows(hWnd, SetFontCallback, (LPARAM)OrdersFontData.hFont);
-            
-            fontInputs   = MakeFont(18, true);
-            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)fontInputs, TRUE);
-            SendMessage(hEditQty, WM_SETFONT, (WPARAM)fontInputs, TRUE);
+            SendMessage(hPriceLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(hEditQtyLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(hTotalLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)hFont18ptbold.get(), TRUE);
+            SendMessage(hEditQty, WM_SETFONT, (WPARAM)hFont18ptbold.get(), TRUE);
 
             api().addApiUpdateWindow(hWnd);  
             Orders_Repopulate(hWnd);
@@ -710,7 +702,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             else if (dark)
                                 cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             if (cd->iSubItem == OCOL_STATUS) {
-                                SelectObject(cd->nmcd.hdc, OrdersSmallFont);
+                                SelectObject(cd->nmcd.hdc, hFont11pt.get());
                             }
                             return CDRF_NEWFONT;
                         }
@@ -787,20 +779,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
-            
-            if (fontInputs)   {
-                DeleteObject(fontInputs);
-                fontInputs = NULL;
-            }
-            if (OrdersFontData.hFont) {
-                DeleteObject(OrdersFontData.hFont);
-            }   
-            if (OrdersFontData.hBoldFont) {
-                DeleteObject(OrdersFontData.hBoldFont);
-            }
-            if (OrdersSmallFont) {
-                DeleteObject(OrdersSmallFont);
-            }
             break;
     }
     

@@ -48,11 +48,6 @@ static const QuickLink g_QuickLinks[] = {
 };
 static const int LINKS_COUNT = (int)(sizeof(g_QuickLinks) / sizeof(g_QuickLinks[0]));
 
-// ─── Fonts ────────────────────────────────────────────────────────────────────
-static HFONT hFontCoins_NetLiq  = NULL;
-static HFONT hFontCoins_BigPnL  = NULL;
-static HFONT hFontCoins_Label   = NULL;
-static HFONT hFontCoins_Value   = NULL;
 static bool fullDetails = true;
 
 void MutexGatewayInstance() {
@@ -394,7 +389,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (hCoin_NetLiq) {
         std::string formattedNum = FormatWithCommas(netLiq, fullDetails);
         SetWindowTextA(hCoin_NetLiq, formattedNum.c_str());
-        int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
+        int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
         SetWindowPos(hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_NetLiq, NULL, TRUE);
     }
@@ -427,7 +422,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         double grossPos = tryParse("GrossPositionValue");
         std::string formattedNum = FormatWithCommas(grossPos, fullDetails);
         SetWindowTextA(hCoin_Positions, formattedNum.c_str());
-        int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
+        int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
         SetWindowPos(hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_Positions, NULL, TRUE);
     }
@@ -470,7 +465,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : COLOR_THEME);
         SetWindowTextA(hCoin_Cash, formattedNum.c_str());
         SetCtrlColor(hCoin_Cash, clr);
-        int w2 = Coins_GetTextWidth(hWnd, hFontCoins_NetLiq, formattedNum.c_str());
+        int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
         SetWindowPos(hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(hCoin_Cash, NULL, TRUE);
     }
@@ -683,11 +678,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_CREATE:	{
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
-            hFontCoins_NetLiq  = MakeFont(14, true);
-            hFontCoins_BigPnL  = MakeFont(21, true);
-            hFontCoins_Value   = MakeFont(12, true);
-            hFontCoins_Label   = MakeFont(11, false);
-
             const int m    = 10;
             const int boxW = 226;
 
@@ -697,12 +687,12 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoinBox1 = CreateWindowA("BUTTON", "Today:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y1, boxW, box1H, hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hCoinBox1, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hCoinBox1, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hCoinBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_NetLiq = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 62, y1 - 4, 30, 18, hWnd, (HMENU)ID_COIN_NETLIQ, hInst, NULL);
-            SendMessage(hCoin_NetLiq, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
+            SendMessage(hCoin_NetLiq, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
             // Lock icon (hidden by default)
             hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
@@ -715,13 +705,13 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoin_Clock = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY,
                 m + boxW - 60, y1, 40, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Clock, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hCoin_Clock, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             // Row 1: PnL: 🔊 +0.00
             HWND hLblBigPnL = CreateWindowA("STATIC", "PnL:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y1 + 24, 30, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblBigPnL, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblBigPnL, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
@@ -732,31 +722,31 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoin_BigPnL = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOTIFY,
                 m + 70, y1 + 16, boxW - 82, 32, hWnd, (HMENU)ID_COIN_BIGPNL, hInst, NULL);
-            SendMessage(hCoin_BigPnL, WM_SETFONT, (WPARAM)hFontCoins_BigPnL, TRUE);
+            SendMessage(hCoin_BigPnL, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
             SetCtrlColor(hCoin_BigPnL, COINS_CLR_GREEN);
 
             // Row 2: PnL %: +0.00%
             HWND hLblPct = CreateWindowA("STATIC", "PnL %:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y1 + 48, 50, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblPct, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblPct, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Pct = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 70, y1 + 48, boxW - 82, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
-            SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
             SetCtrlColor(hCoin_Pct, COINS_CLR_GREEN);
 
             // Row 3: Realized: 0.00
             HWND hLblRealized = CreateWindowA("STATIC", "Realized:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y1 + 68, 65, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblRealized, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblRealized, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Realized = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 77, y1 + 68, boxW - 89, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Realized, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_Realized, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
 
             // ─── Box 2: Positions & Margin ─────────────────────────────────────
@@ -765,67 +755,67 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y2, boxW, box2H, hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hCoinBox2, DarkGroupBoxSubclassProc, 2, 0);
-            SendMessage(hCoinBox2, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hCoinBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Positions = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 77, y2 - 4, 30, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Positions, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
+            SendMessage(hCoin_Positions, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
             // Row 1: Unrealized: 0.00
             HWND hLblUnrealized = CreateWindowA("STATIC", "Unrealized:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 20, 75, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblUnrealized, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblUnrealized, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Unrealized = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 90, y2 + 20, boxW - 102, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Unrealized, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_Unrealized, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 2: Dividends: 33.75
             hLblDividends = CreateWindowA("STATIC", "Dividends:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 40, 75, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblDividends, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblDividends, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Dividends = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 90, y2 + 40, boxW - 102, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Dividends, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_Dividends, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 3: Accruals: -1.64
             hLblAccruals = CreateWindowA("STATIC", "Accruals:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 60, 75, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblAccruals, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblAccruals, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Accruals = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 90, y2 + 60, boxW - 102, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Accruals, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_Accruals, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 4: Buying Power: 86,483.04
             hLblBP = CreateWindowA("STATIC", "Buying Power:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 80, 100, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblBP, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblBP, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_BuyingPower = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 105, y2 + 80, boxW - 117, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 5: Maint Margin: 4,403.05
             hLblMM = CreateWindowA("STATIC", "Maintenance:", //  Margin:
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 100, 85, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblMM, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblMM, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_MaintMargin = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 97, y2 + 100, boxW - 109, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_MaintMargin, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_MaintMargin, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
 
             // ─── Box 3: Cash ───────────────────────────────────────────────────
@@ -834,34 +824,34 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y3, boxW, box3H, hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hCoinBox3, DarkGroupBoxSubclassProc, 3, 0);
-            SendMessage(hCoinBox3, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hCoinBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_Cash = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 53, y3 - 4, 30, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Cash, WM_SETFONT, (WPARAM)hFontCoins_NetLiq, TRUE);
+            SendMessage(hCoin_Cash, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
             // Row 1: EUR: 285.31
             hLblEUR = CreateWindowA("STATIC", "EUR:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 20, 35, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblEUR, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblEUR, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_EUR = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 50, y3 + 20, boxW - 62, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_EUR, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_EUR, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 2: USD: -11,559.66
             hLblUSD = CreateWindowA("STATIC", "USD:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 40, 35, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblUSD, WM_SETFONT, (WPARAM)hFontCoins_Label, TRUE);
+            SendMessage(hLblUSD, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             hCoin_USD = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 50, y3 + 40, boxW - 62, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_USD, WM_SETFONT, (WPARAM)hFontCoins_Value, TRUE);
+            SendMessage(hCoin_USD, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
 
             // ─── Bottom action buttons ──────────────────────────────────────────
@@ -1280,14 +1270,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 g_pCoinsVoice = nullptr;
             }
             g_coinsTtsOn = false;
-
-            // Free fonts
-            if (hFontCoins_NetLiq)  { DeleteObject(hFontCoins_NetLiq);  hFontCoins_NetLiq  = NULL; }
-            if (hFontCoins_BigPnL)  { DeleteObject(hFontCoins_BigPnL);  hFontCoins_BigPnL  = NULL; }
-            if (hFontCoins_Label)   { DeleteObject(hFontCoins_Label);   hFontCoins_Label   = NULL; }
-            if (hFontCoins_Value)   { DeleteObject(hFontCoins_Value);   hFontCoins_Value   = NULL; }
-            
-            if (hFont_Icons)   { DeleteObject(hFont_Icons);   hFont_Icons   = NULL; }
 
             hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
             hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;

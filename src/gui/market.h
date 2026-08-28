@@ -42,8 +42,6 @@ static const int ORDER_BAR_H = 84;
 static const ULONGLONG VOL_RATE_RECENT_MS   = 15000ULL;    // 15s recent window
 static const ULONGLONG VOL_RATE_BASELINE_MS = 300000ULL;   // 5 min baseline window (includes recent slice until pruned)
 
-static ListViewFontData MarketFontData = { NULL, NULL, 14 };
-
 // State mapped per-window to support infinite instances safely
 struct TsState {
     HWND hTsList = NULL;
@@ -75,13 +73,6 @@ struct TsState {
     std::deque<VolTick> volHistory;
     ULONGLONG volTrackingStart = 0;   // time tracking began (since last clear); NOT touched by
                                        // pruning, so the vol-rate "ready" gate below can't flicker
-
-    // ── Cached fonts ──────────────────────────────────────────────────────────
-    HFONT hBigFont     = NULL;   // ~22pt bold — bid ask
-    HFONT hExtraFont     = NULL;   // ~26pt bold — large last price
-    HFONT hStatusFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
-    HFONT hStatusNormalFont      = NULL;   // ~14pt regular — change / bid-ask labels / stats
-    HFONT hOrderFont       = NULL;   // ~20pt bold — order entry controls
 
     // ── TTS state ─────────────────────────────────────────────────────────────
     ISpVoice* hTtsVoice    = nullptr;
@@ -808,7 +799,8 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowSubclass(hTsSearchEdit, TsSearchEditSubclass, 1, 0);
             HWND hTsSearchList = CreateWindowA("LISTBOX", "", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY, 10, 40, 240, 180, hWnd, (HMENU)ID_MARKET_SEARCH_LIST, hInst, NULL);
             SetWindowSubclass(hTsSearchList, TsSearchListSubclass, 2, 0);
-            ApplyListViewFont(hTsSearchList, MarketFontData.hFont, MarketFontData.hBoldFont, MarketFontData.fontSize);
+            SendMessage(hTsSearchList, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(ListView_GetHeader(hTsSearchList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
             SetFocus(hTsSearchEdit);
             break;
         }
@@ -1101,17 +1093,17 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Ask (top row, red)
     {
-        SelectObject(hdc, state->hStatusNormalFont);
+        SelectObject(hdc, hFont12pt.get());
         SetTextColor(hdc, COINS_CLR_RED);
         RECT lr = { RB_X, 1, RB_X + RB_LABEL_W, rowH };
         DrawTextA(hdc, "Ask", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hBigFont);
+        SelectObject(hdc, hFont15ptbold.get());
         std::string askStr = Market_Fmt(L1.ask);
         RECT pr = { RB_X + RB_LABEL_W, 1, RB_X + RB_LABEL_W + RB_PRICE_W, rowH };
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, hFont11ptbold.get());
         std::string askSzStr = std::format(" x {}", Market_FmtQty(L1.askSize));
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
         DrawTextA(hdc, askSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1119,17 +1111,17 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Bid (bottom row, blue)
     {
-        SelectObject(hdc, state->hStatusNormalFont);
+        SelectObject(hdc, hFont12pt.get());
         SetTextColor(hdc, COINS_CLR_BLUE);
         RECT lr = { RB_X, rowH, RB_X + RB_LABEL_W, HEADER_H - 1 };
         DrawTextA(hdc, "Bid", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hBigFont);
+        SelectObject(hdc, hFont15ptbold.get());
         std::string bidStr = Market_Fmt(L1.bid);
         RECT pr = { RB_X + RB_LABEL_W, rowH, RB_X + RB_LABEL_W + RB_PRICE_W, HEADER_H - 1 };
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, hFont11ptbold.get());
         std::string bidSzStr = std::format(" x {}", Market_FmtQty(L1.bidSize));
         RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
         DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1139,7 +1131,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Starts right after the left controls (speaker + checkbox).
     const int STATS_X = LC_MARGIN + LC_ICON_W + LC_MARGIN;
 
-    SelectObject(hdc, state->hStatusFont);
+    SelectObject(hdc, hFont11ptbold.get());
     
     // Calculate PnL (Fallback to local calculation if TWS hasn't sent a stream update yet)
     double dPnL = state->dailyPnL;
@@ -1230,7 +1222,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     }
 
     // Measure large last price
-    SelectObject(hdc, state->hExtraFont);
+    SelectObject(hdc, hFont21ptbold.get());
     std::string lastStr = Market_Fmt(L1.last);
     SIZE lastSz = {};
     GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
@@ -1238,7 +1230,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Measure change text (smaller font)
     std::string chgStr = std::format(" {:.2f}  {:.2f}%", chg, chgPct);
     SIZE chgSz = {};
-    SelectObject(hdc, state->hStatusFont);
+    SelectObject(hdc, hFont11ptbold.get());
     GetTextExtentPoint32A(hdc, chgStr.c_str(), (int)chgStr.size(), &chgSz);
 
     // Total width of the last+change block
@@ -1251,7 +1243,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     if (lcX < LC_RIGHT) {
         // Draw large last price (vertically centred, full header height)
-        SelectObject(hdc, state->hExtraFont);
+        SelectObject(hdc, hFont21ptbold.get());
         SetTextColor(hdc, textColor);
         RECT lastRc = { lcX, 0, LC_RIGHT - 7, HEADER_H - 7 };
         DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
@@ -1262,7 +1254,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
         // Draw change/pct% in smaller font immediately to below
         COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
-        SelectObject(hdc, state->hStatusFont);
+        SelectObject(hdc, hFont11ptbold.get());
         SetTextColor(hdc, chgColor);
         int chgX = lcX;
         if (chgX < LC_RIGHT) {
@@ -1276,7 +1268,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     }
 
     // ── Bottom separator ──────────────────────────────────────────────────────
-    SelectObject(hdc, state->hStatusFont);
+    SelectObject(hdc, hFont11ptbold.get());
     HPEN hSepPen = CreatePen(PS_SOLID, 1, sepColor);
     HPEN hOldPen = (HPEN)SelectObject(hdc, hSepPen);
     MoveToEx(hdc, 0, HEADER_H - 1, NULL);
@@ -1400,13 +1392,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         tsStates[hWnd] = state;
 
-        // ── Header fonts ──────────────────────────────────────────────────────
-        state->hBigFont = MakeFont(15, true);
-        state->hExtraFont = MakeFont(21, true);
-        state->hOrderFont = MakeFont(16, true);
-        state->hStatusFont = MakeFont(11, true);
-        state->hStatusNormalFont = MakeFont(12, false);
-
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hExecList    = Market_CreateExecList(hWnd, hInst);
         state->hL2List      = Market_CreateL2List(hWnd, hInst);
@@ -1419,14 +1404,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SetWindowSubclass(state->hL2List,      Market_ListForwardCtrlProc, 13, 0);
         SetWindowSubclass(state->hExecList,    Market_ListForwardCtrlProc, 14, 0);
 
-        {
-            HFONT hListFont = MakeFont(11, false);
-            SendMessage(state->hTsList,      WM_SETFONT, (WPARAM)hListFont, TRUE);
-            SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hListFont, TRUE);
-            SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hListFont, TRUE);
-            SendMessage(state->hL2List,      WM_SETFONT, (WPARAM)hListFont, TRUE);
-            SendMessage(state->hExecList,    WM_SETFONT, (WPARAM)hListFont, TRUE);
-        }
+        SendMessage(state->hTsList,      WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+        SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+        SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+        SendMessage(state->hL2List,      WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+        SendMessage(state->hExecList,    WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
         ShowWindow(state->hTsList, SW_SHOW);
         ShowWindow(state->hL2List, SW_SHOW);
@@ -1502,7 +1484,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | align | SS_NOPREFIX,
                 0, 0, 10, 10, hWnd, NULL, hInst, NULL);
             SetCtrlColor(h, color);
-            SendMessage(h, WM_SETFONT, (WPARAM)state->hStatusFont, TRUE);
+            SendMessage(h, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
             return h;
         };
         state->hProfitLossPercentLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
@@ -1512,15 +1494,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hOptStopLabel = makeHintLabel(SS_RIGHT, COINS_CLR_GRAY);
 
         // Apply font to order bar controls
-        if (state->hOrderFont) {
-            SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
-            SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
-            SendMessage(state->hOrderStopPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
-            SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
-            SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
-        }
+        SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+        SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+        SendMessage(state->hOrderStopPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+        SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+        SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
         if (state->hOrderRisk)
-            SendMessage(state->hOrderRisk, WM_SETFONT, (WPARAM)state->hOrderFont, TRUE);
+            SendMessage(state->hOrderRisk, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
         // Restore splitter + filter
         if (!state->symbol.empty()) {
@@ -1933,11 +1913,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->hTtsVoice->Release();
                 state->hTtsVoice = nullptr;
             }
-            if (state->hBigFont) DeleteObject(state->hBigFont);
-            if (state->hExtraFont) DeleteObject(state->hExtraFont);
-            if (state->hStatusFont) DeleteObject(state->hStatusFont);
-            if (state->hStatusNormalFont) DeleteObject(state->hStatusNormalFont);
-            if (state->hOrderFont) DeleteObject(state->hOrderFont);
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hOrderRisk = NULL;
