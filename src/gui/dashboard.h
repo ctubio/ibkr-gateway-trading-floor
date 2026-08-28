@@ -39,6 +39,7 @@ static const QuickLink g_QuickLinks[] = {
     { "Today", "https://www.investing.com/dividends-calendar" },
     { "WSB",   "https://www.reddit.com/r/wallstreetbets"      },
     { "Scan",  "https://stockscan.io/all-stocks"              },
+    { "List",  "https://stockanalysis.com/list/"              },
     { "Map",   "https://finviz.com/map.ashx?t=sec"            },
     { "Data",  "https://www.benzinga.com/quote"               },
     { "Paper", "http://192.168.1.105:2025/paper"              },
