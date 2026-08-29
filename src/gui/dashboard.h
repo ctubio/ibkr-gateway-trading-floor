@@ -723,7 +723,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Lock icon (hidden by default)
             hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-                m + boxW - 25, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
+                m + boxW - 90, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
             SendMessage(hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
             SetCtrlColor(hCoin_Lock, COINS_CLR_GRAY);
             ShowWindow(hCoin_Lock, SW_HIDE);
