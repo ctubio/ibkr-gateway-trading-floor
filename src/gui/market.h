@@ -260,12 +260,11 @@ static void Market_RedrawHintsFor(HWND hEdit) {
 
 // ── Right block geometry (shared by paint and layout) ────────────────────────
 // Ask/Bid block is fixed-width, anchored to the right edge.
-// label(28) + price(74) + " x "(16) + size(44) = 162 px + 6 margin = 168 from right
-static const int RB_LABEL_W = 28;
+// price(74) + " x "(16) + size(44) = 162 px + 6 margin = 168 from right
 static const int RB_PRICE_W = 74;
 static const int RB_SEP_W   = 16;
 static const int RB_SIZE_W  = 44;
-static const int RB_TOTAL   = RB_LABEL_W + RB_PRICE_W + RB_SEP_W + RB_SIZE_W;
+static const int RB_TOTAL   = RB_PRICE_W + RB_SEP_W + RB_SIZE_W;
 static const int RB_MARGIN  = 4;
 
 // Left controls block (speaker + checkbox): fixed width anchored to left edge.
@@ -1093,37 +1092,31 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Ask (top row, red)
     {
-        SelectObject(hdc, hFont12pt.get());
         SetTextColor(hdc, COINS_CLR_RED);
-        RECT lr = { RB_X, 1, RB_X + RB_LABEL_W, rowH };
-        DrawTextA(hdc, "Ask", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont16ptbold.get());
         std::string askStr = Market_Fmt(L1.ask);
-        RECT pr = { RB_X + RB_LABEL_W, 1, RB_X + RB_LABEL_W + RB_PRICE_W, rowH };
+        RECT pr = { RB_X, 1, RB_X + RB_PRICE_W, rowH };
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont11ptbold.get());
         std::string askSzStr = std::format(" x {}", Market_FmtQty(L1.askSize));
-        RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
+        RECT sr = { RB_X + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
         DrawTextA(hdc, askSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
     // Bid (bottom row, blue)
     {
-        SelectObject(hdc, hFont12pt.get());
         SetTextColor(hdc, COINS_CLR_BLUE);
-        RECT lr = { RB_X, rowH, RB_X + RB_LABEL_W, HEADER_H - 1 };
-        DrawTextA(hdc, "Bid", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont16ptbold.get());
         std::string bidStr = Market_Fmt(L1.bid);
-        RECT pr = { RB_X + RB_LABEL_W, rowH, RB_X + RB_LABEL_W + RB_PRICE_W, HEADER_H - 1 };
+        RECT pr = { RB_X, rowH, RB_X + RB_PRICE_W, HEADER_H - 1 };
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont11ptbold.get());
         std::string bidSzStr = std::format(" x {}", Market_FmtQty(L1.bidSize));
-        RECT sr = { RB_X + RB_LABEL_W + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
+        RECT sr = { RB_X + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
         DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
@@ -1245,7 +1238,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         // Draw large last price (vertically centred, full header height)
         SelectObject(hdc, hFont21ptbold.get());
         SetTextColor(hdc, textColor);
-        RECT lastRc = { lcX, 0, LC_RIGHT - 7, HEADER_H - 7 };
+        RECT lastRc = { lcX, 0, LC_RIGHT, HEADER_H - 7 };
         DrawTextA(hdc, lastStr.c_str(), -1, &lastRc, DT_RIGHT | DT_TOP | DT_SINGLELINE | DT_NOPREFIX);
 
         // Remember this rect so WM_LBUTTONDOWN/WM_SETCURSOR can hit-test clicks
@@ -1258,7 +1251,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         SetTextColor(hdc, chgColor);
         int chgX = lcX;
         if (chgX < LC_RIGHT) {
-            RECT chgRc = { chgX, 0, LC_RIGHT - 7, HEADER_H - 3 };
+            RECT chgRc = { chgX, 0, LC_RIGHT, HEADER_H - 3 };
             DrawTextA(hdc, chgStr.c_str(), -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
         }
     } else {
@@ -1303,6 +1296,8 @@ static bool Market_InitVoice(TsState* state) {
 static void Market_SpeakLast(TsState* state) {
     if (!state->hTtsVoice) return;
     if (state->l1Info.last <= 0.0) return;
+    state->sparkline.AddPrice(state->l1Info.last);
+    state->sparkline.AddPrice(state->l1Info.last-1);
     std::string s = std::format("{:.2f}", state->l1Info.last);
     std::wstring ws(s.begin(), s.end());
     size_t dotPos = ws.find(L".00");
