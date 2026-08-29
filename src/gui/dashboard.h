@@ -7,8 +7,9 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 
 #define WM_TRAYICON (WM_APP + 101)
 
-#define TIMER_WATCHDOG 1
-#define TIMER_MARKET_CLOCK 2 // Live US market-session clock (1s tick)
+#define TIMER_WATCHDOG               1
+#define TIMER_WATCHDOG_DELAYED_START 2
+#define TIMER_MARKET_CLOCK           3 // Live US market-session clock (1s tick)
 
 #define ID_M_DASHBOARD   1001
 #define ID_MB_DIAMONDS   1003
@@ -907,10 +908,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             SendMessage(hWnd, WM_TIMER, TIMER_MARKET_CLOCK, 0);
 
             SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
-            std::thread([hWnd]() {
-                std::this_thread::sleep_for(std::chrono::milliseconds(721));
-                SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
-            }).detach();
+            SetTimer(hWnd, TIMER_WATCHDOG_DELAYED_START, 721, NULL);
 
             break;
         }
@@ -1030,7 +1028,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
             if (wParam == TIMER_COINS_SPEAKER) // 21000
                 Coins_SpeakDailyPnL();
-            if (wParam == TIMER_WATCHDOG) { // 10000
+            if (wParam == TIMER_WATCHDOG || wParam == TIMER_WATCHDOG_DELAYED_START) { // 10000
+                if (wParam == TIMER_WATCHDOG_DELAYED_START)
+                    KillTimer(hWnd, TIMER_WATCHDOG_DELAYED_START);
                 if (shouldBeConnected && !api().isConnected()) {
 #ifndef GATEWAY_SIM
                     EnsureGatewayRunning(hWnd);
