@@ -337,16 +337,16 @@ static void Market_Layout(HWND hWnd, TsState* state) {
         const int lblW = 150;
         const int priceW = 180;
         const int riskW = 130;
-        const int startY = rc.right - (priceW * 2) - m;
+        const int startX = rc.right - (priceW * 2) - m;
 
         SetWindowPos(state->hOrderLabel,       NULL, m,                                  lblY,   lblW,    18, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hTotalLabel,        NULL, m + lblW + m,                       lblY, riskW, BAR_H, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderPrice,       NULL, startY,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hOrderQty,         NULL, startY + priceW + m,         editY,  priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderPrice,       NULL, startX,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(state->hOrderQty,         NULL, startX + priceW + m,         editY,  priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         if (!state->isOvernight) {
             const int stopY = editY + editH + 4;
-            SetWindowPos(state->hOrderStopPrice,   NULL, startY,              stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-            SetWindowPos(state->hOrderProfitPrice, NULL, startY + priceW + m, stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderStopPrice,   NULL, startX,              stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOrderProfitPrice, NULL, startX + priceW + m, stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // ── Hint overlay labels: 12pt, corner-anchored on their input ───
             const int hint2H = 32; // two-line hints (pct% \n value)
@@ -355,17 +355,17 @@ static void Market_Layout(HWND hWnd, TsState* state) {
             const int hintMargin = 4;
 
             // Price input: loss (bottom-left) / profit (bottom-right)
-            SetWindowPos(state->hProfitLossPercentLabel, NULL, startY + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
-            SetWindowPos(state->hProfitLossValueLabel, NULL, startY + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hProfitLossPercentLabel, NULL, startX + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hProfitLossValueLabel, NULL, startX + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Qty input: sizing at target risk (bottom-left)
-            SetWindowPos(state->hOptQtyLabel, NULL, startY + priceW + m + hintMargin, editY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOptQtyLabel, NULL, startX + priceW + m + hintMargin, editY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Stop input: stop distance at target risk (bottom-right)
-            SetWindowPos(state->hOptStopLabel, NULL, startY + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hOptStopLabel, NULL, startX + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Profit input: risk/reward ratio (bottom-left)
-            SetWindowPos(state->hRRLabel, NULL, startY + priceW + m + hintMargin, stopY + editH - hint1H - 2, 50, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hRRLabel, NULL, startX + priceW + m + hintMargin, stopY + editH - hint1H - 2, 50, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
         }
 
         CenterEditText(state->hOrderPrice);
@@ -1522,8 +1522,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendMessage(state->hOrderStopPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
         SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
         SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-        if (state->hTotalLabel)
-            SendMessage(state->hTotalLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+        SendMessage(state->hTotalLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
         // Restore splitters + filter
         if (!state->symbol.empty()) {

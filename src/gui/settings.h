@@ -52,7 +52,6 @@ void FlushDebugBuffer() {
 LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
-            
             hDebugEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
@@ -307,7 +306,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 Settings_Save("Gateway_KillOnExit", checked);
             }
             if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
-                HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);   
+                HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);
                 if (hPathEdit != NULL) {
                     std::string path = AskGatewayPath(hWnd);
                     if (!path.empty()) {
