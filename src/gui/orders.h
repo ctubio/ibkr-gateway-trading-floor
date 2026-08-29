@@ -485,7 +485,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
     // the hint after every message that could've changed the selection or
     // focus — same fix as Market_RedrawHintsFor() in market.h.
     if (uIdSubclass == 2) { // Qty edit
-        auto redraw = [hWnd](HWND h) {
+        auto redraw = [](HWND h) {
             if (!h || !IsWindowVisible(h)) return;
             InvalidateRect(h, NULL, TRUE);
             UpdateWindow(h);

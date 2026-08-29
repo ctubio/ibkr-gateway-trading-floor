@@ -243,7 +243,7 @@ static void Market_RedrawHintsFor(HWND hEdit) {
     if (it == tsStates.end() || !it->second) return;
     TsState* state = it->second;
 
-    auto redraw = [hEdit](HWND h) {
+    auto redraw = [](HWND h) {
         if (!h || !IsWindowVisible(h)) return;
         InvalidateRect(h, NULL, TRUE);
         UpdateWindow(h);
