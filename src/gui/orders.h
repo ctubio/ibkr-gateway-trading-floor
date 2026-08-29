@@ -1,6 +1,6 @@
 #pragma once
 
-int windowOrdersWidth = 480;
+int windowOrdersWidth = 470;
 
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", windowOrdersWidth, 240); }
 
@@ -47,7 +47,7 @@ static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
     { "Quote",        180,  LVCFMT_LEFT },
-    { "Status",       180,  LVCFMT_CENTER},
+    { "Status",       170,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int h = rc.bottom;
 
     HWND hList          = GetDlgItem(hWnd, ID_ORDERS_LIST);
-    HWND hTotalLabel          = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hTotalLabel    = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
     HWND hPriceEdit     = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hOrderQty      = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
     HWND hOrderTypeHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
@@ -123,8 +123,8 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int editW  = 180;
 
     if (hOrderTypeHint) {
-        int hintW = 210;
-        MoveWindow(hOrderTypeHint, 18, py + 5, hintW, 24, TRUE);
+        int hintW = 130;
+        MoveWindow(hOrderTypeHint, 8, py + 5, hintW, 24, TRUE);
         ShowWindow(hOrderTypeHint, show);
     }
 
@@ -478,7 +478,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
 
     HWND hOrderTypeHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hOrderTypeHint) {
-        std::string hint = order.symbol + " " + order.action + " " + order.orderType;
+        std::string hint = order.symbol + " " + order.action;// + " " + order.orderType;
         SetWindowTextA(hOrderTypeHint, hint.c_str());
         SetCtrlColor(hOrderTypeHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
         InvalidateRect(hOrderTypeHint, NULL, TRUE);
@@ -557,10 +557,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT),   EditField_SubclassProc, 2, 0);
 
             HWND hOrderTypeHint = CreateWindowA("STATIC", "",
-                WS_CHILD | SS_LEFT,
+                WS_CHILD | SS_CENTER,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_HINT_LABEL, hInst, NULL);
 
-            SendMessage(hOrderTypeHint, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(hOrderTypeHint, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hEditPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hEditQty, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hTotalLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
@@ -705,12 +705,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             // Get status text
                             char statusBuf[64] = {};
                             HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 4, statusBuf, sizeof(statusBuf));
+                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, OCOL_STATUS, statusBuf, sizeof(statusBuf));
                             std::string statusStr(statusBuf);
                             size_t pos = statusStr.rfind(' ');
                             statusStr = (pos == std::string::npos) ? statusStr : statusStr.substr(pos + 1);
                             char buf[16] = {};
-                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, 0, buf, sizeof(buf));
+                            ListView_GetItemText(hList, (int)cd->nmcd.dwItemSpec, OCOL_SIDE, buf, sizeof(buf));
                             size_t len = strlen(buf);
                             std::string orderType;
                             if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)       orderType = "BUY";
