@@ -548,8 +548,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(hPriceLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
             SendMessage(hEditQtyLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
             SendMessage(hTotalLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
-            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)hFont18ptbold.get(), TRUE);
-            SendMessage(hEditQty, WM_SETFONT, (WPARAM)hFont18ptbold.get(), TRUE);
+            SendMessage(hEditPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+            SendMessage(hEditQty, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
             api().addApiUpdateWindow(hWnd);  
             Orders_Repopulate(hWnd);

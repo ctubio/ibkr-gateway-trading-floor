@@ -56,7 +56,7 @@ Real-time order tracking with an emphasis on speed and accuracy.
 Deep-dive analysis of held positions with advanced grouping.
 *   **Performance**: Daily P&L, Unrealized P&L, and unrealized % change with high-contrast color-coding.
 *   **Dividends**: Track yield %, next dividend date, annual amounts, and market value.
-*   **Custom Tabs**: Three filterable tabs — *Growth*, *High-Yield Dividends*, and *Quarantine* (checkboxes at bottom).
+*   **Custom Tabs**: Three filterable tabs — *Growth*, *Dividends*, and *Quarantine* (checkboxes at bottom).
 *   **Symbol Colors**: Assign one of six colors (Red, Green, Blue, Purple, Gold, Brown) per position for visual categorization.
 *   **Deferred Sort**: Header-click to sort by any column; zero-flicker re-sorting via timer.
 
@@ -107,7 +107,7 @@ Right-click a position to open a context menu:
 | :--- |
 | **Quick BUY 1** — placeholder BUY order for 1 share at the last price |
 | **Quick SELL 1** — placeholder SELL order for 1 share at 2× the last price |
-| **Move to Growth / High-Yield Dividends / Quarantine** — reassign the group |
+| **Move to Growth / Dividends / Quarantine** — reassign the group |
 | **Set Color** — pick one of six colors (Red, Green, Blue, Purple, Gold, Brown) or None |
 
 ---

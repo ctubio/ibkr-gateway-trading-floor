@@ -1,11 +1,11 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1477;
+int windowDiamondsWidth = 1380;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
 #define ID_DIAMONDS_CHK_0        7002   // "Growth"
-#define ID_DIAMONDS_CHK_1        7003   // "High-Yield Dividends"
+#define ID_DIAMONDS_CHK_1        7003   // "Dividends"
 #define ID_DIAMONDS_CHK_2        7004   // "Quarantine"
 #define DIAMONDS_CHK_STRIP_H     32     // height of the checkbox bar at the bottom
 
@@ -15,7 +15,7 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 #define DTAB_QUARENTINE       2
 #define DIAMONDS_TAB_COUNT    3
 
-static const char* g_DiamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "High-Yield Dividends", "Quarantine" };
+static const char* g_DiamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "Dividends", "Quarantine" };
 
 // Bitmask: bit N set means group N is currently visible.  Default = all visible.
 static UINT g_DiamondsCheckedTabs = 0x7;
@@ -68,10 +68,8 @@ enum DiamondColIdx {
     DCOL_CHG13WEEK,
     DCOL_CHG26WEEK,
     DCOL_CHG52WEEK,
-    //DCOL_CLOSE,
-    //DCOL_OPEN,
-    DCOL_UNREALIZED_PL_PCT,
     DCOL_UNREALIZED_PL,
+    DCOL_UNREALIZED_PL_PCT,
     DCOL_MKTVAL,
     DCOL_PCT_NETLIQ,
     DCOL_DIV_YIELD,
@@ -121,22 +119,20 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
-    { "Asks",             70, LVCFMT_RIGHT },
-    { "Ask",              100, LVCFMT_RIGHT },
-    { "Last",             100, LVCFMT_RIGHT },
-    { "Bid",              100, LVCFMT_RIGHT },
-    { "Bids",             70, LVCFMT_RIGHT },
+    { "Asks",              70, LVCFMT_RIGHT },
+    { "Ask",               90, LVCFMT_RIGHT },
+    { "Last",              90, LVCFMT_RIGHT },
+    { "Bid",               90, LVCFMT_RIGHT },
+    { "Bids",              70, LVCFMT_RIGHT },
     { "VWAP",              80, LVCFMT_RIGHT },
     { "5m",                80, LVCFMT_RIGHT },
-    { "Daily",            100, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Change",           105, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
+    { "Change %",          95, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "13w",              115, LVCFMT_RIGHT },
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
-    //{ "Close",             85, LVCFMT_RIGHT },  // {"fix_tag":7678,"name":"Price/EMA(200)","description":"Price to Exponential moving average (N = 200) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA200"}
-    //{ "Open",              80, LVCFMT_RIGHT },  // {"fix_tag":7743,"name":"52 Week Change %","description":"This is the percentage change in the company's stock price over the last fifty two weeks.","groups":["G5"],"id":"52WK_PRICE_PCT_CHANGE"}
-    { "Unrealized %",     140, LVCFMT_RIGHT },
-    { "Unrealized",       115, LVCFMT_RIGHT },
+    { "Unrealized",       100, LVCFMT_RIGHT },
+    { "Unrealized %",     105, LVCFMT_RIGHT },
     { "Value",             95, LVCFMT_RIGHT },
     { "Net %",             85, LVCFMT_RIGHT },
     { "Yield %",           90, LVCFMT_RIGHT },
@@ -150,7 +146,7 @@ static const DiamondCol diamondCols[] = {
 static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
               "diamondCols count must match DiamondColIdx::DCOL_COUNT");
 
-// Dividend columns (Yield/Date/Amount/Annual) show when "High-Yield Dividends"
+// Dividend columns (Yield/Date/Amount/Annual) show when "Dividends"
 // (bit 1) is checked. 13w/26w/52w change columns show when "Quarantine"
 // (bit 2) is checked. Each group is hidden by collapsing its column widths to
 // 0 and restored to diamondCols[]'s defined width when its tab is checked.
@@ -159,7 +155,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
-    bool showDiv   = (g_DiamondsCheckedTabs & (1u << 1)) != 0;   // High-Yield Dividends
+    bool showDiv   = (g_DiamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
     bool showWeeks = (g_DiamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
 
     for (int i = DCOL_DIV_YIELD; i <= DCOL_ANNUAL_DIV; ++i) {
@@ -322,15 +318,14 @@ static void Diamonds_Layout(HWND hWnd) {
     if (!g_DiamondsChkVisible) return;
 
     // Space the three checkboxes evenly across the bottom strip.
-    static const int chkW[DIAMONDS_TAB_COUNT] = { 90, 175, 115 };
+    static const int chkW[DIAMONDS_TAB_COUNT] = { 70, 90, 90 };
     int totalW = 0;
     for (int w : chkW) totalW += w;
     int startX = (rc.right - totalW) / 2;
     int y = listH + (DIAMONDS_CHK_STRIP_H - 20) / 2;
     int x = startX;
     for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-        SetWindowPos(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), NULL,
-                     x, y, chkW[i], 20, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), NULL, x + (i * 20), y, chkW[i], 20, SWP_NOZORDER | SWP_NOACTIVATE);
         x += chkW[i];
     }
 }
@@ -637,7 +632,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         SetTimer(hWnd, TIMER_DIAMONDS_PAINT, DIAMONDS_PAINT_TIMER_MS, NULL);
 
         Diamonds_SetRowHeight(hList, 28);
-        SendMessage(hList, WM_SETFONT, (WPARAM)hFont17pt.get(), TRUE);
+        SendMessage(hList, WM_SETFONT, (WPARAM)hFont16pt.get(), TRUE);
         SendMessage(ListView_GetHeader(hList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
 
@@ -675,8 +670,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         g_DiamondsCheckedTabs &= 0x7;  // clamp to valid 3-bit range
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
             bool checked = (g_DiamondsCheckedTabs >> i) & 1;
-            SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i),
-                        BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+            HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
+            SendMessage(tab, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+            SetCtrlColor(tab, checked ? (Settings_DarkMode() ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
         }
         Diamonds_UpdateDivColumnsVisibility(hWnd);
 
@@ -703,8 +699,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Rebuild bitmask from checkbox states.
             g_DiamondsCheckedTabs = 0;
             for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-                if (SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), BM_GETCHECK, 0, 0) == BST_CHECKED)
+                HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
+                if (SendMessage(tab, BM_GETCHECK, 0, 0) == BST_CHECKED) {
                     g_DiamondsCheckedTabs |= (1u << i);
+                    SetCtrlColor(tab, Settings_DarkMode() ? DM_TEXT : LM_TEXT);
+                } else {
+                    SetCtrlColor(tab, COINS_CLR_GRAY);
+                }
             }
             Settings_CheckedTabs_Save((int)g_DiamondsCheckedTabs);
             Diamonds_UpdateDivColumnsVisibility(hWnd);
@@ -859,7 +860,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
 
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to High-Yield Dividends");
+                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to Dividends");
                 AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
 
                 // ── Color submenu ─────────────────────────────────────────────
@@ -973,7 +974,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     // ── Symbol column: apply per-symbol color override ────────
                     if (cd->iSubItem == DCOL_SYMBOL) {
-                        SelectObject(cd->nmcd.hdc, hFont17ptbold.get());
+                        SelectObject(cd->nmcd.hdc, hFont16ptbold.get());
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = g_DiamondDisplayOrder[rowIndex];
                         
@@ -1004,7 +1005,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (cd->iSubItem == DCOL_CHG5MIN) {
                             SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         } else {
-                            SelectObject(cd->nmcd.hdc, hFont17pt.get());
+                            SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         }
                         // For the Position cell also request post-paint so we can
                         // overlay the mini sparkline after the text is drawn.
@@ -1055,7 +1056,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont17pt.get());
+                        SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_BID) {
@@ -1071,7 +1072,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont17pt.get());
+                        SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_PCT_NETLIQ) {

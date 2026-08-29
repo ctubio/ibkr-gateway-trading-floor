@@ -270,11 +270,8 @@ static ScopedFont hFont12pt(12, false);
 static ScopedFont hFont12ptbold(12, true);
 static ScopedFont hFont14pt(14, false);
 static ScopedFont hFont14ptbold(14, true);
-static ScopedFont hFont15ptbold(15, true);
+static ScopedFont hFont16pt(16, false);
 static ScopedFont hFont16ptbold(16, true);
-static ScopedFont hFont17pt(17, false);
-static ScopedFont hFont17ptbold(17, true);
-static ScopedFont hFont18ptbold(18, true);
 static ScopedFont hFont21ptbold(21, true);
 
 // Suppresses WM_ERASEBKGND on list views so custom-draw repaints stay flicker-free.
@@ -398,7 +395,7 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             char className[256] = {};
             GetClassNameA(hWnd, className, sizeof(className));
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0 || strcmp(className, ORDERS_CLASS_NAME) == 0) {
+            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0 || strcmp(className, DIAMONDS_CLASS_NAME) == 0 || strcmp(className, ORDERS_CLASS_NAME) == 0) {
                 COLORREF clr = GetCtrlColor((HWND)lParam);
                 if (clr != COLOR_THEME) {
                     SetTextColor((HDC)wParam, clr);

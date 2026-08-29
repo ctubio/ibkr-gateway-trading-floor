@@ -1098,7 +1098,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT lr = { RB_X, 1, RB_X + RB_LABEL_W, rowH };
         DrawTextA(hdc, "Ask", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, hFont15ptbold.get());
+        SelectObject(hdc, hFont16ptbold.get());
         std::string askStr = Market_Fmt(L1.ask);
         RECT pr = { RB_X + RB_LABEL_W, 1, RB_X + RB_LABEL_W + RB_PRICE_W, rowH };
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1116,7 +1116,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         RECT lr = { RB_X, rowH, RB_X + RB_LABEL_W, HEADER_H - 1 };
         DrawTextA(hdc, "Bid", -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
-        SelectObject(hdc, hFont15ptbold.get());
+        SelectObject(hdc, hFont16ptbold.get());
         std::string bidStr = Market_Fmt(L1.bid);
         RECT pr = { RB_X + RB_LABEL_W, rowH, RB_X + RB_LABEL_W + RB_PRICE_W, HEADER_H - 1 };
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1798,11 +1798,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
-                    bool dark = Settings_DarkMode();
                     // lParam stores 1=BUY (blue/green), 2=SELL (red)
                     LPARAM side = cd->nmcd.lItemlParam;
                     COLORREF clr = (side == 1) ? COINS_CLR_BLUE : COINS_CLR_RED;
-                    COLORREF bg  = dark
+                    COLORREF bg  = Settings_DarkMode()
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
