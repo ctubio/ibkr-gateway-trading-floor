@@ -159,6 +159,17 @@ static bool Orders_IsEditable(const std::string& status) {
              status == "Inactive" || status == "PendingCancel");
 }
 
+static void SetOrdersTitle(HWND hWnd) {
+    int submitted = (int)s_unsentOrders.size();
+    int filled = 0;
+    for (const auto& o : api().getOrdersSorted()) {
+        if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
+        if (o.status == "Filled") filled++;
+    }
+
+    SetWindowTextA(hWnd, ("Orders: " + std::to_string(submitted) + " Submitted | " + std::to_string(filled) + " Filled").c_str());
+}
+
 // Hide the panel and let the ListView fill the window.
 static void Orders_HideInlinePanel(HWND hWnd) {
     s_editState.orderId      = 0;
@@ -195,8 +206,6 @@ static void Orders_Repopulate(HWND hWnd) {
             ListView_DeleteItem(hList, i);
     }
 
-    int submitted = 0;
-    int filled = 0;
     for (const auto& o : orders) {
         int row = ListView_GetItemCount(hList);   // append after any surviving Unsent rows
 
@@ -227,12 +236,9 @@ static void Orders_Repopulate(HWND hWnd) {
             fullTypeStr += o.status;
         else fullTypeStr += o.tif + " " + o.orderType + " " + (o.status == "PreSubmitted" ? "PreSub" : o.status);
         ListView_SetItemText(hList, row, col++, (LPSTR)fullTypeStr.c_str());
-
-        if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
-        if (o.status == "Filled") filled++;
     }
 
-    SetWindowTextA(hWnd, ("Orders: " + std::to_string(submitted) + " Submitted | " + std::to_string(filled) + " Filled").c_str());
+    SetOrdersTitle(hWnd);
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -273,17 +279,32 @@ static void Orders_MoveSelection(HWND hWnd, int dir) {
     if (!ListView_GetItem(hList, &lvi)) {
         return;
     }
+
+    auto makeSelection = [&]() -> void {
+        ListView_SetItemState(hList, sel, 0, LVIS_SELECTED | LVIS_FOCUSED);
+        
+        UINT state = LVIS_SELECTED | LVIS_FOCUSED;
+        ListView_SetItemState(hList, next, state, state);
+        ListView_EnsureVisible(hList, next, FALSE);
+    };
+    
+    char statusBuf[64] = {};
+    ListView_GetItemText(hList, next, OCOL_STATUS, statusBuf, sizeof(statusBuf));
+    std::string statusStr(statusBuf);
+    size_t pos = statusStr.rfind(' ');
+    statusStr = (pos == std::string::npos) ? statusStr : statusStr.substr(pos + 1);
+    if (statusStr == "Unsent") {
+        makeSelection();
+        return;
+
+    }
+
     int orderId = (int)lvi.lParam;
     auto orders = api().getOrdersSorted();
     for (const auto& o : orders) {
         if (o.orderId == orderId) {
-            if (Orders_IsEditable(o.status)) {
-                ListView_SetItemState(hList, sel, 0, LVIS_SELECTED | LVIS_FOCUSED);
-                
-                UINT state = LVIS_SELECTED | LVIS_FOCUSED;
-                ListView_SetItemState(hList, next, state, state);
-                ListView_EnsureVisible(hList, next, FALSE);
-            }
+            if (Orders_IsEditable(o.status))
+                makeSelection();
             break;
         }
     }
@@ -322,14 +343,20 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             if (s_editState.panelVisible && s_editState.orderId != 0) {
                 HWND hParent = GetParent(hWnd);
                 // Unsent placeholder never reached TWS — nothing to cancel there.
+                HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                 if (s_editState.isUnsent) {
-                    HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                     if (sel >= 0) ListView_DeleteItem(hList, sel);
+                    
+                    auto uit = s_unsentOrders.find(s_editState.orderId);
+                    if (uit != s_unsentOrders.end())
+                        s_unsentOrders.erase(s_editState.orderId);
+                    SetOrdersTitle(hParent);
                 } else {
                     api().cancelOrder(s_editState.orderId);
                 }
                 Orders_HideInlinePanel(hParent);
+                SetFocus(hList);
             }
             return 0;
         }
@@ -618,14 +645,20 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (kd->wVKey == VK_ESCAPE) {
                     if (s_editState.panelVisible && s_editState.orderId != 0) {
                         // Unsent placeholder never reached TWS — nothing to cancel there.
+                        HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                         if (s_editState.isUnsent) {
-                            HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                             int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                             if (sel >= 0) ListView_DeleteItem(hList, sel);
+                    
+                            auto uit = s_unsentOrders.find(s_editState.orderId);
+                            if (uit != s_unsentOrders.end())
+                                s_unsentOrders.erase(s_editState.orderId);
+                            SetOrdersTitle(hWnd);
                         } else {
                             api().cancelOrder(s_editState.orderId);
                         }
                         Orders_HideInlinePanel(hWnd);
+                        SetFocus(hList);
                     }
                 }
                 return 0;
