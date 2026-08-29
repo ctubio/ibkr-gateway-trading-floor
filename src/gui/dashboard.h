@@ -207,7 +207,7 @@ static void UpdateMarketClock(HWND hWnd) {
 
     if (fullDetails) { 
         std::string day_str = day_names[wd.c_encoding()];
-        std::string time_str = day_str + " " + std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count());
+        std::string time_str = std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count()) + " " + day_str;
         SetWindowTextA(hWnd, time_str.c_str());
     } else SetWindowTextA(hWnd, phase.c_str());
 
