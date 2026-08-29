@@ -125,7 +125,7 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int py     = listH + 6;
     int editH  = 37;
     int lblW   = 50;
-    int editW  = 120;
+    int editW  = 180;
     int startX = 18;
 
     int x = startX;
@@ -135,16 +135,16 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
         ShowWindow(hTotalLabel, show);
         x += hintW + 5;
     }
-    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); }
-    x += editW + 10;
+    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW - 60, editH, TRUE); ShowWindow(hPriceEdit, show); }
+    x += editW - 60 + 10;
 
     // Qty is hidden when partialFill.
     bool showQty = showPanel && !s_editState.partialFill;
     int  qshow   = showQty ? SW_SHOW : SW_HIDE;
     if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); }
     x += lblW + 5;
-    if (hOrderQty) { MoveWindow(hOrderQty, x,         py,     editW - 40, editH, TRUE); ShowWindow(hOrderQty, qshow); }
-    x += editW - 40 + 5;
+    if (hOrderQty) { MoveWindow(hOrderQty, x,         py,     editW, editH, TRUE); ShowWindow(hOrderQty, qshow); }
+    x += editW + 5;
 
     
     if (hHint)  { MoveWindow(hHint,  x,         py + 5, lblW + 40,  24,    TRUE); ShowWindow(hHint,  show); }
