@@ -33,6 +33,7 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_LINKS_BASE  1700   // one command ID per quick link below
 
 bool shouldBeConnected = true;
+static std::string currencyDashboard = "--";
 
 struct QuickLink { const char* label; const char* url; };
 static const QuickLink g_QuickLinks[] = {
@@ -349,7 +350,7 @@ void BindTrayIcon(HWND hWnd) {
     Shell_NotifyIconW(NIM_SETVERSION, &nid);
 }
 
-void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
+void UpdateTrayIcon(HWND hWnd) {
     std::string tooltip = std::string("Trading Floor" GATEWAY_SPACE GATEWAY_NAME) + ": ";
     bool connected = false;
 
@@ -361,7 +362,7 @@ void UpdateTrayIcon(HWND hWnd, std::string currency = "???") {
             tooltip += "Connecting..";
         } else {
             connected = api().isMarketDataConnected() && api().isTradingConnected();
-            tooltip = acc + " | " + currency + " | " + (connected ? "Connected" : "Disconnected");
+            tooltip = acc + " | " + currencyDashboard + " | " + (connected ? "Connected" : "Disconnected");
         }
     }
     std::wstring wTooltip(tooltip.begin(), tooltip.end());
@@ -384,8 +385,9 @@ void Coins_UpdateLabels(HWND hWnd) {
     double daily      = api().getDailyPnL();
     double unrealized = api().getUnrealizedPnL();
     double realized   = api().getRealizedPnL();
-
-    std::string currency = "???";
+    
+    std::string prevCurrency = currencyDashboard;
+    currencyDashboard = "--";
     double netLiq = 0.0;
     auto tryParse = [&](const std::string& k) -> double {
         auto it = summary.find(k);
@@ -393,18 +395,19 @@ void Coins_UpdateLabels(HWND hWnd) {
         try { return std::stod(it->second); } catch (...) { return 0.0; }
     };
     if (summary.count("EUR_NetLiquidation")) {
-        currency = "EUR"; netLiq = tryParse("EUR_NetLiquidation");
+        currencyDashboard = "EUR"; netLiq = tryParse("EUR_NetLiquidation");
     } else if (summary.count("USD_NetLiquidation")) {
-        currency = "USD"; netLiq = tryParse("USD_NetLiquidation");
+        currencyDashboard = "USD"; netLiq = tryParse("USD_NetLiquidation");
     } else if (summary.count("NetLiquidation")) {
         netLiq = tryParse("NetLiquidation");
         for (auto const& [k, v] : summary)
             if (k.find("_NetLiquidation") != std::string::npos)
-                { currency = k.substr(0, k.find('_')); break; }
+                { currencyDashboard = k.substr(0, k.find('_')); break; }
     }
-    
-    UpdateTrayIcon(hWnd, currency);
-    
+
+    if (currencyDashboard != prevCurrency)
+        UpdateTrayIcon(hWnd);
+
     const int m = 10;
     int y1 = 8;
     int box1H = 94;
@@ -487,7 +490,7 @@ void Coins_UpdateLabels(HWND hWnd) {
 
     if (hCoin_Cash) {
         double cash = tryParse("CashBalance");
-        std::string formattedNum = FormatWithCommas(cash, fullDetails) + " " + currency;
+        std::string formattedNum = FormatWithCommas(cash, fullDetails) + " " + currencyDashboard;
         COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : COLOR_THEME);
         SetWindowTextA(hCoin_Cash, formattedNum.c_str());
         SetCtrlColor(hCoin_Cash, clr);
@@ -974,7 +977,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
 
         case WM_API_UPDATE:
-            UpdateTrayIcon(hWnd);
             if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
                 const int m    = 10;
                 const int boxW = 226;
@@ -997,7 +999,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (hCoin_Cash)        { SetWindowTextA(hCoin_Cash,        "--"); SetWindowPos(hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_Cash, NULL, TRUE); }
                 if (hCoin_EUR)         SetWindowTextA(hCoin_EUR,         "--");
                 if (hCoin_USD)         SetWindowTextA(hCoin_USD,         "--");
+                currencyDashboard = "--";
             }
+            UpdateTrayIcon(hWnd);
             break;
             
         case WM_API_LOG: {
@@ -1040,10 +1044,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     , (int)Settings_Load("ClientId", 0)
                     , (int)Settings_Load("GroupId", 4)
                     );
-                    UpdateTrayIcon(hWnd);
                 } else if (!shouldBeConnected && api().isConnected()) {
                     api().disconnect();
-                    UpdateTrayIcon(hWnd);
                 }
             }
             break;
