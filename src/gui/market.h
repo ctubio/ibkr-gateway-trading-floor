@@ -1219,18 +1219,18 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // We measure both pieces then right-justify them to RB_X - 10.
     const int LC_RIGHT = RB_X - 10;   // right edge for the last+change block
 
+    // Measure large last price
+    SelectObject(hdc, hFont21ptbold.get());
+    std::string lastStr = Market_Fmt(L1.last);
+    SIZE lastSz = {};
+    GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
+
     double chg    = 0.0;
     double chgPct = 0.0;
     if (L1.last > 0.0) {
         chg    = L1.change();
         chgPct = L1.changePct();
     }
-
-    // Measure large last price
-    SelectObject(hdc, hFont21ptbold.get());
-    std::string lastStr = Market_Fmt(L1.last);
-    SIZE lastSz = {};
-    GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
 
     // Measure change text (smaller font)
     std::string chgStr = std::format(" {:.2f}  {:.2f}%", chg, chgPct);
@@ -1529,6 +1529,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         Market_RefreshExec(hWnd, state);
         UpdateMarketRegistry();
         break;
+    }
+
+    case WM_GETMINMAXINFO: {
+        MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+        mmi->ptMinTrackSize.x = windowMarketWidth;
+        mmi->ptMaxTrackSize.x = windowMarketWidth;
+        return 0;
     }
 
     case WM_SIZE:

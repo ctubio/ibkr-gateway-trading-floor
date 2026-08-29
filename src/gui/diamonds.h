@@ -181,8 +181,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
 
     RECT windowRect;
     GetWindowRect(hWnd, &windowRect);
-    MoveWindow(hWnd, windowRect.left, windowRect.top,
-               windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
+    MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
 }
 
 static HIMAGELIST g_DiamondsRowHeightImageList = NULL;
@@ -681,6 +680,26 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         SetTimer(hWnd, TIMER_DIAMONDS_SORT, DIAMONDS_SORT_TIMER_MS, NULL);
         break;
+    }
+
+    case WM_GETMINMAXINFO: {
+        bool showDiv   = (g_DiamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
+        bool showWeeks = (g_DiamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+        int extraWidth = 0;
+        if (showDiv) {
+            extraWidth += diamondCols[DCOL_DIV_YIELD].width   + diamondCols[DCOL_DIV_DATE].width +
+                        diamondCols[DCOL_DIV_AMT].width      + diamondCols[DCOL_ANNUAL_DIV].width;
+        }
+        if (showWeeks) {
+            extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
+                        diamondCols[DCOL_CHG52WEEK].width + 
+                        diamondCols[DCOL_AVGPRICE].width;
+        }
+        if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
+        MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+        mmi->ptMinTrackSize.x = windowDiamondsWidth + extraWidth;
+        mmi->ptMaxTrackSize.x = windowDiamondsWidth + extraWidth;
+        return 0;
     }
 
     case WM_SIZE: {

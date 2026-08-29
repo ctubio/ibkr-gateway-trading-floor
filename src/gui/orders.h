@@ -1,6 +1,8 @@
 #pragma once
 
-void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", 635, 240); }
+int windowOrdersWidth = 635;
+
+void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", windowOrdersWidth, 240); }
 
 #define ID_ORDERS_LIST          9003
 #define ID_ORDERS_PRICE_EDIT    9010
@@ -556,6 +558,13 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
 
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+            mmi->ptMinTrackSize.x = windowOrdersWidth;
+            mmi->ptMaxTrackSize.x = windowOrdersWidth;
+            return 0;
+        }
+        
         case WM_SIZE: {
             Orders_LayoutPanel(hWnd, s_editState.panelVisible);
             break;
