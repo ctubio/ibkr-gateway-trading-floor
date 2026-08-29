@@ -1161,6 +1161,15 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     ULONGLONG nowTick = GetTickCount64();
     VolRateResult volRates = Market_ComputeVolRates(state->volHistory, state->volTrackingStart, nowTick);
 
+    double chg    = 0.0;
+    double chgPct = 0.0;
+    if (L1.last > 0.0) {
+        chg    = L1.change();
+        chgPct = L1.changePct();
+    }
+    // Measure change text (smaller font)
+    std::string chgStr = std::format(" {:.2f}  {:.2f}%", chg, chgPct);
+
     auto rateColor = [&](double ratio) -> COLORREF {
         if (ratio >= 3.0) return COINS_CLR_PINK;      // hot: 3x+ normal pace
         if (ratio >= 1.5) return COINS_CLR_PURPLE;   // warming up
@@ -1181,8 +1190,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     StatItem row2[] = {
         { "O:", Market_Fmt(L1.open),  openColor  },
         { "L:", Market_Fmt(L1.low),   lowColor   },
-        { "D:", bufD,                 dPnlColor  },
-        { "U:", bufU,                 uPnlColor  },
+        { "D:", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED  },
     };
 
     SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
@@ -1225,21 +1233,15 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SIZE lastSz = {};
     GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
 
-    double chg    = 0.0;
-    double chgPct = 0.0;
-    if (L1.last > 0.0) {
-        chg    = L1.change();
-        chgPct = L1.changePct();
-    }
-
-    // Measure change text (smaller font)
-    std::string chgStr = std::format(" {:.2f}  {:.2f}%", chg, chgPct);
-    SIZE chgSz = {};
+    SIZE bufDSz = {};
     SelectObject(hdc, hFont11ptbold.get());
-    GetTextExtentPoint32A(hdc, chgStr.c_str(), (int)chgStr.size(), &chgSz);
+    GetTextExtentPoint32A(hdc, bufD.c_str(), (int)bufD.size(), &bufDSz);
+    SIZE bufUSz = {};
+    SelectObject(hdc, hFont11ptbold.get());
+    GetTextExtentPoint32A(hdc, bufU.c_str(), (int)bufU.size(), &bufUSz);
 
     // Total width of the last+change block
-    int lcBlockW = std::max(lastSz.cx, chgSz.cx) + 7;
+    int lcBlockW = std::max(lastSz.cx, bufDSz.cx + bufUSz.cx + 7) + 7;
 
     // Left edge of the block: right-justified to LC_RIGHT, but no further left
     // than STATS_X (so it never overlaps the stats when window is very narrow).
@@ -1257,14 +1259,22 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         // on the big last-price display to toggle TTS (same action as the speaker icon).
         state->lastPriceRect = lastRc;
 
+        //{ "D:", bufD,                 dPnlColor  },
+        //{ "U:", bufU,                 uPnlColor  },
         // Draw change/pct% in smaller font immediately to below
-        COLORREF chgColor = (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
         SelectObject(hdc, hFont11ptbold.get());
-        SetTextColor(hdc, chgColor);
-        int chgX = lcX;
-        if (chgX < LC_RIGHT) {
-            RECT chgRc = { chgX, 0, LC_RIGHT, HEADER_H - 3 };
-            DrawTextA(hdc, chgStr.c_str(), -1, &chgRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
+
+        SetTextColor(hdc, uPnlColor);
+        int bufUX = lcX;
+        if (bufUX < LC_RIGHT) {
+            RECT bufURc = { bufUX, 0, LC_RIGHT, HEADER_H - 3 };
+            DrawTextA(hdc, bufU.c_str(), -1, &bufURc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
+        }
+        SetTextColor(hdc, dPnlColor);
+        int bufDX = lcX;
+        if (bufDX < LC_RIGHT) {
+            RECT bufDRc = { bufDX, 0, LC_RIGHT - bufUSz.cx - 7, HEADER_H - 3 };
+            DrawTextA(hdc, bufD.c_str(), -1, &bufDRc, DT_RIGHT | DT_BOTTOM | DT_SINGLELINE | DT_NOPREFIX);
         }
     } else {
         // Nothing drawn this frame — disable the click target so a stale rect
