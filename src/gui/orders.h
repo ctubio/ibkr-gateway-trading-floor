@@ -78,15 +78,15 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
 
 static void UpdatePriceLabel(HWND hWnd) {
     if (!s_editState.panelVisible) return;
-    HWND hPriceLbl = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hHint      = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
     HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
-    HWND hQtyEdit = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+    HWND hOrderQty  = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
 
-    if (!hPriceLbl || !hPriceEdit || !hQtyEdit) return;
+    if (!hHint || !hPriceEdit || !hOrderQty) return;
 
     char priceBuf[32] = {}, qtyBuf[32] = {};
     GetWindowTextA(hPriceEdit, priceBuf, sizeof(priceBuf));
-    GetWindowTextA(hQtyEdit, qtyBuf, sizeof(qtyBuf));
+    GetWindowTextA(hOrderQty, qtyBuf, sizeof(qtyBuf));
 
     double price = 0;
     double qty   = 0;
@@ -95,7 +95,7 @@ static void UpdatePriceLabel(HWND hWnd) {
         qty = std::abs(std::stod(qtyBuf));
     } catch (...) { price = 0; qty = 0; }
 
-    SetWindowTextA(hPriceLbl, FormatWithCommas(price * qty).c_str());
+    SetWindowTextA(hHint, FormatWithCommas(price * qty).c_str());
 }
 
 // Price and Qty edit fields shown at the bottom of the Orders window when an
@@ -110,10 +110,10 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int h = rc.bottom;
 
     HWND hList       = GetDlgItem(hWnd, ID_ORDERS_LIST);
-    HWND hPriceLbl   = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hHint       = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
     HWND hPriceEdit  = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hQtyLbl     = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
-    HWND hQtyEdit    = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+    HWND hOrderQty   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
     HWND hTotalLabel = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
 
     int listH = showPanel ? h - EDIT_PANEL_H : h;
@@ -143,15 +143,15 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int  qshow   = showQty ? SW_SHOW : SW_HIDE;
     if (hQtyLbl)  { MoveWindow(hQtyLbl,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hQtyLbl,  qshow); }
     x += lblW + 5;
-    if (hQtyEdit) { MoveWindow(hQtyEdit, x,         py,     editW - 40, editH, TRUE); ShowWindow(hQtyEdit, qshow); }
+    if (hOrderQty) { MoveWindow(hOrderQty, x,         py,     editW - 40, editH, TRUE); ShowWindow(hOrderQty, qshow); }
     x += editW - 40 + 5;
 
     
-    if (hPriceLbl)  { MoveWindow(hPriceLbl,  x,         py + 5, lblW + 40,  24,    TRUE); ShowWindow(hPriceLbl,  show); }
+    if (hHint)  { MoveWindow(hHint,  x,         py + 5, lblW + 40,  24,    TRUE); ShowWindow(hHint,  show); }
     x += lblW + 5;
     
     CenterEditText(hPriceEdit);
-    CenterEditText(hQtyEdit);
+    CenterEditText(hOrderQty);
 
     if (show) UpdatePriceLabel(hWnd);
 }
@@ -342,13 +342,13 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             if (s_editState.panelVisible && s_editState.orderId != 0) {
                 HWND hParent = GetParent(hWnd);
                 HWND hPriceEdit = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
-                HWND hQtyEdit   = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
+                HWND hOrderQty  = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
                 char pBuf[32] = {}, qBuf[32] = {};
                 if (hPriceEdit) GetWindowTextA(hPriceEdit, pBuf, sizeof(pBuf));
                 double price = atof(pBuf);
                 double qty = s_editState.originalQty;
-                if (!s_editState.partialFill && hQtyEdit) {
-                    GetWindowTextA(hQtyEdit, qBuf, sizeof(qBuf));
+                if (!s_editState.partialFill && hOrderQty) {
+                    GetWindowTextA(hOrderQty, qBuf, sizeof(qBuf));
                     qty = std::abs(atof(qBuf));
                 }
                 if (qty > 0) {
@@ -445,7 +445,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     s_editState.fullProfitPrice = order.fullProfitPrice;
 
     HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
-    HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+    HWND hOrderQty  = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
 
     std::string priceStr;
     if (order.price > 0) priceStr = std::format("{:.2f}", order.price);
@@ -453,7 +453,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     if (hPriceEdit) SetWindowTextA(hPriceEdit, priceStr.c_str());
 
     std::string qtyStr = std::format("{:+}", order.totalQty * (order.action == "BUY" ? 1 : -1));
-    if (hQtyEdit) SetWindowTextA(hQtyEdit, qtyStr.c_str());
+    if (hOrderQty) SetWindowTextA(hOrderQty, qtyStr.c_str());
 
     HWND hTotalLabel = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hTotalLabel) {
