@@ -784,6 +784,26 @@ bool Settings_LoadMarketSplitter(const std::string& symbol, float& splitY) {
     return true;
 }
 
+// Second splitter: hTsList (top) / hExecList (bottom), left column of the T&S area.
+// Same storage convention (×10000 scaled DWORD, per-symbol key) as the splitter above.
+void Settings_SaveMarketSplitterExec(const std::string& symbol, float splitY) {
+    std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
+    RegSetDword(windowKey.c_str(), "SplitYExec", (DWORD)(splitY * 10000.0f));
+}
+
+bool Settings_LoadMarketSplitterExec(const std::string& symbol, float& splitY) {
+    std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
+
+    DWORD dx = RegGetDword(windowKey.c_str(), "SplitYExec", 0xFFFFFFFF);
+    if (dx == 0xFFFFFFFF) return false;
+
+    float fx = (float)dx / 10000.0f;
+    if (fx < 0.1f || fx > 0.9f) return false;
+
+    splitY = fx;
+    return true;
+}
+
 // ── Market window "opened date" tracking + pruning ───────────────────────────
 // Every per-symbol Market_* registry subkey (window position, splitter,
 // overnight flag, etc.) is otherwise permanent, so these accumulate forever

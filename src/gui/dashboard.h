@@ -50,6 +50,8 @@ static const int LINKS_COUNT = (int)(sizeof(g_QuickLinks) / sizeof(g_QuickLinks[
 
 static bool fullDetails = true;
 
+static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
 void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
 
@@ -122,7 +124,6 @@ static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
 }
 
 // ─── US market-session clock ─────────────────────────────────────────────
-
 static void UpdateMarketClock(HWND hWnd) {
     if (!hCoin_Clock) return;
 
@@ -131,9 +132,10 @@ static void UpdateMarketClock(HWND hWnd) {
     std::chrono::zoned_time zt{"America/New_York", now};
     auto ny_time = zt.get_local_time();
     
-    // Extract exact time of day
+    // Extract exact time of day and weekday
     auto dp = std::chrono::floor<std::chrono::days>(ny_time);
     auto time_of_day = std::chrono::hh_mm_ss{ny_time - dp};
+    std::chrono::weekday wd{dp}; // Get current day of the week
     
     int total_secs = time_of_day.hours().count() * 3600 + 
                      time_of_day.minutes().count() * 60 + 
@@ -144,56 +146,80 @@ static void UpdateMarketClock(HWND hWnd) {
     const int T_OPEN_IMBAL = 9 * 3600;                    // 09:00 ET (20m before 09:20)
     const int T_OPEN_BELL = 9 * 3600 + 20 * 60;           // 09:20 ET (10m before 09:30)
     const int T_OPEN = 9 * 3600 + 30 * 60;                // 09:30 ET
-    
     const int T_CLOSE_IMBAL = 15 * 3600 + 30 * 60;        // 15:30 ET (20m before 15:50)
     const int T_CLOSE_BELL = 15 * 3600 + 50 * 60;         // 15:50 ET (10m before 16:00)
     const int T_CLOSE = 16 * 3600;                        // 16:00 ET
     const int T_AFTERHOURS_END = 20 * 3600;               // 20:00 ET
+    const int T_SUNDAY_OPEN = 20 * 3600;                  // 20:00 ET (Sunday 8:00 PM)
     
     std::string phase;
     int target_secs = 0;
-    // State Machine to determine current phase & countdown target
-    if (total_secs < T_PREMARKET) {
-        phase = "OVERNIGHT"; target_secs = T_PREMARKET;
+
+    // 1. Handle Weekend / Market Closed State (Targeting Sunday 20:00 ET)
+    if (wd == std::chrono::Friday && total_secs >= T_AFTERHOURS_END) {
+        phase = "Market Closed"; 
+        target_secs = (2 * 24 * 3600) + T_SUNDAY_OPEN; // Fri to Sun 20:00
         SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
-    } else if (total_secs < T_OPEN_IMBAL) {
-        phase = "Pre-Market"; target_secs = T_OPEN; // Countdown to Open
-        SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
-    } else if (total_secs < T_OPEN_BELL) {
-        phase = "IMBALANCE"; target_secs = T_OPEN;
-        SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
-    } else if (total_secs < T_OPEN) {
-        phase = "Opening Bell"; target_secs = T_OPEN;
-        SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
-    } else if (total_secs < T_CLOSE_IMBAL) {
-        phase = "Market Open"; target_secs = T_CLOSE; // Countdown to Close
-        SetCtrlColor(hCoin_Clock, COINS_CLR_YELLOW);
-    } else if (total_secs < T_CLOSE_BELL) {
-        phase = "IMBALANCE"; target_secs = T_CLOSE;
-        SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
-    } else if (total_secs < T_CLOSE) {
-        phase = "Closing Bell"; target_secs = T_CLOSE;
-        SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
-    } else if (total_secs < T_AFTERHOURS_END) {
-        phase = "After-Hours"; target_secs = T_AFTERHOURS_END;
-        SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
-    } else {
-        phase = "OVERNIGHT"; target_secs = T_PREMARKET + (24 * 3600); // Tomorrow's pre-market
+    } else if (wd == std::chrono::Saturday) {
+        phase = "Market Closed"; 
+        target_secs = (1 * 24 * 3600) + T_SUNDAY_OPEN; // Sat to Sun 20:00
         SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+    } else if (wd == std::chrono::Sunday && total_secs < T_SUNDAY_OPEN) {
+        phase = "Market Closed"; 
+        target_secs = T_SUNDAY_OPEN;                   // Sunday morning/afternoon to Sun 20:00
+        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+    } else if (wd == std::chrono::Sunday && total_secs >= T_SUNDAY_OPEN) {
+        phase = "OVERNIGHT"; 
+        target_secs = (1 * 24 * 3600) + T_PREMARKET;   // Market is OPEN! Counting to Mon 04:00 AM
+        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+    } 
+    // 2. Standard Weekday State Machine (Monday - Friday)
+    else {
+        if (total_secs < T_PREMARKET) {
+            phase = "OVERNIGHT"; target_secs = T_PREMARKET;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+        } else if (total_secs < T_OPEN_IMBAL) {
+            phase = "Pre-Market"; target_secs = T_OPEN;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
+        } else if (total_secs < T_OPEN_BELL) {
+            phase = "IMBALANCE"; target_secs = T_OPEN;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
+        } else if (total_secs < T_OPEN) {
+            phase = "Opening Bell"; target_secs = T_OPEN;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+        } else if (total_secs < T_CLOSE_IMBAL) {
+            phase = "Market Open"; target_secs = T_CLOSE;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_YELLOW);
+        } else if (total_secs < T_CLOSE_BELL) {
+            phase = "IMBALANCE"; target_secs = T_CLOSE;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
+        } else if (total_secs < T_CLOSE) {
+            phase = "Closing Bell"; target_secs = T_CLOSE;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+        } else if (total_secs < T_AFTERHOURS_END) {
+            phase = "After-Hours"; target_secs = T_AFTERHOURS_END;
+            SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
+        } else {
+            phase = "OVERNIGHT"; target_secs = T_PREMARKET + (24 * 3600); // Tomorrow's 04:00 AM
+            SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+        }
     }
 
-    SetWindowTextA(hWnd, phase.c_str());
+    if (fullDetails) { 
+        std::string day_str = day_names[wd.c_encoding()];
+        std::string time_str = day_str + " " + std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count());
+        SetWindowTextA(hWnd, time_str.c_str());
+    } else SetWindowTextA(hWnd, phase.c_str());
 
     // Calculate time left
     int secs_left = target_secs - total_secs;
     int h_left = secs_left / 3600;
     int m_left = (secs_left % 3600) / 60;
 
-    // Format output string (HH:MM PHASE:)
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%02d:%02d", h_left, m_left);
+    // Format output string (HH:MM)
+    std::string time_left_str = std::format("{:02}:{:02}", h_left, m_left);
 
-    SetWindowTextA(hCoin_Clock, buf);
+    SetWindowTextA(hCoin_Clock, time_left_str.c_str());
     InvalidateRect(hCoin_Clock, NULL, TRUE);
 }
 
@@ -943,6 +969,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (api().isMarketDataConnected() && api().isTradingConnected()) {
                 Coins_UpdateLabels(hWnd);
             }
+            UpdateMarketClock(hWnd);
             break;
         }
 
@@ -994,7 +1021,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break; 
         }
         case WM_TIMER:
-            if (wParam == TIMER_MARKET_CLOCK) { // 1000 -> 1s tick
+            if (wParam == TIMER_MARKET_CLOCK) {
                 UpdateMarketClock(hWnd);
             }
             if (wParam == TIMER_COINS_SPEAKER) // 21000

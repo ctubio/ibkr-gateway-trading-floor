@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 690;
+int windowMarketWidth = 585;
 int windowMarketHeight = 550;
 
 void StartMarketSearch(); // Forward declaration
@@ -29,8 +29,9 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 //   [Ask  182.87  x 154]       (row 1, right block)
 //   [Bid  177.00  x 196]       (row 2, right block)
 static const int HEADER_H = 52;   // two-row header height
-static const int EXEC_W   = 126;  // Fixed width of the Executions panel (far left)
-static const int L2_W     = 140;  // Fixed width of the Level 2 depth panel (beside exec)
+static const int EXEC_W   = 126;  // Initial height-independent width for hExecList before
+                                   // layout (now stacked under Level 2, sharing its column)
+static const int L2_W     = 140;  // Fixed width of the Level 2 / Executions column (far left)
 static const int ORDER_BAR_H = 84;
 
 // ── Volume / print-frequency rate windows ─────────────────────────────────────
@@ -82,8 +83,9 @@ struct TsState {
     HWND      hOVNButton   = NULL;
 
     // ── Splitter state ────────────────────────────────────────────────────────
-    float splitY = 0.5f;
-    int dragMode = 0;
+    float splitY     = 0.5f;   // right column: hTsListF100 (top) / hTsListF1000 (bottom)
+    float splitYExec = 0.6f;   // far-left column: hL2List (top) / hExecList (bottom)
+    int dragMode = 0;          // 0 = none, 1 = right column splitter, 2 = L2/Exec splitter
 
     // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
     RECT lastPriceRect = { 0, 0, 0, 0 };
@@ -298,18 +300,20 @@ static void Market_Layout(HWND hWnd, TsState* state) {
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    // ── Executions panel (far left) ───────────────────────────────────────────
-    if (state->hExecList)
-        MoveWindow(state->hExecList, 0, bodyY, EXEC_W, bodyH, TRUE);
+    const int splitThick = 4;
 
-    // ── Level 2 panel (beside executions) ────────────────────────────────────
+    // ── Left panel: Level 2 (top) / Executions (bottom), split by splitYExec ──
+    int leftTopH = (int)(bodyH * state->splitYExec) - splitThick / 2;
+    int leftBotH = bodyH - leftTopH - splitThick;
+
     if (state->hL2List)
-        MoveWindow(state->hL2List, EXEC_W, bodyY, L2_W, bodyH, TRUE);
+        MoveWindow(state->hL2List, 0, bodyY, L2_W, leftTopH, TRUE);
+    if (state->hExecList)
+        MoveWindow(state->hExecList, 0, bodyY + leftTopH + splitThick, L2_W, leftBotH, TRUE);
 
     // ── T&S area ──────────────────────────────────────────────────────────────
-    const int splitThick = 4;   
-    const int tsX = EXEC_W + L2_W + splitThick;
-    const int tsW = bodyW - EXEC_W - L2_W - splitThick;
+    const int tsX = L2_W + splitThick;
+    const int tsW = bodyW - L2_W - splitThick;
 
     int leftW  = (int)((tsW - splitThick) / 2);
     int rightW = leftW;
@@ -845,21 +849,29 @@ void StartMarket(const std::string& symbol, int conId) {
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     RECT rc; GetClientRect(hWnd, &rc);
     const int bodyH      = rc.bottom - HEADER_H;
-    const int leftW      = EXEC_W + L2_W;
-    const int tsX        = leftW;
-    const int tsW        = rc.right - leftW;
     const int splitThick = 4;
 
-    int relX = x - tsX;
     int relY = y - HEADER_H;
-    if (relX < 0 || relY < 0 || relY > bodyH) return 0;
+    if (relY < 0 || relY > bodyH) return 0;
 
-    int splitXPos = (int)(tsW / 2);
-    int splitYPos = (int)(bodyH * state->splitY);
+    // Left column (L2 / Executions) splitter — x within [0, L2_W)
+    if (x >= 0 && x < L2_W) {
+        int leftSplitYPos = (int)(bodyH * state->splitYExec);
+        if (relY >= leftSplitYPos - splitThick && relY <= leftSplitYPos + splitThick)
+            return 2;
+        return 0;
+    }
 
-    // if (relX >= splitXPos - splitThick && relX <= splitXPos + splitThick)
-    //     return 2;
-    if (relX > splitXPos + splitThick && relY >= splitYPos - splitThick && relY <= splitYPos + splitThick)
+    // Right T&S column splitter (hTsListF100 / hTsListF1000)
+    const int tsX = L2_W + splitThick;
+    const int tsW = rc.right - tsX;
+    int relX = x - tsX;
+    if (relX < 0) return 0;
+
+    int splitXPos      = (int)(tsW / 2);
+    int rightSplitYPos = (int)(bodyH * state->splitY);
+
+    if (relX > splitXPos + splitThick && relY >= rightSplitYPos - splitThick && relY <= rightSplitYPos + splitThick)
         return 1;
 
     return 0;
@@ -1067,7 +1079,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     const TradingAPI::L1Book& L1 = state->l1Info;
     // Update sparkline with latest price and draw it first so labels paint on top
     if (L1.last > 0.0) state->sparkline.AddPrice(L1.last);
-    state->sparkline.Draw(hdc, rc, 390, HEADER_H - 2);
+    state->sparkline.Draw(hdc, rc, 310, HEADER_H - 2);
     
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
 
@@ -1497,9 +1509,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state->hOrderRisk)
             SendMessage(state->hOrderRisk, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
-        // Restore splitter + filter
+        // Restore splitters + filter
         if (!state->symbol.empty()) {
             Settings_LoadMarketSplitter(state->symbol, state->splitY);
+            Settings_LoadMarketSplitterExec(state->symbol, state->splitYExec);
             std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
             if (Settings_Overnight_Load(windowKey.c_str(), 0)) {
                 state->isOvernight = false;
@@ -1843,7 +1856,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state && LOWORD(lParam) == HTCLIENT) {
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
-            if (hit == 1) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
+            if (hit == 1 || hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
             if (PtInRect(&state->lastPriceRect, pt)) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
@@ -1873,14 +1886,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state && state->dragMode != 0) {
             RECT rc; GetClientRect(hWnd, &rc);
             const int bodyH = rc.bottom - HEADER_H;
-            const int tsW   = rc.right - (EXEC_W + L2_W);
-            int x = (short)LOWORD(lParam) - (EXEC_W + L2_W);
             int y = (short)HIWORD(lParam) - HEADER_H;
 
-            if (state->dragMode == 1) {
-                float ns = (bodyH > 0) ? (float)y / (float)bodyH : 0.5f;
-                state->splitY = std::max(0.1f, std::min(0.9f, ns));
-            }
+            float ns = (bodyH > 0) ? (float)y / (float)bodyH : 0.5f;
+            ns = std::max(0.1f, std::min(0.9f, ns));
+
+            if (state->dragMode == 1)      state->splitY     = ns;
+            else if (state->dragMode == 2) state->splitYExec = ns;
+
             Market_Layout(hWnd, state);
             InvalidateRect(hWnd, NULL, TRUE);
         }
@@ -1889,10 +1902,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_LBUTTONUP: {
         if (state && state->dragMode != 0) {
+            int mode = state->dragMode;
             state->dragMode = 0;
             ReleaseCapture();
-            if (!state->symbol.empty())
-                Settings_SaveMarketSplitter(state->symbol, state->splitY);
+            if (!state->symbol.empty()) {
+                if (mode == 1)      Settings_SaveMarketSplitter(state->symbol, state->splitY);
+                else if (mode == 2) Settings_SaveMarketSplitterExec(state->symbol, state->splitYExec);
+            }
         }
         break;
     }
