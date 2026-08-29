@@ -109,12 +109,12 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int w = rc.right;
     int h = rc.bottom;
 
-    HWND hList      = GetDlgItem(hWnd, ID_ORDERS_LIST);
-    HWND hPriceLbl  = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
-    HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
-    HWND hQtyLbl    = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
-    HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
-    HWND hTotalLabel      = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
+    HWND hList       = GetDlgItem(hWnd, ID_ORDERS_LIST);
+    HWND hPriceLbl   = GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL);
+    HWND hPriceEdit  = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
+    HWND hQtyLbl     = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
+    HWND hQtyEdit    = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
+    HWND hTotalLabel = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
 
     int listH = showPanel ? h - EDIT_PANEL_H : h;
     if (hList) MoveWindow(hList, 0, 0, w, listH, TRUE);
