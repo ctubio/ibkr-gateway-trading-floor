@@ -1,6 +1,6 @@
 #pragma once
 
-int windowOrdersWidth = 615;
+int windowOrdersWidth = 480;
 
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", windowOrdersWidth, 240); }
 
@@ -38,7 +38,7 @@ static OrdersEditState s_editState;
 static std::map<int, TradingAPI::OrderInfo> s_unsentOrders;
 
 // Column indices, matching orderCols[] order below.
-enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_AVGFILL, OCOL_STATUS };
+enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_STATUS };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -46,10 +46,8 @@ struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
-    { "Quote",        190,  LVCFMT_LEFT },
-    { "Avg Filled",   130,  LVCFMT_LEFT },
-    { "Status",       170,  LVCFMT_CENTER},
-    // { "Time",          80,  LVCFMT_CENTER},
+    { "Quote",        180,  LVCFMT_LEFT },
+    { "Status",       180,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,9 +59,7 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
         else if (orderType == "SELL") return RGB(102, 43, 43);
     } 
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
-    if (status == "Cancelled" || status == "Inactive" || status == "PendingCancel")
-        return dark ? RGB(130, 130, 130) : RGB(160, 160, 160);
-    if (status == "Submitted" || status == "PreSubmitted" || status == "PreSub" || status == "PendingSubmit" || status == "Pending") {
+    if (status == "Submitted" || status == "PreSubmitted" || status == "PreSub" || status == "PendingSubmit" || status == "Pending" || status == "Unsent") {
         if (orderType == "BUY") return RGB(80, 200, 120);
         else if (orderType == "SELL") return RGB(220, 80, 80);
     }
@@ -224,14 +220,12 @@ static void Orders_Repopulate(HWND hWnd) {
             quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
         ListView_SetItemText(hList, row, col++, (LPSTR)quoteStr.c_str());
 
-        std::string fillStr;
+        std::string fullTypeStr;
         if (o.filledQty > 0)
-            fillStr = std::format("{:.0f} @ {:.2f}", o.filledQty, o.avgFillPx);
-        else
-            fillStr = "-- @ --";
-        ListView_SetItemText(hList, row, col++, (LPSTR)fillStr.c_str());
-
-        std::string fullTypeStr = o.tif + " " + o.orderType + " " + (o.status == "PreSubmitted" ? "PreSub" : o.status);
+            fullTypeStr = std::format("{:.0f} @ {:.2f} ", o.filledQty, o.avgFillPx);
+        if (o.status == "Filled")
+            fullTypeStr += o.status;
+        else fullTypeStr += o.tif + " " + o.orderType + " " + (o.status == "PreSubmitted" ? "PreSub" : o.status);
         ListView_SetItemText(hList, row, col++, (LPSTR)fullTypeStr.c_str());
 
         if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
@@ -757,9 +751,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     ListView_SetItemText(hList, idx, OCOL_SYMBOL, (LPSTR)info->symbol.c_str());
                     std::string quoteStr = std::format("{:.0f} @ {:.2f}", info->totalQty, info->price);
                     ListView_SetItemText(hList, idx, OCOL_QUOTE, (LPSTR)quoteStr.c_str());
-                    std::string filledStr = std::format("{:.2f} | {:.2f}", info->fullStopPrice, info->fullProfitPrice);
-                    ListView_SetItemText(hList, idx, OCOL_AVGFILL, (LPSTR)filledStr.c_str());
-                    std::string fullTypeStr = info->tif + " " + info->orderType + " " + info->status;
+                    std::string fullTypeStr;
+                    if (info->fullStopPrice > 0 || info->fullProfitPrice > 0) 
+                        fullTypeStr = std::format("{:.2f} | {:.2f} ", info->fullStopPrice, info->fullProfitPrice);
+                    fullTypeStr += /*info->tif + " " + info->orderType + " " + */info->status;
                     ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
                     Orders_Repopulate(hWnd);
                 }
