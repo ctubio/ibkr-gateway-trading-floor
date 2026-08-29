@@ -1,6 +1,6 @@
 #pragma once
 
-int windowOrdersWidth = 635;
+int windowOrdersWidth = 615;
 
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", windowOrdersWidth, 240); }
 
@@ -47,7 +47,7 @@ static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
     { "Quote",        190,  LVCFMT_LEFT },
-    { "Avg Filled",   150,  LVCFMT_LEFT },
+    { "Avg Filled",   130,  LVCFMT_LEFT },
     { "Status",       170,  LVCFMT_CENTER},
     // { "Time",          80,  LVCFMT_CENTER},
 };
