@@ -253,6 +253,7 @@ static void Market_RedrawHintsFor(HWND hEdit) {
         redraw(state->hProfitLossValueLabel);
     } else if (hEdit == state->hOrderQty) {
         redraw(state->hOptQtyLabel);
+        redraw(state->hTotalLabel);
     } else if (hEdit == state->hOrderStopPrice) {
         redraw(state->hOptStopLabel);
     } else if (hEdit == state->hOrderProfitPrice) {
@@ -336,23 +337,27 @@ static void Market_Layout(HWND hWnd, TsState* state) {
         const int lblY  = rc.bottom - BAR_H + (BAR_H - 18) / 2;
         const int lblW = 150;
         const int priceW = 180;
-        const int riskW = 130;
         const int startX = rc.right - (priceW * 2) - m;
+        // riskW removed — no longer used now that hTotalLabel is a hint overlay
+
+        // ── Hint overlay label geometry: 11pt, corner-anchored on their input ──
+        const int hint2H = 32; // two-line hints (pct% \n value)
+        const int hint1H = 16; // single-line hint (risk/reward ratio, notional value, etc.)
+        const int hintW = std::max(40, priceW / 2 - 6);
+        const int hintMargin = 4;
 
         SetWindowPos(state->hOrderLabel,       NULL, m,                                  lblY,   lblW,    18, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetWindowPos(state->hTotalLabel,        NULL, m + lblW + m,                       lblY, riskW, BAR_H, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hOrderPrice,       NULL, startX,                      editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hOrderQty,         NULL, startX + priceW + m,         editY,  priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+
+        // Qty input: notional value (price × qty) — bottom-right hint, always
+        // visible since the Qty input itself is always shown (overnight or not).
+        SetWindowPos(state->hTotalLabel, NULL, startX + priceW + m + priceW - hintW - hintMargin, editY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+
         if (!state->isOvernight) {
             const int stopY = editY + editH + 4;
             SetWindowPos(state->hOrderStopPrice,   NULL, startX,              stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
             SetWindowPos(state->hOrderProfitPrice, NULL, startX + priceW + m, stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-
-            // ── Hint overlay labels: 12pt, corner-anchored on their input ───
-            const int hint2H = 32; // two-line hints (pct% \n value)
-            const int hint1H = 16; // single-line hint (risk/reward ratio)
-            const int hintW = std::max(40, priceW / 2 - 6);
-            const int hintMargin = 4;
 
             // Price input: loss (bottom-left) / profit (bottom-right)
             SetWindowPos(state->hProfitLossPercentLabel, NULL, startX + hintMargin, editY + editH - hint2H - 2, hintW, hint2H, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -412,6 +417,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     // ── hTotalLabel: Notional value only ─────────────────────────────────────
     std::string notionalText = (price > 0.0 && qty > 0.0) ? FormatWithCommas(price * qty) : "--";
     SetWindowTextA(state->hTotalLabel, notionalText.c_str());
+    InvalidateRect(state->hOrderQty, NULL, TRUE);
     InvalidateRect(state->hTotalLabel, NULL, TRUE);
 
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
@@ -687,7 +693,12 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             GetWindowTextA(hWnd, buf, sizeof(buf));
             double val  = atof(buf);
             if (uIdSubclass == 2) val = std::abs(val);
-            double step = (uIdSubclass == 1) ? (((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01) : 1.0;
+            double step = 0.0;
+            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+                step = uIdSubclass == 1 ? 1.0 : 10.0;
+            } else {
+                step = uIdSubclass == 1 ? 0.01 : 1.0;
+            }
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
             std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:+}", val * (st->orderSide == "BUY" ? 1 : -1));
@@ -1489,12 +1500,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
         SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
 
-        // Risk readout — read-only, left-aligned. Notional value only now.
-        state->hTotalLabel = CreateWindowA("STATIC", "",
-            WS_CHILD | SS_LEFT,
-            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-        SetCtrlColor(state->hTotalLabel, COINS_CLR_ORANGE);
-
         // ── Hint overlay labels ─────────────────────────────────────────────
         // Created AFTER the edits above, so they sit on top in z-order.
         // WS_EX_TRANSPARENT means they never erase their own background — the
@@ -1515,6 +1520,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hRRLabel   = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
         state->hOptQtyLabel = makeHintLabel(SS_LEFT, COINS_CLR_GRAY);
         state->hOptStopLabel = makeHintLabel(SS_RIGHT, COINS_CLR_GRAY);
+        state->hTotalLabel  = makeHintLabel(SS_RIGHT, COINS_CLR_ORANGE);
 
         // Apply font to order bar controls
         SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
@@ -1522,7 +1528,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendMessage(state->hOrderStopPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
         SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
         SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-        SendMessage(state->hTotalLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
         // Restore splitters + filter
         if (!state->symbol.empty()) {
@@ -1677,7 +1682,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state) {
                 HWND hCtrl = (HWND)lParam;
                 if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hRRLabel ||
-                    hCtrl == state->hOptQtyLabel || hCtrl == state->hOptStopLabel) {
+                    hCtrl == state->hOptQtyLabel || hCtrl == state->hOptStopLabel || hCtrl == state->hTotalLabel) {
                     HDC hdc = (HDC)wParam;
                     SetBkMode(hdc, TRANSPARENT);
                     COLORREF clr = GetCtrlColor(hCtrl);

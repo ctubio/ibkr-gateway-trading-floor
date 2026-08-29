@@ -95,6 +95,8 @@ static void UpdatePriceLabel(HWND hWnd) {
     } catch (...) { price = 0; qty = 0; }
 
     SetWindowTextA(hTotalLabel, FormatWithCommas(price * qty).c_str());
+    InvalidateRect(hOrderQty, NULL, TRUE);
+    InvalidateRect(hTotalLabel, NULL, TRUE);
 }
 
 // Price and Qty edit fields shown at the bottom of the Orders window when an
@@ -122,7 +124,6 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     // [Price: |__edit__]   [Qty: |__edit__]   [↑↓ Tab  Enter]
     int py     = listH + 6;
     int editH  = 37;
-    int lblW   = 90;
     int editW  = 180;
 
     if (hOrderTypeHint) {
@@ -140,9 +141,16 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int  qshow   = showQty ? SW_SHOW : SW_HIDE;
     if (hOrderQty) { MoveWindow(hOrderQty, x,         py,     editW, editH, TRUE); ShowWindow(hOrderQty, qshow); }
 
-    x += editW - lblW - 3;
-    if (hTotalLabel)  { MoveWindow(hTotalLabel,  x,         py + 5, lblW,  24,    TRUE); ShowWindow(hTotalLabel,  show); }
-    
+    // Notional value hint: bottom-right overlay on the Qty input, same style
+    // (transparent, 11pt bold, corner-anchored) as the order-bar hints in market.h.
+    const int hintH = 16;
+    const int hintMargin = 4;
+    const int hintW = std::max(40, editW / 2 - 6);
+    if (hTotalLabel) {
+        MoveWindow(hTotalLabel, x + editW - hintW - hintMargin, py + editH - hintH - 2, hintW, hintH, TRUE);
+        ShowWindow(hTotalLabel, show);
+    }
+
     CenterEditText(hPriceEdit);
     CenterEditText(hOrderQty);
 
@@ -409,7 +417,12 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             GetWindowTextA(hWnd, buf, sizeof(buf));
             double val  = atof(buf);
             if (uIdSubclass == 2) val = std::abs(val);
-            double step = uIdSubclass == 1 ? (((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01) : 1.0;  // price vs qty
+            double step = 0.0;
+            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+                step = uIdSubclass == 1 ? 1.0 : 10.0;
+            } else {
+                step = uIdSubclass == 1 ? 0.01 : 1.0;
+            }
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
             std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:+}", val * (s_editState.action == "BUY" ? 1 : -1));
@@ -420,7 +433,28 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             return 0;
         }
     }
-    return DefSubclassProc(hWnd, message, wParam, lParam);
+        // Plain hover (no button held) can't change the selection — skip it so
+    // we don't force a repaint on every hover pixel (mirrors market.h).
+    if (message == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
+        return DefSubclassProc(hWnd, message, wParam, lParam);
+
+    LRESULT res = DefSubclassProc(hWnd, message, wParam, lParam);
+
+    // The Qty edit's blue selection highlight is drawn directly by EDIT via
+    // GetDC (not necessarily through WM_PAINT), so mouse drag-select can
+    // paint it over the transparent hTotalLabel hint sitting on top. Re-assert
+    // the hint after every message that could've changed the selection or
+    // focus — same fix as Market_RedrawHintsFor() in market.h.
+    if (uIdSubclass == 2) { // Qty edit
+        HWND hParent = GetParent(hWnd);
+        HWND hTotal  = GetDlgItem(hParent, ID_ORDERS_PRICE_LABEL);
+        if (hTotal && IsWindowVisible(hTotal)) {
+            InvalidateRect(hTotal, NULL, TRUE);
+            UpdateWindow(hTotal);
+        }
+    }
+
+    return res;
 }
 
 // Populate the inline edit fields from the given order and make the panel visible.
@@ -450,7 +484,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
 
     HWND hOrderTypeHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hOrderTypeHint) {
-        std::string hint = order.symbol + " " + order.action + " " + order.orderType + " Price:";
+        std::string hint = order.symbol + " " + order.action + " " + order.orderType;
         SetWindowTextA(hOrderTypeHint, hint.c_str());
         SetCtrlColor(hOrderTypeHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
         InvalidateRect(hOrderTypeHint, NULL, TRUE);
@@ -516,12 +550,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_EDIT, hInst, NULL);
 
             HWND hEditQty = CreateWindowA("EDIT", "",
-                WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE, 
+                WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
 
-            HWND hTotalLabel = CreateWindowA("STATIC", "0",
-                WS_CHILD | SS_RIGHT,
-                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);    
+            HWND hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",
+                WS_CHILD | SS_RIGHT | SS_NOPREFIX,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);
             SetCtrlColor(hTotalLabel, COINS_CLR_ORANGE);
 
             // Subclass edit fields to intercept keyboard navigation.
@@ -535,7 +569,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(hOrderTypeHint, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
             SendMessage(hEditPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hEditQty, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-            SendMessage(hTotalLabel, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            SendMessage(hTotalLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
 
             api().addApiUpdateWindow(hWnd);  
             Orders_Repopulate(hWnd);
@@ -766,6 +800,20 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SetTextColor(hdc, DM_TEXT);
                 SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
                 return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
+            }
+            break;
+        }
+
+        // hTotalLabel (notional value) is a transparent hint overlaid on the Qty
+        // input, same treatment as the market.h order-bar hint labels.
+        case WM_CTLCOLORSTATIC: {
+            HWND hCtrl = (HWND)lParam;
+            if (hCtrl == GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL)) {
+                HDC hdc = (HDC)wParam;
+                SetBkMode(hdc, TRANSPARENT);
+                COLORREF clr = GetCtrlColor(hCtrl);
+                SetTextColor(hdc, clr != COLOR_THEME ? clr : COINS_CLR_ORANGE);
+                return (LRESULT)GetStockObject(NULL_BRUSH);
             }
             break;
         }
