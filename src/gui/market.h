@@ -671,6 +671,12 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                         }
                     }
                     api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
+                    if (!FindWindowA(ORDERS_CLASS_NAME, NULL)) {
+                        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                        if (hDashboard && IsWindow(hDashboard)) {
+                            PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                        }
+                    }
                 }
                 Market_Layout_HideBar(hMarket, st);
             }
