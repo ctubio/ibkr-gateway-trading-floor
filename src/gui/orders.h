@@ -9,6 +9,8 @@ void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPICli
 #define ID_ORDERS_QTY_EDIT      9011
 #define ID_ORDERS_PRICE_LABEL   9012
 #define ID_ORDERS_HINT_LABEL    9013
+#define ID_ORDERS_QTY_TIF_LABEL 9014   // small hint, top-left inside the Qty edit
+#define ID_ORDERS_QTY_TYPE_LABEL 9015  // small hint, bottom-left inside the Qty edit
 #define ID_ORDERS_FOCUS_TIMER   9020   // one-shot: defers SetFocus past click/activation processing
 
 #define EDIT_PANEL_H  44   // height reserved at the bottom when the panel is visible
@@ -145,6 +147,22 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     if (hTotalLabel) {
         MoveWindow(hTotalLabel, x + editW - hintW - hintMargin, py + editH - hintH - 2, hintW, hintH, TRUE);
         ShowWindow(hTotalLabel, show);
+    }
+
+    // tif / orderType hints overlaid on the Qty input's left edge. Small font,
+    // transparent background. Top hint sits at the top-left, bottom hint at the
+    // bottom-left of the field.
+    HWND hQtyTypeLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL);
+    HWND hQtyTifLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL);
+    const int qtyHintW = 48;
+    const int qtyHintH = 16;
+    if (hQtyTifLabel) {
+        MoveWindow(hQtyTifLabel, x + 4, py + 2, qtyHintW, qtyHintH, TRUE);
+        ShowWindow(hQtyTifLabel, show);
+    }
+    if (hQtyTypeLabel) {
+        MoveWindow(hQtyTypeLabel, x + 4, py + editH - qtyHintH - 2, qtyHintW, qtyHintH, TRUE);
+        ShowWindow(hQtyTypeLabel, show);
     }
 
     CenterEditText(hPriceEdit);
@@ -467,12 +485,15 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
     // the hint after every message that could've changed the selection or
     // focus — same fix as Market_RedrawHintsFor() in market.h.
     if (uIdSubclass == 2) { // Qty edit
+        auto redraw = [hWnd](HWND h) {
+            if (!h || !IsWindowVisible(h)) return;
+            InvalidateRect(h, NULL, TRUE);
+            UpdateWindow(h);
+        };
         HWND hParent = GetParent(hWnd);
-        HWND hTotal  = GetDlgItem(hParent, ID_ORDERS_PRICE_LABEL);
-        if (hTotal && IsWindowVisible(hTotal)) {
-            InvalidateRect(hTotal, NULL, TRUE);
-            UpdateWindow(hTotal);
-        }
+        redraw(GetDlgItem(hParent, ID_ORDERS_PRICE_LABEL));
+        redraw(GetDlgItem(hParent, ID_ORDERS_QTY_TYPE_LABEL));
+        redraw(GetDlgItem(hParent, ID_ORDERS_QTY_TIF_LABEL));
     }
 
     return res;
@@ -505,23 +526,30 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
 
     HWND hOrderTypeHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
     if (hOrderTypeHint) {
-        std::string hint = order.symbol + " " + order.action;// + " " + order.orderType;
+        std::string hint = order.symbol + " " + order.action;// + " " + order.orderType + " " + order.tif;
         SetWindowTextA(hOrderTypeHint, hint.c_str());
         SetCtrlColor(hOrderTypeHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
         InvalidateRect(hOrderTypeHint, NULL, TRUE);
     }
+
+    // Side-color the Qty hints green (BUY) / red (SELL).
+    COLORREF qtyClr = order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
+    HWND hQtyTifLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL);
+    if (hQtyTifLabel) {
+        SetCtrlColor(hQtyTifLabel, qtyClr);
+        SetWindowTextA(hQtyTifLabel, order.tif.c_str());
+        InvalidateRect(hQtyTifLabel, NULL, TRUE);
+    }
+    HWND hQtyTypeLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL);
+    if (hQtyTypeLabel) {
+        SetCtrlColor(hQtyTypeLabel, qtyClr);
+        SetWindowTextA(hQtyTypeLabel, order.orderType.c_str());
+        InvalidateRect(hQtyTypeLabel, NULL, TRUE);
+    }
+
     Orders_LayoutPanel(hWnd, true);
     InvalidateRect(GetDlgItem(hWnd, ID_ORDERS_LIST), NULL, TRUE);
 
-    // Focus the price field and select all. Deferred via a one-shot timer
-    // rather than called directly: on the FIRST click into an inactive Orders
-    // window, the OS's own activation sequence (WM_MOUSEACTIVATE → SetForegroundWindow
-    // → the list view claiming focus for itself) runs interleaved with this
-    // notification handler and steals focus back after we set it. A timer message
-    // is only dispatched once the queue is otherwise empty, so by the time it
-    // fires, activation + the list's own focus grab have already finished, and
-    // we reliably win the focus. (PostMessage is not late enough for this case,
-    // since some of that activation handling can itself be queued behind it.)
     if (hPriceEdit) {
         SetTimer(hWnd, ID_ORDERS_FOCUS_TIMER, 333, NULL);
     }
@@ -579,6 +607,19 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);
             SetCtrlColor(hTotalLabel, COINS_CLR_ORANGE);
 
+            // Two small hints overlaid on the top-left / bottom-left of the Qty edit:
+            // the order's time-in-force (tif) and its order type. Side-colored like
+            // the order-bar hint (green for BUY, red for SELL).
+            HWND hQtyTifLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
+                WS_CHILD | SS_LEFT | SS_NOPREFIX,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_TIF_LABEL, hInst, NULL);
+            SetCtrlColor(hQtyTifLabel, COINS_CLR_GREEN);
+
+            HWND hQtyTypeLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
+                WS_CHILD | SS_LEFT | SS_NOPREFIX,
+                0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_TYPE_LABEL, hInst, NULL);
+            SetCtrlColor(hQtyTypeLabel, COINS_CLR_GREEN);
+
             // Subclass edit fields to intercept keyboard navigation.
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT), EditField_SubclassProc, 1, 0);
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT),   EditField_SubclassProc, 2, 0);
@@ -591,6 +632,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(hEditPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hEditQty, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hTotalLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
+            SendMessage(hQtyTifLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
+            SendMessage(hQtyTypeLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
 
             api().addApiUpdateWindow(hWnd);  
             Orders_Repopulate(hWnd);
@@ -832,11 +875,14 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
 
-        // hTotalLabel (notional value) is a transparent hint overlaid on the Qty
-        // input, same treatment as the market.h order-bar hint labels.
+        // hTotalLabel (notional value) and the two Qty-side hints (tif / order
+        // type) are transparent hints overlaid on the Qty input, same treatment
+        // as the market.h order-bar hint labels.
         case WM_CTLCOLORSTATIC: {
             HWND hCtrl = (HWND)lParam;
-            if (hCtrl == GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL)) {
+            if (hCtrl == GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL) ||
+                hCtrl == GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL) ||
+                hCtrl == GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL)) {
                 HDC hdc = (HDC)wParam;
                 SetBkMode(hdc, TRANSPARENT);
                 COLORREF clr = GetCtrlColor(hCtrl);
