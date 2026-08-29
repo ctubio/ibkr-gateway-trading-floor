@@ -114,7 +114,7 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     HWND hPriceEdit = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hQtyLbl    = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
     HWND hQtyEdit   = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
-    HWND hHint      = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
+    HWND hTotalLabel      = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
 
     int listH = showPanel ? h - EDIT_PANEL_H : h;
     if (hList) MoveWindow(hList, 0, 0, w, listH, TRUE);
@@ -129,10 +129,10 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     int startX = 18;
 
     int x = startX;
-    if (hHint) {
+    if (hTotalLabel) {
         int hintW = 210;
-        MoveWindow(hHint, x, py + 5, hintW, 24, TRUE);
-        ShowWindow(hHint, show);
+        MoveWindow(hTotalLabel, x, py + 5, hintW, 24, TRUE);
+        ShowWindow(hTotalLabel, show);
         x += hintW + 5;
     }
     if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW, editH, TRUE); ShowWindow(hPriceEdit, show); }
@@ -455,12 +455,12 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     std::string qtyStr = std::format("{:+}", order.totalQty * (order.action == "BUY" ? 1 : -1));
     if (hQtyEdit) SetWindowTextA(hQtyEdit, qtyStr.c_str());
 
-    HWND hHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
-    if (hHint) {
+    HWND hTotalLabel = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
+    if (hTotalLabel) {
         std::string hint = order.symbol + " " + order.action + " " + order.orderType + " Price:";
-        SetWindowTextA(hHint, hint.c_str());
-        SetCtrlColor(hHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
-        InvalidateRect(hHint, NULL, TRUE);
+        SetWindowTextA(hTotalLabel, hint.c_str());
+        SetCtrlColor(hTotalLabel, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
+        InvalidateRect(hTotalLabel, NULL, TRUE);
     }
     HWND hQtyLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_LABEL);
     if (hQtyLabel) {
