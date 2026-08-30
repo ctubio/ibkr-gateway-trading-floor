@@ -17,6 +17,8 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 #define ID_MARKET_EXEC_LIST            6011   // Executions SysListView32 (far left panel)
 
 #define TIMER_MARKET_SPEAKER    0xC020  // WM_TIMER id for per-market TTS (21s)
+#define TIMER_MARKET_PAINT      0xC021  // WM_TIMER id for throttled header repaint (30-60 FPS)
+#define MARKET_PAINT_TIMER_MS   33      // ~30 FPS
 
 // ── Layout constants ─────────────────────────────────────────────────────────
 // Header layout (left → right):
@@ -56,6 +58,9 @@ struct TsState {
 
     // ── Level 1 quote ─────────────────────────────
     TradingAPI::L1Book l1Info;
+
+    // ── Paint limiter ─────────────────────────────────────────────────────────
+    bool marketHdrDirty = false;
 
     // ── Portfolio snapshot ────────────────────────────────────────────────────
     double position = 0.0;
@@ -1398,8 +1403,7 @@ void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
         state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
     }
 
-    RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
-    InvalidateRect(hWnd, &hdrRc, FALSE);
+    state->marketHdrDirty = true;
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -1539,6 +1543,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         api().addApiUpdateWindow(hWnd);
         api().setMarketWindow(hWnd, state->conId, state->symbol);
+        SetTimer(hWnd, TIMER_MARKET_PAINT, MARKET_PAINT_TIMER_MS, NULL);
         // Seed L1 from watchlist cache so VWAP (and other ticks) are
         // immediately visible before the first L1 update fires
         PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
@@ -1693,6 +1698,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_TIMER:
         if (wParam == TIMER_MARKET_SPEAKER && state && state->ttsOn)
             Market_SpeakLast(state);
+        if (wParam == TIMER_MARKET_PAINT) {
+            if (state && state->marketHdrDirty) {
+                RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
+                InvalidateRect(hWnd, &hdrRc, FALSE);
+                state->marketHdrDirty = false;
+            }
+        }
         break;
 
     case WM_TTS_VOICE_CHANGED: {
@@ -1953,6 +1965,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
     
     case WM_DESTROY:
+        KillTimer(hWnd, TIMER_MARKET_PAINT);
         api().unsetMarketWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         if (state) {
