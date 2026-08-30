@@ -118,7 +118,7 @@ struct TsState {
 };
 static std::map<HWND, TsState*> tsStates;
 
-static std::string lastTime;
+static int lastTimeSec = 0;
 
 static LRESULT CALLBACK Market_ListForwardCtrlProc(
     HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
@@ -223,13 +223,24 @@ static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
     return hList;
 }
 
+static inline int TimeToSeconds(const std::string& timeStr) {
+    if (timeStr.size() >= 8 && timeStr[2] == ':' && timeStr[5] == ':') {
+        int h = (timeStr[0] - '0') * 10 + (timeStr[1] - '0');
+        int m = (timeStr[3] - '0') * 10 + (timeStr[4] - '0');
+        int s = (timeStr[6] - '0') * 10 + (timeStr[7] - '0');
+        return h * 3600 + m * 60 + s;
+    }
+    return 0;
+}
+
 static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time, COLORREF color) {
     std::string priceStr = std::format("{:.2f}", price);
+    int timeSec = TimeToSeconds(time);
     LVITEMA lvi = {};
     lvi.mask = LVIF_TEXT | LVIF_PARAM;
     lvi.iItem = 0;
     lvi.pszText = (LPSTR)priceStr.c_str();
-    lvi.lParam = (LPARAM)color;
+    lvi.lParam = (static_cast<LPARAM>(static_cast<uint32_t>(timeSec)) << 32) | static_cast<uint32_t>(color);
     ListView_InsertItem(hList, &lvi);
     std::string sizeStr = std::format("{:.0f}", size);
     ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
@@ -1706,7 +1717,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
                 else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
             }
-            lastTime = tick->time;
+            lastTimeSec = TimeToSeconds(tick->time);
             if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
@@ -1782,20 +1793,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
                     if (dark)
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                    COLORREF rowColor = (COLORREF)cd->nmcd.lItemlParam;
+                    LPARAM itemParam = cd->nmcd.lItemlParam;
+                    COLORREF rowColor = static_cast<COLORREF>(itemParam & 0xFFFFFFFF);
+                    int tickTimeSec = static_cast<int>(itemParam >> 32);
                     if (cd->iSubItem == 0) {
-                        char timeText[64] = {};
-                        ListView_GetItemText(hdr->hwndFrom, (int)cd->nmcd.dwItemSpec, 2, timeText, sizeof(timeText));
-                        bool isMatch = false;
-                        const char* last = lastTime.c_str();
-                        // Fast check: Are the first 6 characters ("HH:MM:") identical
-                        if (strncmp(last, timeText, 6) == 0) {
-                            int s_last = (last[6] - '0') * 10 + (last[7] - '0');
-                            int s_text = (timeText[6] - '0') * 10 + (timeText[7] - '0');
-                            if (s_text == s_last || s_text == s_last - 1) {
-                                isMatch = true;
-                            }
-                        }
+                        int diff = lastTimeSec - tickTimeSec;
+                        if (diff < 0) diff += 86400;
+                        bool isMatch = (diff >= 0 && diff <= 1);
                         if (isMatch) {
                             cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         } else {
