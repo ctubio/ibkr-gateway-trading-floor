@@ -191,12 +191,15 @@ BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
             std::wstring windowTitle(titleBuffer.data());
             
             // Check if the title contains '@' OR 'U423'
-            bool containsAtSymbol = (windowTitle.find(L"@") != std::wstring::npos);
-            bool containsU423 = (windowTitle.find(L"Interactive Brokers") != std::wstring::npos);
-            bool containsGateway = (windowTitle.find(L"IBKR Gateway") != std::wstring::npos);
-            
+            //bool containsAtSymbol = (windowTitle.find(L"@") != std::wstring::npos);
+            //bool containsU423 = (windowTitle.find(L"Interactive Brokers") != std::wstring::npos);
+            //bool containsGateway = (windowTitle.find(L"IBKR Gateway") != std::wstring::npos);
+            bool containsToolkit = (windowTitle.find(L"ToolkitWindow") != std::wstring::npos);
+            bool containsLoading = (windowTitle.find(L"Loading") != std::wstring::npos);
+
             // Only add the window if it matches your specific criteria
-            if (containsAtSymbol || containsU423 || containsGateway) {
+            //if (containsAtSymbol || containsU423 || containsGateway) {
+            if (!containsToolkit && !containsLoading) {
                 data->foundWindows.push_back(hwnd);
             }
         }
