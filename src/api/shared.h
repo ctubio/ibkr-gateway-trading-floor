@@ -31,11 +31,6 @@ static const wchar_t MOON_GLYPH[] = L"\uE708";
 // glyph: E72E = Lock on (Segoe MDL2 Assets)
 static const wchar_t LOCK_GLYPH[] = L"\uE72E";
 
-// ─── Per-control color table ──────────────────────────────────────────────────
-static HWND     gClrHwnd[160]  = {};
-static COLORREF gClrColor[160] = {};
-static int      gClrCount      = 0;
-
 // ─── Lock hotkeys ──────────────────────────────────────────────────
 static bool lockHotkeys = false;
 
@@ -51,14 +46,18 @@ TradingAPI& api() {
 
 // ── Label Colors ───────────────────────────────────────────────────────────
 static void SetCtrlColor(HWND hw, COLORREF c) {
-    for (int i = 0; i < gClrCount; i++)
-        if (gClrHwnd[i] == hw) { gClrColor[i] = c; return; }
-    if (gClrCount < 160) { gClrHwnd[gClrCount] = hw; gClrColor[gClrCount++] = c; }
+    if (!hw) return;
+    if (c == COLOR_THEME) {
+        RemovePropA(hw, "CtrlColor");
+    } else {
+        SetPropA(hw, "CtrlColor", (HANDLE)(uintptr_t)(c + 1));
+    }
 }
 static COLORREF GetCtrlColor(HWND hw) {
-    for (int i = 0; i < gClrCount; i++)
-        if (gClrHwnd[i] == hw) return gClrColor[i];
-    return COLOR_THEME;  // not registered = let theme handle it
+    if (!hw) return COLOR_THEME;
+    HANDLE h = GetPropA(hw, "CtrlColor");
+    if (!h) return COLOR_THEME;
+    return (COLORREF)((uintptr_t)h - 1);
 }
 
 void InitDarkBrushes() {

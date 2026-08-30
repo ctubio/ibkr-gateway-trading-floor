@@ -1313,7 +1313,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             dashboardState.hLblEUR = dashboardState.hLblUSD = dashboardState.hCoin_NetLiq = dashboardState.hCoin_BigPnL = dashboardState.hCoin_Pct = dashboardState.hCoin_Realized = dashboardState.hCoin_Speaker = dashboardState.hCoin_Lock = NULL;
             dashboardState.hCoin_Positions = dashboardState.hCoin_Unrealized = dashboardState.hCoin_Dividends = dashboardState.hCoin_Accruals = dashboardState.hCoin_BuyingPower = dashboardState.hCoin_MaintMargin = NULL;
             dashboardState.hCoin_Clock = dashboardState.hLblBP = dashboardState.hLblMM = dashboardState.hLblDividends = dashboardState.hLblAccruals = dashboardState.hCoinBox1 = dashboardState.hCoinBox2 = dashboardState.hCoinBox3 = dashboardState.hCoin_Cash = dashboardState.hCoin_EUR = dashboardState.hCoin_USD = NULL;
-            gClrCount = 0;
 
             PostQuitMessage(0);
             break;
