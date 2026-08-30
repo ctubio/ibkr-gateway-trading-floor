@@ -304,6 +304,46 @@ static void Diamonds_CleanupStaleTabAssignments() {
     if (changedColors) Diamonds_SaveSymbolColors();
 }
 
+// Drops "Dividends" registry values (written by Settings_Dividends_Save, see
+// registry.h) for conIds that are no longer a held position. That subkey is a
+// pure fetch-once-per-session cache keyed by conId with nothing else pruning
+// it, so closed-out positions would otherwise accumulate there forever — same
+// rationale as Diamonds_CleanupStaleTabAssignments() above, just aimed at a
+// different registry subkey (Dividends instead of Tab_*/SymbolColors).
+static void Diamonds_CleanupStaleDividends() {
+    std::unordered_set<int> liveConIds;
+    {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        for (auto const& [conId, info] : api().getPortfolioMap())
+            liveConIds.insert(conId);
+    }
+
+    HKEY hKey;
+    std::string fullPath = std::format("{}\\Dividends", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
+        return; // no Dividends subkey yet — nothing to clean
+
+    std::vector<std::string> toDelete;
+    char valueName[64];
+    DWORD index = 0;
+    while (true) {
+        DWORD nameSize = sizeof(valueName);
+        if (RegEnumValueA(hKey, index++, valueName, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+            break;
+
+        int conId = 0;
+        try { conId = std::stoi(std::string(valueName)); }
+        catch (...) { continue; } // value name isn't conId-shaped — leave it alone
+
+        if (!liveConIds.count(conId))
+            toDelete.push_back(valueName);
+    }
+    RegCloseKey(hKey);
+
+    for (const auto& name : toDelete)
+        RegDelete("Dividends", name.c_str());
+}
+
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 static void Diamonds_Layout(HWND hWnd) {
@@ -945,7 +985,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     Diamonds_SaveTabMap();
                     Diamonds_Repopulate(hWnd);
                     InvalidateRect(hWnd, NULL, TRUE);
-                    Diamonds_CleanupStaleTabAssignments(); 
+                    Diamonds_CleanupStaleTabAssignments();
+                    Diamonds_CleanupStaleDividends();
                 } else if (cmd >= 200 && cmd <= 200 + DIAMONDS_COLOR_COUNT) {
                     // Color assignment.
                     int pickedIdx = cmd - 200;
@@ -960,7 +1001,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
                     ListView_RedrawItems(hList, row, row);
                     UpdateWindow(hList);
-                    Diamonds_CleanupStaleTabAssignments(); 
+                    Diamonds_CleanupStaleTabAssignments();
+                    Diamonds_CleanupStaleDividends();
                 } else if (cmd == 300) {
                     // Quick BUY placeholder: 1 share @ $1.00.
                     std::thread([conId, sym]() {
