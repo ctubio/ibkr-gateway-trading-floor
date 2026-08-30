@@ -920,6 +920,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
+            if (s_editState.panelVisible)
+                Orders_HideInlinePanel(hWnd);
             break;
     }
     
