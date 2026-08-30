@@ -1207,20 +1207,20 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     };
 
     // Row 1: O  C  H  L
-    struct StatItem { const char* label; std::string value; COLORREF color; };
+    struct StatItem { const char* label; std::string value; COLORREF color; const wchar_t* wIcon = nullptr; };
     StatItem row1[] = {
-        { "C:", Market_Fmt(L1.prevClose), closeColor  },
-        { "H:", Market_Fmt(L1.high),      highColor  },
+        { "", Market_Fmt(L1.prevClose), closeColor, RIGHT_GLYPH  },
+        { "", Market_Fmt(L1.high),      highColor, TOP_GLYPH  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
-        { "W:", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor  },
-        { "V:", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE  },  // was: formatVolume(L1.volume)
+        { "", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor, LOCATE_GLYPH  },
+        { "", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE, LIGHT_GLYPH  },  // was: formatVolume(L1.volume)
     };
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
-        { "O:", Market_Fmt(L1.open),  openColor  },
-        { "L:", Market_Fmt(L1.low),   lowColor   },
-        { "D:", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED  },
+        { "", Market_Fmt(L1.open),  openColor, LEFT_GLYPH  },
+        { "", Market_Fmt(L1.low),   lowColor, BOTTOM_GLYPH   },
+        { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, RINGER_GLYPH  },
     };
 
     SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
@@ -1231,14 +1231,27 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         int cx = startX;
         const int GAP = 8;
         for (int i = 0; i < count; i++) {
+            if (items[i].wIcon) {
+                SelectObject(hdc, hFont_Icons);
+                SIZE iconSz;
+                GetTextExtentPoint32W(hdc, items[i].wIcon, lstrlenW(items[i].wIcon), &iconSz);
+                SetTextColor(hdc, labelColor); 
+                RECT ir = { cx, y0, cx + iconSz.cx, y1 };
+                DrawTextW(hdc, items[i].wIcon, -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                cx += iconSz.cx + 2; // small gap after icon
+                SelectObject(hdc, hFont11ptbold);
+            }
+
             // label
-            std::string labStr = std::string(items[i].label) + " ";
-            SIZE lblSz;
-            GetTextExtentPoint32A(hdc, labStr.c_str(), (int)labStr.size(), &lblSz);
-            SetTextColor(hdc, labelColor);
-            RECT lr = { cx, y0, cx + lblSz.cx, y1 };
-            DrawTextA(hdc, labStr.c_str(), -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-            cx += lblSz.cx;
+            if (items[i].label && items[i].label[0] != '\0') {
+                std::string labStr = std::string(items[i].label) + " ";
+                SIZE lblSz;
+                GetTextExtentPoint32A(hdc, labStr.c_str(), (int)labStr.size(), &lblSz);
+                SetTextColor(hdc, labelColor);
+                RECT lr = { cx, y0, cx + lblSz.cx, y1 };
+                DrawTextA(hdc, labStr.c_str(), -1, &lr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                cx += lblSz.cx;
+            }
 
             // value
             SIZE valSz;

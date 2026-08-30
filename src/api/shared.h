@@ -30,6 +30,21 @@ static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
 static const wchar_t MOON_GLYPH[] = L"\uE708";
 // glyph: E72E = Lock on (Segoe MDL2 Assets)
 static const wchar_t LOCK_GLYPH[] = L"\uE72E";
+// glyph: E7C1 = Warning on (Segoe MDL2 Assets)
+static const wchar_t RINGER_GLYPH[] = L"\uE7C1";
+
+// glyph: E936 = FlickUp on (Segoe MDL2 Assets)
+static const wchar_t BOTTOM_GLYPH[] = L"\uE936";
+// glyph: E935 = FlickDown on (Segoe MDL2 Assets)
+static const wchar_t TOP_GLYPH[] = L"\uE935";
+// glyph: E937 = FlickLeft on (Segoe MDL2 Assets)
+static const wchar_t RIGHT_GLYPH[] = L"\uE937";
+// glyph: E938 = FlickRight on (Segoe MDL2 Assets)
+static const wchar_t LEFT_GLYPH[] = L"\uE938";
+// glyph: E945 = LightningBolt on (Segoe MDL2 Assets)
+static const wchar_t LIGHT_GLYPH[] = L"\uE945";
+// glyph: EC43 = MobLocation on (Segoe MDL2 Assets)
+static const wchar_t LOCATE_GLYPH[] = L"\uEC43";
 
 // ─── Lock hotkeys ──────────────────────────────────────────────────
 static bool lockHotkeys = false;
