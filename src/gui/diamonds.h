@@ -907,126 +907,108 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
 
         if (hdr->code == NM_DBLCLK) {
-            LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
-            int row = act->iItem;
-            if (row >= 0) {
-                int conId = diamondDisplayOrder[row];
-                const std::string& sym = diamondDataCache[conId].textCols[DCOL_SYMBOL];
-                StartMarket(sym, conId);
+            if (!lockHotkeys) {
+                LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
+                int row = act->iItem;
+                if (row >= 0) {
+                    int conId = diamondDisplayOrder[row];
+                    const std::string& sym = diamondDataCache[conId].textCols[DCOL_SYMBOL];
+                    StartMarket(sym, conId);
+                }
             }
         }
 
         if (hdr->code == NM_RCLICK) {
-            LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
-            int row = act->iItem;
-            if (row >= 0) {
-                int conId = diamondDisplayOrder[row];
-                const std::string& sym = diamondDataCache[conId].textCols[DCOL_SYMBOL];
+            if (!lockHotkeys) {
+                LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
+                int row = act->iItem;
+                if (row >= 0) {
+                    int conId = diamondDisplayOrder[row];
+                    const std::string& sym = diamondDataCache[conId].textCols[DCOL_SYMBOL];
 
-                // Determine current group assignment for this item.
-                auto mapIt = diamondsTabMap.find(conId);
-                int currentGroup = (mapIt != diamondsTabMap.end()) ? mapIt->second : DTAB_ALL;
+                    // Determine current group assignment for this item.
+                    auto mapIt = diamondsTabMap.find(conId);
+                    int currentGroup = (mapIt != diamondsTabMap.end()) ? mapIt->second : DTAB_ALL;
 
-                // Determine current color assignment for this item.
-                auto colorIt = diamondsSymbolColors.find(conId);
-                int currentColor = (colorIt != diamondsSymbolColors.end()) ? colorIt->second : DIAMONDS_COLOR_NONE;
+                    // Determine current color assignment for this item.
+                    auto colorIt = diamondsSymbolColors.find(conId);
+                    int currentColor = (colorIt != diamondsSymbolColors.end()) ? colorIt->second : DIAMONDS_COLOR_NONE;
 
-                // ── Build context menu ────────────────────────────────────────
-                // IDs 1-3:   group assignment
-                // IDs 200-206: color options (200+idx for colors, 206 = None)
-                HMENU hMenu = CreatePopupMenu();
+                    // ── Build context menu ────────────────────────────────────────
+                    // IDs 1-3:   group assignment
+                    // IDs 200-206: color options (200+idx for colors, 206 = None)
+                    HMENU hMenu = CreatePopupMenu();
 
 
-                // ── Quick placeholder orders ───────────────────────────────────
-                double quickLastPrice = 0.0;
-                {
-                    TradingAPI::L1Book quickInfo;
-                    if (api().getMarketData(conId, quickInfo)) quickLastPrice = quickInfo.last;
-                }
-                std::string sellLabel = sym + (
-                    (quickLastPrice > 0.0)
-                        ? std::format(" SELL 1 @ {:.2f}", quickLastPrice * 2.0)
-                        : " SELL 1 @ 2x Price"
-                );
-                AppendMenuA(hMenu, MF_STRING | (quickLastPrice <= 0.0 ? MF_GRAYED : 0), 301, sellLabel.c_str());
-                AppendMenuA(hMenu, MF_STRING, 300, (sym + " BUY 1 @ 1").c_str());
-                AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
-
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to Dividends");
-                AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
-
-                // ── Color submenu ─────────────────────────────────────────────
-                AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
-                
-                // "None" option — grayed when no color is currently assigned.
-                AppendMenuA(hMenu, MF_STRING | (currentColor == DIAMONDS_COLOR_NONE ? MF_GRAYED : 0),
-                            200 + DIAMONDS_COLOR_COUNT, "Set Color: None");
-
-                for (int i = 0; i < DIAMONDS_COLOR_COUNT; ++i) {
-                    bool isCurrent = (currentColor == i);
-                    AppendMenuA(hMenu, MF_STRING | (isCurrent ? MF_GRAYED : 0),
-                                200 + i, diamondColorPalette[i].label);
-                }
-
-                POINT pt;
-                GetCursorPos(&pt);
-                int cmd = (int)TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
-                                              pt.x, pt.y, 0, hWnd, NULL);
-                DestroyMenu(hMenu);
-
-                if (cmd >= 1 && cmd <= 3) {
-                    // Group assignment.
-                    int targetTab = cmd - 1;
-                    if (targetTab == DTAB_ALL)
-                        diamondsTabMap.erase(conId);
-                    else
-                        diamondsTabMap[conId] = targetTab;
-                    Diamonds_SaveTabMap();
-                    Diamonds_Repopulate(hWnd);
-                    InvalidateRect(hWnd, NULL, TRUE);
-                    Diamonds_CleanupStaleTabAssignments();
-                    Diamonds_CleanupStaleDividends();
-                } else if (cmd >= 200 && cmd <= 200 + DIAMONDS_COLOR_COUNT) {
-                    // Color assignment.
-                    int pickedIdx = cmd - 200;
-                    if (pickedIdx == DIAMONDS_COLOR_COUNT) {
-                        // "None" — remove override.
-                        diamondsSymbolColors.erase(conId);
-                    } else {
-                        diamondsSymbolColors[conId] = pickedIdx;
+                    // ── Quick placeholder orders ───────────────────────────────────
+                    double quickLastPrice = 0.0;
+                    {
+                        TradingAPI::L1Book quickInfo;
+                        if (api().getMarketData(conId, quickInfo)) quickLastPrice = quickInfo.last;
                     }
-                    Diamonds_SaveSymbolColors();
-                    // Invalidate just this row so the color appears immediately.
-                    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                    ListView_RedrawItems(hList, row, row);
-                    UpdateWindow(hList);
-                    Diamonds_CleanupStaleTabAssignments();
-                    Diamonds_CleanupStaleDividends();
-                } else if (cmd == 300) {
-                    // Quick BUY placeholder: 1 share @ $1.00.
-                    std::thread([conId, sym]() {
-                        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-                        if (hDashboard && IsWindow(hDashboard)) {
-                            PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                    std::string sellLabel = sym + (
+                        (quickLastPrice > 0.0)
+                            ? std::format(" SELL 1 @ {:.2f}", quickLastPrice * 2.0)
+                            : " SELL 1 @ 2x Price"
+                    );
+                    AppendMenuA(hMenu, MF_STRING | (quickLastPrice <= 0.0 ? MF_GRAYED : 0), 301, sellLabel.c_str());
+                    AppendMenuA(hMenu, MF_STRING, 300, (sym + " BUY 1 @ 1").c_str());
+                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+
+                    AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
+                    AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to Dividends");
+                    AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
+
+                    // ── Color submenu ─────────────────────────────────────────────
+                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+                    
+                    // "None" option — grayed when no color is currently assigned.
+                    AppendMenuA(hMenu, MF_STRING | (currentColor == DIAMONDS_COLOR_NONE ? MF_GRAYED : 0),
+                                200 + DIAMONDS_COLOR_COUNT, "Set Color: None");
+
+                    for (int i = 0; i < DIAMONDS_COLOR_COUNT; ++i) {
+                        bool isCurrent = (currentColor == i);
+                        AppendMenuA(hMenu, MF_STRING | (isCurrent ? MF_GRAYED : 0),
+                                    200 + i, diamondColorPalette[i].label);
+                    }
+
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    int cmd = (int)TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                                pt.x, pt.y, 0, hWnd, NULL);
+                    DestroyMenu(hMenu);
+
+                    if (cmd >= 1 && cmd <= 3) {
+                        // Group assignment.
+                        int targetTab = cmd - 1;
+                        if (targetTab == DTAB_ALL)
+                            diamondsTabMap.erase(conId);
+                        else
+                            diamondsTabMap[conId] = targetTab;
+                        Diamonds_SaveTabMap();
+                        Diamonds_Repopulate(hWnd);
+                        InvalidateRect(hWnd, NULL, TRUE);
+                        Diamonds_CleanupStaleTabAssignments();
+                        Diamonds_CleanupStaleDividends();
+                    } else if (cmd >= 200 && cmd <= 200 + DIAMONDS_COLOR_COUNT) {
+                        // Color assignment.
+                        int pickedIdx = cmd - 200;
+                        if (pickedIdx == DIAMONDS_COLOR_COUNT) {
+                            // "None" — remove override.
+                            diamondsSymbolColors.erase(conId);
+                        } else {
+                            diamondsSymbolColors[conId] = pickedIdx;
                         }
-                        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                        int max = 10;
-                        while (!hOrders || !IsWindow(hOrders)) {
-                            if (!max--) break;
-                            std::this_thread::sleep_for(std::chrono::milliseconds(121));
-                            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                        }
-                        if (hOrders && IsWindow(hOrders)) {
-                            api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, 0.0, false);
-                        }
-                    }).detach();
-                } else if (cmd == 301) {
-                    // Quick SELL placeholder: 1 share @ 2x last price.
-                    TradingAPI::L1Book quickInfo;
-                    if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
-                        double sellPrice = quickInfo.last * 2.0;
-                        std::thread([conId, sym, sellPrice]() {
+                        Diamonds_SaveSymbolColors();
+                        // Invalidate just this row so the color appears immediately.
+                        HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+                        ListView_RedrawItems(hList, row, row);
+                        UpdateWindow(hList);
+                        Diamonds_CleanupStaleTabAssignments();
+                        Diamonds_CleanupStaleDividends();
+                    } else if (cmd == 300) {
+                        // Quick BUY placeholder: 1 share @ $1.00.
+                        std::thread([conId, sym]() {
                             HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
                             if (hDashboard && IsWindow(hDashboard)) {
                                 PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
@@ -1039,9 +1021,31 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                                 hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
                             }
                             if (hOrders && IsWindow(hOrders)) {
-                                api().submitOrder(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0, false);
+                                api().submitOrder(conId, sym, "BUY", false, 1.0, 1.0, 0.0, 0.0, 0.0, false);
                             }
                         }).detach();
+                    } else if (cmd == 301) {
+                        // Quick SELL placeholder: 1 share @ 2x last price.
+                        TradingAPI::L1Book quickInfo;
+                        if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
+                            double sellPrice = quickInfo.last * 2.0;
+                            std::thread([conId, sym, sellPrice]() {
+                                HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                                if (hDashboard && IsWindow(hDashboard)) {
+                                    PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                                }
+                                HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+                                int max = 10;
+                                while (!hOrders || !IsWindow(hOrders)) {
+                                    if (!max--) break;
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(121));
+                                    hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+                                }
+                                if (hOrders && IsWindow(hOrders)) {
+                                    api().submitOrder(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0, false);
+                                }
+                            }).detach();
+                        }
                     }
                 }
             }
