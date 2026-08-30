@@ -3,20 +3,21 @@
 #ifndef GATEWAY_SIM
 
 #include <tlhelp32.h>
-bool IsProcessRunning(const char* processName) {
+DWORD IsProcessRunning(const char* processName) {
+    DWORD pid = 0;
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnap == INVALID_HANDLE_VALUE) return false;
+    if (hSnap == INVALID_HANDLE_VALUE) return pid;
     PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
-    bool found = false;
     if (Process32First(hSnap, &pe)) {
         do {
             if (_stricmp(pe.szExeFile, processName) == 0) {
-                found = true; break;
+                pid = pe.th32ProcessID;
+                break;
             }
         } while (Process32Next(hSnap, &pe));
     }
     CloseHandle(hSnap);
-    return found;
+    return pid;
 }
 
 // Returns the full image path of a running process, or empty on failure
@@ -130,7 +131,7 @@ void EnsureGatewayRunning(HWND hParent) {
     std::string path   = GetGatewayPath();
     std::string installRoot = path.empty() ? "" : std::filesystem::path(path).parent_path().string();
 
-    if (IsProcessRunning("ibgateway.exe") || IsProcessRunning("tws.exe") || IsAnyProcessRunningUnder(installRoot))
+    if (IsProcessRunning("ibgateway.exe") > 0 || IsProcessRunning("tws.exe") > 0 || IsAnyProcessRunningUnder(installRoot))
         return;
 
     EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
@@ -163,7 +164,65 @@ void KillGateway() {
     }
     CloseHandle(hSnap);
 }
+
+// Structure to pass data to our EnumWindows callback
+struct WindowFinderData {
+    DWORD targetPID;
+    std::vector<HWND> foundWindows; // Now using a vector to store multiple handles
+};
+
+// Callback function to evaluate each window
+// Callback function to evaluate each window
+BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
+    WindowFinderData* data = reinterpret_cast<WindowFinderData*>(lParam);
+    DWORD processId = 0;
+    GetWindowThreadProcessId(hwnd, &processId);
+
+    if (data->targetPID == processId) {
+        // Get the length of the window's title
+        int textLength = GetWindowTextLengthW(hwnd);
+        
+        if (textLength > 0) {
+            // Allocate a buffer to hold the title text
+            std::vector<wchar_t> titleBuffer(textLength + 1);
+            GetWindowTextW(hwnd, titleBuffer.data(), textLength + 1);
+            
+            // Convert to a C++ wstring for easy searching
+            std::wstring windowTitle(titleBuffer.data());
+            
+            // Check if the title contains '@' OR 'U423'
+            bool containsAtSymbol = (windowTitle.find(L"@") != std::wstring::npos);
+            bool containsU423 = (windowTitle.find(L"Interactive Brokers") != std::wstring::npos);
+            bool containsGateway = (windowTitle.find(L"IBKR Gateway") != std::wstring::npos);
+            
+            // Only add the window if it matches your specific criteria
+            if (containsAtSymbol || containsU423 || containsGateway) {
+                data->foundWindows.push_back(hwnd);
+            }
+        }
+    }
+    
+    return TRUE; // Continue enumerating
+}
+
+static void ToggleTWS(int swState) {
+    DWORD pid = IsProcessRunning(std::filesystem::path(GetGatewayPath()).filename().string().c_str());
+    if (pid == 0) return;
+
+    WindowFinderData data;
+    data.targetPID = pid;
+    
+    EnumWindows(EnumAnyWindowsCallback, reinterpret_cast<LPARAM>(&data));
+
+    if (!data.foundWindows.empty()) {
+        for (HWND hwnd : data.foundWindows) {
+            ShowWindow(hwnd, swState);
+        }
+    }
+}
+
 #endif
+
 LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
     DWORD code = exceptionInfo->ExceptionRecord->ExceptionCode;
     std::string errorType = "UNKNOWN CRITICAL EXCEPTION";

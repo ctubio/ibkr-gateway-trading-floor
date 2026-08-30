@@ -1193,9 +1193,16 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 lockHotkeys = !lockHotkeys;
                 ShowWindow(dashboardState.hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
                 PostMessage(hWnd, WM_ACTIVATE, lockHotkeys ? WA_INACTIVE : WA_ACTIVE, 0);
+                ToggleTWS(lockHotkeys ? SW_HIDE : SW_SHOW);
                 return 0;
             }
         }
+
+        case WM_SHOWWINDOW:
+            if (!lockHotkeys && wParam == TRUE) {
+                ToggleTWS(SW_SHOW); 
+            }
+            return 0;
 
         case WM_COMMAND: {
             WORD id  = LOWORD(wParam);
