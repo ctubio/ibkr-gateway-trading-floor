@@ -388,10 +388,10 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     }
 
     if (pnlSingle.conId > 0) {
-        if (pnlSingle.has_daily) {
+        //if (pnlSingle.has_daily) {
             row.sortValues[DCOL_DAILYPNL] = pnlSingle.dailyPnL;
             row.textCols[DCOL_DAILYPNL] = std::format("{:+.2f}", pnlSingle.dailyPnL);
-        }
+        //}
         if (pnlSingle.has_unrealized) {
             row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
             row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
@@ -439,9 +439,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         }
     };
 
-    auto setNA = [&](int col) {
+    auto setNA = [&](int col, std::string placeHolder = DIAMONDS_NO_DATA) {
         row.sortValues[col] = -999999.0; // Pushes NA to bottom on sorts
-        row.textCols[col] = DIAMONDS_NO_DATA;
+        row.textCols[col] = placeHolder;
     };
 
     setCol(DCOL_ASKSIZE, t.askSize, "{:.0f}");
@@ -515,13 +515,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
 
     // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
     // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
-    if (t.vwap > 0.0) {
-        double vwapDiff = t.last - t.vwap;
-        row.sortValues[DCOL_VWAP] = vwapDiff;
-        row.textCols[DCOL_VWAP]   = std::format("{:+.2f}", vwapDiff);
-    } else {
-        setNA(DCOL_VWAP);
-    }
+    double vwapDiff = (t.vwap > 0.0 && t.last > 0.0) ? t.last - t.vwap : 0.0;
+    setCol(DCOL_VWAP, vwapDiff, "{:+.2f}", true);
 
     // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
     // sampled from the same long-lived history the sparkline's reference dots
@@ -1089,7 +1084,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         const auto& cacheRow = diamondDataCache[conId];
                         if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
                             double diff = cacheRow.sortValues[DCOL_VWAP];
-                            cd->clrText = (diff >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
+                            if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
+                            else if (diff < 0.0) cd->clrText = COINS_CLR_RED;
+                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         }
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
