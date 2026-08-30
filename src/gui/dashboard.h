@@ -33,11 +33,8 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 
 #define ID_M_LINKS_BASE  1700   // one command ID per quick link below
 
-bool shouldBeConnected = true;
-static std::string currencyDashboard = "--";
-
 struct QuickLink { const char* label; const char* url; };
-static const QuickLink g_QuickLinks[] = {
+static const QuickLink quickLinks[] = {
     { "Today", "https://www.investing.com/dividends-calendar" },
     { "WSB",   "https://www.reddit.com/r/wallstreetbets"      },
     { "Scan",  "https://stockscan.io/all-stocks"              },
@@ -48,9 +45,7 @@ static const QuickLink g_QuickLinks[] = {
     { "Chat",  "https://192.168.1.105/openclaw/chat"          },
     { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
-static const int LINKS_COUNT = (int)(sizeof(g_QuickLinks) / sizeof(g_QuickLinks[0]));
-
-static bool fullDetails = true;
+static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]));
 
 static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
@@ -83,6 +78,11 @@ void MutexGatewayInstance() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1021));
     }
 }
+
+static bool fullDetails       = true;
+static bool shouldBeConnected = true;
+
+static std::string currencyDashboard = "--";
 
 static HWND hCoinBox1 = NULL;
 static HWND hCoinBox2 = NULL;
@@ -1251,9 +1251,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
                     HMENU hMenu = CreatePopupMenu();
                     for (int i = 0; i < LINKS_COUNT; ++i) {
-                        if (g_QuickLinks[i].label == "Paper" || g_QuickLinks[i].label == "GitHub")
+                        if (quickLinks[i].label == "Paper" || quickLinks[i].label == "GitHub")
                             AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
-                        AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, g_QuickLinks[i].label);   
+                        AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
                     }
 
                     SetForegroundWindow(hWnd);
@@ -1263,7 +1263,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     DestroyMenu(hMenu);
 
                     if (cmd >= ID_M_LINKS_BASE && cmd < ID_M_LINKS_BASE + LINKS_COUNT) {
-                        ShellExecuteA(NULL, "open", g_QuickLinks[cmd - ID_M_LINKS_BASE].url, NULL, NULL, SW_SHOWNORMAL);
+                        ShellExecuteA(NULL, "open", quickLinks[cmd - ID_M_LINKS_BASE].url, NULL, NULL, SW_SHOWNORMAL);
                     }
                     break;
                 }
