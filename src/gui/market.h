@@ -755,6 +755,21 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
 // ── Search Popup ──────────────────────────────────────────────────────────────
 static std::vector<std::string> tsSearchResults;
 
+// Shared helper: parse selected result and launch market, then close search dialog
+static void TsSearch_SelectAndLaunch(HWND hWnd, int sel) {
+    if (sel != LB_ERR && sel < (int)tsSearchResults.size()) {
+        std::string r = tsSearchResults[sel];
+        auto dot = r.find('.');
+        if (dot != std::string::npos) {
+            int cid = std::stoi(r.substr(0, dot));
+            std::string rest = r.substr(dot + 1);
+            auto d2 = rest.find('.');
+            StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
+        }
+        DestroyWindow(GetParent(hWnd));
+    }
+}
+
 LRESULT CALLBACK TsSearchEditSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (msg == WM_KEYDOWN) {
         HWND hTsSearchList = GetDlgItem(GetParent(hWnd), ID_MARKET_SEARCH_LIST);
@@ -773,17 +788,7 @@ LRESULT CALLBACK TsSearchEditSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
         if (wParam == VK_RETURN && vis) {
             int sel = SendMessage(hTsSearchList, LB_GETCURSEL, 0, 0);
             if (sel == LB_ERR && SendMessage(hTsSearchList, LB_GETCOUNT, 0, 0) > 0) sel = 0;
-            if (sel != LB_ERR && sel < (int)tsSearchResults.size()) {
-                std::string r = tsSearchResults[sel];
-                auto dot = r.find('.');
-                if (dot != std::string::npos) {
-                    int cid = std::stoi(r.substr(0, dot));
-                    std::string rest = r.substr(dot + 1);
-                    auto d2 = rest.find('.');
-                    StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
-                }
-                DestroyWindow(GetParent(hWnd));
-            }
+            TsSearch_SelectAndLaunch(hWnd, sel);
             return 0;
         }
         if (wParam == VK_ESCAPE) { DestroyWindow(GetParent(hWnd)); return 0; }
@@ -795,17 +800,7 @@ LRESULT CALLBACK TsSearchEditSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 LRESULT CALLBACK TsSearchListSubclass(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (msg == WM_LBUTTONUP) {
         int sel = SendMessage(hWnd, LB_GETCURSEL, 0, 0);
-        if (sel != LB_ERR && sel < (int)tsSearchResults.size()) {
-            std::string r = tsSearchResults[sel];
-            auto dot = r.find('.');
-            if (dot != std::string::npos) {
-                int cid = std::stoi(r.substr(0, dot));
-                std::string rest = r.substr(dot + 1);
-                auto d2 = rest.find('.');
-                StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
-            }
-            DestroyWindow(GetParent(hWnd));
-        }
+        TsSearch_SelectAndLaunch(hWnd, sel);
     }
     if (msg == WM_NCDESTROY) RemoveWindowSubclass(hWnd, TsSearchListSubclass, uIdSubclass);
     return DefSubclassProc(hWnd, msg, wParam, lParam);
