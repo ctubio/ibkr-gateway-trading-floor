@@ -93,10 +93,9 @@ struct DashboardState {
     HWND hCoin_EUR = NULL;
     HWND hCoin_USD = NULL;
     
-    // TTS state
-    ISpVoice* pCoinsVoice = nullptr;
+    // TTS state — speech goes through the shared SharedTtsEngine (shared.h)
+    // now; this just tracks whether the dashboard holds a reference to it.
     bool coinsTtsOn = false;
-    bool coinsComInit = false;
 };
 
 // Global dashboard state instance
@@ -255,24 +254,11 @@ static void UpdateMarketClock(HWND hWnd) {
 #define ID_DASHFX_AMOUNT_EDIT   5202
 
 // ─── TTS helpers ──────────────────────────────────────────────────────────────
-
-static bool Coins_InitVoice() {
-    if (dashboardState.pCoinsVoice) return true;
-
-    if (!dashboardState.coinsComInit) {
-        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-        dashboardState.coinsComInit = SUCCEEDED(hr) || (hr == RPC_E_CHANGED_MODE);
-    }
-
-    HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&dashboardState.pCoinsVoice);
-    if (FAILED(hr)) { dashboardState.pCoinsVoice = nullptr; return false; }
-
-    TTS_ApplySavedVoice(dashboardState.pCoinsVoice);
-    return true;
-}
+// Speech goes through the shared SharedTtsEngine (shared.h). The dashboard just
+// tracks whether it currently holds a reference to it.
 
 static void Coins_SpeakDailyPnL() {
-    if (!dashboardState.pCoinsVoice || !dashboardState.hCoin_BigPnL) return;
+    if (!dashboardState.coinsTtsOn || !dashboardState.hCoin_BigPnL) return;
     char buf[128] = {};
     GetWindowTextA(dashboardState.hCoin_BigPnL, buf, sizeof(buf));
     std::wstring wtext(buf, buf + strlen(buf));
@@ -284,7 +270,7 @@ static void Coins_SpeakDailyPnL() {
         wtext.erase(0, 1);
     }
     wtext.erase(std::remove(wtext.begin(), wtext.end(), L','), wtext.end());
-    dashboardState.pCoinsVoice->Speak(wtext.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
+    SharedTts().Speak(wtext);
 }
 
 static void Coins_ToggleTTS(HWND hWnd) {
@@ -294,7 +280,7 @@ static void Coins_ToggleTTS(HWND hWnd) {
     RegSetDword(DASHBOARD_CLASS_NAME, "Speaker", dashboardState.coinsTtsOn ? 1 : 0);
 
     if (dashboardState.coinsTtsOn) {
-        if (!Coins_InitVoice()) {
+        if (!SharedTts().Acquire()) {
             dashboardState.coinsTtsOn = false;
             return;
         }
@@ -303,8 +289,7 @@ static void Coins_ToggleTTS(HWND hWnd) {
         Coins_SpeakDailyPnL();                          // speak immediately
     } else {
         KillTimer(hWnd, TIMER_COINS_SPEAKER);
-        if (dashboardState.pCoinsVoice)
-            dashboardState.pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL); // stop current
+        SharedTts().Release();                          // stop + tear down if we were the last one
         SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);    // dim = inactive
     }
 
@@ -1092,27 +1077,10 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
 
         case WM_TTS_VOICE_CHANGED: {
-            // Hot-swap the TTS voice without closing the window.
-            // Release the current voice object so the next Coins_InitVoice call
-            // picks up the newly saved token from the registry.
-            if (dashboardState.pCoinsVoice) {
-                dashboardState.pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
-                dashboardState.pCoinsVoice->Release();
-                dashboardState.pCoinsVoice = nullptr;
-            }
-            // If TTS is currently active, re-initialise with the new voice and
-            // restart the timer so it fires on the normal 21-second cadence.
-            if (dashboardState.coinsTtsOn) {
-                KillTimer(hWnd, TIMER_COINS_SPEAKER);
-                if (Coins_InitVoice()) {
-                    SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
-                    Coins_SpeakDailyPnL(); // speak immediately with the new voice
-                } else {
-                    dashboardState.coinsTtsOn = false;
-                    SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);
-                    if (dashboardState.hCoin_Speaker) InvalidateRect(dashboardState.hCoin_Speaker, NULL, TRUE);
-                }
-            }
+            // The shared engine holds one voice for every window now — just
+            // re-apply the (now-changed) saved voice token to it in place.
+            SharedTts().ReapplySavedVoice();
+            if (dashboardState.coinsTtsOn) Coins_SpeakDailyPnL(); // speak immediately with the new voice
             break;
         }
 
@@ -1329,11 +1297,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             api().removeApiUpdateWindow(hWnd);
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
-            if (dashboardState.coinsTtsOn) KillTimer(hWnd, TIMER_COINS_SPEAKER);
-            if (dashboardState.pCoinsVoice) {
-                dashboardState.pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
-                dashboardState.pCoinsVoice->Release();
-                dashboardState.pCoinsVoice = nullptr;
+            if (dashboardState.coinsTtsOn) {
+                KillTimer(hWnd, TIMER_COINS_SPEAKER);
+                SharedTts().Release();
             }
             dashboardState.coinsTtsOn = false;
 

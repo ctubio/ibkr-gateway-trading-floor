@@ -76,9 +76,9 @@ struct TsState {
                                        // pruning, so the vol-rate "ready" gate below can't flicker
 
     // ── TTS state ─────────────────────────────────────────────────────────────
-    ISpVoice* hTtsVoice    = nullptr;
+    // Speech goes through the shared SharedTtsEngine (shared.h) now — this
+    // window just tracks whether it currently holds a reference to it.
     bool      ttsOn        = false;
-    bool      ttsComInit   = false;
     HWND      hSpeakerBtn  = NULL;
     HWND      hOVNButton   = NULL;
 
@@ -1320,20 +1320,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 }
 
 // ── Market TTS helpers ────────────────────────────────────────────────────────
-static bool Market_InitVoice(TsState* state) {
-    if (state->hTtsVoice) return true;
-    if (!state->ttsComInit) {
-        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-        state->ttsComInit = SUCCEEDED(hr) || (hr == RPC_E_CHANGED_MODE);
-    }
-    HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&state->hTtsVoice);
-    if (FAILED(hr)) { state->hTtsVoice = nullptr; return false; }
-    TTS_ApplySavedVoice(state->hTtsVoice);
-    return true;
-}
-
+// Speech goes through the shared SharedTtsEngine (shared.h). This window just
+// tracks whether it currently holds a reference to it.
 static void Market_SpeakLast(TsState* state) {
-    if (!state->hTtsVoice) return;
+    if (!state->ttsOn) return;
     if (state->l1Info.last <= 0.0) return;
     state->sparkline.AddPrice(state->l1Info.last);
     state->sparkline.AddPrice(state->l1Info.last-1);
@@ -1345,21 +1335,20 @@ static void Market_SpeakLast(TsState* state) {
     }
     ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
     std::replace(ws.begin(), ws.end(), L'.', L',');
-    state->hTtsVoice->Speak(ws.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
+    SharedTts().Speak(ws);
 }
 
 static void Market_ToggleTTS(HWND hWnd, TsState* state) {
     state->ttsOn = !state->ttsOn;
     if (state->ttsOn) {
-        if (!Market_InitVoice(state)) { state->ttsOn = false; return; }
+        if (!SharedTts().Acquire()) { state->ttsOn = false; return; }
         if (state->hSpeakerBtn)
             SetCtrlColor(state->hSpeakerBtn, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);
         SetTimer(hWnd, TIMER_MARKET_SPEAKER, 21000, NULL);
         Market_SpeakLast(state);
     } else {
         KillTimer(hWnd, TIMER_MARKET_SPEAKER);
-        if (state->hTtsVoice)
-            state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+        SharedTts().Release();
         if (state->hSpeakerBtn)
             SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
     }
@@ -1700,24 +1689,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_TTS_VOICE_CHANGED: {
         if (!state) break;
-        if (state->hTtsVoice) {
-            state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
-            state->hTtsVoice->Release();
-            state->hTtsVoice = nullptr;
-        }
-        if (state->ttsOn) {
-            KillTimer(hWnd, TIMER_MARKET_SPEAKER);
-            if (Market_InitVoice(state)) {
-                SetTimer(hWnd, TIMER_MARKET_SPEAKER, 21000, NULL);
-                Market_SpeakLast(state);
-            } else {
-                state->ttsOn = false;
-                if (state->hSpeakerBtn) {
-                    SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
-                    InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
-                }
-            }
-        }
+        // The shared engine holds one voice for every window now — just
+        // re-apply the (now-changed) saved voice token to it in place. No
+        // per-window release/recreate needed anymore.
+        SharedTts().ReapplySavedVoice();
+        if (state->ttsOn) Market_SpeakLast(state); // speak immediately with the new voice
         break;
     }
 
@@ -1944,11 +1920,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api().unsetMarketWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         if (state) {
-            if (state->ttsOn) KillTimer(hWnd, TIMER_MARKET_SPEAKER);
-            if (state->hTtsVoice) {
-                state->hTtsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
-                state->hTtsVoice->Release();
-                state->hTtsVoice = nullptr;
+            if (state->ttsOn) {
+                KillTimer(hWnd, TIMER_MARKET_SPEAKER);
+                SharedTts().Release();
+                state->ttsOn = false;
             }
             // Order bar controls are children and destroyed with the window,
             // but null the pointers so nothing uses them after destruction.

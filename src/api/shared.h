@@ -49,6 +49,68 @@ TradingAPI& api() {
     return *TWS_API;
 }
 
+// ── Shared TTS Engine ─────────────────────────────────────────────────────
+
+class SharedTtsEngine {
+    ISpVoice*  voice_    = nullptr;
+    bool       comInit_  = false;
+    int        refCount_ = 0;
+    std::mutex mutex_;
+
+public:
+    // Acquires a reference, lazily creating the engine on the first caller.
+    // Returns false if SAPI couldn't be initialized — caller should treat
+    // its own "TTS on" toggle as failed and not hold a reference.
+    bool Acquire() {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (voice_) { ++refCount_; return true; }
+
+        if (!comInit_) {
+            HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+            comInit_ = SUCCEEDED(hr) || (hr == RPC_E_CHANGED_MODE);
+        }
+        HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&voice_);
+        if (FAILED(hr)) { voice_ = nullptr; return false; }
+
+        TTS_ApplySavedVoice(voice_);
+        refCount_ = 1;
+        return true;
+    }
+
+    // Releases a reference. Once the last window still speaking releases
+    // its reference, the engine stops any speech in progress and tears
+    // itself down, so an idle app isn't holding a live SAPI engine.
+    void Release() {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (!voice_ || refCount_ <= 0) return;
+        if (--refCount_ > 0) return;
+        voice_->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+        voice_->Release();
+        voice_ = nullptr;
+    }
+
+    // Speaks `text` async, purging whatever the shared voice was doing
+    // before (see class comment for the multi-window implication). No-op
+    // if nobody currently holds a reference.
+    void Speak(const std::wstring& text) {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (voice_) voice_->Speak(text.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
+    }
+
+    // Re-applies the (just-changed) saved voice token in place. No-op if
+    // nobody currently holds a reference — the next Acquire() will pick up
+    // the new token anyway via TTS_ApplySavedVoice.
+    void ReapplySavedVoice() {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (voice_) TTS_ApplySavedVoice(voice_);
+    }
+};
+
+SharedTtsEngine& SharedTts() {
+    static SharedTtsEngine engine;
+    return engine;
+}
+
 // ── Label Colors ───────────────────────────────────────────────────────────
 static void SetCtrlColor(HWND hw, COLORREF c) {
     for (int i = 0; i < gClrCount; i++)
