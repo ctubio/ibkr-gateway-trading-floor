@@ -3,7 +3,7 @@
 #ifndef GATEWAY_SIM
 
 #include <tlhelp32.h>
-DWORD IsProcessRunning(const char* processName) {
+DWORD PIDProcessRunning(const char* processName) {
     DWORD pid = 0;
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) return pid;
@@ -38,7 +38,7 @@ static std::string GetProcessFullPath(DWORD pid) {
 // Returns true if any currently running process's image lives under rootDir
 // (case-insensitive prefix match). Catches TWS/IB Gateway's self-update
 // helper process(es) regardless of what IBKR names them for a given build —
-// IsProcessRunning() alone only matches the fixed names we already know.
+// PIDProcessRunning() alone only matches the fixed names we already know.
 static bool IsAnyProcessRunningUnder(const std::string& rootDir) {
     if (rootDir.empty()) return false;
 
@@ -131,7 +131,7 @@ void EnsureGatewayRunning(HWND hParent) {
     std::string path   = GetGatewayPath();
     std::string installRoot = path.empty() ? "" : std::filesystem::path(path).parent_path().string();
 
-    if (IsProcessRunning("ibgateway.exe") > 0 || IsProcessRunning("tws.exe") > 0 || IsAnyProcessRunningUnder(installRoot))
+    if (PIDProcessRunning("ibgateway.exe") > 0 || PIDProcessRunning("tws.exe") > 0 || IsAnyProcessRunningUnder(installRoot))
         return;
 
     EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
@@ -209,7 +209,7 @@ BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
 }
 
 static void ToggleTWS(int swState) {
-    DWORD pid = IsProcessRunning(std::filesystem::path(GetGatewayPath()).filename().string().c_str());
+    DWORD pid = PIDProcessRunning(std::filesystem::path(GetGatewayPath()).filename().string().c_str());
     if (pid == 0) return;
 
     WindowFinderData data;
