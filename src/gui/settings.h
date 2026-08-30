@@ -33,7 +33,7 @@ static HWND hSettingBox4 = NULL;
 static HWND hSettingBox5 = NULL;
 static HWND hDebugEdit = NULL;
 static HWND hGatewayEdit = NULL;
-static std::vector<TtsVoiceEntry> g_settingsVoices; // populated once on WM_CREATE
+static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 
 // ─── Debug Log ────────────────────────────────────────────────────────────────
 void FlushDebugBuffer() {
@@ -208,15 +208,15 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
 
             // Enumerate all system voices and fill the combo
-            g_settingsVoices = TTS_EnumerateVoices();
+            settingsVoices = TTS_EnumerateVoices();
             std::string savedTokenA = Settings_LoadTtsVoice();
             std::wstring savedToken(savedTokenA.begin(), savedTokenA.end());
 
             int selectIdx = -1;      // index to pre-select
             int herenaIdx = -1;      // fallback: first Herena/Catalan entry
 
-            for (int i = 0; i < (int)g_settingsVoices.size(); ++i) {
-                const auto& v = g_settingsVoices[i];
+            for (int i = 0; i < (int)settingsVoices.size(); ++i) {
+                const auto& v = settingsVoices[i];
                 SendMessageW(hVoiceCombo, CB_ADDSTRING, 0, (LPARAM)v.display.c_str());
 
                 if (!savedToken.empty() && v.tokenId == savedToken)
@@ -236,7 +236,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             // If nothing saved yet, default to first Herena-Catalan found
             if (selectIdx < 0) selectIdx = (herenaIdx >= 0) ? herenaIdx : 0;
-            if (!g_settingsVoices.empty())
+            if (!settingsVoices.empty())
                 SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
             y += 86;
 
@@ -414,8 +414,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);
                 int idx = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
-                if (idx >= 0 && idx < (int)g_settingsVoices.size()) {
-                    const std::wstring& tid = g_settingsVoices[idx].tokenId;
+                if (idx >= 0 && idx < (int)settingsVoices.size()) {
+                    const std::wstring& tid = settingsVoices[idx].tokenId;
                     std::string tidA(tid.begin(), tid.end());
                     Settings_SaveTtsVoice(tidA);
                     // Notify all open windows to hot-swap to the new voice immediately

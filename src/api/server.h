@@ -34,9 +34,9 @@ static constexpr unsigned short HTTP_SERVER_PORT = 4011;
 
 // ── Internal state ────────────────────────────────────────────────────────────
 
-static SOCKET            g_httpListenSocket = INVALID_SOCKET;
-static std::thread       g_httpThread;
-static std::atomic<bool> g_httpRunning{ false };
+static SOCKET            httpListenSocket = INVALID_SOCKET;
+static std::thread       httpThread;
+static std::atomic<bool> httpRunning{ false };
 
 // ── JSON helpers ──────────────────────────────────────────────────────────────
 
@@ -1400,16 +1400,16 @@ static void HandleHttpClient(SOCKET client) {
 // ── Server loop ───────────────────────────────────────────────────────────────
 
 static void HttpServerLoop() {
-    while (g_httpRunning.load()) {
+    while (httpRunning.load()) {
         fd_set readSet;
         FD_ZERO(&readSet);
-        FD_SET(g_httpListenSocket, &readSet);
+        FD_SET(httpListenSocket, &readSet);
 
         timeval tv{ 0, 500000 }; // 500 ms poll interval
         int sel = select(0, &readSet, nullptr, nullptr, &tv);
         if (sel <= 0) continue;
 
-        SOCKET client = accept(g_httpListenSocket, nullptr, nullptr);
+        SOCKET client = accept(httpListenSocket, nullptr, nullptr);
         if (client == INVALID_SOCKET) continue;
 
         HandleHttpClient(client);
@@ -1422,14 +1422,14 @@ static bool HttpServer_Start() {
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
 
-    g_httpListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (g_httpListenSocket == INVALID_SOCKET) {
+    httpListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (httpListenSocket == INVALID_SOCKET) {
         WSACleanup();
         return false;
     }
 
     BOOL yes = TRUE;
-    setsockopt(g_httpListenSocket, SOL_SOCKET, SO_REUSEADDR,
+    setsockopt(httpListenSocket, SOL_SOCKET, SO_REUSEADDR,
                reinterpret_cast<const char*>(&yes), sizeof(yes));
 
     sockaddr_in addr{};
@@ -1437,23 +1437,23 @@ static bool HttpServer_Start() {
     addr.sin_port        = htons(HTTP_SERVER_PORT);
     addr.sin_addr.s_addr = htonl(INADDR_ANY); // 0.0.0.0 — all interfaces (LAN accessible)
 
-    if (bind(g_httpListenSocket,
+    if (bind(httpListenSocket,
              reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
-        closesocket(g_httpListenSocket);
-        g_httpListenSocket = INVALID_SOCKET;
+        closesocket(httpListenSocket);
+        httpListenSocket = INVALID_SOCKET;
         WSACleanup();
         return false;
     }
 
-    if (listen(g_httpListenSocket, SOMAXCONN) == SOCKET_ERROR) {
-        closesocket(g_httpListenSocket);
-        g_httpListenSocket = INVALID_SOCKET;
+    if (listen(httpListenSocket, SOMAXCONN) == SOCKET_ERROR) {
+        closesocket(httpListenSocket);
+        httpListenSocket = INVALID_SOCKET;
         WSACleanup();
         return false;
     }
 
-    g_httpRunning.store(true);
-    g_httpThread = std::thread(HttpServerLoop);
+    httpRunning.store(true);
+    httpThread = std::thread(HttpServerLoop);
 
     LogDebug(std::string("HTTP API listening on 127.0.0.1:") +
              std::to_string(HTTP_SERVER_PORT));
@@ -1461,15 +1461,15 @@ static bool HttpServer_Start() {
 }
 
 static void HttpServer_Stop() {
-    g_httpRunning.store(false);
+    httpRunning.store(false);
 
-    if (g_httpListenSocket != INVALID_SOCKET) {
-        closesocket(g_httpListenSocket);
-        g_httpListenSocket = INVALID_SOCKET;
+    if (httpListenSocket != INVALID_SOCKET) {
+        closesocket(httpListenSocket);
+        httpListenSocket = INVALID_SOCKET;
     }
 
-    if (g_httpThread.joinable()) {
-        g_httpThread.join();
+    if (httpThread.joinable()) {
+        httpThread.join();
     }
 
     WSACleanup();

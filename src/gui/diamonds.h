@@ -15,13 +15,13 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 #define DTAB_QUARENTINE       2
 #define DIAMONDS_TAB_COUNT    3
 
-static const char* g_DiamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "Dividends", "Quarantine" };
+static const char* diamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "Dividends", "Quarantine" };
 
 // Bitmask: bit N set means group N is currently visible.  Default = all visible.
-static UINT g_DiamondsCheckedTabs = 0x7;
+static UINT diamondsCheckedTabs = 0x7;
 
 // Maps conId → assigned group (DTAB_ALL = untagged = shown when bit 0 is set).
-static std::map<int,int> g_DiamondsTabMap;
+static std::map<int,int> diamondsTabMap;
 
 // ── Symbol color palette ──────────────────────────────────────────────────────
 // Index 0-5 = named colors.  No entry in the map (or index -1) = inherit theme.
@@ -29,7 +29,7 @@ static std::map<int,int> g_DiamondsTabMap;
 #define DIAMONDS_COLOR_NONE  -1   // sentinel: remove override, inherit by theme
 
 struct DiamondsColorDef { COLORREF rgb; const char* label; };
-static const DiamondsColorDef g_DiamondColorPalette[DIAMONDS_COLOR_COUNT] = {
+static const DiamondsColorDef diamondColorPalette[DIAMONDS_COLOR_COUNT] = {
     { RGB(159,  27,  27), "Set Color: Red"    },
     { RGB( 18, 220,  18), "Set Color: Green"  },
     { RGB(  0, 167, 255), "Set Color: Blue"   },
@@ -39,12 +39,12 @@ static const DiamondsColorDef g_DiamondColorPalette[DIAMONDS_COLOR_COUNT] = {
 };
 
 // Maps conId → color index (0..DIAMONDS_COLOR_COUNT-1), or not present = inherit.
-static std::map<int,int> g_DiamondsSymbolColors;
+static std::map<int,int> diamondsSymbolColors;
 
 // Stash the hList pointer so the static sort callback can reach it.
-static HWND g_DiamondsListForSort = NULL;
+static HWND diamondsListForSort = NULL;
 
-static bool g_DiamondsChkVisible = false;
+static bool diamondsChkVisible = false;
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
 #define TIMER_DIAMONDS_SORT      7010
@@ -80,13 +80,13 @@ enum DiamondColIdx {
 };
 
 // ── Sort state ────────────────────────────────────────────────────────────────
-static int  g_DiamondsSortCol = DCOL_SYMBOL;
-static bool g_DiamondsSortAsc = true;
+static int  diamondsSortCol = DCOL_SYMBOL;
+static bool diamondsSortAsc = true;
 
 // Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
-static std::map<int, MiniSparkline> g_DiamondsSparklines;
+static std::map<int, MiniSparkline> diamondsSparklines;
 
-// ── Unified Virtual List Cache (Replaces g_DiamondsPnlCache) ─────────────────
+// ── Unified Virtual List Cache (Replaces diamondsPnlCache) ─────────────────
 struct DiamondRowCache {
     int conId = 0;
     std::string symbol;
@@ -102,13 +102,13 @@ struct DiamondRowCache {
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
-static std::map<int, DiamondRowCache> g_DiamondDataCache;
+static std::map<int, DiamondRowCache> diamondDataCache;
 
 // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
-static std::vector<int> g_DiamondDisplayOrder;
+static std::vector<int> diamondDisplayOrder;
 
 // Paint Limiter
-static bool g_DiamondsDirty = false;
+static bool diamondsDirty = false;
 #define TIMER_DIAMONDS_PAINT 7011
 #define DIAMONDS_PAINT_TIMER_MS  60     // ~16 FPS (Butter smooth, zero flicker)
 
@@ -155,8 +155,8 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
-    bool showDiv   = (g_DiamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
-    bool showWeeks = (g_DiamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+    bool showDiv   = (diamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
+    bool showWeeks = (diamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
 
     for (int i = DCOL_DIV_YIELD; i <= DCOL_ANNUAL_DIV; ++i) {
         ListView_SetColumnWidth(hList, i, showDiv ? diamondCols[i].width : 0);
@@ -184,34 +184,34 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
 }
 
-static HIMAGELIST g_DiamondsRowHeightImageList = NULL;
+static HIMAGELIST diamondsRowHeightImageList = NULL;
 
 static void Diamonds_SetRowHeight(HWND hList, int rowHeight) {
-    if (g_DiamondsRowHeightImageList) {
-        ImageList_Destroy(g_DiamondsRowHeightImageList);
-        g_DiamondsRowHeightImageList = NULL;
+    if (diamondsRowHeightImageList) {
+        ImageList_Destroy(diamondsRowHeightImageList);
+        diamondsRowHeightImageList = NULL;
     }
     // Width can stay tiny (1px) since LVS_REPORT never shows the icon glyph
     // area when there's no LVCFMT_IMAGE column, but height controls row height.
-    g_DiamondsRowHeightImageList = ImageList_Create(1, rowHeight, ILC_COLOR32 | ILC_MASK, 1, 1);
-    if (!g_DiamondsRowHeightImageList) return;
+    diamondsRowHeightImageList = ImageList_Create(1, rowHeight, ILC_COLOR32 | ILC_MASK, 1, 1);
+    if (!diamondsRowHeightImageList) return;
 
     // Add one fully-transparent 1x1 bitmap so the image list is non-empty.
     HBITMAP hbmImage = CreateBitmap(1, rowHeight, 1, 1, NULL);
     HBITMAP hbmMask  = CreateBitmap(1, rowHeight, 1, 1, NULL);
-    ImageList_Add(g_DiamondsRowHeightImageList, hbmImage, hbmMask);
+    ImageList_Add(diamondsRowHeightImageList, hbmImage, hbmMask);
     DeleteObject(hbmImage);
     DeleteObject(hbmMask);
 
-    ListView_SetImageList(hList, g_DiamondsRowHeightImageList, LVSIL_SMALL);
+    ListView_SetImageList(hList, diamondsRowHeightImageList, LVSIL_SMALL);
 }
 
 // ── Registry persistence for tab assignments ──────────────────────────────────
 
-// Saves g_DiamondsTabMap to the registry as two space-separated conId lists.
+// Saves diamondsTabMap to the registry as two space-separated conId lists.
 static void Diamonds_SaveTabMap() {
     std::string growthList, quarentineList;
-    for (auto& [conId, tab] : g_DiamondsTabMap) {
+    for (auto& [conId, tab] : diamondsTabMap) {
         if (tab == DTAB_GROWTH) {
             if (!growthList.empty()) growthList += ' ';
             growthList += std::to_string(conId);
@@ -224,16 +224,16 @@ static void Diamonds_SaveTabMap() {
     Settings_Tab_Save("Tab_Quarantine", quarentineList);
 }
 
-// Loads g_DiamondsTabMap from the registry.
+// Loads diamondsTabMap from the registry.
 static void Diamonds_LoadTabMap() {
-    g_DiamondsTabMap.clear();
+    diamondsTabMap.clear();
     auto parseIds = [](const std::string& s, int tab) {
         size_t start = 0;
         while (start < s.size()) {
             size_t end = s.find(' ', start);
             if (end == std::string::npos) end = s.size();
             if (end > start) {
-                try { g_DiamondsTabMap[std::stoi(s.substr(start, end - start))] = tab; }
+                try { diamondsTabMap[std::stoi(s.substr(start, end - start))] = tab; }
                 catch (...) {}
             }
             start = end + 1;
@@ -247,7 +247,7 @@ static void Diamonds_LoadTabMap() {
 
 static void Diamonds_SaveSymbolColors() {
     std::string s;
-    for (auto& [conId, idx] : g_DiamondsSymbolColors) {
+    for (auto& [conId, idx] : diamondsSymbolColors) {
         if (!s.empty()) s += ' ';
         s += std::to_string(conId) + ':' + std::to_string(idx);
     }
@@ -255,7 +255,7 @@ static void Diamonds_SaveSymbolColors() {
 }
 
 static void Diamonds_LoadSymbolColors() {
-    g_DiamondsSymbolColors.clear();
+    diamondsSymbolColors.clear();
     std::string s = Settings_SymbolColors_Load();
     size_t pos = 0;
     while (pos < s.size()) {
@@ -268,19 +268,19 @@ static void Diamonds_LoadSymbolColors() {
                 int conId = std::stoi(tok.substr(0, colon));
                 int idx   = std::stoi(tok.substr(colon + 1));
                 if (idx >= 0 && idx < DIAMONDS_COLOR_COUNT)
-                    g_DiamondsSymbolColors[conId] = idx;
+                    diamondsSymbolColors[conId] = idx;
             } catch (...) {}
         }
         pos = end + 1;
     }
 }
 
-// Drops g_DiamondsTabMap entries for conIds that are no longer a held
+// Drops diamondsTabMap entries for conIds that are no longer a held
 // position, then persists the pruned map. Nothing else prunes this map —
 // Diamonds_SaveTabMap() just rewrites whatever's currently in it — so
 // closed-out positions would otherwise accumulate in the registry forever.
 static void Diamonds_CleanupStaleTabAssignments() {
-    if (g_DiamondsTabMap.empty()) return;
+    if (diamondsTabMap.empty()) return;
 
     std::unordered_set<int> liveConIds;
     {
@@ -290,15 +290,15 @@ static void Diamonds_CleanupStaleTabAssignments() {
     }
 
     bool changedTabs = false;
-    for (auto it = g_DiamondsTabMap.begin(); it != g_DiamondsTabMap.end(); ) {
-        if (!liveConIds.count(it->first)) { it = g_DiamondsTabMap.erase(it); changedTabs = true; }
+    for (auto it = diamondsTabMap.begin(); it != diamondsTabMap.end(); ) {
+        if (!liveConIds.count(it->first)) { it = diamondsTabMap.erase(it); changedTabs = true; }
         else ++it;
     }
     if (changedTabs) Diamonds_SaveTabMap();
 
     bool changedColors = false;
-    for (auto it = g_DiamondsSymbolColors.begin(); it != g_DiamondsSymbolColors.end(); ) {
-        if (!liveConIds.count(it->first)) { it = g_DiamondsSymbolColors.erase(it); changedColors = true; }
+    for (auto it = diamondsSymbolColors.begin(); it != diamondsSymbolColors.end(); ) {
+        if (!liveConIds.count(it->first)) { it = diamondsSymbolColors.erase(it); changedColors = true; }
         else ++it;
     }
     if (changedColors) Diamonds_SaveSymbolColors();
@@ -311,10 +311,10 @@ static void Diamonds_Layout(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
     RECT rc; GetClientRect(hWnd, &rc);
-    int listH = g_DiamondsChkVisible ? rc.bottom - DIAMONDS_CHK_STRIP_H : rc.bottom;
+    int listH = diamondsChkVisible ? rc.bottom - DIAMONDS_CHK_STRIP_H : rc.bottom;
     MoveWindow(hList, 0, 0, rc.right, listH, TRUE);
 
-    if (!g_DiamondsChkVisible) return;
+    if (!diamondsChkVisible) return;
 
     // Space the three checkboxes evenly across the bottom strip.
     static const int chkW[DIAMONDS_TAB_COUNT] = { 70, 90, 90 };
@@ -330,8 +330,8 @@ static void Diamonds_Layout(HWND hWnd) {
 }
 
 static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
-    if (g_DiamondsChkVisible == show) return;
-    g_DiamondsChkVisible = show;
+    if (diamondsChkVisible == show) return;
+    diamondsChkVisible = show;
     int sw = show ? SW_SHOW : SW_HIDE;
     for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i)
         ShowWindow(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), sw);
@@ -341,29 +341,29 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
 // ── Virtual Sort ──────────────────────────────────────────────────────────────
 
 static void Diamonds_ApplySort(HWND hList) {
-    if (g_DiamondDisplayOrder.empty()) return;
+    if (diamondDisplayOrder.empty()) return;
 
-    std::sort(g_DiamondDisplayOrder.begin(), g_DiamondDisplayOrder.end(), [](int idA, int idB) {
-        const auto& a = g_DiamondDataCache[idA];
-        const auto& b = g_DiamondDataCache[idB];
+    std::sort(diamondDisplayOrder.begin(), diamondDisplayOrder.end(), [](int idA, int idB) {
+        const auto& a = diamondDataCache[idA];
+        const auto& b = diamondDataCache[idB];
 
-        if (g_DiamondsSortCol == DCOL_SYMBOL) {
+        if (diamondsSortCol == DCOL_SYMBOL) {
             int cmp = _stricmp(a.textCols[DCOL_SYMBOL].c_str(), b.textCols[DCOL_SYMBOL].c_str());
-            return g_DiamondsSortAsc ? (cmp < 0) : (cmp > 0);
+            return diamondsSortAsc ? (cmp < 0) : (cmp > 0);
         } else {
-            double v1 = a.sortValues[g_DiamondsSortCol];
-            double v2 = b.sortValues[g_DiamondsSortCol];
+            double v1 = a.sortValues[diamondsSortCol];
+            double v2 = b.sortValues[diamondsSortCol];
             if (v1 == v2) return false;
-            if (g_DiamondsSortCol == DCOL_DIV_DATE) {
-                return g_DiamondsSortAsc ? (v1 > v2) : (v1 < v2);
+            if (diamondsSortCol == DCOL_DIV_DATE) {
+                return diamondsSortAsc ? (v1 > v2) : (v1 < v2);
             } else {
-                return g_DiamondsSortAsc ? (v1 < v2) : (v1 > v2);
+                return diamondsSortAsc ? (v1 < v2) : (v1 > v2);
             }
         }
     });
 
     // ZERO-FLICKER FIX: Delegate to the paint timer instead of invalidating instantly
-    g_DiamondsDirty = true;
+    diamondsDirty = true;
 }
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -373,7 +373,7 @@ static const char* DIAMONDS_NO_DATA = "--";
 
 static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     // Grab our new unified cache row
-    auto& row = g_DiamondDataCache[conId];
+    auto& row = diamondDataCache[conId];
     row.conId = conId; 
     
     TradingAPI::PnlSinglePayload pnlSingle;
@@ -413,7 +413,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
             }
         }
 
-        g_DiamondsDirty = true;
+        diamondsDirty = true;
     }
 }
 
@@ -426,9 +426,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // for good (nothing ever re-requested it). That could look exactly like
     // "some columns stop updating" after a close/reopen cycle. Auto-creating
     // the row (mirroring what Diamonds_UpdatePnLCols already does) means the
-    // tick is never lost; if the row isn't in g_DiamondDisplayOrder yet it
+    // tick is never lost; if the row isn't in diamondDisplayOrder yet it
     // simply becomes visible on the next repopulate/sort instead of vanishing.
-    auto& row = g_DiamondDataCache[conId];
+    auto& row = diamondDataCache[conId];
     row.conId = conId;
     // Helper to write both sortable raw data and display string
     auto setCol = [&](int col, double val, std::string_view fmt, bool alwaysShow = false) {
@@ -512,7 +512,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     }
 
     setCol(DCOL_LAST, t.last, "{:.2f}", true);
-    g_DiamondsSparklines[conId].AddPrice(t.last);
+    diamondsSparklines[conId].AddPrice(t.last);
 
     // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
     // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
@@ -530,7 +530,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // for this symbol (same "appears once ready" behavior as those dots).
     {
         double price5MinAgo = 0.0;
-        if (g_DiamondsSparklines[conId].GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
+        if (diamondsSparklines[conId].GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
             setCol(DCOL_CHG5MIN, t.last - price5MinAgo, "{:+.2f}", true);
         } else {
             setNA(DCOL_CHG5MIN);
@@ -546,15 +546,15 @@ static void Diamonds_Repopulate(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
-    g_DiamondDisplayOrder.clear(); // Clear the virtual list viewport
+    diamondDisplayOrder.clear(); // Clear the virtual list viewport
 
     std::vector<TradingAPI::PositionInfo> rows;
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
         for (auto const& [conId, info] : api().getPortfolioMap()) {
-            auto it = g_DiamondsTabMap.find(info.conId);
-            int  assignedTab = (it != g_DiamondsTabMap.end()) ? it->second : DTAB_ALL;
-            if (!((g_DiamondsCheckedTabs >> assignedTab) & 1)) continue;
+            auto it = diamondsTabMap.find(info.conId);
+            int  assignedTab = (it != diamondsTabMap.end()) ? it->second : DTAB_ALL;
+            if (!((diamondsCheckedTabs >> assignedTab) & 1)) continue;
             rows.push_back(info);
         }
     }
@@ -567,7 +567,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
     for (const auto& pos : rows) {
         // operator[] creates a default row only when the conId is new.
         // For existing rows it returns the current entry — PnL fields are preserved.
-        auto& cacheRow = g_DiamondDataCache[pos.conId];
+        auto& cacheRow = diamondDataCache[pos.conId];
         cacheRow.conId  = pos.conId;
         cacheRow.symbol = pos.symbol;
 
@@ -588,11 +588,11 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
         Diamonds_UpdatePnLCols(hWnd, pos.conId);
 
-        g_DiamondDisplayOrder.push_back(pos.conId);
+        diamondDisplayOrder.push_back(pos.conId);
     }
 
     // VIRTUAL LIST MAGIC: Tell the UI exactly how many items exist. It will ask for text later.
-    ListView_SetItemCountEx(hList, g_DiamondDisplayOrder.size(), LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL);
+    ListView_SetItemCountEx(hList, diamondDisplayOrder.size(), LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL);
     InvalidateRect(hList, NULL, FALSE);
     Diamonds_ApplySort(hList);
 
@@ -600,7 +600,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
     int activeTabs = 0;
     for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
         if (SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), BM_GETCHECK, 0, 0) == BST_CHECKED)
-            title += std::string(activeTabs++ == 0 ? " " : " + ") + g_DiamondTabNames[i];
+            title += std::string(activeTabs++ == 0 ? " " : " + ") + diamondTabNames[i];
     }
     title += " Positions";
     SetWindowTextA(hWnd, title.c_str());
@@ -648,7 +648,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         // Create the three filter checkboxes (hidden until window is focused).
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-            HWND hChk = CreateWindowA("BUTTON", g_DiamondTabNames[i],
+            HWND hChk = CreateWindowA("BUTTON", diamondTabNames[i],
                 WS_CHILD | BS_AUTOCHECKBOX | BS_NOTIFY,
                 0, 0, 10, 10,
                 hWnd, (HMENU)(UINT_PTR)(ID_DIAMONDS_CHK_0 + i), hInst, NULL);
@@ -660,15 +660,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Load saved tab assignments, checkbox state, sort settings, and symbol colors.
         Diamonds_LoadTabMap();
         Diamonds_LoadSymbolColors();
-        g_DiamondsSortCol = (int)Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
-        g_DiamondsSortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 1) != 0;
-        if (g_DiamondsSortCol < 0 || g_DiamondsSortCol >= DCOL_COUNT) g_DiamondsSortCol = DCOL_SYMBOL;
+        diamondsSortCol = (int)Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
+        diamondsSortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 1) != 0;
+        if (diamondsSortCol < 0 || diamondsSortCol >= DCOL_COUNT) diamondsSortCol = DCOL_SYMBOL;
 
         // Restore checkbox bitmask (default 0x7 = all checked).
-        g_DiamondsCheckedTabs = (UINT)Settings_CheckedTabs_Load(0x7);
-        g_DiamondsCheckedTabs &= 0x7;  // clamp to valid 3-bit range
+        diamondsCheckedTabs = (UINT)Settings_CheckedTabs_Load(0x7);
+        diamondsCheckedTabs &= 0x7;  // clamp to valid 3-bit range
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-            bool checked = (g_DiamondsCheckedTabs >> i) & 1;
+            bool checked = (diamondsCheckedTabs >> i) & 1;
             HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
             SendMessage(tab, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
             SetCtrlColor(tab, checked ? (Settings_DarkMode() ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
@@ -683,8 +683,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_GETMINMAXINFO: {
-        bool showDiv   = (g_DiamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
-        bool showWeeks = (g_DiamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+        bool showDiv   = (diamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
+        bool showWeeks = (diamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
         int extraWidth = 0;
         if (showDiv) {
             extraWidth += diamondCols[DCOL_DIV_YIELD].width   + diamondCols[DCOL_DIV_DATE].width +
@@ -716,17 +716,17 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         WORD id = LOWORD(wParam);
         if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2 && HIWORD(wParam) == BN_CLICKED) {
             // Rebuild bitmask from checkbox states.
-            g_DiamondsCheckedTabs = 0;
+            diamondsCheckedTabs = 0;
             for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
                 HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
                 if (SendMessage(tab, BM_GETCHECK, 0, 0) == BST_CHECKED) {
-                    g_DiamondsCheckedTabs |= (1u << i);
+                    diamondsCheckedTabs |= (1u << i);
                     SetCtrlColor(tab, Settings_DarkMode() ? DM_TEXT : LM_TEXT);
                 } else {
                     SetCtrlColor(tab, COINS_CLR_GRAY);
                 }
             }
-            Settings_CheckedTabs_Save((int)g_DiamondsCheckedTabs);
+            Settings_CheckedTabs_Save((int)diamondsCheckedTabs);
             Diamonds_UpdateDivColumnsVisibility(hWnd);
             Diamonds_Repopulate(hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
@@ -749,7 +749,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (api().getMarketData(conId, info)) {
             Diamonds_UpdateMarketCols(conId, info);
             // Defer to the throttled paint timer -- see note in Diamonds_UpdatePnLCols.
-            g_DiamondsDirty = true;
+            diamondsDirty = true;
         }
         Diamonds_UpdatePnLCols(hWnd, conId);
         
@@ -782,8 +782,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Clear everything — positions and prices are stale.
             // ZERO-FLICKER FIX: Never use ListView_DeleteAllItems on an LVS_OWNERDATA list.
             // It's invalid for virtual lists and triggers a full erase flash.
-            g_DiamondDisplayOrder.clear();
-            g_DiamondDataCache.clear();
+            diamondDisplayOrder.clear();
+            diamondDataCache.clear();
             ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
             InvalidateRect(hList, NULL, FALSE);
         }
@@ -799,8 +799,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (hdr->code == LVN_ITEMCHANGED) {
             NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
             if ((nmlv->uChanged & LVIF_STATE) && (nmlv->uNewState & LVIS_SELECTED) &&
-                nmlv->iItem >= 0 && nmlv->iItem < (int)g_DiamondDisplayOrder.size()) {
-                int conId = g_DiamondDisplayOrder[nmlv->iItem];
+                nmlv->iItem >= 0 && nmlv->iItem < (int)diamondDisplayOrder.size()) {
+                int conId = diamondDisplayOrder[nmlv->iItem];
                 api().updateDisplayGroup(conId);
             }
         }
@@ -808,10 +808,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // --- VIRTUAL LIST TEXT REQUEST ---
         if (hdr->code == LVN_GETDISPINFO) {
             NMLVDISPINFO* pdi = (NMLVDISPINFO*)lParam;
-            if (pdi->item.iItem < 0 || pdi->item.iItem >= (int)g_DiamondDisplayOrder.size()) return 0;
+            if (pdi->item.iItem < 0 || pdi->item.iItem >= (int)diamondDisplayOrder.size()) return 0;
             
-            int conId = g_DiamondDisplayOrder[pdi->item.iItem];
-            const auto& row = g_DiamondDataCache[conId];
+            int conId = diamondDisplayOrder[pdi->item.iItem];
+            const auto& row = diamondDataCache[conId];
 
             if (pdi->item.mask & LVIF_TEXT) {
                 // VIRTUAL LIST FIX: Direct pointer assignment is zero-copy and avoids buffer truncation
@@ -822,10 +822,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (hdr->code == LVN_COLUMNCLICK) {
             NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
             int col = nmlv->iSubItem;
-            if (col == g_DiamondsSortCol) g_DiamondsSortAsc = !g_DiamondsSortAsc;
-            else { g_DiamondsSortCol = col; g_DiamondsSortAsc = false; }
-            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortCol", g_DiamondsSortCol);
-            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortAsc", g_DiamondsSortAsc ? 1 : 0);
+            if (col == diamondsSortCol) diamondsSortAsc = !diamondsSortAsc;
+            else { diamondsSortCol = col; diamondsSortAsc = false; }
+            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortCol", diamondsSortCol);
+            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortAsc", diamondsSortAsc ? 1 : 0);
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
             InvalidateRect(hList, NULL, FALSE);
@@ -836,8 +836,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
             int row = act->iItem;
             if (row >= 0) {
-                int conId = g_DiamondDisplayOrder[row];
-                const std::string& sym = g_DiamondDataCache[conId].textCols[DCOL_SYMBOL];
+                int conId = diamondDisplayOrder[row];
+                const std::string& sym = diamondDataCache[conId].textCols[DCOL_SYMBOL];
                 StartMarket(sym, conId);
             }
         }
@@ -846,16 +846,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
             int row = act->iItem;
             if (row >= 0) {
-                int conId = g_DiamondDisplayOrder[row];
-                const std::string& sym = g_DiamondDataCache[conId].textCols[DCOL_SYMBOL];
+                int conId = diamondDisplayOrder[row];
+                const std::string& sym = diamondDataCache[conId].textCols[DCOL_SYMBOL];
 
                 // Determine current group assignment for this item.
-                auto mapIt = g_DiamondsTabMap.find(conId);
-                int currentGroup = (mapIt != g_DiamondsTabMap.end()) ? mapIt->second : DTAB_ALL;
+                auto mapIt = diamondsTabMap.find(conId);
+                int currentGroup = (mapIt != diamondsTabMap.end()) ? mapIt->second : DTAB_ALL;
 
                 // Determine current color assignment for this item.
-                auto colorIt = g_DiamondsSymbolColors.find(conId);
-                int currentColor = (colorIt != g_DiamondsSymbolColors.end()) ? colorIt->second : DIAMONDS_COLOR_NONE;
+                auto colorIt = diamondsSymbolColors.find(conId);
+                int currentColor = (colorIt != diamondsSymbolColors.end()) ? colorIt->second : DIAMONDS_COLOR_NONE;
 
                 // ── Build context menu ────────────────────────────────────────
                 // IDs 1-3:   group assignment
@@ -892,7 +892,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 for (int i = 0; i < DIAMONDS_COLOR_COUNT; ++i) {
                     bool isCurrent = (currentColor == i);
                     AppendMenuA(hMenu, MF_STRING | (isCurrent ? MF_GRAYED : 0),
-                                200 + i, g_DiamondColorPalette[i].label);
+                                200 + i, diamondColorPalette[i].label);
                 }
 
                 POINT pt;
@@ -905,9 +905,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // Group assignment.
                     int targetTab = cmd - 1;
                     if (targetTab == DTAB_ALL)
-                        g_DiamondsTabMap.erase(conId);
+                        diamondsTabMap.erase(conId);
                     else
-                        g_DiamondsTabMap[conId] = targetTab;
+                        diamondsTabMap[conId] = targetTab;
                     Diamonds_SaveTabMap();
                     Diamonds_Repopulate(hWnd);
                     InvalidateRect(hWnd, NULL, TRUE);
@@ -917,9 +917,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     int pickedIdx = cmd - 200;
                     if (pickedIdx == DIAMONDS_COLOR_COUNT) {
                         // "None" — remove override.
-                        g_DiamondsSymbolColors.erase(conId);
+                        diamondsSymbolColors.erase(conId);
                     } else {
-                        g_DiamondsSymbolColors[conId] = pickedIdx;
+                        diamondsSymbolColors[conId] = pickedIdx;
                     }
                     Diamonds_SaveSymbolColors();
                     // Invalidate just this row so the color appears immediately.
@@ -995,12 +995,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_SYMBOL) {
                         SelectObject(cd->nmcd.hdc, hFont16ptbold.get());
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = g_DiamondDisplayOrder[rowIndex];
+                        int conId = diamondDisplayOrder[rowIndex];
                         
-                        auto cit = g_DiamondsSymbolColors.find(conId);
-                        if (cit != g_DiamondsSymbolColors.end() &&
+                        auto cit = diamondsSymbolColors.find(conId);
+                        if (cit != diamondsSymbolColors.end() &&
                             cit->second >= 0 && cit->second < DIAMONDS_COLOR_COUNT) {
-                            cd->clrText = g_DiamondColorPalette[cit->second].rgb;
+                            cd->clrText = diamondColorPalette[cit->second].rgb;
                             if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         }
                         return CDRF_NEWFONT;
@@ -1009,8 +1009,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // cell holds a real numeric value (not the "--" sentinel).
                     if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = g_DiamondDisplayOrder[rowIndex];
-                        const std::string& textVal = g_DiamondDataCache[conId].textCols[cd->iSubItem];
+                        int conId = diamondDisplayOrder[rowIndex];
+                        const std::string& textVal = diamondDataCache[conId].textCols[cd->iSubItem];
                         // Guard: skip colouring the "--" sentinel — atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
                         // explicit avoids any locale-specific atof surprises.
@@ -1034,8 +1034,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = g_DiamondDisplayOrder[rowIndex];
-                        bool halted = g_DiamondDataCache[conId].halted;
+                        int conId = diamondDisplayOrder[rowIndex];
+                        bool halted = diamondDataCache[conId].halted;
                         cd->clrText = halted ? COINS_CLR_GRAY : COINS_CLR_BLUE;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
@@ -1043,8 +1043,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_VWAP) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = g_DiamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = g_DiamondDataCache[conId];
+                        int conId = diamondDisplayOrder[rowIndex];
+                        const auto& cacheRow = diamondDataCache[conId];
                         if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
                             double diff = cacheRow.sortValues[DCOL_VWAP];
                             cd->clrText = (diff >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED;
@@ -1055,8 +1055,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_LAST) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = g_DiamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = g_DiamondDataCache[conId];
+                        int conId = diamondDisplayOrder[rowIndex];
+                        const auto& cacheRow = diamondDataCache[conId];
                         double last = cacheRow.sortValues[DCOL_LAST];
                         double high = cacheRow.dayHigh;
                         double low = cacheRow.dayLow;
@@ -1080,9 +1080,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_BID) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = g_DiamondDisplayOrder[rowIndex];
-                        const std::string& textValB = g_DiamondDataCache[conId].textCols[DCOL_BIDSIZE];
-                        const std::string& textValA = g_DiamondDataCache[conId].textCols[DCOL_ASKSIZE];
+                        int conId = diamondDisplayOrder[rowIndex];
+                        const std::string& textValB = diamondDataCache[conId].textCols[DCOL_BIDSIZE];
+                        const std::string& textValA = diamondDataCache[conId].textCols[DCOL_ASKSIZE];
                         if (!textValB.empty() && !textValA.empty()) {
                             double valB = atof(textValB.c_str());
                             double valA = atof(textValA.c_str());
@@ -1124,11 +1124,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem != DCOL_POSITION) return CDRF_DODEFAULT;
 
                     int rowIndex = (int)cd->nmcd.dwItemSpec;
-                    if (rowIndex < 0 || rowIndex >= g_DiamondDisplayOrder.size()) return CDRF_DODEFAULT;
+                    if (rowIndex < 0 || rowIndex >= diamondDisplayOrder.size()) return CDRF_DODEFAULT;
 
-                    int conId = g_DiamondDisplayOrder[rowIndex];
-                    auto sit  = g_DiamondsSparklines.find(conId);
-                    if (sit == g_DiamondsSparklines.end() || !sit->second.HasData())
+                    int conId = diamondDisplayOrder[rowIndex];
+                    auto sit  = diamondsSparklines.find(conId);
+                    if (sit == diamondsSparklines.end() || !sit->second.HasData())
                         return CDRF_DODEFAULT;
 
                     RECT cellRect;
@@ -1151,23 +1151,23 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             InvalidateRect(hList, NULL, FALSE);
         }
         if (wParam == TIMER_DIAMONDS_PAINT) {
-            if (g_DiamondsDirty) {
+            if (diamondsDirty) {
                 HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                if (hList && !g_DiamondDisplayOrder.empty()) {
+                if (hList && !diamondDisplayOrder.empty()) {
                     // Get the range of items currently visible to the user
                     int top = ListView_GetTopIndex(hList);
                     int count = ListView_GetCountPerPage(hList);
                     int bottom = top + count;
                     
                     // Clamp to actual size
-                    if (bottom >= (int)g_DiamondDisplayOrder.size()) 
-                        bottom = (int)g_DiamondDisplayOrder.size() - 1;
+                    if (bottom >= (int)diamondDisplayOrder.size()) 
+                        bottom = (int)diamondDisplayOrder.size() - 1;
 
                     // Only redraw the specific rows that have changed on screen
                     ListView_RedrawItems(hList, top, bottom);
                     UpdateWindow(hList); // Force immediate flush
                 }
-                g_DiamondsDirty = false;
+                diamondsDirty = false;
             }
         }
         break;  // was missing — without this, every timer tick fell through into WM_DESTROY,
@@ -1178,11 +1178,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         KillTimer(hWnd, TIMER_DIAMONDS_SORT);
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
         api().removeApiUpdateWindow(hWnd);
-        g_DiamondDataCache.clear();
-        g_DiamondsSparklines.clear();
-        if (g_DiamondsRowHeightImageList) {
-            ImageList_Destroy(g_DiamondsRowHeightImageList);
-            g_DiamondsRowHeightImageList = NULL;
+        diamondDataCache.clear();
+        diamondsSparklines.clear();
+        if (diamondsRowHeightImageList) {
+            ImageList_Destroy(diamondsRowHeightImageList);
+            diamondsRowHeightImageList = NULL;
         }
         break;
     }

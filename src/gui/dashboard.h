@@ -49,6 +49,59 @@ static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]))
 
 static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
+// ─── Dashboard State ──────────────────────────────────────────────────────────
+// Encapsulates all dashboard-specific HWNDs and state variables
+
+struct DashboardState {
+    // Window state
+    bool fullDetails = true;
+    bool shouldBeConnected = true;
+    std::string currencyDashboard = "--";
+    
+    // Group boxes
+    HWND hCoinBox1 = NULL;
+    HWND hCoinBox2 = NULL;
+    HWND hCoinBox3 = NULL;
+    
+    // Labels (static text labels for rows)
+    HWND hLblDividends = NULL;
+    HWND hLblAccruals = NULL;
+    HWND hLblBP = NULL;
+    HWND hLblMM = NULL;
+    HWND hLblEUR = NULL;
+    HWND hLblUSD = NULL;
+    
+    // Box 1: Net Liq & PnL
+    HWND hCoin_NetLiq = NULL;
+    HWND hCoin_BigPnL = NULL;
+    HWND hCoin_Pct = NULL;
+    HWND hCoin_Realized = NULL;
+    HWND hCoin_Speaker = NULL;   // speaker icon button (SS_NOTIFY)
+    HWND hCoin_Lock = NULL;      // lock icon button (WM_KEYDOWN VK_SCROLL)
+    HWND hCoin_Clock = NULL;     // market clock
+    
+    // Box 2: Positions & Margin
+    HWND hCoin_Positions = NULL;
+    HWND hCoin_Unrealized = NULL;
+    HWND hCoin_Dividends = NULL;
+    HWND hCoin_Accruals = NULL;
+    HWND hCoin_BuyingPower = NULL;
+    HWND hCoin_MaintMargin = NULL;
+    
+    // Box 3: Cash
+    HWND hCoin_Cash = NULL;
+    HWND hCoin_EUR = NULL;
+    HWND hCoin_USD = NULL;
+    
+    // TTS state
+    ISpVoice* pCoinsVoice = nullptr;
+    bool coinsTtsOn = false;
+    bool coinsComInit = false;
+};
+
+// Global dashboard state instance
+static DashboardState dashboardState;
+
 void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
 
@@ -79,41 +132,6 @@ void MutexGatewayInstance() {
     }
 }
 
-static bool fullDetails       = true;
-static bool shouldBeConnected = true;
-
-static std::string currencyDashboard = "--";
-
-static HWND hCoinBox1 = NULL;
-static HWND hCoinBox2 = NULL;
-static HWND hCoinBox3 = NULL;
-
-static HWND hLblDividends = NULL;
-static HWND hLblAccruals  = NULL;
-static HWND hLblBP        = NULL;
-static HWND hLblMM        = NULL;
-static HWND hLblEUR = NULL;
-static HWND hLblUSD = NULL;
-
-static HWND hCoin_NetLiq      = NULL;
-static HWND hCoin_BigPnL      = NULL;
-static HWND hCoin_Pct         = NULL;
-static HWND hCoin_Realized    = NULL;
-static HWND hCoin_Speaker     = NULL;   // speaker icon button (SS_NOTIFY)
-static HWND hCoin_Lock        = NULL;   // lock icon button (WM_KEYDOWN VK_SCROLL)
-
-static HWND hCoin_Positions   = NULL;
-static HWND hCoin_Unrealized  = NULL;
-static HWND hCoin_Dividends   = NULL;
-static HWND hCoin_Accruals    = NULL;
-static HWND hCoin_BuyingPower = NULL;
-static HWND hCoin_MaintMargin = NULL;
-
-static HWND hCoin_Cash        = NULL;
-static HWND hCoin_Clock       = NULL;
-static HWND hCoin_EUR         = NULL;
-static HWND hCoin_USD         = NULL;
-
 static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
     if (!hWnd || !text) return 0;
     HDC hdc = GetDC(hWnd);
@@ -127,7 +145,7 @@ static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
 
 // ─── US market-session clock ─────────────────────────────────────────────
 static void UpdateMarketClock(HWND hWnd) {
-    if (!hCoin_Clock) return;
+    if (!dashboardState.hCoin_Clock) return;
 
     // Get current time in New York (Eastern Time)
     auto now = std::chrono::system_clock::now();
@@ -161,53 +179,53 @@ static void UpdateMarketClock(HWND hWnd) {
     if (wd == std::chrono::Friday && total_secs >= T_AFTERHOURS_END) {
         phase = "Market Closed"; 
         target_secs = (2 * 24 * 3600) + T_SUNDAY_OPEN; // Fri to Sun 20:00
-        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
     } else if (wd == std::chrono::Saturday) {
         phase = "Market Closed"; 
         target_secs = (1 * 24 * 3600) + T_SUNDAY_OPEN; // Sat to Sun 20:00
-        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
     } else if (wd == std::chrono::Sunday && total_secs < T_SUNDAY_OPEN) {
         phase = "Market Closed"; 
         target_secs = T_SUNDAY_OPEN;                   // Sunday morning/afternoon to Sun 20:00
-        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
     } else if (wd == std::chrono::Sunday && total_secs >= T_SUNDAY_OPEN) {
         phase = "OVERNIGHT"; 
         target_secs = (1 * 24 * 3600) + T_PREMARKET;   // Market is OPEN! Counting to Mon 04:00 AM
-        SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
     } 
     // 2. Standard Weekday State Machine (Monday - Friday)
     else {
         if (total_secs < T_PREMARKET) {
             phase = "OVERNIGHT"; target_secs = T_PREMARKET;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
         } else if (total_secs < T_OPEN_IMBAL) {
             phase = "Pre-Market"; target_secs = T_OPEN;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_ORANGE);
         } else if (total_secs < T_OPEN_BELL) {
             phase = "IMBALANCE"; target_secs = T_OPEN;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_RED);
         } else if (total_secs < T_OPEN) {
             phase = "Opening Bell"; target_secs = T_OPEN;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_BLUE);
         } else if (total_secs < T_CLOSE_IMBAL) {
             phase = "Market Open"; target_secs = T_CLOSE;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_YELLOW);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_YELLOW);
         } else if (total_secs < T_CLOSE_BELL) {
             phase = "IMBALANCE"; target_secs = T_CLOSE;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_RED);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_RED);
         } else if (total_secs < T_CLOSE) {
             phase = "Closing Bell"; target_secs = T_CLOSE;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_BLUE);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_BLUE);
         } else if (total_secs < T_AFTERHOURS_END) {
             phase = "After-Hours"; target_secs = T_AFTERHOURS_END;
-            SetCtrlColor(hCoin_Clock, COINS_CLR_ORANGE);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_ORANGE);
         } else {
             phase = "OVERNIGHT"; target_secs = T_PREMARKET + (24 * 3600); // Tomorrow's 04:00 AM
-            SetCtrlColor(hCoin_Clock, COINS_CLR_GRAY);
+            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
         }
     }
 
-    if (fullDetails) { 
+    if (dashboardState.fullDetails) { 
         std::string day_str = day_names[wd.c_encoding()];
         std::string time_str = std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count()) + " " + day_str;
         SetWindowTextA(hWnd, time_str.c_str());
@@ -221,8 +239,8 @@ static void UpdateMarketClock(HWND hWnd) {
     // Format output string (HH:MM)
     std::string time_left_str = std::format("{:02}:{:02}", h_left, m_left);
 
-    SetWindowTextA(hCoin_Clock, time_left_str.c_str());
-    InvalidateRect(hCoin_Clock, NULL, TRUE);
+    SetWindowTextA(dashboardState.hCoin_Clock, time_left_str.c_str());
+    InvalidateRect(dashboardState.hCoin_Clock, NULL, TRUE);
 }
 
 #define ID_COIN_NETLIQ   5100
@@ -236,32 +254,27 @@ static void UpdateMarketClock(HWND hWnd) {
 #define ID_DASHFX_ACTION_COMBO  5201
 #define ID_DASHFX_AMOUNT_EDIT   5202
 
-// ─── TTS state ────────────────────────────────────────────────────────────────
-static ISpVoice* g_pCoinsVoice  = nullptr;
-static bool      g_coinsTtsOn   = false;
-static bool      g_coinsComInit = false;
-
 // ─── TTS helpers ──────────────────────────────────────────────────────────────
 
 static bool Coins_InitVoice() {
-    if (g_pCoinsVoice) return true;
+    if (dashboardState.pCoinsVoice) return true;
 
-    if (!g_coinsComInit) {
+    if (!dashboardState.coinsComInit) {
         HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-        g_coinsComInit = SUCCEEDED(hr) || (hr == RPC_E_CHANGED_MODE);
+        dashboardState.coinsComInit = SUCCEEDED(hr) || (hr == RPC_E_CHANGED_MODE);
     }
 
-    HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&g_pCoinsVoice);
-    if (FAILED(hr)) { g_pCoinsVoice = nullptr; return false; }
+    HRESULT hr = CoCreateInstance(CLSID_SpVoice, NULL, CLSCTX_ALL, IID_ISpVoice, (void**)&dashboardState.pCoinsVoice);
+    if (FAILED(hr)) { dashboardState.pCoinsVoice = nullptr; return false; }
 
-    TTS_ApplySavedVoice(g_pCoinsVoice);
+    TTS_ApplySavedVoice(dashboardState.pCoinsVoice);
     return true;
 }
 
 static void Coins_SpeakDailyPnL() {
-    if (!g_pCoinsVoice || !hCoin_BigPnL) return;
+    if (!dashboardState.pCoinsVoice || !dashboardState.hCoin_BigPnL) return;
     char buf[128] = {};
-    GetWindowTextA(hCoin_BigPnL, buf, sizeof(buf));
+    GetWindowTextA(dashboardState.hCoin_BigPnL, buf, sizeof(buf));
     std::wstring wtext(buf, buf + strlen(buf));
     size_t dotPos = wtext.find(L'.');
     if (dotPos != std::wstring::npos) {
@@ -271,31 +284,31 @@ static void Coins_SpeakDailyPnL() {
         wtext.erase(0, 1);
     }
     wtext.erase(std::remove(wtext.begin(), wtext.end(), L','), wtext.end());
-    g_pCoinsVoice->Speak(wtext.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
+    dashboardState.pCoinsVoice->Speak(wtext.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
 }
 
 static void Coins_ToggleTTS(HWND hWnd) {
-    g_coinsTtsOn = !g_coinsTtsOn;
+    dashboardState.coinsTtsOn = !dashboardState.coinsTtsOn;
 
     // Persist state to registry
-    RegSetDword(DASHBOARD_CLASS_NAME, "Speaker", g_coinsTtsOn ? 1 : 0);
+    RegSetDword(DASHBOARD_CLASS_NAME, "Speaker", dashboardState.coinsTtsOn ? 1 : 0);
 
-    if (g_coinsTtsOn) {
+    if (dashboardState.coinsTtsOn) {
         if (!Coins_InitVoice()) {
-            g_coinsTtsOn = false;
+            dashboardState.coinsTtsOn = false;
             return;
         }
-        SetCtrlColor(hCoin_Speaker, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);   // bright = active
+        SetCtrlColor(dashboardState.hCoin_Speaker, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);   // bright = active
         SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
         Coins_SpeakDailyPnL();                          // speak immediately
     } else {
         KillTimer(hWnd, TIMER_COINS_SPEAKER);
-        if (g_pCoinsVoice)
-            g_pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL); // stop current
-        SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);    // dim = inactive
+        if (dashboardState.pCoinsVoice)
+            dashboardState.pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL); // stop current
+        SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);    // dim = inactive
     }
 
-    if (hCoin_Speaker) InvalidateRect(hCoin_Speaker, NULL, TRUE);
+    if (dashboardState.hCoin_Speaker) InvalidateRect(dashboardState.hCoin_Speaker, NULL, TRUE);
 }
 
 // ─── Icons update ─────────────────────────────────────────────────────────────
@@ -363,7 +376,7 @@ void UpdateTrayIcon(HWND hWnd) {
             tooltip += "Connecting..";
         } else {
             connected = api().isMarketDataConnected() && api().isTradingConnected();
-            tooltip = acc + " | " + currencyDashboard + " | " + (connected ? "Connected" : "Disconnected");
+            tooltip = acc + " | " + dashboardState.currencyDashboard + " | " + (connected ? "Connected" : "Disconnected");
         }
     }
     std::wstring wTooltip(tooltip.begin(), tooltip.end());
@@ -411,8 +424,8 @@ void Coins_UpdateLabels(HWND hWnd) {
     double unrealized = api().getUnrealizedPnL();
     double realized   = api().getRealizedPnL();
     
-    std::string prevCurrency = currencyDashboard;
-    currencyDashboard = "--";
+    std::string prevCurrency = dashboardState.currencyDashboard;
+    dashboardState.currencyDashboard = "--";
     double netLiq = 0.0;
     auto tryParse = [&](const std::string& k) -> double {
         auto it = summary.find(k);
@@ -420,17 +433,17 @@ void Coins_UpdateLabels(HWND hWnd) {
         try { return std::stod(it->second); } catch (...) { return 0.0; }
     };
     if (summary.count("EUR_NetLiquidation")) {
-        currencyDashboard = "EUR"; netLiq = tryParse("EUR_NetLiquidation");
+        dashboardState.currencyDashboard = "EUR"; netLiq = tryParse("EUR_NetLiquidation");
     } else if (summary.count("USD_NetLiquidation")) {
-        currencyDashboard = "USD"; netLiq = tryParse("USD_NetLiquidation");
+        dashboardState.currencyDashboard = "USD"; netLiq = tryParse("USD_NetLiquidation");
     } else if (summary.count("NetLiquidation")) {
         netLiq = tryParse("NetLiquidation");
         for (auto const& [k, v] : summary)
             if (k.find("_NetLiquidation") != std::string::npos)
-                { currencyDashboard = k.substr(0, k.find('_')); break; }
+                { dashboardState.currencyDashboard = k.substr(0, k.find('_')); break; }
     }
 
-    if (currencyDashboard != prevCurrency)
+    if (dashboardState.currencyDashboard != prevCurrency)
         UpdateTrayIcon(hWnd);
 
     const int m = 10;
@@ -440,103 +453,103 @@ void Coins_UpdateLabels(HWND hWnd) {
     int box2H = 124;
     int y3 = y2 + box2H + 9;
 
-    if (hCoin_NetLiq) {
-        std::string formattedNum = FormatWithCommas(netLiq, fullDetails);
-        if (SetWindowTextIfChanged(hCoin_NetLiq, formattedNum)) {
+    if (dashboardState.hCoin_NetLiq) {
+        std::string formattedNum = FormatWithCommas(netLiq, dashboardState.fullDetails);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_NetLiq, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
-            SetWindowPos(hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
 
     COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-    if (hCoin_BigPnL) {
+    if (dashboardState.hCoin_BigPnL) {
         std::string formattedNum = FormatWithCommas(daily);
         if (daily >= 0.0) formattedNum = "+" + formattedNum;
-        if (SetWindowTextIfChanged(hCoin_BigPnL, formattedNum)) {
-            SetCtrlColor(hCoin_BigPnL, pnlClr);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_BigPnL, formattedNum)) {
+            SetCtrlColor(dashboardState.hCoin_BigPnL, pnlClr);
         }
     }
-    if (hCoin_Pct) {
+    if (dashboardState.hCoin_Pct) {
         double pct = (netLiq != 0.0) ? (daily / netLiq * 100.0) : 0.0;
         std::string formattedNum = FormatWithCommas(pct);
         if (pct >= 0.0) formattedNum = "+" + formattedNum;
-        if (SetWindowTextIfChanged(hCoin_Pct, std::format("{}%", formattedNum))) {
-            SetCtrlColor(hCoin_Pct, pnlClr);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Pct, std::format("{}%", formattedNum))) {
+            SetCtrlColor(dashboardState.hCoin_Pct, pnlClr);
         }
     }
-    if (hCoin_Realized) {
+    if (dashboardState.hCoin_Realized) {
         std::string formattedNum = FormatWithCommas(realized);
-        if (SetWindowTextIfChanged(hCoin_Realized, formattedNum)) {
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Realized, formattedNum)) {
             COLORREF clr = realized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SetCtrlColor(hCoin_Realized, clr);
+            SetCtrlColor(dashboardState.hCoin_Realized, clr);
         }
     }
 
-    if (hCoin_Positions) {
+    if (dashboardState.hCoin_Positions) {
         double grossPos = tryParse("GrossPositionValue");
-        std::string formattedNum = FormatWithCommas(grossPos, fullDetails);
-        if (SetWindowTextIfChanged(hCoin_Positions, formattedNum)) {
+        std::string formattedNum = FormatWithCommas(grossPos, dashboardState.fullDetails);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Positions, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
-            SetWindowPos(hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(dashboardState.hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
-    if (hCoin_Unrealized) {
-        std::string formattedNum = FormatWithCommas(unrealized, fullDetails);
-        if (SetWindowTextIfChanged(hCoin_Unrealized, formattedNum)) {
+    if (dashboardState.hCoin_Unrealized) {
+        std::string formattedNum = FormatWithCommas(unrealized, dashboardState.fullDetails);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Unrealized, formattedNum)) {
             COLORREF clr = unrealized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SetCtrlColor(hCoin_Unrealized, clr);
+            SetCtrlColor(dashboardState.hCoin_Unrealized, clr);
         }
     }
-    if (hCoin_Dividends) {
+    if (dashboardState.hCoin_Dividends) {
         double div = tryParse("AccruedDividend");
         std::string formattedNum = FormatWithCommas(div);
-        if (SetWindowTextIfChanged(hCoin_Dividends, formattedNum)) {
-            SetCtrlColor(hCoin_Dividends, COINS_CLR_PURPLE);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Dividends, formattedNum)) {
+            SetCtrlColor(dashboardState.hCoin_Dividends, COINS_CLR_PURPLE);
         }
     }
-    if (hCoin_Accruals) {
+    if (dashboardState.hCoin_Accruals) {
         double acc = tryParse("AccruedCash");
         std::string formattedNum = FormatWithCommas(acc);
-        if (SetWindowTextIfChanged(hCoin_Accruals, formattedNum)) {
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Accruals, formattedNum)) {
             COLORREF clr = acc > 0.0 ? COINS_CLR_GREEN : (acc < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(hCoin_Accruals, clr);
+            SetCtrlColor(dashboardState.hCoin_Accruals, clr);
         }
     }
-    if (hCoin_BuyingPower) {
+    if (dashboardState.hCoin_BuyingPower) {
         double bp = tryParse("BuyingPower");
-        std::string formattedNum = FormatWithCommas(bp, fullDetails);
-        SetWindowTextIfChanged(hCoin_BuyingPower, formattedNum);
+        std::string formattedNum = FormatWithCommas(bp, dashboardState.fullDetails);
+        SetWindowTextIfChanged(dashboardState.hCoin_BuyingPower, formattedNum);
     }
-    if (hCoin_MaintMargin) {
+    if (dashboardState.hCoin_MaintMargin) {
         double mm = tryParse("MaintMarginReq");
-        std::string formattedNum = FormatWithCommas(mm, fullDetails);
-        SetWindowTextIfChanged(hCoin_MaintMargin, formattedNum);
+        std::string formattedNum = FormatWithCommas(mm, dashboardState.fullDetails);
+        SetWindowTextIfChanged(dashboardState.hCoin_MaintMargin, formattedNum);
     }
 
-    if (hCoin_Cash) {
+    if (dashboardState.hCoin_Cash) {
         double cash = tryParse("CashBalance");
-        std::string formattedNum = FormatWithCommas(cash, fullDetails) + " " + currencyDashboard;
-        if (SetWindowTextIfChanged(hCoin_Cash, formattedNum)) {
+        std::string formattedNum = FormatWithCommas(cash, dashboardState.fullDetails) + " " + dashboardState.currencyDashboard;
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Cash, formattedNum)) {
             COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(hCoin_Cash, clr);
+            SetCtrlColor(dashboardState.hCoin_Cash, clr);
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
-            SetWindowPos(hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
-    if (hCoin_EUR) {
+    if (dashboardState.hCoin_EUR) {
         double eur = tryParse("EUR_CashBalance");
-        std::string formattedNum = FormatWithCommas(eur, fullDetails) + (fullDetails ? "" : " €");
-        if (SetWindowTextWIfChanged(hCoin_EUR, StringToWide(formattedNum))) {
+        std::string formattedNum = FormatWithCommas(eur, dashboardState.fullDetails) + (dashboardState.fullDetails ? "" : " €");
+        if (SetWindowTextWIfChanged(dashboardState.hCoin_EUR, StringToWide(formattedNum))) {
             COLORREF clr = eur > 0.0 ? COINS_CLR_GREEN : (eur < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(hCoin_EUR, clr);
+            SetCtrlColor(dashboardState.hCoin_EUR, clr);
         }
     }
-    if (hCoin_USD) {
+    if (dashboardState.hCoin_USD) {
         double usd = tryParse("USD_CashBalance");
-        std::string formattedNum = FormatWithCommas(usd, fullDetails) + (fullDetails ? "" : " $");
-        if (SetWindowTextWIfChanged(hCoin_USD, StringToWide(formattedNum))) {
+        std::string formattedNum = FormatWithCommas(usd, dashboardState.fullDetails) + (dashboardState.fullDetails ? "" : " $");
+        if (SetWindowTextWIfChanged(dashboardState.hCoin_USD, StringToWide(formattedNum))) {
             COLORREF clr = usd > 0.0 ? COINS_CLR_GREEN : (usd < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(hCoin_USD, clr);
+            SetCtrlColor(dashboardState.hCoin_USD, clr);
         }
     }
 }
@@ -738,28 +751,28 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 1: Net Liq & PnL ──────────────────────────────────────────
             int y1 = 8;
             int box1H = 94;
-            hCoinBox1 = CreateWindowA("BUTTON", "Today:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            dashboardState.hCoinBox1 = CreateWindowA("BUTTON", "Today:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y1, boxW, box1H, hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hCoinBox1, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hCoinBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SetWindowSubclass(dashboardState.hCoinBox1, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(dashboardState.hCoinBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_NetLiq = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_NetLiq = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 62, y1 - 4, 30, 18, hWnd, (HMENU)ID_COIN_NETLIQ, hInst, NULL);
-            SendMessage(hCoin_NetLiq, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_NetLiq, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
             // Lock icon (hidden by default)
-            hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
+            dashboardState.hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + boxW - 90, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
-            SendMessage(hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-            SetCtrlColor(hCoin_Lock, COINS_CLR_GRAY);
-            ShowWindow(hCoin_Lock, SW_HIDE);
+            SendMessage(dashboardState.hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
+            SetCtrlColor(dashboardState.hCoin_Lock, COINS_CLR_GRAY);
+            ShowWindow(dashboardState.hCoin_Lock, SW_HIDE);
 
-            hCoin_Clock = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Clock = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY,
                 m + boxW - 60, y1, 40, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Clock, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Clock, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             // Row 1: PnL: 🔊 +0.00
             HWND hLblBigPnL = CreateWindowA("STATIC", "PnL:",
@@ -767,17 +780,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 12, y1 + 24, 30, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblBigPnL, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
+            dashboardState.hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + 42, y1 + 24, 20, 20, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
-            SendMessage(hCoin_Speaker, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-            SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
+            SendMessage(dashboardState.hCoin_Speaker, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
+            SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);
 
-            hCoin_BigPnL = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_BigPnL = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOTIFY,
                 m + 70, y1 + 16, boxW - 82, 32, hWnd, (HMENU)ID_COIN_BIGPNL, hInst, NULL);
-            SendMessage(hCoin_BigPnL, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
-            SetCtrlColor(hCoin_BigPnL, COINS_CLR_GREEN);
+            SendMessage(dashboardState.hCoin_BigPnL, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
+            SetCtrlColor(dashboardState.hCoin_BigPnL, COINS_CLR_GREEN);
 
             // Row 2: PnL %: +0.00%
             HWND hLblPct = CreateWindowA("STATIC", "PnL %:",
@@ -785,11 +798,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 12, y1 + 48, 50, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblPct, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Pct = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Pct = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 70, y1 + 48, boxW - 82, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
-            SendMessage(hCoin_Pct, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
-            SetCtrlColor(hCoin_Pct, COINS_CLR_GREEN);
+            SendMessage(dashboardState.hCoin_Pct, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SetCtrlColor(dashboardState.hCoin_Pct, COINS_CLR_GREEN);
 
             // Row 3: Realized: 0.00
             HWND hLblRealized = CreateWindowA("STATIC", "Realized:",
@@ -797,24 +810,24 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 12, y1 + 68, 65, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblRealized, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Realized = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Realized = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 77, y1 + 68, boxW - 89, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Realized, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Realized, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
 
             // ─── Box 2: Positions & Margin ─────────────────────────────────────
             int y2 = y1 + box1H + 9; // y2 = 114
             int box2H = 124;
-            hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            dashboardState.hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y2, boxW, box2H, hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hCoinBox2, DarkGroupBoxSubclassProc, 2, 0);
-            SendMessage(hCoinBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SetWindowSubclass(dashboardState.hCoinBox2, DarkGroupBoxSubclassProc, 2, 0);
+            SendMessage(dashboardState.hCoinBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Positions = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Positions = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 77, y2 - 4, 30, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Positions, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Positions, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
             // Row 1: Unrealized: 0.00
             HWND hLblUnrealized = CreateWindowA("STATIC", "Unrealized:",
@@ -822,90 +835,90 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 12, y2 + 20, 75, 18, hWnd, NULL, hInst, NULL);
             SendMessage(hLblUnrealized, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Unrealized = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Unrealized = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 90, y2 + 20, boxW - 102, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Unrealized, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Unrealized, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 2: Dividends: 33.75
-            hLblDividends = CreateWindowA("STATIC", "Dividends:",
+            dashboardState.hLblDividends = CreateWindowA("STATIC", "Dividends:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 40, 75, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblDividends, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hLblDividends, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Dividends = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Dividends = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 90, y2 + 40, boxW - 102, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Dividends, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Dividends, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 3: Accruals: -1.64
-            hLblAccruals = CreateWindowA("STATIC", "Accruals:",
+            dashboardState.hLblAccruals = CreateWindowA("STATIC", "Accruals:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 60, 75, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblAccruals, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hLblAccruals, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Accruals = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Accruals = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 90, y2 + 60, boxW - 102, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Accruals, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Accruals, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 4: Buying Power: 86,483.04
-            hLblBP = CreateWindowA("STATIC", "Buying Power:",
+            dashboardState.hLblBP = CreateWindowA("STATIC", "Buying Power:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 80, 100, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblBP, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hLblBP, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_BuyingPower = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_BuyingPower = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 105, y2 + 80, boxW - 117, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_BuyingPower, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 5: Maint Margin: 4,403.05
-            hLblMM = CreateWindowA("STATIC", "Maintenance:", //  Margin:
+            dashboardState.hLblMM = CreateWindowA("STATIC", "Maintenance:", //  Margin:
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y2 + 100, 85, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblMM, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hLblMM, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_MaintMargin = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_MaintMargin = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 97, y2 + 100, boxW - 109, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_MaintMargin, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_MaintMargin, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
 
             // ─── Box 3: Cash ───────────────────────────────────────────────────
             int y3 = y2 + box2H + 9; // y3 = 250
             int box3H = 64;
-            hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            dashboardState.hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y3, boxW, box3H, hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hCoinBox3, DarkGroupBoxSubclassProc, 3, 0);
-            SendMessage(hCoinBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SetWindowSubclass(dashboardState.hCoinBox3, DarkGroupBoxSubclassProc, 3, 0);
+            SendMessage(dashboardState.hCoinBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_Cash = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_Cash = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 53, y3 - 4, 30, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_Cash, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_Cash, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
             // Row 1: EUR: 285.31
-            hLblEUR = CreateWindowA("STATIC", "EUR:",
+            dashboardState.hLblEUR = CreateWindowA("STATIC", "EUR:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 20, 35, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblEUR, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hLblEUR, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_EUR = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_EUR = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 50, y3 + 20, boxW - 62, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_EUR, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_EUR, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
             // Row 2: USD: -11,559.66
-            hLblUSD = CreateWindowA("STATIC", "USD:",
+            dashboardState.hLblUSD = CreateWindowA("STATIC", "USD:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 12, y3 + 40, 35, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hLblUSD, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(dashboardState.hLblUSD, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            hCoin_USD = CreateWindowA("STATIC", "--",
+            dashboardState.hCoin_USD = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 50, y3 + 40, boxW - 62, 18, hWnd, NULL, hInst, NULL);
-            SendMessage(hCoin_USD, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SendMessage(dashboardState.hCoin_USD, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
 
 
             // ─── Bottom action buttons ──────────────────────────────────────────
@@ -948,48 +961,48 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int box2H = 124;
             int y3 = y2 + box2H + 9; // y3 = 250
             int box3H = 64;
-            LONG_PTR style = GetWindowLongPtr(hCoin_EUR, GWL_STYLE);
+            LONG_PTR style = GetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE);
             if (LOWORD(wParam) != WA_INACTIVE) {
                 if (lockHotkeys) break;
-                ShowWindow(hLblDividends, SW_SHOW);
-                ShowWindow(hLblAccruals, SW_SHOW);
-                ShowWindow(hCoin_Accruals, SW_SHOW);
-                ShowWindow(hCoin_Dividends, SW_SHOW);
-                ShowWindow(hCoin_Cash, SW_SHOW);
-                ShowWindow(hLblEUR, SW_SHOW);
-                ShowWindow(hLblUSD, SW_SHOW);
-                SetWindowPos(hCoinBox2, NULL, m, y2, boxW, box2H, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hLblBP, NULL,  m + 12, y2 + 80, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_BuyingPower, NULL, m + 105, y2 + 80, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hLblMM, NULL, m + 12, y2 + 100, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_MaintMargin, NULL, m + 97, y2 + 100, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoinBox3, NULL, m, y3, boxW, box3H, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_EUR, NULL, m + 50, y3 + 20, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                ShowWindow(dashboardState.hLblDividends, SW_SHOW);
+                ShowWindow(dashboardState.hLblAccruals, SW_SHOW);
+                ShowWindow(dashboardState.hCoin_Accruals, SW_SHOW);
+                ShowWindow(dashboardState.hCoin_Dividends, SW_SHOW);
+                ShowWindow(dashboardState.hCoin_Cash, SW_SHOW);
+                ShowWindow(dashboardState.hLblEUR, SW_SHOW);
+                ShowWindow(dashboardState.hLblUSD, SW_SHOW);
+                SetWindowPos(dashboardState.hCoinBox2, NULL, m, y2, boxW, box2H, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hLblBP, NULL,  m + 12, y2 + 80, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoin_BuyingPower, NULL, m + 105, y2 + 80, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hLblMM, NULL, m + 12, y2 + 100, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoin_MaintMargin, NULL, m + 97, y2 + 100, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoinBox3, NULL, m, y3, boxW, box3H, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoin_EUR, NULL, m + 50, y3 + 20, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 style &= ~SS_TYPEMASK;
-                SetWindowLongPtr(hCoin_EUR, GWL_STYLE, style | SS_RIGHT);
-                SetWindowPos(hCoin_USD, NULL, m + 50, y3 + 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE, style | SS_RIGHT);
+                SetWindowPos(dashboardState.hCoin_USD, NULL, m + 50, y3 + 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
-                fullDetails = true;
+                dashboardState.fullDetails = true;
             } else {
-                ShowWindow(hLblDividends, SW_HIDE);
-                ShowWindow(hLblAccruals, SW_HIDE);
-                ShowWindow(hCoin_Accruals, SW_HIDE);
-                ShowWindow(hCoin_Dividends, SW_HIDE);
-                ShowWindow(hCoin_Cash, SW_HIDE);
-                ShowWindow(hLblEUR, SW_HIDE);
-                ShowWindow(hLblUSD, SW_HIDE);
-                SetWindowPos(hCoinBox2, NULL, m, y2, boxW, box2H - 40, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hLblBP, NULL,  m + 12, y2 + 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_BuyingPower, NULL, m + 105, y2 + 40, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hLblMM, NULL, m + 12, y2 + 60, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_MaintMargin, NULL, m + 97, y2 + 60, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoinBox3, NULL, m, y3 - 40, boxW, box3H - 20, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(hCoin_EUR, NULL, m + 12, y3 + 20 - 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                ShowWindow(dashboardState.hLblDividends, SW_HIDE);
+                ShowWindow(dashboardState.hLblAccruals, SW_HIDE);
+                ShowWindow(dashboardState.hCoin_Accruals, SW_HIDE);
+                ShowWindow(dashboardState.hCoin_Dividends, SW_HIDE);
+                ShowWindow(dashboardState.hCoin_Cash, SW_HIDE);
+                ShowWindow(dashboardState.hLblEUR, SW_HIDE);
+                ShowWindow(dashboardState.hLblUSD, SW_HIDE);
+                SetWindowPos(dashboardState.hCoinBox2, NULL, m, y2, boxW, box2H - 40, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hLblBP, NULL,  m + 12, y2 + 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoin_BuyingPower, NULL, m + 105, y2 + 40, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hLblMM, NULL, m + 12, y2 + 60, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoin_MaintMargin, NULL, m + 97, y2 + 60, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoinBox3, NULL, m, y3 - 40, boxW, box3H - 20, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(dashboardState.hCoin_EUR, NULL, m + 12, y3 + 20 - 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 style &= ~SS_TYPEMASK;
-                SetWindowLongPtr(hCoin_EUR, GWL_STYLE, style | SS_LEFT);
-                SetWindowPos(hCoin_USD, NULL, m + 112, y3 + 20 - 40, boxW - 124, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE, style | SS_LEFT);
+                SetWindowPos(dashboardState.hCoin_USD, NULL, m + 112, y3 + 20 - 40, boxW - 124, 18, SWP_NOZORDER | SWP_NOACTIVATE);
                 MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 60 - 38, TRUE);
-                fullDetails = false;
+                dashboardState.fullDetails = false;
             }
             if (api().isMarketDataConnected() && api().isTradingConnected()) {
                 Coins_UpdateLabels(hWnd);
@@ -1008,20 +1021,20 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 int box2H = 124;
                 int y3 = y2 + box2H + 9; // y3 = 250
                 int box3H = 64;
-                if (hCoin_NetLiq)      { SetWindowTextA(hCoin_NetLiq,      "--"); SetWindowPos(hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_NetLiq, NULL, TRUE); }
-                if (hCoin_BigPnL)      SetWindowTextA(hCoin_BigPnL,      "--");
-                if (hCoin_Pct)         SetWindowTextA(hCoin_Pct,         "--");
-                if (hCoin_Realized)    SetWindowTextA(hCoin_Realized,    "--");
-                if (hCoin_Positions)   { SetWindowTextA(hCoin_Positions,   "--"); SetWindowPos(hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_Positions, NULL, TRUE); }
-                if (hCoin_Unrealized)  SetWindowTextA(hCoin_Unrealized,  "--");
-                if (hCoin_Dividends)   SetWindowTextA(hCoin_Dividends,   "--");
-                if (hCoin_Accruals)    SetWindowTextA(hCoin_Accruals,    "--");
-                if (hCoin_BuyingPower) SetWindowTextA(hCoin_BuyingPower, "--");
-                if (hCoin_MaintMargin) SetWindowTextA(hCoin_MaintMargin, "--");
-                if (hCoin_Cash)        { SetWindowTextA(hCoin_Cash,        "--"); SetWindowPos(hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(hCoin_Cash, NULL, TRUE); }
-                if (hCoin_EUR)         SetWindowTextA(hCoin_EUR,         "--");
-                if (hCoin_USD)         SetWindowTextA(hCoin_USD,         "--");
-                currencyDashboard = "--";
+                if (dashboardState.hCoin_NetLiq)      { SetWindowTextA(dashboardState.hCoin_NetLiq,      "--"); SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_NetLiq, NULL, TRUE); }
+                if (dashboardState.hCoin_BigPnL)      SetWindowTextA(dashboardState.hCoin_BigPnL,      "--");
+                if (dashboardState.hCoin_Pct)         SetWindowTextA(dashboardState.hCoin_Pct,         "--");
+                if (dashboardState.hCoin_Realized)    SetWindowTextA(dashboardState.hCoin_Realized,    "--");
+                if (dashboardState.hCoin_Positions)   { SetWindowTextA(dashboardState.hCoin_Positions,   "--"); SetWindowPos(dashboardState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Positions, NULL, TRUE); }
+                if (dashboardState.hCoin_Unrealized)  SetWindowTextA(dashboardState.hCoin_Unrealized,  "--");
+                if (dashboardState.hCoin_Dividends)   SetWindowTextA(dashboardState.hCoin_Dividends,   "--");
+                if (dashboardState.hCoin_Accruals)    SetWindowTextA(dashboardState.hCoin_Accruals,    "--");
+                if (dashboardState.hCoin_BuyingPower) SetWindowTextA(dashboardState.hCoin_BuyingPower, "--");
+                if (dashboardState.hCoin_MaintMargin) SetWindowTextA(dashboardState.hCoin_MaintMargin, "--");
+                if (dashboardState.hCoin_Cash)        { SetWindowTextA(dashboardState.hCoin_Cash,        "--"); SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Cash, NULL, TRUE); }
+                if (dashboardState.hCoin_EUR)         SetWindowTextA(dashboardState.hCoin_EUR,         "--");
+                if (dashboardState.hCoin_USD)         SetWindowTextA(dashboardState.hCoin_USD,         "--");
+                dashboardState.currencyDashboard = "--";
             }
             UpdateTrayIcon(hWnd);
             break;
@@ -1055,7 +1068,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (wParam == TIMER_WATCHDOG || wParam == TIMER_WATCHDOG_DELAYED_START) { // 10000
                 if (wParam == TIMER_WATCHDOG_DELAYED_START)
                     KillTimer(hWnd, TIMER_WATCHDOG_DELAYED_START);
-                if (shouldBeConnected && !api().isConnected()) {
+                if (dashboardState.shouldBeConnected && !api().isConnected()) {
 #ifndef GATEWAY_SIM
                     EnsureGatewayRunning(hWnd);
 #endif
@@ -1068,7 +1081,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     , (int)Settings_Load("ClientId", 0)
                     , (int)Settings_Load("GroupId", 4)
                     );
-                } else if (!shouldBeConnected && api().isConnected()) {
+                } else if (!dashboardState.shouldBeConnected && api().isConnected()) {
                     api().disconnect();
                 }
             }
@@ -1082,22 +1095,22 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // Hot-swap the TTS voice without closing the window.
             // Release the current voice object so the next Coins_InitVoice call
             // picks up the newly saved token from the registry.
-            if (g_pCoinsVoice) {
-                g_pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
-                g_pCoinsVoice->Release();
-                g_pCoinsVoice = nullptr;
+            if (dashboardState.pCoinsVoice) {
+                dashboardState.pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+                dashboardState.pCoinsVoice->Release();
+                dashboardState.pCoinsVoice = nullptr;
             }
             // If TTS is currently active, re-initialise with the new voice and
             // restart the timer so it fires on the normal 21-second cadence.
-            if (g_coinsTtsOn) {
+            if (dashboardState.coinsTtsOn) {
                 KillTimer(hWnd, TIMER_COINS_SPEAKER);
                 if (Coins_InitVoice()) {
                     SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
                     Coins_SpeakDailyPnL(); // speak immediately with the new voice
                 } else {
-                    g_coinsTtsOn = false;
-                    SetCtrlColor(hCoin_Speaker, COINS_CLR_GRAY);
-                    if (hCoin_Speaker) InvalidateRect(hCoin_Speaker, NULL, TRUE);
+                    dashboardState.coinsTtsOn = false;
+                    SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);
+                    if (dashboardState.hCoin_Speaker) InvalidateRect(dashboardState.hCoin_Speaker, NULL, TRUE);
                 }
             }
             break;
@@ -1210,7 +1223,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_KEYDOWN: {
             if (wParam == VK_SCROLL) {
                 lockHotkeys = !lockHotkeys;
-                ShowWindow(hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
+                ShowWindow(dashboardState.hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
                 PostMessage(hWnd, WM_ACTIVATE, lockHotkeys ? WA_INACTIVE : WA_ACTIVE, 0);
                 return 0;
             }
@@ -1226,12 +1239,12 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         Coins_ToggleTTS(hWnd);
                     break;
                 case ID_M_CONNECT:
-                    shouldBeConnected = true;
+                    dashboardState.shouldBeConnected = true;
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
                     break;
 
                 case ID_M_DISCONNECT:
-                    shouldBeConnected = false;
+                    dashboardState.shouldBeConnected = false;
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
                     break;
 
@@ -1316,17 +1329,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             api().removeApiUpdateWindow(hWnd);
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
-            if (g_coinsTtsOn) KillTimer(hWnd, TIMER_COINS_SPEAKER);
-            if (g_pCoinsVoice) {
-                g_pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
-                g_pCoinsVoice->Release();
-                g_pCoinsVoice = nullptr;
+            if (dashboardState.coinsTtsOn) KillTimer(hWnd, TIMER_COINS_SPEAKER);
+            if (dashboardState.pCoinsVoice) {
+                dashboardState.pCoinsVoice->Speak(NULL, SVSFPurgeBeforeSpeak, NULL);
+                dashboardState.pCoinsVoice->Release();
+                dashboardState.pCoinsVoice = nullptr;
             }
-            g_coinsTtsOn = false;
+            dashboardState.coinsTtsOn = false;
 
-            hLblEUR = hLblUSD = hCoin_NetLiq = hCoin_BigPnL = hCoin_Pct = hCoin_Realized = hCoin_Speaker = hCoin_Lock = NULL;
-            hCoin_Positions = hCoin_Unrealized = hCoin_Dividends = hCoin_Accruals = hCoin_BuyingPower = hCoin_MaintMargin = NULL;
-            hCoin_Clock = hLblBP = hLblMM = hLblDividends = hLblAccruals = hCoinBox1 = hCoinBox2 = hCoinBox3 = hCoin_Cash = hCoin_EUR = hCoin_USD = NULL;
+            dashboardState.hLblEUR = dashboardState.hLblUSD = dashboardState.hCoin_NetLiq = dashboardState.hCoin_BigPnL = dashboardState.hCoin_Pct = dashboardState.hCoin_Realized = dashboardState.hCoin_Speaker = dashboardState.hCoin_Lock = NULL;
+            dashboardState.hCoin_Positions = dashboardState.hCoin_Unrealized = dashboardState.hCoin_Dividends = dashboardState.hCoin_Accruals = dashboardState.hCoin_BuyingPower = dashboardState.hCoin_MaintMargin = NULL;
+            dashboardState.hCoin_Clock = dashboardState.hLblBP = dashboardState.hLblMM = dashboardState.hLblDividends = dashboardState.hLblAccruals = dashboardState.hCoinBox1 = dashboardState.hCoinBox2 = dashboardState.hCoinBox3 = dashboardState.hCoin_Cash = dashboardState.hCoin_EUR = dashboardState.hCoin_USD = NULL;
             gClrCount = 0;
 
             PostQuitMessage(0);
