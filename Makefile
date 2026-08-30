@@ -1,13 +1,14 @@
 MAJOR      = 0
 MINOR      = 0
 PATCH      = 1
-BUILD      = 109
+BUILD      = 110
 
 CXX     := x86_64-w64-mingw32-g++
 WINDRES := x86_64-w64-mingw32-windres
 
 # Flags shared by both the real gateway and the simulator builds.
-COMMON_CXXFLAGS := -std=c++23 -Wl,--no-dynamicbase -Wl,--no-high-entropy-va \
+COMMON_CXXFLAGS := -std=c++23 -O3 -flto=auto -march=x86-64-v3 \
+                    -Wl,--no-dynamicbase -Wl,--no-high-entropy-va \
                     -fno-rtti \
                     -mwindows \
                     -static -static-libgcc -static-libstdc++
