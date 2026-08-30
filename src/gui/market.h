@@ -75,6 +75,12 @@ struct TsState {
     ULONGLONG volTrackingStart = 0;   // time tracking began (since last clear); NOT touched by
                                        // pruning, so the vol-rate "ready" gate below can't flicker
 
+    // ── Incremental volume sums (updated on tick arrival / prune, read on paint) ──
+    // Avoids iterating the full deque on every WM_PAINT.
+    double volSumTotal   = 0.0;  // sum of all ticks in volHistory (trailing 5 min)
+    double volSumRecent  = 0.0;  // sum of ticks in the most recent 15 s window
+    double volSumBaseline = 0.0; // volSumTotal - volSumRecent (the older 4 min 45 s)
+
     // ── TTS state ─────────────────────────────────────────────────────────────
     // Speech goes through the shared SharedTtsEngine (shared.h) now — this
     // window just tracks whether it currently holds a reference to it.
@@ -921,11 +927,12 @@ struct VolRateResult {
                                // denominator.
 };
 
-static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& hist, ULONGLONG trackingStart, ULONGLONG now) {
+static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now) {
     VolRateResult r;
-    if (hist.empty()) return r;
+    if (state->volHistory.empty()) return r;
 
-    for (const auto& t : hist) r.vol5min += t.size;
+    // Use pre-maintained running sums — O(1) instead of O(n) per paint
+    r.vol5min = state->volSumTotal;
 
     // Not enough history yet to trust a baseline — avoid a misleadingly huge
     // ratio off a thin denominator (mirrors Sparkline::GetPriceAgo's approach
@@ -937,16 +944,11 @@ static VolRateResult Market_ComputeVolRates(const std::deque<TsState::VolTick>& 
     // that boundary — true between prints, false the instant the next print
     // evicts the stale entry. trackingStart only moves on an explicit clear,
     // so once ready flips true it stays true.
-    if (trackingStart == 0 || now < trackingStart || now - trackingStart < VOL_RATE_BASELINE_MS)
+    if (state->volTrackingStart == 0 || now < state->volTrackingStart || now - state->volTrackingStart < VOL_RATE_BASELINE_MS)
         return r;
 
-    ULONGLONG recentCutoff = now - VOL_RATE_RECENT_MS;
-    double recentVol = 0.0, baselineVol = 0.0;
-
-    for (const auto& t : hist) {
-        if (t.time >= recentCutoff) { recentVol += t.size;  }
-        else                        { baselineVol += t.size; }
-    }
+    double recentVol   = state->volSumRecent;
+    double baselineVol = state->volSumBaseline;
 
     double recentSec   = VOL_RATE_RECENT_MS / 1000.0;
     double baselineSec = (VOL_RATE_BASELINE_MS - VOL_RATE_RECENT_MS) / 1000.0;
@@ -1171,7 +1173,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── Volume rate / print-frequency rate (tick-by-tick, see Market_ComputeVolRates) ──
     ULONGLONG nowTick = GetTickCount64();
-    VolRateResult volRates = Market_ComputeVolRates(state->volHistory, state->volTrackingStart, nowTick);
+    VolRateResult volRates = Market_ComputeVolRates(state, nowTick);
 
     double chg    = 0.0;
     double chgPct = 0.0;
@@ -1713,13 +1715,45 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
             // here with its arrival time so Market_ComputeVolRates can derive a
             // recent-vs-baseline ratio for both share volume and trade frequency.
+            // Running sums are maintained incrementally to avoid O(n) iteration on paint.
             ULONGLONG tickNow = GetTickCount64();
             if (state->volHistory.empty())
                 state->volTrackingStart = tickNow;
+            
+            // Add new tick and update total sum
             state->volHistory.push_back({ tickNow, tick->size });
-            while (!state->volHistory.empty() && tickNow > VOL_RATE_BASELINE_MS &&
-                   state->volHistory.front().time < tickNow - VOL_RATE_BASELINE_MS)
+            state->volSumTotal += tick->size;
+            
+            // Prune old ticks and update sums incrementally
+            ULONGLONG baselineCutoff = tickNow - VOL_RATE_BASELINE_MS;
+            ULONGLONG recentCutoff   = tickNow - VOL_RATE_RECENT_MS;
+            
+            while (!state->volHistory.empty() && state->volHistory.front().time < baselineCutoff) {
+                double oldSize = state->volHistory.front().size;
+                state->volSumTotal -= oldSize;
+                
+                // If the pruned tick was in the recent window, subtract from recent sum
+                // Otherwise it was in the baseline window, subtract from baseline sum
+                if (state->volHistory.front().time >= recentCutoff) {
+                    state->volSumRecent -= oldSize;
+                } else {
+                    state->volSumBaseline -= oldSize;
+                }
+                
                 state->volHistory.pop_front();
+            }
+            
+            // Recalculate recent/baseline split for remaining ticks
+            // (ticks that were in recent window may have moved to baseline window)
+            state->volSumRecent = 0.0;
+            state->volSumBaseline = 0.0;
+            for (const auto& t : state->volHistory) {
+                if (t.time >= recentCutoff) {
+                    state->volSumRecent += t.size;
+                } else {
+                    state->volSumBaseline += t.size;
+                }
+            }
 
             Market_RefreshPositionAndAvg(hWnd, state);
         }
@@ -1838,6 +1872,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->l1Info = TradingAPI::L1Book{};
                 state->volHistory.clear();   // stale on disconnect — avoid a phantom ratio off a frozen history
                 state->volTrackingStart = 0; // re-arm the warm-up gate so ready doesn't latch true off pre-disconnect data
+                state->volSumTotal = 0.0;
+                state->volSumRecent = 0.0;
+                state->volSumBaseline = 0.0;
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }
