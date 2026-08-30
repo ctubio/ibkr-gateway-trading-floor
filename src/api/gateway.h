@@ -28,6 +28,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <queue>
 #include <deque>
 #include <map>
 #include <vector>
@@ -42,6 +43,7 @@
 #include <format>
 #include <memory>
 #include <exception>
+#include <condition_variable>
 
 #ifdef GATEWAY_NAME
     #define GATEWAY_SPACE " "
