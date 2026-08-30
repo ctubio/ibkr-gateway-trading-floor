@@ -168,6 +168,7 @@ void KillGateway() {
 // Structure to pass data to our EnumWindows callback
 struct WindowFinderData {
     DWORD targetPID;
+    int swState;
     std::vector<HWND> foundWindows; // Now using a vector to store multiple handles
 };
 
@@ -199,7 +200,7 @@ BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
 
             // Only add the window if it matches your specific criteria
             //if (containsAtSymbol || containsU423 || containsGateway) {
-            if (!containsToolkit && !containsLoading) {
+            if (data->swState == SW_HIDE || (!containsToolkit && !containsLoading)) {
                 data->foundWindows.push_back(hwnd);
             }
         }
@@ -214,12 +215,13 @@ static void ToggleTWS(int swState) {
 
     WindowFinderData data;
     data.targetPID = pid;
+    data.swState = swState;
     
     EnumWindows(EnumAnyWindowsCallback, reinterpret_cast<LPARAM>(&data));
 
     if (!data.foundWindows.empty()) {
         for (HWND hwnd : data.foundWindows) {
-            ShowWindow(hwnd, swState);
+            ShowWindow(hwnd, data.swState);
         }
     }
 }
