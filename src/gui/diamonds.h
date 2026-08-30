@@ -816,9 +816,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Re-request positions (market data re-subscribed in positionEnd()).
             Diamonds_Repopulate(hWnd);
         } else {
-            // Clear everything — positions and prices are stale.
-            // ZERO-FLICKER FIX: Never use ListView_DeleteAllItems on an LVS_OWNERDATA list.
-            // It's invalid for virtual lists and triggers a full erase flash.
             diamondDisplayOrder.clear();
             diamondDataCache.clear();
             ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
