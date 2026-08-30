@@ -113,57 +113,83 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     HWND hPriceEdit     = GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT);
     HWND hOrderQty      = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
     HWND hOrderTypeHint = GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL);
+    HWND hQtyTypeLabel  = GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL);
+    HWND hQtyTifLabel   = GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL);
 
     int listH = showPanel ? h - EDIT_PANEL_H : h;
-    if (hList) MoveWindow(hList, 0, 0, w, listH, TRUE);
+    int py    = listH + 6;
+    int editH = 37;
+    int editW = 180;
 
     int show = showPanel ? SW_SHOW : SW_HIDE;
-    // Panel geometry — two groups side by side.
-    // [Price: |__edit__]   [Qty: |__edit__]   [↑↓ Tab  Enter]
-    int py     = listH + 6;
-    int editH  = 37;
-    int editW  = 180;
 
+    // Count controls for DeferWindowPos
+    int ctrlCount = 0;
+    if (hList) ctrlCount++;
+    if (hOrderTypeHint) ctrlCount++;
+    if (hPriceEdit) ctrlCount++;
+    if (hOrderQty) ctrlCount++;
+    if (hTotalLabel) ctrlCount++;
+    if (hQtyTifLabel) ctrlCount++;
+    if (hQtyTypeLabel) ctrlCount++;
+
+    HDWP hdwp = BeginDeferWindowPos(ctrlCount);
+    if (!hdwp) return;
+
+    // ListView
+    if (hList) {
+        hdwp = DeferWindowPos(hdwp, hList, NULL, 0, 0, w, listH, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    // Order type hint (left side)
     if (hOrderTypeHint) {
         int hintW = 130;
-        MoveWindow(hOrderTypeHint, 8, py + 5, hintW, 24, TRUE);
+        hdwp = DeferWindowPos(hdwp, hOrderTypeHint, NULL, 8, py + 5, hintW, 24, SWP_NOZORDER | SWP_NOACTIVATE);
         ShowWindow(hOrderTypeHint, show);
     }
 
-    int x  = rc.right - (editW * 2) + 60 - 10;
-    if (hPriceEdit) { MoveWindow(hPriceEdit, x,         py,     editW - 60, editH, TRUE); ShowWindow(hPriceEdit, show); }
+    // Price edit (right side)
+    int x = rc.right - (editW * 2) + 60 - 10;
+    if (hPriceEdit) {
+        hdwp = DeferWindowPos(hdwp, hPriceEdit, NULL, x, py, editW - 60, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        ShowWindow(hPriceEdit, show);
+    }
     x += editW - 60 + 10;
 
-    // Qty is hidden when partialFill.
+    // Qty edit (hidden when partialFill)
     bool showQty = showPanel && !s_editState.partialFill;
-    int  qshow   = showQty ? SW_SHOW : SW_HIDE;
-    if (hOrderQty) { MoveWindow(hOrderQty, x,         py,     editW, editH, TRUE); ShowWindow(hOrderQty, qshow); }
+    int qshow = showQty ? SW_SHOW : SW_HIDE;
+    if (hOrderQty) {
+        hdwp = DeferWindowPos(hdwp, hOrderQty, NULL, x, py, editW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+        ShowWindow(hOrderQty, qshow);
+    }
 
-    // Notional value hint: bottom-right overlay on the Qty input, same style
-    // (transparent, 11pt bold, corner-anchored) as the order-bar hints in market.h.
+    // Notional value hint (bottom-right of Qty edit)
     const int hintH = 16;
     const int hintMargin = 4;
     const int hintW = std::max(40, editW / 2 - 6);
     if (hTotalLabel) {
-        MoveWindow(hTotalLabel, x + editW - hintW - hintMargin, py + editH - hintH - 2, hintW, hintH, TRUE);
+        hdwp = DeferWindowPos(hdwp, hTotalLabel, NULL,
+            x + editW - hintW - hintMargin, py + editH - hintH - 2,
+            hintW, hintH, SWP_NOZORDER | SWP_NOACTIVATE);
         ShowWindow(hTotalLabel, show);
     }
 
-    // tif / orderType hints overlaid on the Qty input's left edge. Small font,
-    // transparent background. Top hint sits at the top-left, bottom hint at the
-    // bottom-left of the field.
-    HWND hQtyTypeLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL);
-    HWND hQtyTifLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL);
+    // TIF hint (top-left of Qty edit)
     const int qtyHintW = 48;
     const int qtyHintH = 16;
     if (hQtyTifLabel) {
-        MoveWindow(hQtyTifLabel, x + 4, py + 2, qtyHintW, qtyHintH, TRUE);
+        hdwp = DeferWindowPos(hdwp, hQtyTifLabel, NULL, x + 4, py + 2, qtyHintW, qtyHintH, SWP_NOZORDER | SWP_NOACTIVATE);
         ShowWindow(hQtyTifLabel, show);
     }
+
+    // Order type hint (bottom-left of Qty edit)
     if (hQtyTypeLabel) {
-        MoveWindow(hQtyTypeLabel, x + 4, py + editH - qtyHintH - 2, qtyHintW, qtyHintH, TRUE);
+        hdwp = DeferWindowPos(hdwp, hQtyTypeLabel, NULL, x + 4, py + editH - qtyHintH - 2, qtyHintW, qtyHintH, SWP_NOZORDER | SWP_NOACTIVATE);
         ShowWindow(hQtyTypeLabel, show);
     }
+
+    EndDeferWindowPos(hdwp);
 
     CenterEditText(hPriceEdit);
     CenterEditText(hOrderQty);
