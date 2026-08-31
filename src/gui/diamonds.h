@@ -572,7 +572,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
     // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
     double vwapDiff = (t.vwap > 0.0 && t.last > 0.0) ? t.last - t.vwap : 0.0;
-    setCol(DCOL_VWAP, vwapDiff, "{:+.2f}", true);
+    setCol(DCOL_VWAP, vwapDiff, "{:.2f}", true);
 
     // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
     // sampled from the same long-lived history the sparkline's reference dots
@@ -581,7 +581,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     {
         double price5MinAgo = 0.0;
         if (diamondsSparklines[conId].GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
-            setCol(DCOL_CHG5MIN, t.last - price5MinAgo, "{:+.2f}", true);
+            setCol(DCOL_CHG5MIN, t.last - price5MinAgo, "{:.2f}", true);
         } else {
             setNA(DCOL_CHG5MIN);
         }
