@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef GATEWAY_SIM
-int WindowSettingsHeight = 625;
+int WindowSettingsHeight = 653;
 #else
 int WindowSettingsHeight = 569 - 138;
 #endif
@@ -25,6 +25,8 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_SAFETY_VALUE      4013
 #define ID_SETTINGS_GROUP_ID          4014
 #define ID_SETTINGS_CLIENT_ID         4015
+#define ID_SETTINGS_BACKUP_RESTORE    4016
+#define ID_SETTINGS_BACKUP_DOWNLOAD   4017
 
 static HWND hSettingBox1 = NULL;
 static HWND hSettingBox2 = NULL;
@@ -275,17 +277,28 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
 
             // ── System Tools ───────────────────────────────────────────
-            hSettingBox5 = CreateWindowA("BUTTON", "API Messages:",
+            hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 50,
+                m, y, w, 78,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox5, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox5, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
+            CreateWindowA("BUTTON", "Backup",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+                m + gm, y + 20, (gw / 2) - 2, 22,
+                hWnd, (HMENU)ID_SETTINGS_BACKUP_DOWNLOAD, hInst, NULL);
+            
+            CreateWindowA("BUTTON", "Restore",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+                m + gm + (gw / 2) - 2 + 4, y + 20, (gw / 2) - 2, 22,
+                hWnd, (HMENU)ID_SETTINGS_BACKUP_RESTORE, hInst, NULL);                
+
             CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                m + gm, y + 20, gw, 22,
+                m + gm, y + 48, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
+
             break;
         }
 
