@@ -15,6 +15,7 @@
 #include <dwmapi.h>
 #include <uxtheme.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <gdiplus.h>
 
 #include <string>

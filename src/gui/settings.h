@@ -442,6 +442,75 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }, 0);
                 }
             }
+            if (LOWORD(wParam) == ID_SETTINGS_BACKUP_DOWNLOAD) {
+                OPENFILENAMEA ofn;
+                char szFile[MAX_PATH] = "Trading-Floor_Settings_Backup.reg";
+                ZeroMemory(&ofn, sizeof(ofn));
+                ofn.lStructSize = sizeof(ofn);
+                ofn.hwndOwner = hWnd;
+                ofn.lpstrFile = szFile;
+                ofn.nMaxFile = sizeof(szFile);
+                ofn.lpstrFilter = "Registry Files (*.reg)\0*.reg\0All Files (*.*)\0*.*\0";
+                ofn.lpstrDefExt = "reg";
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+                if (GetSaveFileNameA(&ofn)) {
+                    // Tell reg.exe to export the root registry path for this app.
+                    // /y suppresses the overwrite confirmation since GetSaveFileName already handles it.
+                    std::string cmd = std::format("reg.exe export \"HKCU\\{}\" \"{}\" /y", APP_REG_ROOT, szFile);
+                    
+                    STARTUPINFOA si = { sizeof(si) };
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_HIDE; // Hide the cmd window popup
+                    PROCESS_INFORMATION pi = { 0 };
+                    
+                    char cmdBuf[1024];
+                    strcpy_s(cmdBuf, sizeof(cmdBuf), cmd.c_str());
+                    
+                    if (CreateProcessA(NULL, cmdBuf, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+                        WaitForSingleObject(pi.hProcess, INFINITE);
+                        CloseHandle(pi.hProcess);
+                        CloseHandle(pi.hThread);
+                        MessageBoxA(hWnd, "Settings backed up successfully.", "Backup", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBoxA(hWnd, "Failed to create backup.", "Error", MB_OK | MB_ICONERROR);
+                    }
+                }
+            }
+
+            if (LOWORD(wParam) == ID_SETTINGS_BACKUP_RESTORE) {
+                OPENFILENAMEA ofn;
+                char szFile[MAX_PATH] = { 0 };
+                ZeroMemory(&ofn, sizeof(ofn));
+                ofn.lStructSize = sizeof(ofn);
+                ofn.hwndOwner = hWnd;
+                ofn.lpstrFile = szFile;
+                ofn.nMaxFile = sizeof(szFile);
+                ofn.lpstrFilter = "Registry Files (*.reg)\0*.reg\0All Files (*.*)\0*.*\0";
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+                if (GetOpenFileNameA(&ofn)) {
+                    // Tell reg.exe to import the selected .reg file back into the registry.
+                    std::string cmd = std::format("reg.exe import \"{}\"", szFile);
+                    
+                    STARTUPINFOA si = { sizeof(si) };
+                    si.dwFlags = STARTF_USESHOWWINDOW;
+                    si.wShowWindow = SW_HIDE;
+                    PROCESS_INFORMATION pi = { 0 };
+                    
+                    char cmdBuf[1024];
+                    strcpy_s(cmdBuf, sizeof(cmdBuf), cmd.c_str());
+                    
+                    if (CreateProcessA(NULL, cmdBuf, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+                        WaitForSingleObject(pi.hProcess, INFINITE);
+                        CloseHandle(pi.hProcess);
+                        CloseHandle(pi.hThread);
+                        MessageBoxA(hWnd, "Settings restored successfully. Please restart the application to apply all changes.", "Restore", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBoxA(hWnd, "Failed to restore backup.", "Error", MB_OK | MB_ICONERROR);
+                    }
+                }
+            }
             break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
