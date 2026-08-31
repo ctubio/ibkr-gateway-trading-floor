@@ -111,6 +111,19 @@ static LRESULT CALLBACK AlertsEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARA
             }
             return 0;
         }
+        if (wParam == VK_UP || wParam == VK_DOWN) {
+            char buf[32] = {};
+            GetWindowTextA(hCtrl, buf, sizeof(buf));
+            double val  = atof(buf);
+            double step = ((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01;
+            val += (wParam == VK_UP) ? step : -step;
+            if (val < 0.0) val = 0.0;
+            std::string s = std::format("{:.2f}", val);
+            SetWindowTextA(hCtrl, s.c_str());
+            int len = GetWindowTextLengthA(hCtrl);
+            SendMessageA(hCtrl, EM_SETSEL, len, len);
+            return 0;
+        }
     }
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hCtrl, AlertsEditor_KeySubclassProc, uIdSubclass);
