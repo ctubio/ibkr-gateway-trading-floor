@@ -222,6 +222,10 @@ static void ToggleTWS(int swState) {
     if (!data.foundWindows.empty()) {
         for (HWND hwnd : data.foundWindows) {
             ShowWindow(hwnd, data.swState);
+            if (data.swState == SW_SHOW) {
+                ShowWindow(hwnd, SW_MINIMIZE);
+                ShowWindow(hwnd, SW_RESTORE);
+            }
         }
     }
 }
