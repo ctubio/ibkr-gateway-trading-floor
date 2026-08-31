@@ -1,6 +1,6 @@
 #pragma once
 
-int windowOrdersWidth = 470;
+int windowOrdersWidth = 465;
 
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", windowOrdersWidth, 240); }
 
@@ -49,7 +49,7 @@ static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
     { "Quote",        180,  LVCFMT_LEFT },
-    { "Status",       170,  LVCFMT_CENTER},
+    { "Status",       165,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -149,12 +149,12 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     }
 
     // Price edit (right side)
-    int x = rc.right - (editW * 2) + 60 - 10;
+    int x = rc.right - (editW * 2) + 60 - 8;
     if (hPriceEdit) {
         hdwp = DeferWindowPos(hdwp, hPriceEdit, NULL, x, py, editW - 60, editH, SWP_NOZORDER | SWP_NOACTIVATE);
         ShowWindow(hPriceEdit, show);
     }
-    x += editW - 60 + 10;
+    x += editW - 60 + 8;
 
     // Qty edit (hidden when partialFill)
     bool showQty = showPanel && !s_editState.partialFill;
