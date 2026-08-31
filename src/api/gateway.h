@@ -82,6 +82,7 @@ static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol" GATEWAY
 static const char* SETTINGS_CLASS_NAME           = "Settings" GATEWAY_NAME;
 static const char* DEBUGLOG_CLASS_NAME           = "DebugLog" GATEWAY_NAME;
 static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
+static const char* ALERTS_CLASS_NAME             = "Alerts" GATEWAY_NAME;
 
 class TradingAPI {
 public:

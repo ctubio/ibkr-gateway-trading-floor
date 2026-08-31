@@ -102,6 +102,9 @@ struct TsState {
     RECT lastPriceRect = { 0, 0, 0, 0 };
     RECT flaqRect      = { 0, 0, 0, 0 };
 
+    // ── Alerts ────────────────────────────────────────────────────────────────
+    bool hasAlert = false;   // true if this symbol has an Alert Up/Down set — colors the flag icon yellow
+
     // ── Order entry bar ───────────────────────────────────────────────────────
     HWND  hOrderLabel       = NULL;
     HWND  hOrderPrice       = NULL;
@@ -1236,9 +1239,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 SelectObject(hdc, hFont_Icons);
                 SIZE iconSz;
                 GetTextExtentPoint32W(hdc, items[i].wIcon, lstrlenW(items[i].wIcon), &iconSz);
-                SetTextColor(hdc, labelColor); 
+                bool isFlagIcon = (wcscmp(items[i].wIcon, FLAG_GLYPH) == 0);
+                SetTextColor(hdc, (isFlagIcon && state->hasAlert) ? COINS_CLR_YELLOW : labelColor);
                 RECT ir = { cx, y0, cx + iconSz.cx, y1 };
-                if (wcscmp(items[i].wIcon, FLAG_GLYPH) == 0) {
+                if (isFlagIcon) {
                     state->flaqRect = ir;
                 }
                 DrawTextW(hdc, items[i].wIcon, -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1441,6 +1445,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             state->symbol = data->symbol;
             state->conId  = data->conId;
             Settings_Market_SaveOpenDate(data->winKey);
+
+            std::string alertUp, alertDown;
+            state->hasAlert = Settings_Alerts_Load(state->symbol, alertUp, alertDown);
         }
         tsStates[hWnd] = state;
 
@@ -1734,6 +1741,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
+    case WM_ALERTS_CHANGED: {
+        if (state && !state->symbol.empty()) {
+            std::string alertUp, alertDown;
+            state->hasAlert = Settings_Alerts_Load(state->symbol, alertUp, alertDown);
+            state->marketHdrDirty = true;
+        }
+        break;
+    }
+
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
@@ -1945,7 +1961,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (PtInRect(&state->lastPriceRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
-                    MessageBoxA(NULL, "No Edit Alerts Window yet!", "Under Construction", MB_ICONERROR | MB_OK);
+                    StartAlertsEditor(state->symbol);
                 }
             }
         }

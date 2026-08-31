@@ -159,11 +159,16 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
         }
+        if (strcmp(className, ALERTS_CLASS_NAME) == 0) {
+            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
+            dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
+            hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        }
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }
 
-    if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) != 0)
-        SetWindowTaskbarId(hWnd, taskbarId);
+    if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) != 0 && strcmp(className, ALERTS_CLASS_NAME) != 0)
+       SetWindowTaskbarId(hWnd, taskbarId);
         
     return hWnd;
 }

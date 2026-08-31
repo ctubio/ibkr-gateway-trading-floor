@@ -140,6 +140,62 @@ bool Settings_Dividends_Load(int conId, double& annualDividends, double& dividen
     } catch (...) { return false; }
     return true;
 }
+// ── Alerts (per-symbol Alert Up / Alert Down price registry) ─────────────────
+// Stored under a dedicated "Alerts" subkey, one REG_SZ value per direction:
+//   SYMBOL_UP, SYMBOL_DOWN
+// A missing value means no alert is set for that direction. Values are saved
+// as-typed (no parsing/validation, no live-price comparison yet — that's a
+// later feature).
+
+void Settings_Alerts_Save(const std::string& symbol, const std::string& upStr, const std::string& downStr) {
+    std::string upKey   = symbol + "_UP";
+    std::string downKey = symbol + "_DOWN";
+    if (upStr.empty())   RegDelete("Alerts", upKey.c_str());
+    else                 RegSetString("Alerts", upKey.c_str(), upStr);
+    if (downStr.empty()) RegDelete("Alerts", downKey.c_str());
+    else                 RegSetString("Alerts", downKey.c_str(), downStr);
+}
+
+// Loads the raw Alert Up / Alert Down strings for one symbol. Returns true if
+// at least one of them is set.
+bool Settings_Alerts_Load(const std::string& symbol, std::string& outUp, std::string& outDown) {
+    outUp   = RegGetString("Alerts", (symbol + "_UP").c_str(),   "");
+    outDown = RegGetString("Alerts", (symbol + "_DOWN").c_str(), "");
+    return !outUp.empty() || !outDown.empty();
+}
+
+// Enumerates every symbol with at least one alert currently set, mapping
+// symbol -> {upStr, downStr} (either may be empty if only one direction is set).
+std::map<std::string, std::pair<std::string, std::string>> Settings_Alerts_LoadAll() {
+    std::map<std::string, std::pair<std::string, std::string>> result;
+
+    HKEY hKey;
+    std::string fullPath = std::format("{}\\Alerts", APP_REG_ROOT);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return result;
+
+    char valueName[256];
+    DWORD index = 0;
+    while (true) {
+        DWORD nameSize = sizeof(valueName);
+        if (RegEnumValueA(hKey, index++, valueName, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+            break;
+
+        std::string name(valueName);
+        bool isUp   = name.size() > 3 && name.compare(name.size() - 3, 3, "_UP")   == 0;
+        bool isDown = name.size() > 5 && name.compare(name.size() - 5, 5, "_DOWN") == 0;
+        if (!isUp && !isDown) continue;
+
+        std::string symbol = isUp ? name.substr(0, name.size() - 3) : name.substr(0, name.size() - 5);
+        std::string value  = RegGetString("Alerts", name.c_str(), "");
+        if (value.empty()) continue;
+
+        auto& entry = result[symbol];
+        if (isUp) entry.first = value; else entry.second = value;
+    }
+    RegCloseKey(hKey);
+    return result;
+}
 
 // Convenience wrappers
 void Settings_SaveString(const char* key, const std::string& value) {
@@ -1040,6 +1096,12 @@ struct TtsVoiceEntry {
 // TTS voice in Settings, so open Market and Dashboard windows hot-swap immediately.
 // wParam = 0, lParam = 0.
 #define WM_TTS_VOICE_CHANGED (WM_APP + 301)
+
+// Broadcast to every top-level window whenever an alert is saved/cleared in
+// the Alerts editor popup, so the Market window (flag icon color) and the
+// Diamonds window (Alert Up/Down columns + Quarantine membership for
+// alert-only symbols) refresh themselves from the registry.
+#define WM_ALERTS_CHANGED (WM_APP + 302)
 
 // Enumerate ALL voices from both classic SAPI and OneCore registries.
 // Duplicates (same tokenId) are suppressed so voices that appear in both

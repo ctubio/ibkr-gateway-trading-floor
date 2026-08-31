@@ -41,8 +41,22 @@ static const DiamondsColorDef diamondColorPalette[DIAMONDS_COLOR_COUNT] = {
 // Maps conId → color index (0..DIAMONDS_COLOR_COUNT-1), or not present = inherit.
 static std::map<int,int> diamondsSymbolColors;
 
-// Stash the hList pointer so the static sort callback can reach it.
-static HWND diamondsListForSort = NULL;
+// ── Alert-only pseudo rows ────────────────────────────────────────────────
+// A symbol with an Alert Up/Down set but that isn't a current position has
+// no real conId. The whole Diamonds ListView (display order, sort, custom
+// draw, context menu) is keyed by conId, so each such symbol gets a stable,
+// unique synthetic *negative* id for the duration of this session — real
+// IBKR conIds are always positive, so there's no collision risk.
+static std::unordered_map<std::string, int> diamondsAlertOnlyIds;
+static int diamondsNextAlertOnlyId = -1;
+
+static int Diamonds_GetOrCreateAlertOnlyId(const std::string& symbol) {
+    auto it = diamondsAlertOnlyIds.find(symbol);
+    if (it != diamondsAlertOnlyIds.end()) return it->second;
+    int id = diamondsNextAlertOnlyId--;
+    diamondsAlertOnlyIds[symbol] = id;
+    return id;
+}
 
 static bool diamondsChkVisible = false;
 
@@ -283,12 +297,11 @@ static void Diamonds_LoadSymbolColors() {
 }
 
 // Drops diamondsTabMap entries for conIds that are no longer a held
-// position, then persists the pruned map. Nothing else prunes this map —
-// Diamonds_SaveTabMap() just rewrites whatever's currently in it — so
-// closed-out positions would otherwise accumulate in the registry forever.
+// position, then persists the pruned map. Also drops diamondsSymbolColors
+// entries, but only when the symbol is neither a current position NOR has an
+// alert set — a symbol with an alert is allowed to keep a color override
+// even while not held.
 static void Diamonds_CleanupStaleTabAssignments() {
-    if (diamondsTabMap.empty()) return;
-
     std::unordered_set<int> liveConIds;
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
@@ -296,19 +309,32 @@ static void Diamonds_CleanupStaleTabAssignments() {
             liveConIds.insert(conId);
     }
 
-    bool changedTabs = false;
-    for (auto it = diamondsTabMap.begin(); it != diamondsTabMap.end(); ) {
-        if (!liveConIds.count(it->first)) { it = diamondsTabMap.erase(it); changedTabs = true; }
-        else ++it;
+    if (!diamondsTabMap.empty()) {
+        bool changedTabs = false;
+        for (auto it = diamondsTabMap.begin(); it != diamondsTabMap.end(); ) {
+            if (!liveConIds.count(it->first)) { it = diamondsTabMap.erase(it); changedTabs = true; }
+            else ++it;
+        }
+        if (changedTabs) Diamonds_SaveTabMap();
     }
-    if (changedTabs) Diamonds_SaveTabMap();
 
-    bool changedColors = false;
-    for (auto it = diamondsSymbolColors.begin(); it != diamondsSymbolColors.end(); ) {
-        if (!liveConIds.count(it->first)) { it = diamondsSymbolColors.erase(it); changedColors = true; }
-        else ++it;
+    if (!diamondsSymbolColors.empty()) {
+        bool changedColors = false;
+        for (auto it = diamondsSymbolColors.begin(); it != diamondsSymbolColors.end(); ) {
+            bool isLive = liveConIds.count(it->first) != 0;
+            bool hasAlert = false;
+            if (!isLive) {
+                auto cacheIt = diamondDataCache.find(it->first);
+                if (cacheIt != diamondDataCache.end() && !cacheIt->second.symbol.empty()) {
+                    std::string up, down;
+                    hasAlert = Settings_Alerts_Load(cacheIt->second.symbol, up, down);
+                }
+            }
+            if (!isLive && !hasAlert) { it = diamondsSymbolColors.erase(it); changedColors = true; }
+            else ++it;
+        }
+        if (changedColors) Diamonds_SaveSymbolColors();
     }
-    if (changedColors) Diamonds_SaveSymbolColors();
 }
 
 // Drops "Dividends" registry values (written by Settings_Dividends_Save, see
@@ -623,6 +649,27 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
     }
 }
 
+// Loads the Alert Up / Alert Down strings for one symbol from the registry
+// and writes them into DCOL_ALERTUP / DCOL_ALERTDOWN. Called for every row
+// (portfolio position or alert-only pseudo row) on every repopulate, and
+// whenever WM_ALERTS_CHANGED fires so an edit made in the Alerts popup shows
+// up immediately without waiting for the next natural repopulate.
+static void Diamonds_UpdateAlertCols(int conId, const std::string& symbol) {
+    auto& row = diamondDataCache[conId];
+    row.conId = conId;
+
+    std::string upStr, downStr;
+    Settings_Alerts_Load(symbol, upStr, downStr);
+
+    row.textCols[DCOL_ALERTUP]   = upStr;
+    row.textCols[DCOL_ALERTDOWN] = downStr;
+
+    try { row.sortValues[DCOL_ALERTUP]   = upStr.empty()   ? -999999.0 : std::stod(upStr); }
+    catch (...) { row.sortValues[DCOL_ALERTUP] = -999999.0; }
+    try { row.sortValues[DCOL_ALERTDOWN] = downStr.empty() ? -999999.0 : std::stod(downStr); }
+    catch (...) { row.sortValues[DCOL_ALERTDOWN] = -999999.0; }
+}
+
 // ── Repopulate ────────────────────────────────────────────────────────────────
 static void Diamonds_Repopulate(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
@@ -631,13 +678,34 @@ static void Diamonds_Repopulate(HWND hWnd) {
     diamondDisplayOrder.clear(); // Clear the virtual list viewport
 
     std::vector<TradingAPI::PositionInfo> rows;
+    std::unordered_set<std::string> portfolioSymbolsUpper;
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
         for (auto const& [conId, info] : api().getPortfolioMap()) {
             auto it = diamondsTabMap.find(info.conId);
             int  assignedTab = (it != diamondsTabMap.end()) ? it->second : DTAB_ALL;
-            if (!((diamondsCheckedTabs >> assignedTab) & 1)) continue;
-            rows.push_back(info);
+            if ((diamondsCheckedTabs >> assignedTab) & 1) rows.push_back(info);
+
+            std::string upperSym = info.symbol;
+            std::transform(upperSym.begin(), upperSym.end(), upperSym.begin(), ::toupper);
+            portfolioSymbolsUpper.insert(upperSym);
+        }
+    }
+
+    // ── Alert-only symbols: have an Alert Up/Down set but aren't a current
+    // position. Shown only under the Quarantine tab (forced there regardless
+    // of diamondsTabMap, since there's no real position to assign a group
+    // to) — see the NM_RCLICK handler below for the disabled "Move to *".
+    if ((diamondsCheckedTabs >> DTAB_QUARENTINE) & 1) {
+        for (auto const& [symbol, upDown] : Settings_Alerts_LoadAll()) {
+            std::string upperSym = symbol;
+            std::transform(upperSym.begin(), upperSym.end(), upperSym.begin(), ::toupper);
+            if (portfolioSymbolsUpper.count(upperSym)) continue; // already a real position
+
+            TradingAPI::PositionInfo pseudo;
+            pseudo.conId  = Diamonds_GetOrCreateAlertOnlyId(symbol);
+            pseudo.symbol = symbol;
+            rows.push_back(pseudo);
         }
     }
 
@@ -647,6 +715,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
     // — those are owned by WM_PNL_SINGLE and must survive a repopulate so they
     // remain visible when the window is closed and reopened.
     for (const auto& pos : rows) {
+        bool isRealPosition = (pos.conId > 0);
+
         // operator[] creates a default row only when the conId is new.
         // For existing rows it returns the current entry — PnL fields are preserved.
         auto& cacheRow = diamondDataCache[pos.conId];
@@ -656,21 +726,25 @@ static void Diamonds_Repopulate(HWND hWnd) {
         cacheRow.textCols[DCOL_SYMBOL] = pos.symbol;
 
         cacheRow.sortValues[DCOL_POSITION] = pos.shares;
-        cacheRow.textCols[DCOL_POSITION] = std::format("{:.4g}", pos.shares);
+        cacheRow.textCols[DCOL_POSITION] = isRealPosition ? std::format("{:.4g}", pos.shares) : "--";
 
         cacheRow.sortValues[DCOL_AVGPRICE] = pos.avgCost;
-        cacheRow.textCols[DCOL_AVGPRICE] = std::format("{:.2f}", pos.avgCost);
+        cacheRow.textCols[DCOL_AVGPRICE] = isRealPosition ? std::format("{:.2f}", pos.avgCost) : "--";
 
-        // Pre-fill market data if already cached — this also seeds the estimated
-        // PnL columns for the first open (before WM_PNL_SINGLE arrives).
-        TradingAPI::L1Book tickInfo;
-        if (api().getMarketData(pos.conId, tickInfo)) {
-            Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+        Diamonds_UpdateAlertCols(pos.conId, pos.symbol);
+
+        if (isRealPosition) {
+            // Pre-fill market data if already cached — this also seeds the estimated
+            // PnL columns for the first open (before WM_PNL_SINGLE arrives).
+            TradingAPI::L1Book tickInfo;
+            if (api().getMarketData(pos.conId, tickInfo)) {
+                Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+            }
+
+            Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
+
+            Diamonds_UpdatePnLCols(hWnd, pos.conId);
         }
-
-        Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
-
-        Diamonds_UpdatePnLCols(hWnd, pos.conId);
 
         diamondDisplayOrder.push_back(pos.conId);
     }
@@ -825,6 +899,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         break;
     }
 
+    case WM_ALERTS_CHANGED: {
+        Diamonds_Repopulate(hWnd);
+        break;
+    }
+
     // ── Live market data update for one symbol ────────────────────────────────
     // Posted by Impl::tickPrice / tickSize / tickString / tickGeneric
     case WM_MARKET_L1: {
@@ -945,14 +1024,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // ── Build context menu ────────────────────────────────────────
                     // IDs 1-3:   group assignment
                     // IDs 200-206: color options (200+idx for colors, 206 = None)
-                    HMENU hMenu = CreatePopupMenu();
-
+                                        HMENU hMenu = CreatePopupMenu();
+                    bool isRealPosition = (conId > 0);
 
                     // ── Quick placeholder orders ───────────────────────────────────
                     double quickLastPrice = 0.0;
                     {
                         TradingAPI::L1Book quickInfo;
-                        if (api().getMarketData(conId, quickInfo)) quickLastPrice = quickInfo.last;
+                        if (isRealPosition && api().getMarketData(conId, quickInfo)) quickLastPrice = quickInfo.last;
                     }
                     std::string sellLabel = sym + (
                         (quickLastPrice > 0.0)
@@ -960,15 +1039,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             : " SELL 1 @ 2x Price"
                     );
                     AppendMenuA(hMenu, MF_STRING | (quickLastPrice <= 0.0 ? MF_GRAYED : 0), 301, sellLabel.c_str());
-                    AppendMenuA(hMenu, MF_STRING, 300, (sym + " BUY 1 @ 1").c_str());
+                    AppendMenuA(hMenu, MF_STRING | (isRealPosition ? 0 : MF_GRAYED), 300, (sym + " BUY 1 @ 1").c_str());
 
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
                     AppendMenuA(hMenu, MF_STRING, 302, "Edit Alerts");
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
 
-                    AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
-                    AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_GROWTH     ? MF_GRAYED : 0), 2, "Move to Dividends");
-                    AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_QUARENTINE ? MF_GRAYED : 0), 3, "Move to Quarantine");
+                    AppendMenuA(hMenu, MF_STRING | ((currentGroup == DTAB_ALL        || !isRealPosition) ? MF_GRAYED : 0), 1, "Move to Growth");
+                    AppendMenuA(hMenu, MF_STRING | ((currentGroup == DTAB_GROWTH     || !isRealPosition) ? MF_GRAYED : 0), 2, "Move to Dividends");
+                    AppendMenuA(hMenu, MF_STRING | ((currentGroup == DTAB_QUARENTINE || !isRealPosition) ? MF_GRAYED : 0), 3, "Move to Quarantine");
 
                     // ── Color submenu ─────────────────────────────────────────────
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
@@ -989,7 +1068,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                                                 pt.x, pt.y, 0, hWnd, NULL);
                     DestroyMenu(hMenu);
 
-                    if (cmd >= 1 && cmd <= 3) {
+                    if (cmd >= 1 && cmd <= 3 && isRealPosition) {
                         // Group assignment.
                         int targetTab = cmd - 1;
                         if (targetTab == DTAB_ALL)
@@ -1017,7 +1096,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         UpdateWindow(hList);
                         Diamonds_CleanupStaleTabAssignments();
                         Diamonds_CleanupStaleDividends();
-                    } else if (cmd == 300) {
+                    } else if (cmd == 300 && isRealPosition) {
                         // Quick BUY placeholder: 1 share @ $1.00.
                         TradingAPI::L1Book quickInfo;
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
@@ -1039,7 +1118,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                                 }
                             }).detach();
                         }
-                    } else if (cmd == 301) {
+                    } else if (cmd == 301 && isRealPosition) {
                         // Quick SELL placeholder: 1 share @ 2x last price.
                         TradingAPI::L1Book quickInfo;
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
@@ -1062,7 +1141,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             }).detach();
                         }
                     } else if (cmd == 302) {
-                        MessageBoxA(NULL, "No Edit Alerts Window yet!", "Under Construction", MB_ICONERROR | MB_OK);
+                        StartAlertsEditor(sym);
                     }
                 }
             }
@@ -1199,7 +1278,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
+                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_ALERTUP || cd->iSubItem == DCOL_ALERTDOWN) {
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
