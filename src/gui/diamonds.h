@@ -56,6 +56,8 @@ enum DiamondColIdx {
     DCOL_SYMBOL = 0,
     DCOL_POSITION,
     DCOL_AVGPRICE,
+    DCOL_ALERTUP,
+    DCOL_ALERTDOWN,
     DCOL_ASKSIZE,
     DCOL_ASK,
     DCOL_LAST,
@@ -119,6 +121,8 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
+    { "AlertUp",           85, LVCFMT_RIGHT },
+    { "AlertDown",         85, LVCFMT_RIGHT },
     { "Asks",              70, LVCFMT_RIGHT },
     { "Ask",               90, LVCFMT_RIGHT },
     { "Last",              90, LVCFMT_RIGHT },
@@ -164,7 +168,9 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_CHG13WEEK; i <= DCOL_CHG52WEEK; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
-    ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
+    for (int i = DCOL_AVGPRICE; i <= DCOL_ALERTDOWN; ++i) {
+        ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
+    }
 
     // Sum the extra width needed for each currently-visible group.
     int extraWidth = 0;
@@ -175,7 +181,8 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     if (showWeeks) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                       diamondCols[DCOL_CHG52WEEK].width + 
-                      diamondCols[DCOL_AVGPRICE].width;
+                      diamondCols[DCOL_AVGPRICE].width +
+                      diamondCols[DCOL_ALERTUP].width + diamondCols[DCOL_ALERTDOWN].width;
     }
     if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
 
@@ -770,7 +777,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (showWeeks) {
             extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                         diamondCols[DCOL_CHG52WEEK].width + 
-                        diamondCols[DCOL_AVGPRICE].width;
+                        diamondCols[DCOL_AVGPRICE].width +
+                        diamondCols[DCOL_ALERTUP].width + diamondCols[DCOL_ALERTDOWN].width;
         }
         if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
         MINMAXINFO* mmi = (MINMAXINFO*)lParam;
@@ -953,6 +961,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     );
                     AppendMenuA(hMenu, MF_STRING | (quickLastPrice <= 0.0 ? MF_GRAYED : 0), 301, sellLabel.c_str());
                     AppendMenuA(hMenu, MF_STRING, 300, (sym + " BUY 1 @ 1").c_str());
+
+                    AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
+                    AppendMenuA(hMenu, MF_STRING, 302, "Edit Alerts");
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
 
                     AppendMenuA(hMenu, MF_STRING | (currentGroup == DTAB_ALL        ? MF_GRAYED : 0), 1, "Move to Growth");
@@ -1050,6 +1061,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                                 }
                             }).detach();
                         }
+                    } else if (cmd == 302) {
+                        MessageBoxA(NULL, "No Edit Alerts Window yet!", "Under Construction", MB_ICONERROR | MB_OK);
                     }
                 }
             }

@@ -100,6 +100,7 @@ struct TsState {
 
     // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
     RECT lastPriceRect = { 0, 0, 0, 0 };
+    RECT flaqRect      = { 0, 0, 0, 0 };
 
     // ── Order entry bar ───────────────────────────────────────────────────────
     HWND  hOrderLabel       = NULL;
@@ -1220,7 +1221,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     StatItem row2[] = {
         { "", Market_Fmt(L1.open),  openColor, LEFT_GLYPH  },
         { "", Market_Fmt(L1.low),   lowColor, BOTTOM_GLYPH   },
-        { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, RINGER_GLYPH  },
+        { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
 
     SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
@@ -1237,6 +1238,9 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 GetTextExtentPoint32W(hdc, items[i].wIcon, lstrlenW(items[i].wIcon), &iconSz);
                 SetTextColor(hdc, labelColor); 
                 RECT ir = { cx, y0, cx + iconSz.cx, y1 };
+                if (wcscmp(items[i].wIcon, FLAG_GLYPH) == 0) {
+                    state->flaqRect = ir;
+                }
                 DrawTextW(hdc, items[i].wIcon, -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                 cx += iconSz.cx + 2; // small gap after icon
                 SelectObject(hdc, hFont11ptbold);
@@ -1921,7 +1925,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
             if (hit == 1 || hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
-            if (PtInRect(&state->lastPriceRect, pt)) {
+            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt)) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
             }
@@ -1940,6 +1944,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 POINT pt = { x, y };
                 if (PtInRect(&state->lastPriceRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
+                } else if (PtInRect(&state->flaqRect, pt)) {
+                    MessageBoxA(NULL, "No Edit Alerts Window yet!", "Under Construction", MB_ICONERROR | MB_OK);
                 }
             }
         }
