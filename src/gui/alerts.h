@@ -8,14 +8,15 @@
 // from the Diamonds window's "Edit Alerts" context menu item.
 //
 // Values are stored in the registry under a dedicated "Alerts" subkey (see
-// Settings_Alerts_* in registry.h), keyed by SYMBOL_UP / SYMBOL_DOWN. Nothing
-// here checks live prices or fires notifications yet — that's a later step.
+// Settings_Alerts_* in registry.h), keyed by SYMBOL_CONID_UP / SYMBOL_CONID_DOWN.
+// Nothing here checks live prices or fires notifications yet — that's a later step.
 
 #define ID_ALERTS_UP_EDIT    5301
 #define ID_ALERTS_DOWN_EDIT  5302
 
 struct AlertsEditState {
     std::string symbol;   // symbol currently loaded into the popup
+    int conId = 0;        // conId currently loaded into the popup
 };
 static AlertsEditState alertsEditState;
 
@@ -33,16 +34,17 @@ static void Alerts_NotifyChanged() {
     }, 0);
 }
 
-// (Re)loads the popup for `symbol`: updates the title and both edit fields
+// (Re)loads the popup for `symbol` and `conId`: updates the title and both edit fields
 // from whatever is currently saved in the registry (empty if none), and
 // focuses/selects the Alert Up field. Safe to call on an already-open popup
 // (single-instance window) to repoint it at a different symbol.
-static void AlertsEditor_Populate(HWND hWnd, const std::string& symbol) {
+static void AlertsEditor_Populate(HWND hWnd, const std::string& symbol, int conId) {
     alertsEditState.symbol = symbol;
+    alertsEditState.conId  = conId;
     SetWindowTextA(hWnd, ("Edit Alerts: " + symbol).c_str());
 
     std::string upStr, downStr;
-    Settings_Alerts_Load(symbol, upStr, downStr);
+    Settings_Alerts_Load(symbol, conId, upStr, downStr);
 
     HWND hUp   = GetDlgItem(hWnd, ID_ALERTS_UP_EDIT);
     HWND hDown = GetDlgItem(hWnd, ID_ALERTS_DOWN_EDIT);
@@ -73,8 +75,8 @@ static void AlertsEditor_SaveAndClose(HWND hWnd) {
     std::string upStr   = trim(upBuf);
     std::string downStr = trim(downBuf);
 
-    if (!alertsEditState.symbol.empty())
-        Settings_Alerts_Save(alertsEditState.symbol, upStr, downStr);
+    if (!alertsEditState.symbol.empty() && alertsEditState.conId > 0)
+        Settings_Alerts_Save(alertsEditState.symbol, alertsEditState.conId, upStr, downStr);
 
     DestroyWindow(hWnd);
     Alerts_NotifyChanged();
@@ -167,15 +169,16 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         case WM_DESTROY:
             alertsEditState.symbol.clear();
+            alertsEditState.conId = 0;
             break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
-// Opens (or refocuses) the Alerts editor popup for `symbol`. Single-instance:
+// Opens (or refocuses) the Alerts editor popup for `symbol` and `conId`. Single-instance:
 // if already open (e.g. for a different symbol), it's repointed at `symbol`
 // instead of a second window being created.
-void StartAlertsEditor(const std::string& symbol) {
+void StartAlertsEditor(const std::string& symbol, int conId) {
     HWND hWnd = StartGenericWindow(ALERTS_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 260, 130);
-    if (hWnd) AlertsEditor_Populate(hWnd, symbol);
+    if (hWnd) AlertsEditor_Populate(hWnd, symbol, conId);
 }

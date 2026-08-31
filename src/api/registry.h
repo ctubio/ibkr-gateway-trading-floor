@@ -140,34 +140,44 @@ bool Settings_Dividends_Load(int conId, double& annualDividends, double& dividen
     } catch (...) { return false; }
     return true;
 }
-// ── Alerts (per-symbol Alert Up / Alert Down price registry) ─────────────────
+// ── Alerts (per-symbol/conId Alert Up / Alert Down price registry) ───────────
 // Stored under a dedicated "Alerts" subkey, one REG_SZ value per direction:
-//   SYMBOL_UP, SYMBOL_DOWN
+//   SYMBOL_CONID_UP, SYMBOL_CONID_DOWN
 // A missing value means no alert is set for that direction. Values are saved
 // as-typed (no parsing/validation, no live-price comparison yet — that's a
 // later feature).
 
-void Settings_Alerts_Save(const std::string& symbol, const std::string& upStr, const std::string& downStr) {
-    std::string upKey   = symbol + "_UP";
-    std::string downKey = symbol + "_DOWN";
+struct AlertEntry {
+    std::string symbol;
+    int conId = 0;
+    std::string upStr;
+    std::string downStr;
+};
+
+void Settings_Alerts_Save(const std::string& symbol, int conId, const std::string& upStr, const std::string& downStr) {
+    if (symbol.empty() || conId <= 0) return;
+    std::string upKey   = std::format("{}_{}_UP",   symbol, conId);
+    std::string downKey = std::format("{}_{}_DOWN", symbol, conId);
     if (upStr.empty())   RegDelete("Alerts", upKey.c_str());
     else                 RegSetString("Alerts", upKey.c_str(), upStr);
     if (downStr.empty()) RegDelete("Alerts", downKey.c_str());
     else                 RegSetString("Alerts", downKey.c_str(), downStr);
 }
 
-// Loads the raw Alert Up / Alert Down strings for one symbol. Returns true if
+// Loads the raw Alert Up / Alert Down strings for one symbol and conId. Returns true if
 // at least one of them is set.
-bool Settings_Alerts_Load(const std::string& symbol, std::string& outUp, std::string& outDown) {
-    outUp   = RegGetString("Alerts", (symbol + "_UP").c_str(),   "");
-    outDown = RegGetString("Alerts", (symbol + "_DOWN").c_str(), "");
+bool Settings_Alerts_Load(const std::string& symbol, int conId, std::string& outUp, std::string& outDown) {
+    if (symbol.empty() || conId <= 0) { outUp.clear(); outDown.clear(); return false; }
+    outUp   = RegGetString("Alerts", std::format("{}_{}_UP",   symbol, conId).c_str(), "");
+    outDown = RegGetString("Alerts", std::format("{}_{}_DOWN", symbol, conId).c_str(), "");
     return !outUp.empty() || !outDown.empty();
 }
 
-// Enumerates every symbol with at least one alert currently set, mapping
-// symbol -> {upStr, downStr} (either may be empty if only one direction is set).
-std::map<std::string, std::pair<std::string, std::string>> Settings_Alerts_LoadAll() {
-    std::map<std::string, std::pair<std::string, std::string>> result;
+// Enumerates every symbol/conId with at least one alert currently set, returning
+// a list of AlertEntry records.
+std::vector<AlertEntry> Settings_Alerts_LoadAll() {
+    std::vector<AlertEntry> result;
+    std::map<int, AlertEntry> entriesByConId;
 
     HKEY hKey;
     std::string fullPath = std::format("{}\\Alerts", APP_REG_ROOT);
@@ -186,14 +196,37 @@ std::map<std::string, std::pair<std::string, std::string>> Settings_Alerts_LoadA
         bool isDown = name.size() > 5 && name.compare(name.size() - 5, 5, "_DOWN") == 0;
         if (!isUp && !isDown) continue;
 
-        std::string symbol = isUp ? name.substr(0, name.size() - 3) : name.substr(0, name.size() - 5);
-        std::string value  = RegGetString("Alerts", name.c_str(), "");
+        std::string stem = isUp ? name.substr(0, name.size() - 3) : name.substr(0, name.size() - 5);
+        size_t lastUnderscore = stem.rfind('_');
+        if (lastUnderscore == std::string::npos || lastUnderscore == 0 || lastUnderscore == stem.size() - 1)
+            continue;
+
+        std::string symbol   = stem.substr(0, lastUnderscore);
+        std::string conIdStr = stem.substr(lastUnderscore + 1);
+        int conId = 0;
+        try {
+            conId = std::stoi(conIdStr);
+        } catch (...) {
+            continue;
+        }
+        if (conId <= 0 || symbol.empty()) continue;
+
+        std::string value = RegGetString("Alerts", name.c_str(), "");
         if (value.empty()) continue;
 
-        auto& entry = result[symbol];
-        if (isUp) entry.first = value; else entry.second = value;
+        auto& entry = entriesByConId[conId];
+        entry.conId  = conId;
+        entry.symbol = symbol;
+        if (isUp) entry.upStr = value;
+        else entry.downStr = value;
     }
     RegCloseKey(hKey);
+
+    for (auto& [cid, entry] : entriesByConId) {
+        if (!entry.upStr.empty() || !entry.downStr.empty()) {
+            result.push_back(entry);
+        }
+    }
     return result;
 }
 

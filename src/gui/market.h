@@ -1447,7 +1447,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             Settings_Market_SaveOpenDate(data->winKey);
 
             std::string alertUp, alertDown;
-            state->hasAlert = Settings_Alerts_Load(state->symbol, alertUp, alertDown);
+            state->hasAlert = Settings_Alerts_Load(state->symbol, state->conId, alertUp, alertDown);
         }
         tsStates[hWnd] = state;
 
@@ -1744,7 +1744,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_ALERTS_CHANGED: {
         if (state && !state->symbol.empty()) {
             std::string alertUp, alertDown;
-            state->hasAlert = Settings_Alerts_Load(state->symbol, alertUp, alertDown);
+            state->hasAlert = Settings_Alerts_Load(state->symbol, state->conId, alertUp, alertDown);
             state->marketHdrDirty = true;
         }
         break;
@@ -1961,7 +1961,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (PtInRect(&state->lastPriceRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
-                    StartAlertsEditor(state->symbol);
+                    StartAlertsEditor(state->symbol, state->conId);
                 }
             }
         }
