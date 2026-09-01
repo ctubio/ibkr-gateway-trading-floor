@@ -259,7 +259,8 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
 static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
-    int limit = state->orderBarVisible ? 2 : 0;
+    int limitLong  = state->orderBarVisible ? 5 : 0;
+    int limitShort = state->orderBarVisible ? 3 : 0;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
@@ -272,9 +273,9 @@ static void Market_TrimTimeSalesLists(TsState* state) {
         }
     };
 
-    trim(state->hTsList,      23 - (limit ? limit + 3 : 0));
-    trim(state->hTsListF100,  10 - limit);
-    trim(state->hTsListF1000, 10 - limit);
+    trim(state->hTsList,      23 - limitLong);
+    trim(state->hTsListF100,  10 - limitShort);
+    trim(state->hTsListF1000, 10 - limitShort);
 }
 
 // Re-asserts the hint label(s) belonging to a given order-bar edit on top of
@@ -1134,7 +1135,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     const TradingAPI::L1Book& L1 = state->l1Info;
     // Update sparkline with latest price and draw it first so labels paint on top
     if (L1.last > 0.0) state->sparkline.AddPrice(L1.last);
-    state->sparkline.Draw(hdc, rc, 310, HEADER_H - 2);
+    state->sparkline.Draw(hdc, rc, 280, HEADER_H - 2);
     
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
 
@@ -1200,11 +1201,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Format Strings (Only show if we hold a position, else "--")
     std::string bufD, bufU;
     bufD = std::format("{:+.2f}", dPnL);
-    if (state->position != 0.0) {
-        bufU = std::format("{:+.2f}", uPnL);
-    } else {
-        bufU = "--";
-    }
+    bufU = std::format("{:+.2f}", uPnL);
 
     // Determine Colors
     COLORREF dPnlColor = (dPnL > 0.0) ? COINS_CLR_GREEN : (dPnL < 0.0 ? COINS_CLR_RED : textColor);
@@ -1234,17 +1231,17 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Row 1: O  C  H  L
     struct StatItem { const char* label; std::string value; COLORREF color; const wchar_t* wIcon = nullptr; };
     StatItem row1[] = {
-        { "", Market_Fmt(L1.prevClose), closeColor, RIGHT_GLYPH  },
-        { "", Market_Fmt(L1.high),      highColor, TOP_GLYPH  },
+        { "", Market_Fmt(L1.prevClose), closeColor  },
+        { "", Market_Fmt(L1.high),      highColor  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
-        { "", (L1.last > 0 && L1.vwap > 0) ? Market_Fmt(L1.last - L1.vwap) : "--",    vwapColor, LOCATE_GLYPH  },
-        { "", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE, LIGHT_GLYPH  },  // was: formatVolume(L1.volume)
+        { "", (L1.last > 0 && L1.vwap > 0) ? " " + Market_Fmt(L1.last - L1.vwap) : " --",    vwapColor, LOCATE_GLYPH  },
+        { "", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE },  // was: formatVolume(L1.volume)
     };
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
-        { "", Market_Fmt(L1.open),  openColor, LEFT_GLYPH  },
-        { "", Market_Fmt(L1.low),   lowColor, BOTTOM_GLYPH   },
+        { "", Market_Fmt(L1.open),  openColor  },
+        { "", Market_Fmt(L1.low),   lowColor   },
         { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
 
