@@ -190,3 +190,70 @@ void StartAlertsEditor(const std::string& symbol, int conId) {
     HWND hWnd = StartGenericWindow(ALERTS_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 260, 130);
     if (hWnd) AlertsEditor_Populate(hWnd, symbol, conId);
 }
+
+// Helper window procedure for the flash overlay
+static LRESULT CALLBACK FlashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_PAINT) {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        HBRUSH hBrush = (HBRUSH)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+        FillRect(hdc, &ps.rcPaint, hBrush);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    if (msg == WM_LBUTTONDOWN || msg == WM_KEYDOWN) {
+        DestroyWindow(hwnd); // Dismiss early if clicked or keyed
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+// Triggers a full screen flash (isGreen = true for green, false for red)
+void FlashScreen(bool isGreen, int durationMs = 800) {
+    std::thread([isGreen, durationMs]() {
+        HINSTANCE hInstance = GetModuleHandle(NULL);
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = FlashWndProc;
+        wc.hInstance     = hInstance;
+        wc.lpszClassName = "ScreenFlashOverlay";
+        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassA(&wc);
+
+        // Pick color: Red or Green with alpha transparency (~50% opacity so you can still see charts)
+        COLORREF rgb = isGreen ? COINS_CLR_GREEN : COINS_CLR_RED;
+        HBRUSH hBrush = CreateSolidBrush(rgb);
+
+        // Cover all virtual screens (supports multi-monitor setups)
+        int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+        // WS_EX_LAYERED + WS_EX_TRANSPARENT allows clicks to pass *right through* the flash overlay
+        HWND hwnd = CreateWindowExA(
+            WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW,
+            "ScreenFlashOverlay", "",
+            WS_POPUP | WS_VISIBLE,
+            x, y, w, h,
+            NULL, NULL, hInstance, NULL
+        );
+
+        if (!hwnd) {
+            DeleteObject(hBrush);
+            return;
+        }
+
+        // Set 45% transparency (69 out of 255) so it flashes nicely without blinding you
+        SetLayeredWindowAttributes(hwnd, 0, 69, LWA_ALPHA);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)hBrush);
+        ShowWindow(hwnd, SW_SHOW);
+        UpdateWindow(hwnd);
+
+        // Wait for the duration of the flash
+        std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
+
+        DestroyWindow(hwnd);
+        UnregisterClassA("ScreenFlashOverlay", hInstance);
+        DeleteObject(hBrush);
+    }).detach();
+}

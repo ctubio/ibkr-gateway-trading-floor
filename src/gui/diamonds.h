@@ -17,6 +17,10 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 
 static const char* diamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "Dividends", "Quarantine" };
 
+// Ephemeral storage for triggered alerts to prevent spamming
+static std::unordered_set<int> firedAlertsUp;
+static std::unordered_set<int> firedAlertsDown;
+
 // Bitmask: bit N set means group N is currently visible.  Default = all visible.
 static UINT diamondsCheckedTabs = 0x7;
 
@@ -569,6 +573,49 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_LAST, t.last, "{:.2f}", true);
     diamondsSparklines[conId].AddPrice(t.last);
 
+    if (t.last <= 0.0) {
+        setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
+        setNA(DCOL_CHG5MIN);
+        setNA(DCOL_VWAP);
+        return;
+    }
+
+    setCol(DCOL_LAST, t.last, "{:.2f}", true);
+    diamondsSparklines[conId].AddPrice(t.last);
+    
+
+    double alertHigh = row.sortValues[DCOL_ALERTHIGH];
+    double alertLow  = row.sortValues[DCOL_ALERTLOW];
+    // Alert Up Trigger (Alert High is equal to or lower than Last)
+    if (alertHigh > 0.0 && t.last >= alertHigh) {
+        if (firedAlertsUp.find(conId) == firedAlertsUp.end()) {
+            firedAlertsUp.insert(conId); // Mark as fired
+            std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
+            std::string title = std::format("{} UP!", row.symbol);
+
+            FlashScreen(true, 1000);
+            
+            std::thread([msg, title]() {
+                MessageBoxA(NULL, msg.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST | MB_SYSTEMMODAL);
+            }).detach();
+        }
+    }
+
+    // Alert Down Trigger (Alert Low is equal to or higher than Last)
+    if (alertLow > 0.0 && t.last <= alertLow) {
+        if (firedAlertsDown.find(conId) == firedAlertsDown.end()) {
+            firedAlertsDown.insert(conId); // Mark as fired
+            std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
+            std::string title = std::format("{} DOWN!", row.symbol);
+
+            FlashScreen(false, 1000);
+            
+            std::thread([msg, title]() {
+                MessageBoxA(NULL, msg.c_str(), title.c_str(), MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST | MB_SYSTEMMODAL);
+            }).detach();
+        }
+    }
+
     // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
     // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
     double vwapDiff = (t.vwap > 0.0 && t.last > 0.0) ? t.last - t.vwap : 0.0;
@@ -882,6 +929,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_ALERTS_CHANGED: {
         int conId = (int)lParam;
         if (!conId) break;
+        
+        firedAlertsUp.erase(conId);
+        firedAlertsDown.erase(conId);
+
         Diamonds_Repopulate(hWnd);
         InvalidateRect(hWnd, NULL, TRUE);
         break;
