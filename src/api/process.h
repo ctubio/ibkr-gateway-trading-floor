@@ -195,12 +195,13 @@ BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
             //bool containsAtSymbol = (windowTitle.find(L"@") != std::wstring::npos);
             //bool containsU423 = (windowTitle.find(L"Interactive Brokers") != std::wstring::npos);
             //bool containsGateway = (windowTitle.find(L"IBKR Gateway") != std::wstring::npos);
-            bool containsToolkit = (windowTitle.find(L"ToolkitWindow") != std::wstring::npos);
-            bool containsLoading = (windowTitle.find(L"Loading") != std::wstring::npos);
+            bool containsToolkit   = (windowTitle.find(L"ToolkitWindow") != std::wstring::npos);
+            bool containsPortfolio = (windowTitle.find(L"Portfolio") != std::wstring::npos);
+            bool containsLoading   = (windowTitle.find(L"Loading") != std::wstring::npos);
 
             // Only add the window if it matches your specific criteria
             //if (containsAtSymbol || containsU423 || containsGateway) {
-            if (data->swState == SW_HIDE || (!containsToolkit && !containsLoading)) {
+            if (data->swState == SW_HIDE || (!containsToolkit && !containsLoading && !containsPortfolio)) {
                 data->foundWindows.push_back(hwnd);
             }
         }
