@@ -53,8 +53,8 @@ enum DiamondColIdx {
     DCOL_SYMBOL = 0,
     DCOL_POSITION,
     DCOL_AVGPRICE,
-    DCOL_ALERTUP,
-    DCOL_ALERTDOWN,
+    DCOL_ALERTHIGH,
+    DCOL_ALERTLOW,
     DCOL_ASKSIZE,
     DCOL_ASK,
     DCOL_LAST,
@@ -118,8 +118,8 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
-    { "AlertUp",           85, LVCFMT_RIGHT },
-    { "AlertDown",         85, LVCFMT_RIGHT },
+    { "AlertHigh",         85, LVCFMT_RIGHT },
+    { "AlertLow",          85, LVCFMT_RIGHT },
     { "Asks",              70, LVCFMT_RIGHT },
     { "Ask",               90, LVCFMT_RIGHT },
     { "Last",              90, LVCFMT_RIGHT },
@@ -165,7 +165,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_CHG13WEEK; i <= DCOL_CHG52WEEK; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
-    for (int i = DCOL_AVGPRICE; i <= DCOL_ALERTDOWN; ++i) {
+    for (int i = DCOL_AVGPRICE; i <= DCOL_ALERTLOW; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
 
@@ -179,7 +179,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                       diamondCols[DCOL_CHG52WEEK].width + 
                       diamondCols[DCOL_AVGPRICE].width +
-                      diamondCols[DCOL_ALERTUP].width + diamondCols[DCOL_ALERTDOWN].width;
+                      diamondCols[DCOL_ALERTHIGH].width + diamondCols[DCOL_ALERTLOW].width;
     }
     if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
 
@@ -639,13 +639,13 @@ static void Diamonds_UpdateAlertCols(int conId, const std::string& symbol) {
     std::string upStr, downStr;
     Settings_Alerts_Load(symbol, conId, upStr, downStr);
 
-    row.textCols[DCOL_ALERTUP]   = upStr;
-    row.textCols[DCOL_ALERTDOWN] = downStr;
+    row.textCols[DCOL_ALERTHIGH]   = upStr;
+    row.textCols[DCOL_ALERTLOW] = downStr;
 
-    try { row.sortValues[DCOL_ALERTUP]   = upStr.empty()   ? -999999.0 : std::stod(upStr); }
-    catch (...) { row.sortValues[DCOL_ALERTUP] = -999999.0; }
-    try { row.sortValues[DCOL_ALERTDOWN] = downStr.empty() ? -999999.0 : std::stod(downStr); }
-    catch (...) { row.sortValues[DCOL_ALERTDOWN] = -999999.0; }
+    try { row.sortValues[DCOL_ALERTHIGH]   = upStr.empty()   ? -999999.0 : std::stod(upStr); }
+    catch (...) { row.sortValues[DCOL_ALERTHIGH] = -999999.0; }
+    try { row.sortValues[DCOL_ALERTLOW] = downStr.empty() ? -999999.0 : std::stod(downStr); }
+    catch (...) { row.sortValues[DCOL_ALERTLOW] = -999999.0; }
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
@@ -660,6 +660,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
     {
         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
         for (auto const& [conId, info] : api().getPortfolioMap()) {
+            if (info.isWatchOnly) continue; // watch-only rows are added explicitly below, Quarantine-only
             auto it = diamondsTabMap.find(info.conId);
             int  assignedTab = (it != diamondsTabMap.end()) ? it->second : DTAB_ALL;
             if ((diamondsCheckedTabs >> assignedTab) & 1) rows.push_back(info);
@@ -675,6 +676,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
     if ((diamondsCheckedTabs >> DTAB_QUARENTINE) & 1) {
         for (auto const& alert : Settings_Alerts_LoadAll()) {
             if (portfolioConIds.count(alert.conId)) continue; // already a real held position
+
+            api().watchSymbol(alert.conId, alert.symbol);
 
             TradingAPI::PositionInfo pseudo;
             pseudo.conId  = alert.conId;
@@ -709,16 +712,17 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
         Diamonds_UpdateAlertCols(pos.conId, pos.symbol);
 
+        // Pre-fill market data if already cached — this also seeds the estimated
+        // PnL columns for the first open (before WM_PNL_SINGLE arrives).
+        // This runs for both held positions AND watch-only (quarantine) symbols.
+        TradingAPI::L1Book tickInfo;
+        if (api().getMarketData(pos.conId, tickInfo)) {
+            Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+        }
+
+        Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
+
         if (isHeldPosition) {
-            // Pre-fill market data if already cached — this also seeds the estimated
-            // PnL columns for the first open (before WM_PNL_SINGLE arrives).
-            TradingAPI::L1Book tickInfo;
-            if (api().getMarketData(pos.conId, tickInfo)) {
-                Diamonds_UpdateMarketCols(pos.conId, tickInfo);
-            }
-
-            Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
-
             Diamonds_UpdatePnLCols(hWnd, pos.conId);
         }
 
@@ -828,7 +832,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                         diamondCols[DCOL_CHG52WEEK].width + 
                         diamondCols[DCOL_AVGPRICE].width +
-                        diamondCols[DCOL_ALERTUP].width + diamondCols[DCOL_ALERTDOWN].width;
+                        diamondCols[DCOL_ALERTHIGH].width + diamondCols[DCOL_ALERTLOW].width;
         }
         if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
         MINMAXINFO* mmi = (MINMAXINFO*)lParam;
@@ -877,6 +881,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_ALERTS_CHANGED: {
         Diamonds_Repopulate(hWnd);
+        InvalidateRect(hWnd, NULL, TRUE);
         break;
     }
 
@@ -1001,7 +1006,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     bool isHeldPosition = false;
                     {
                         std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-                        isHeldPosition = api().getPortfolioMap().count(conId) > 0;
+                        auto& pm = api().getPortfolioMap();
+                        auto pit = pm.find(conId);
+                        isHeldPosition = (pit != pm.end()) && !pit->second.isWatchOnly;
                     }
 
                     // ── Build context menu ────────────────────────────────────────
@@ -1260,7 +1267,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL || cd->iSubItem == DCOL_ALERTUP || cd->iSubItem == DCOL_ALERTDOWN) {
+                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
                         if (dark) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
@@ -1268,6 +1275,22 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
                             cd->clrText   = LM_TEXT;
                         }
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_ALERTHIGH || cd->iSubItem == DCOL_ALERTLOW) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = diamondDisplayOrder[rowIndex];
+                        const std::string& textValA = diamondDataCache[conId].textCols[cd->iSubItem];
+                        const std::string& textValB = diamondDataCache[conId].textCols[DCOL_LAST];
+                        if (!textValB.empty() && !textValA.empty()) {
+                            double valB = atof(textValB.c_str());
+                            double valA = atof(textValA.c_str());
+                            if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTHIGH && valA <= valB) cd->clrText = COINS_CLR_GREEN;
+                            else if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTLOW && valA >= valB) cd->clrText = COINS_CLR_RED;
+                            else cd->clrText = COINS_CLR_GRAY;
+                        } else cd->clrText   = COINS_CLR_GRAY;
+                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }

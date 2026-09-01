@@ -20,18 +20,21 @@ struct AlertsEditState {
 };
 static AlertsEditState alertsEditState;
 
-// Broadcasts WM_ALERTS_CHANGED to every top-level window of this process so
-// any open Market window (flag icon color) and the Diamonds window (Alert
-// Up/Down columns + Quarantine membership for alert-only symbols) refresh
-// themselves from the registry. Mirrors WM_TTS_VOICE_CHANGED's broadcast.
+// Posts WM_ALERTS_CHANGED directly to the two window classes that actually
+// handle it (WndProcMarket / WndProcDiamonds) instead of enumerating every
+// top-level window in the process and filtering by PID. Diamonds is
+// single-instance; Market can have many, so we walk all of them the same way
+// EnumerateMarketWindows() in registry.h does.
 static void Alerts_NotifyChanged() {
-    EnumWindows([](HWND hw, LPARAM) -> BOOL {
-        DWORD pid;
-        GetWindowThreadProcessId(hw, &pid);
-        if (pid == GetCurrentProcessId())
-            PostMessage(hw, WM_ALERTS_CHANGED, 0, 0);
-        return TRUE;
-    }, 0);
+    HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
+    if (hDiamonds && IsWindow(hDiamonds))
+        PostMessage(hDiamonds, WM_ALERTS_CHANGED, 0, 0);
+
+    HWND hMarket = FindWindowA(MARKET_CLASS_NAME, NULL);
+    while (hMarket) {
+        PostMessage(hMarket, WM_ALERTS_CHANGED, 0, 0);
+        hMarket = FindWindowExA(NULL, hMarket, MARKET_CLASS_NAME, NULL);
+    }
 }
 
 // (Re)loads the popup for `symbol` and `conId`: updates the title and both edit fields

@@ -223,6 +223,7 @@ static std::string HandleGetPositions() {
     std::string body = "[";
     bool first = true;
     for (const auto& [conId, pos] : map) {
+        //if (pos.isWatchOnly) continue;
         if (!first) body += ",";
         body += PositionToJson(pos);
         first = false;

@@ -129,7 +129,7 @@ public:
         bool   has_daily      = false;
         bool   has_unrealized = false;
     };
-
+        
     struct PositionInfo {
         int         conId;
         std::string symbol;
@@ -138,18 +138,12 @@ public:
         double      avgCost           = 0.0;
         PnlSinglePayload pnlSingle;
 
-        // ── 13 / 26 / 52-week % change reference closes ─────────────────────
-        // Daily-bar closing prices from ~91 / ~182 / ~364 calendar days ago,
-        // used to compute true "% change since N weeks ago" (last vs. this
-        // close), as opposed to L1Book::WeekNRangePct() below which reports
-        // where price sits *within* the N-week high/low range instead.
-        //
-        // Populated once per position via a single one-shot reqHistoricalData()
-        // daily-bar request (see TradingAPI::Impl::queueWeeklyRangeFetch()),
-        // paced several seconds apart so a ~60-symbol portfolio never gets
-        // anywhere near IBKR's historical-data pacing limits. 0.0 = not
-        // fetched yet — callers should treat that as "no data available",
-        // the same convention avgCost/shares use before positions arrive.
+        // True for a placeholder created by TradingAPI::watchSymbol() for an
+        // alert-only symbol that is NOT a currently held broker position.
+        // position() always sets this false — including when promoting an
+        // existing watch-only entry into a real one the moment a position opens.
+        bool isWatchOnly = false;
+
         double closeAgo13Week = 0.0;
         double closeAgo26Week = 0.0;
         double closeAgo52Week = 0.0;
@@ -296,6 +290,15 @@ public:
 
     void setMarketWindow(HWND hWnd, int conId, const std::string& symbol);
     void unsetMarketWindow(HWND hWnd);
+
+    // ── Watch-only symbols (Diamonds "Quarantine" alert-only rows) ───────────
+    // Ensures L1 market data + weekly-range (13/26/52-week) + dividend data
+    // flow for `conId`/`symbol` even when it isn't (yet) a held portfolio
+    // position — e.g. a symbol with only an Alert Up/Down price set. Safe to
+    // call repeatedly (idempotent), and safe to call for a conId that already
+    // IS a held position (no-ops on top of the existing subscription).
+    // Deliberately skips PnLSingle/L2/tick-by-tick — those stay Market-window-only.
+    void watchSymbol(int conId, const std::string& symbol);
 
     // ── Level 1 (market window) ────────────────────────────────
 
