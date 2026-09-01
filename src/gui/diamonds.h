@@ -880,6 +880,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_ALERTS_CHANGED: {
+        int conId = (int)lParam;
+        if (!conId) break;
         Diamonds_Repopulate(hWnd);
         InvalidateRect(hWnd, NULL, TRUE);
         break;

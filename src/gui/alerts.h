@@ -25,15 +25,18 @@ static AlertsEditState alertsEditState;
 // top-level window in the process and filtering by PID. Diamonds is
 // single-instance; Market can have many, so we walk all of them the same way
 // EnumerateMarketWindows() in registry.h does.
-static void Alerts_NotifyChanged() {
+static void Alerts_NotifyChanged(int conId) {
     HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
     if (hDiamonds && IsWindow(hDiamonds))
-        PostMessage(hDiamonds, WM_ALERTS_CHANGED, 0, 0);
-
-    HWND hMarket = FindWindowA(MARKET_CLASS_NAME, NULL);
-    while (hMarket) {
-        PostMessage(hMarket, WM_ALERTS_CHANGED, 0, 0);
-        hMarket = FindWindowExA(NULL, hMarket, MARKET_CLASS_NAME, NULL);
+        PostMessage(hDiamonds, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);
+    
+    auto tsWindows = EnumerateMarketWindows();
+    for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
+        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
+        if (data && data->conId == conId) {
+            PostMessage(tsWindows[i].hWnd, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);
+            break;
+        }
     }
 }
 
@@ -78,11 +81,13 @@ static void AlertsEditor_SaveAndClose(HWND hWnd) {
     std::string upStr   = trim(upBuf);
     std::string downStr = trim(downBuf);
 
-    if (!alertsEditState.symbol.empty() && alertsEditState.conId > 0)
+    if (!alertsEditState.symbol.empty() && alertsEditState.conId > 0) {
         Settings_Alerts_Save(alertsEditState.symbol, alertsEditState.conId, upStr, downStr);
+        Alerts_NotifyChanged(alertsEditState.conId);
+
+    }
 
     DestroyWindow(hWnd);
-    Alerts_NotifyChanged();
 }
 
 // Subclass shared by both edit fields:
