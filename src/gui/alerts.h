@@ -47,7 +47,7 @@ static void Alerts_NotifyChanged(int conId) {
 static void AlertsEditor_Populate(HWND hWnd, const std::string& symbol, int conId) {
     alertsEditState.symbol = symbol;
     alertsEditState.conId  = conId;
-    SetWindowTextA(hWnd, ("Edit Alerts: " + symbol).c_str());
+    SetWindowTextA(hWnd, (symbol + ": Edit Alerts").c_str());
 
     std::string upStr, downStr;
     Settings_Alerts_Load(symbol, conId, upStr, downStr);
