@@ -17,15 +17,16 @@ class RegisterWindowRAII {
     HINSTANCE hInst_;
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
-        RegisterWindowClass(hInst_, WndProcDashboard,   DASHBOARD_CLASS_NAME,          101);
-        RegisterWindowClass(hInst_, WndProcExchange,    DASHBOARD_EXCHANGE_CLASS_NAME, 106, true);
-        RegisterWindowClass(hInst_, WndProcAlerts,      ALERTS_CLASS_NAME,             102, true);
-        RegisterWindowClass(hInst_, WndProcOrders,      ORDERS_CLASS_NAME,             103);
-        RegisterWindowClass(hInst_, WndProcDiamonds,    DIAMONDS_CLASS_NAME,           104);
-        RegisterWindowClass(hInst_, WndProcMarket,      MARKET_CLASS_NAME,             105);
-        RegisterWindowClass(hInst_, WndProcTsSearch,    MARKET_SEARCH_CLASS_NAME,      105, true);
-        RegisterWindowClass(hInst_, WndProcSettings,    SETTINGS_CLASS_NAME,           107);
-        RegisterWindowClass(hInst_, WndProcDebugLog,    DEBUGLOG_CLASS_NAME,           108, true);
+        RegisterWindowClass(hInst_, WndProcDashboard,          DASHBOARD_CLASS_NAME,          101);
+        RegisterWindowClass(hInst_, WndProcExchange,           DASHBOARD_EXCHANGE_CLASS_NAME, 106, true);
+        RegisterWindowClass(hInst_, WndProcAlerts,             ALERTS_CLASS_NAME,             102, true);
+        RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,       102, true);
+        RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,             103);
+        RegisterWindowClass(hInst_, WndProcDiamonds,           DIAMONDS_CLASS_NAME,           104);
+        RegisterWindowClass(hInst_, WndProcMarket,             MARKET_CLASS_NAME,             105);
+        RegisterWindowClass(hInst_, WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,      105, true);
+        RegisterWindowClass(hInst_, WndProcSettings,           SETTINGS_CLASS_NAME,           107);
+        RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,           108, true);
         
         StartDashboard(hInst_);
 
@@ -35,6 +36,7 @@ public:
         UnregisterClass(DASHBOARD_CLASS_NAME, hInst_);
         UnregisterClass(DASHBOARD_EXCHANGE_CLASS_NAME, hInst_);
         UnregisterClass(ALERTS_CLASS_NAME, hInst_);
+        UnregisterClass(ALERT_NOTIFY_CLASS_NAME, hInst_);
         UnregisterClass(ORDERS_CLASS_NAME, hInst_);
         UnregisterClass(DIAMONDS_CLASS_NAME, hInst_);
         UnregisterClass(MARKET_CLASS_NAME, hInst_);

@@ -74,6 +74,7 @@
                                               // ordersMap, so it's naturally cleared on the next Orders_Repopulate().
 #define WM_OPEN_ORDERS_WINDOW (WM_USER + 15) // Posted from background thread (e.g. HTTP server) to the
                                               // Dashboard window to request opening the Orders window on the UI thread.
+#define WM_SHOW_ALERT (WM_USER + 16)
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard" GATEWAY_NAME;
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds" GATEWAY_NAME;
@@ -84,6 +85,7 @@ static const char* SETTINGS_CLASS_NAME           = "Settings" GATEWAY_NAME;
 static const char* DEBUGLOG_CLASS_NAME           = "DebugLog" GATEWAY_NAME;
 static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
 static const char* ALERTS_CLASS_NAME             = "Alerts" GATEWAY_NAME;
+static const char* ALERT_NOTIFY_CLASS_NAME       = "AlertNotification" GATEWAY_NAME;
 
 class TradingAPI {
 public:

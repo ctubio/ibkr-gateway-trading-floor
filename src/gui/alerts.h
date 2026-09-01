@@ -257,3 +257,69 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
         DeleteObject(hBrush);
     }).detach();
 }
+
+#define ID_ALERT_KEEP_BTN   5401
+#define ID_ALERT_DELETE_BTN 5402
+
+struct AlertPopupData {
+    std::string title;
+    std::string msg;
+    std::string symbol;
+    int conId;
+    bool isUp;
+};
+
+LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+        case WM_CREATE: {
+            CREATESTRUCT* cs = (CREATESTRUCT*)lParam;
+            AlertPopupData* data = (AlertPopupData*)cs->lpCreateParams;
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
+
+            // Message text
+            HWND hMsg = CreateWindowA("STATIC", data->msg.c_str(),
+                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                8, 20, 260, 60, hWnd, NULL, cs->hInstance, NULL);
+            SendMessage(hMsg, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
+            SetCtrlColor(hMsg, data->isUp ? COINS_CLR_GREEN : COINS_CLR_RED);
+            
+            // Buttons
+            HWND hKeep = CreateWindowA("BUTTON", "Keep",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+                0, 100, (300 / 2) - 4, 22, hWnd, (HMENU)ID_ALERT_KEEP_BTN, cs->hInstance, NULL);
+            SendMessage(hKeep, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            
+            HWND hDelete = CreateWindowA("BUTTON", "Delete",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+                (300 / 2) + 4, 100, (300 / 2) - 4, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
+            SendMessage(hDelete, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+            break;
+        }
+        case WM_COMMAND: {
+            int wmId = LOWORD(wParam);
+            if (wmId == ID_ALERT_KEEP_BTN || wmId == ID_ALERT_DELETE_BTN) {
+                if (wmId == ID_ALERT_DELETE_BTN) {
+                    AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                    if (data) {
+                        std::string upStr, downStr;
+                        Settings_Alerts_Load(data->symbol, data->conId, upStr, downStr);
+                        if (data->isUp) upStr = "";
+                        else downStr = "";
+                        Settings_Alerts_Save(data->symbol, data->conId, upStr, downStr);
+                        Alerts_NotifyChanged(data->conId);
+                    }
+                }
+                DestroyWindow(hWnd);
+            }
+            break;
+        }
+        case WM_DESTROY: {
+            AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+            if (data) delete data;
+            break;
+        }
+    }
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
+}
+

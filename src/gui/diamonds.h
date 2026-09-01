@@ -591,13 +591,12 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         if (firedAlertsUp.find(conId) == firedAlertsUp.end()) {
             firedAlertsUp.insert(conId); // Mark as fired
             std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
-            std::string title = std::format("{} UP!", row.symbol);
-
-            FlashScreen(true, 1000);
-            
-            std::thread([msg, title]() {
-                MessageBoxA(NULL, msg.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST | MB_SYSTEMMODAL);
-            }).detach();
+            std::string title = std::format("{} is UP!", row.symbol);
+            HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+            if (hMain) {
+                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, conId, true};
+                PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
+            }
         }
     }
 
@@ -606,13 +605,12 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         if (firedAlertsDown.find(conId) == firedAlertsDown.end()) {
             firedAlertsDown.insert(conId); // Mark as fired
             std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
-            std::string title = std::format("{} DOWN!", row.symbol);
-
-            FlashScreen(false, 1000);
-            
-            std::thread([msg, title]() {
-                MessageBoxA(NULL, msg.c_str(), title.c_str(), MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST | MB_SYSTEMMODAL);
-            }).detach();
+            std::string title = std::format("{} is DOWN!", row.symbol);
+            HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+            if (hMain) {
+                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, conId, false};
+                PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
+            }
         }
     }
 

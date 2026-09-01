@@ -154,12 +154,16 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwExStyle = WS_EX_TOPMOST;
             dwStyle   = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
-        if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) == 0) {
+        if (strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0) {
+            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
+            dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
+        }
+        if (strcmp(className, ALERTS_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
         }
-        if (strcmp(className, ALERTS_CLASS_NAME) == 0) {
+        if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
@@ -414,7 +418,7 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             char className[256] = {};
             GetClassNameA(hWnd, className, sizeof(className));
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0 || strcmp(className, DIAMONDS_CLASS_NAME) == 0 || strcmp(className, ORDERS_CLASS_NAME) == 0) {
+            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0 || strcmp(className, DIAMONDS_CLASS_NAME) == 0 || strcmp(className, ORDERS_CLASS_NAME) == 0 || strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0) {
                 COLORREF clr = GetCtrlColor((HWND)lParam);
                 if (clr != COLOR_THEME) {
                     SetTextColor((HDC)wParam, clr);
