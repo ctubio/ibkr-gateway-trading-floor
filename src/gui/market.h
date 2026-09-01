@@ -1,6 +1,6 @@
 #pragma once
 
-int windowMarketWidth = 585;
+int windowMarketWidth = 550;
 int windowMarketHeight = 550;
 
 void StartMarketSearch(); // Forward declaration
@@ -254,8 +254,27 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
     std::string sizeStr = std::format("{:.0f}", size);
     ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
-    int count = ListView_GetItemCount(hList);
-    if (count > 32) ListView_DeleteItem(hList, count - 1);
+}
+
+static void Market_TrimTimeSalesLists(TsState* state) {
+    if (!state) return;
+
+    int limit = state->orderBarVisible ? 2 : 0;
+    auto trim = [&](HWND hList, int maxRows) {
+        if (!hList) return;
+        int count = ListView_GetItemCount(hList);
+        if (count <= maxRows) return;
+        int excess = count - maxRows;
+        while (excess-- > 0) {
+            int last = ListView_GetItemCount(hList) - 1;
+            if (last < 0) break;
+            ListView_DeleteItem(hList, last);
+        }
+    };
+
+    trim(state->hTsList,      23 - (limit ? limit + 3 : 0));
+    trim(state->hTsListF100,  10 - limit);
+    trim(state->hTsListF1000, 10 - limit);
 }
 
 // Re-asserts the hint label(s) belonging to a given order-bar edit on top of
@@ -528,6 +547,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     if (!state || !state->hOrderLabel) return;
     state->orderSide = side;
     state->orderBarVisible = true;
+    Market_TrimTimeSalesLists(state);
     std::string labelStr = state->isOvernight ? std::format("OVN {}", side) : side;
     SetWindowTextA(state->hOrderLabel, labelStr.c_str());
     SetCtrlColor(state->hOrderLabel, side == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
@@ -578,6 +598,7 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hOptQtyLabel, SW_HIDE);
     ShowWindow(state->hOptStopLabel, SW_HIDE);
     state->orderBarVisible = false;
+    Market_TrimTimeSalesLists(state);
     Market_Layout(hWnd, state);
 }
 
@@ -1768,6 +1789,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
+            Market_TrimTimeSalesLists(state);
 
             // ── Volume rate / print-frequency rate: feed the rolling tick history ──
             // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
