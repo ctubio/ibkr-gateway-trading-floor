@@ -255,7 +255,7 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
     ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
     int count = ListView_GetItemCount(hList);
-    if (count > 50) ListView_DeleteItem(hList, count - 1);
+    if (count > 32) ListView_DeleteItem(hList, count - 1);
 }
 
 // Re-asserts the hint label(s) belonging to a given order-bar edit on top of
