@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef GATEWAY_SIM
-int WindowSettingsHeight = 653;
+int WindowSettingsHeight = 683;
 #else
 int WindowSettingsHeight = 569 - 138;
 #endif
@@ -10,23 +10,24 @@ void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWS
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
-#define ID_SETTINGS_KILL_GATEWAY      4001
-#define ID_SETTINGS_DARK_MODE         4002
-#define ID_SETTINGS_PLAY_SOUNDS       4003
-#define ID_SETTINGS_AUTO_GATEWAY      4004
-#define ID_SETTINGS_DEBUG_LOG         4005
-#define ID_SETTINGS_VOICE_COMBO       4006
-#define ID_SETTINGS_QTY_VALUE         4007
-#define ID_SETTINGS_STOP_VALUE        4008
-#define ID_SETTINGS_PROFIT_VALUE      4009
-#define ID_SETTINGS_GATEWAY_PATH      4010
-#define ID_SETTINGS_GATEWAY_PATH_EDIT 4011
-#define ID_SETTINGS_RISK_VALUE        4012
-#define ID_SETTINGS_SAFETY_VALUE      4013
-#define ID_SETTINGS_GROUP_ID          4014
-#define ID_SETTINGS_CLIENT_ID         4015
-#define ID_SETTINGS_BACKUP_RESTORE    4016
-#define ID_SETTINGS_BACKUP_DOWNLOAD   4017
+#define ID_SETTINGS_KILL_GATEWAY       4001
+#define ID_SETTINGS_DARK_MODE          4002
+#define ID_SETTINGS_PLAY_SOUNDS        4003
+#define ID_SETTINGS_AUTO_GATEWAY       4004
+#define ID_SETTINGS_DEBUG_LOG          4005
+#define ID_SETTINGS_VOICE_COMBO        4006
+#define ID_SETTINGS_QTY_VALUE          4007
+#define ID_SETTINGS_STOP_VALUE         4008
+#define ID_SETTINGS_PROFIT_VALUE       4009
+#define ID_SETTINGS_GATEWAY_PATH       4010
+#define ID_SETTINGS_GATEWAY_PATH_EDIT  4011
+#define ID_SETTINGS_RISK_VALUE         4012
+#define ID_SETTINGS_SAFETY_VALUE       4013
+#define ID_SETTINGS_GROUP_ID           4014
+#define ID_SETTINGS_CLIENT_ID          4015
+#define ID_SETTINGS_BACKUP_RESTORE     4016
+#define ID_SETTINGS_BACKUP_DOWNLOAD    4017
+#define ID_SETTINGS_FULL_SCREEN_ALERTS 4018
 
 static HWND hSettingBox1 = NULL;
 static HWND hSettingBox2 = NULL;
@@ -170,7 +171,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Display ──────────────────────────────────────────────────────
             hSettingBox2 = CreateWindowA("BUTTON", "Display:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 46,
+                m, y, w, 14 + (30 * 2),
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -181,7 +182,14 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
             if (Settings_DarkMode())
                 SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
-            y += 54;
+
+            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                m + gm, y + 44, gw, 22,
+                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
+            if (Settings_Load("FullScreenAlerts", 0))
+                SendMessage(hChkAlerts, BM_SETCHECK, BST_CHECKED, 0);
+            y += 84;
 
             // ── Audio ────────────────────────────────────────────────────────
             hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
@@ -263,7 +271,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
             };
 
-            HWND hQtyEdit    = MakeRow("Order Qty:",  ID_SETTINGS_QTY_VALUE,     20, true);
+            HWND hQtyEdit    = MakeRow("Quantity:",   ID_SETTINGS_QTY_VALUE,     20, true);
             HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,    53, false);
             HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE,  86, false);
             HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,   119, false);
@@ -359,6 +367,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
                 StartDebugLog();
                 FlushDebugBuffer();
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_FULL_SCREEN_ALERTS) {
+                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_FULL_SCREEN_ALERTS);
+                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
+                Settings_Save("FullScreenAlerts", checked);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DARK_MODE) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
