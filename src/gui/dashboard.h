@@ -42,7 +42,7 @@ static const QuickLink quickLinks[] = {
     { "Map",   "https://finviz.com/map.ashx?t=sec"            },
     { "Data",  "https://www.benzinga.com/quote"               },
     { "Paper", "http://192.168.1.105:2025/paper"              },
-    { "Chat",  "https://192.168.1.105/openclaw/chat"          },
+    { "Chat",  "https://192.168.1.105/chat/"          },
     { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
 static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]));
