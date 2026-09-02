@@ -194,7 +194,7 @@ public:
         double annualDividends  = 0.0;
         double dividendAmount   = 0.0;
         std::string dividendDate;
-        double dividendDateSortable;
+        double dividendDateSortable   = 0.0;
 
         // ── Generic ticks (tickGeneric) ──────────────────────────────────────
         bool   halted = false;          // field 49 (HALTED)

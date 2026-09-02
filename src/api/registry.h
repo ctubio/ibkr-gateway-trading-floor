@@ -105,28 +105,30 @@ void RegDelete(const char* subPath, const char* valueName) {
 // ── Dividend cache (per-position, registry) ───────────────────────────────
 // Caches the last known values from the low-frequency IB_DIVIDENDS (tick 456)
 // fetch — annualDividends, dividendAmount, dividendDate, dividendDateSortable
-// — keyed by conId, under a dedicated "Dividends" subkey. This lets Diamonds
-// show the dividend columns immediately at window creation even when there's
-// no live market data connection at all (e.g. weekends). Populated by
-// TradingAPI::Impl's one-shot dividend fetch (see queueDividendFetch /
-// HandleDividendTick in ibkr.cpp), which fires once per position per
-// connection and then drops its subscription.
+// — keyed by SYMBOL_CONID (matching the pattern the Alerts subkey uses), under
+// a dedicated "Dividends" subkey. This lets Diamonds show the dividend columns
+// immediately at window creation even when there's no live market data
+// connection at all (e.g. weekends). Populated by TradingAPI::Impl's one-shot
+// dividend fetch (see queueDividendFetch / HandleDividendTick in ibkr.cpp),
+// which fires once per position per connection and then drops its subscription.
 
-void Settings_Dividends_Save(int conId, double annualDividends, double dividendAmount,
+void Settings_Dividends_Save(const std::string& symbol, int conId, double annualDividends, double dividendAmount,
                               const std::string& dividendDate, double dividendDateSortable) {
-    std::string packed = std::format("{}|{}|{}|{}", annualDividends, dividendAmount, dividendDate, dividendDateSortable);
-    RegSetString("Dividends", std::to_string(conId).c_str(), packed);
+    std::string packed = std::format("{} {} {} {}", annualDividends, dividendAmount, dividendDate, dividendDateSortable);
+    std::string key = std::format("{}_{}", symbol, conId);
+    RegSetString("Dividends", key.c_str(), packed);
 }
 
-bool Settings_Dividends_Load(int conId, double& annualDividends, double& dividendAmount,
+bool Settings_Dividends_Load(const std::string& symbol, int conId, double& annualDividends, double& dividendAmount,
                               std::string& dividendDate, double& dividendDateSortable) {
-    std::string packed = RegGetString("Dividends", std::to_string(conId).c_str(), "");
+    std::string key = std::format("{}_{}", symbol, conId);
+    std::string packed = RegGetString("Dividends", key.c_str(), "");
     if (packed.empty()) return false;
 
     std::vector<std::string> parts;
     size_t pos = 0;
     while (true) {
-        size_t next = packed.find('|', pos);
+        size_t next = packed.find(' ', pos);
         parts.push_back(packed.substr(pos, next == std::string::npos ? std::string::npos : next - pos));
         if (next == std::string::npos) break;
         pos = next + 1;

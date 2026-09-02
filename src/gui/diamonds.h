@@ -326,10 +326,10 @@ static void Diamonds_CleanupStaleTabAssignments() {
 
 // Drops "Dividends" registry values (written by Settings_Dividends_Save, see
 // registry.h) for conIds that are no longer a held position. That subkey is a
-// pure fetch-once-per-session cache keyed by conId with nothing else pruning
-// it, so closed-out positions would otherwise accumulate there forever — same
-// rationale as Diamonds_CleanupStaleTabAssignments() above, just aimed at a
-// different registry subkey (Dividends instead of Tab_*/SymbolColors).
+// pure fetch-once-per-session cache keyed by SYMBOL_CONID with nothing else
+// pruning it, so closed-out positions would otherwise accumulate there forever
+// — same rationale as Diamonds_CleanupStaleTabAssignments() above, just aimed
+// at a different registry subkey (Dividends instead of Tab_*/SymbolColors).
 static void Diamonds_CleanupStaleDividends() {
     std::unordered_set<int> liveConIds;
     {
@@ -344,19 +344,23 @@ static void Diamonds_CleanupStaleDividends() {
         return; // no Dividends subkey yet — nothing to clean
 
     std::vector<std::string> toDelete;
-    char valueName[64];
+    char valueName[128];
     DWORD index = 0;
     while (true) {
         DWORD nameSize = sizeof(valueName);
         if (RegEnumValueA(hKey, index++, valueName, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
             break;
 
+        std::string name(valueName);
+        size_t underscore = name.rfind('_');
+        if (underscore == std::string::npos || underscore == name.size() - 1) continue; // not SYMBOL_CONID shaped — leave alone
+
         int conId = 0;
-        try { conId = std::stoi(std::string(valueName)); }
-        catch (...) { continue; } // value name isn't conId-shaped — leave it alone
+        try { conId = std::stoi(name.substr(underscore + 1)); }
+        catch (...) { continue; } // trailing part isn't a conId — leave it alone
 
         if (!liveConIds.count(conId))
-            toDelete.push_back(valueName);
+            toDelete.push_back(name);
     }
     RegCloseKey(hKey);
 
@@ -408,7 +412,7 @@ static void Diamonds_ApplySort(HWND hList) {
 
         if (diamondsSortCol == DCOL_SYMBOL) {
             int cmp = _stricmp(a.textCols[DCOL_SYMBOL].c_str(), b.textCols[DCOL_SYMBOL].c_str());
-            return diamondsSortAsc ? (cmp < 0) : (cmp > 0);
+            return diamondsSortAsc ? (cmp > 0) : (cmp < 0);
         } else {
             double v1 = a.sortValues[diamondsSortCol];
             double v2 = b.sortValues[diamondsSortCol];
@@ -450,7 +454,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     if (pnlSingle.conId > 0) {
         row.sortValues[DCOL_DAILYPNL] = pnlSingle.dailyPnL;
         row.textCols[DCOL_DAILYPNL] = std::format("{:+.2f}", pnlSingle.dailyPnL);
-        
+
         row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
         row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
 
@@ -501,14 +505,14 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setCol(DCOL_BID,     t.bid,     "{:.2f}");
     setCol(DCOL_BIDSIZE, t.bidSize, "{:.0f}");
 
-    setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}");
-    setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}");
+    setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}", true);
+    setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}", true);
     
     row.textCols[DCOL_DIV_DATE] = t.dividendDate;
     row.sortValues[DCOL_DIV_DATE] = t.dividendDateSortable;
 
-    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "{:.2f}%");
-    else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "");
+    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "{:.2f}%", true);
+    else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "{:.2f}%", true);
     else setNA(DCOL_DIV_YIELD);
 
     double closeAgo13Week = 0.0, closeAgo26Week = 0.0, closeAgo52Week = 0.0;
@@ -642,7 +646,7 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
 
     double cachedAnnual = 0.0, cachedAmount = 0.0, cachedDateSortable = 0.0;
     std::string cachedDate;
-    if (!Settings_Dividends_Load(conId, cachedAnnual, cachedAmount, cachedDate, cachedDateSortable)) return;
+    if (!Settings_Dividends_Load(cacheRow.symbol, conId, cachedAnnual, cachedAmount, cachedDate, cachedDateSortable)) return;
 
     cacheRow.sortValues[DCOL_DIV_AMT] = cachedAmount;
     cacheRow.textCols[DCOL_DIV_AMT]   = std::format("{:.3f}", cachedAmount);
@@ -662,7 +666,7 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
         cacheRow.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
     } else if (cachedAnnual == 0.0) {
         cacheRow.sortValues[DCOL_DIV_YIELD] = 0.0;
-        cacheRow.textCols[DCOL_DIV_YIELD]   = "";
+        cacheRow.textCols[DCOL_DIV_YIELD]   = "0.00%";
     } else {
         cacheRow.sortValues[DCOL_DIV_YIELD] = -999999.0;
         cacheRow.textCols[DCOL_DIV_YIELD]   = DIAMONDS_NO_DATA;
@@ -755,9 +759,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
         TradingAPI::L1Book tickInfo;
         if (api().getMarketData(pos.conId, tickInfo)) {
             Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+            Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
         }
-
-        Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
 
         if (isHeldPosition) {
             Diamonds_UpdatePnLCols(hWnd, pos.conId);
