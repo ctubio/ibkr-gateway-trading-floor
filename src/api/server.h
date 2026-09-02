@@ -19,7 +19,7 @@
 //  HttpServer_Stop() before the process exits.
 //
 //  News content is cached in the Windows Registry under:
-//    HKCU\Software\ibkr-gateway-trading-floor\NewsCache
+//    HKCU\Software\ibkr-gateway-trading-floor\News
 //  One REG_SZ value per day (key = YYYY-MM-DD). Values older than 7 days are
 //  purged automatically at the end of every /today or /week request.
 //
@@ -252,9 +252,6 @@ static std::string HandleGetPositionBySymbol(const std::string& symbol) {
 
 // ── News fetch helpers (mirrors fetch_news.py logic) ─────────────────────────
 
-// Registry sub-key used to store news cache entries
-static constexpr const char* NEWS_CACHE_SUBKEY = "NewsCache";
-
 // Month names table (matches Python MONTHS dict)
 static const char* s_monthNames[] = {
     "", "january", "february", "march", "april",
@@ -294,7 +291,7 @@ static std::string News_LoadCache(const std::string& dateKey) {
     return std::string(buf.data());
 }
 
-// Save a news entry to the registry under the NewsCache subkey
+// Save a news entry to the registry under the News subkey
 static void News_SaveCache(const std::string& dateKey, const std::string& content) {
     HKEY hKey;
     std::string fullPath = std::string(APP_REG_ROOT) + "\\" + NEWS_CACHE_SUBKEY;

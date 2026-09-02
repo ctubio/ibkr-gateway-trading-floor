@@ -86,6 +86,7 @@ static const char* DEBUGLOG_CLASS_NAME           = "DebugLog" GATEWAY_NAME;
 static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
 static const char* ALERTS_CLASS_NAME             = "Alerts" GATEWAY_NAME;
 static const char* ALERT_NOTIFY_CLASS_NAME       = "AlertNotification" GATEWAY_NAME;
+static const char* NEWS_CACHE_SUBKEY             = "News" GATEWAY_NAME;
 
 class TradingAPI {
 public:
