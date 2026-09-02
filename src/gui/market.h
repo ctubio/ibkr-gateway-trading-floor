@@ -259,8 +259,8 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
 static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
-    int limitLong  = state->orderBarVisible ? 5 : 0;
-    int limitShort = state->orderBarVisible ? 3 : 0;
+    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 20 : 18) : 23;
+    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  7) : 10;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
@@ -273,9 +273,9 @@ static void Market_TrimTimeSalesLists(TsState* state) {
         }
     };
 
-    trim(state->hTsList,      23 - limitLong);
-    trim(state->hTsListF100,  10 - limitShort);
-    trim(state->hTsListF1000, 10 - limitShort);
+    trim(state->hTsList,      limitLong);
+    trim(state->hTsListF100,  limitShort);
+    trim(state->hTsListF1000, limitShort);
 }
 
 // Re-asserts the hint label(s) belonging to a given order-bar edit on top of
