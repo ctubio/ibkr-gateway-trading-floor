@@ -85,6 +85,7 @@ struct TsState {
     double volSumTotal   = 0.0;  // sum of all ticks in volHistory (trailing 5 min)
     double volSumRecent  = 0.0;  // sum of ticks in the most recent 15 s window
     double volSumBaseline = 0.0; // volSumTotal - volSumRecent (the older 4 min 45 s)
+    size_t volRecentBoundaryIdx = 0; // index into volHistory of the first entry still "recent"
 
     // ── TTS state ─────────────────────────────────────────────────────────────
     // Speech goes through the shared SharedTtsEngine (shared.h) now — this
@@ -1796,40 +1797,34 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             ULONGLONG tickNow = GetTickCount64();
             if (state->volHistory.empty())
                 state->volTrackingStart = tickNow;
-            
-            // Add new tick and update total sum
+
+            // Add new tick and update total + recent sums (a brand-new tick is
+            // always "recent" by definition).
             state->volHistory.push_back({ tickNow, tick->size });
-            state->volSumTotal += tick->size;
-            
-            // Prune old ticks and update sums incrementally
+            state->volSumTotal  += tick->size;
+            state->volSumRecent += tick->size;
+
             ULONGLONG baselineCutoff = tickNow - VOL_RATE_BASELINE_MS;
             ULONGLONG recentCutoff   = tickNow - VOL_RATE_RECENT_MS;
-            
+
+            // Advance the recent -> baseline boundary incrementally.
+            // volHistory is time-ordered, so entries only ever move from
+            // recent into baseline, never back — no need to rescan the deque.
+            while (state->volRecentBoundaryIdx < state->volHistory.size() &&
+                   state->volHistory[state->volRecentBoundaryIdx].time < recentCutoff) {
+                double sz = state->volHistory[state->volRecentBoundaryIdx].size;
+                state->volSumRecent   -= sz;
+                state->volSumBaseline += sz;
+                ++state->volRecentBoundaryIdx;
+            }
+
+            // Prune old ticks off the front (baseline window expiry).
             while (!state->volHistory.empty() && state->volHistory.front().time < baselineCutoff) {
                 double oldSize = state->volHistory.front().size;
                 state->volSumTotal -= oldSize;
-                
-                // If the pruned tick was in the recent window, subtract from recent sum
-                // Otherwise it was in the baseline window, subtract from baseline sum
-                if (state->volHistory.front().time >= recentCutoff) {
-                    state->volSumRecent -= oldSize;
-                } else {
-                    state->volSumBaseline -= oldSize;
-                }
-                
+                state->volSumBaseline -= oldSize; // anything old enough to prune is always in baseline by now
                 state->volHistory.pop_front();
-            }
-            
-            // Recalculate recent/baseline split for remaining ticks
-            // (ticks that were in recent window may have moved to baseline window)
-            state->volSumRecent = 0.0;
-            state->volSumBaseline = 0.0;
-            for (const auto& t : state->volHistory) {
-                if (t.time >= recentCutoff) {
-                    state->volSumRecent += t.size;
-                } else {
-                    state->volSumBaseline += t.size;
-                }
+                if (state->volRecentBoundaryIdx > 0) --state->volRecentBoundaryIdx;
             }
 
             Market_RefreshPositionAndAvg(hWnd, state);
@@ -1945,6 +1940,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->volSumTotal = 0.0;
                 state->volSumRecent = 0.0;
                 state->volSumBaseline = 0.0;
+                state->volRecentBoundaryIdx = 0;
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }
