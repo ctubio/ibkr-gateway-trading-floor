@@ -472,6 +472,50 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     }
 }
 
+// Dividend data changes rarely and is now fetched once per position via a
+// low-frequency one-shot request instead of the always-open L1 subscription
+// (see queueDividendFetch/HandleDividendTick in ibkr.cpp). That means it can
+// be genuinely unavailable for a while — most visibly over weekends, when
+// there's no live market data connection for the one-shot fetch to ever
+// complete. Falls back to the last value cached in the registry whenever the
+// live fields are still at their empty/zero defaults. Any later live update
+// simply overwrites these through the normal Diamonds_UpdateMarketCols() path.
+static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, const TradingAPI::L1Book& tickInfo) {
+    bool haveLiveDividendData = (tickInfo.annualDividends != 0.0) || (tickInfo.dividendAmount != 0.0) || !tickInfo.dividendDate.empty();
+    if (haveLiveDividendData) return;
+
+    bool haveCachedDividendData = (cacheRow.sortValues[DCOL_ANNUAL_DIV] != 0.0) || (cacheRow.sortValues[DCOL_DIV_AMT] != 0.0) || !cacheRow.textCols[DCOL_DIV_DATE].empty();
+    if (haveCachedDividendData) return;
+
+    double cachedAnnual = 0.0, cachedAmount = 0.0, cachedDateSortable = 0.0;
+    std::string cachedDate;
+    if (!Settings_Dividends_Load(cacheRow.symbol, conId, cachedAnnual, cachedAmount, cachedDate, cachedDateSortable)) return;
+
+    cacheRow.sortValues[DCOL_DIV_AMT] = cachedAmount;
+    cacheRow.textCols[DCOL_DIV_AMT]   = std::format("{:.3f}", cachedAmount);
+
+    cacheRow.sortValues[DCOL_ANNUAL_DIV] = cachedAnnual;
+    cacheRow.textCols[DCOL_ANNUAL_DIV]   = std::format("{:.3f}", cachedAnnual);
+
+    cacheRow.sortValues[DCOL_DIV_DATE] = cachedDateSortable;
+    cacheRow.textCols[DCOL_DIV_DATE]   = cachedDate;
+
+    // Yield needs a current price — fall back to the last known price (last,
+    // else prevClose) so it still shows something with only stale price data.
+    double priceForYield = tickInfo.last > 0.0 ? tickInfo.last : tickInfo.prevClose;
+    if (priceForYield > 0.0 && cachedAnnual > 0.0) {
+        double pct = cachedAnnual / priceForYield * 100.0;
+        cacheRow.sortValues[DCOL_DIV_YIELD] = pct;
+        cacheRow.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
+    } else if (cachedAnnual == 0.0) {
+        cacheRow.sortValues[DCOL_DIV_YIELD] = 0.0;
+        cacheRow.textCols[DCOL_DIV_YIELD]   = "0.00%";
+    } else {
+        cacheRow.sortValues[DCOL_DIV_YIELD] = -999999.0;
+        cacheRow.textCols[DCOL_DIV_YIELD]   = DIAMONDS_NO_DATA;
+    }
+}
+
 static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // Ensure a cache row exists even if this tick arrived before
     // Diamonds_Repopulate had a chance to create one for it — e.g. right after
@@ -514,6 +558,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "{:.2f}%", true);
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "{:.2f}%", true);
     else setNA(DCOL_DIV_YIELD);
+    Diamonds_ApplyCachedDividends(row, conId, t);
 
     double closeAgo13Week = 0.0, closeAgo26Week = 0.0, closeAgo52Week = 0.0;
     {
@@ -632,47 +677,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else setNA(DCOL_CHGPCT);
 }
 
-// Dividend data changes rarely and is now fetched once per position via a
-// low-frequency one-shot request instead of the always-open L1 subscription
-// (see queueDividendFetch/HandleDividendTick in ibkr.cpp). That means it can
-// be genuinely unavailable for a while — most visibly over weekends, when
-// there's no live market data connection for the one-shot fetch to ever
-// complete. Falls back to the last value cached in the registry whenever the
-// live fields are still at their empty/zero defaults. Any later live update
-// simply overwrites these through the normal Diamonds_UpdateMarketCols() path.
-static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, const TradingAPI::L1Book& tickInfo) {
-    bool haveLiveDividendData = (tickInfo.annualDividends != 0.0) || (tickInfo.dividendAmount != 0.0) || !tickInfo.dividendDate.empty();
-    if (haveLiveDividendData) return;
-
-    double cachedAnnual = 0.0, cachedAmount = 0.0, cachedDateSortable = 0.0;
-    std::string cachedDate;
-    if (!Settings_Dividends_Load(cacheRow.symbol, conId, cachedAnnual, cachedAmount, cachedDate, cachedDateSortable)) return;
-
-    cacheRow.sortValues[DCOL_DIV_AMT] = cachedAmount;
-    cacheRow.textCols[DCOL_DIV_AMT]   = std::format("{:.3f}", cachedAmount);
-
-    cacheRow.sortValues[DCOL_ANNUAL_DIV] = cachedAnnual;
-    cacheRow.textCols[DCOL_ANNUAL_DIV]   = std::format("{:.3f}", cachedAnnual);
-
-    cacheRow.sortValues[DCOL_DIV_DATE] = cachedDateSortable;
-    cacheRow.textCols[DCOL_DIV_DATE]   = cachedDate;
-
-    // Yield needs a current price — fall back to the last known price (last,
-    // else prevClose) so it still shows something with only stale price data.
-    double priceForYield = tickInfo.last > 0.0 ? tickInfo.last : tickInfo.prevClose;
-    if (priceForYield > 0.0 && cachedAnnual > 0.0) {
-        double pct = cachedAnnual / priceForYield * 100.0;
-        cacheRow.sortValues[DCOL_DIV_YIELD] = pct;
-        cacheRow.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
-    } else if (cachedAnnual == 0.0) {
-        cacheRow.sortValues[DCOL_DIV_YIELD] = 0.0;
-        cacheRow.textCols[DCOL_DIV_YIELD]   = "0.00%";
-    } else {
-        cacheRow.sortValues[DCOL_DIV_YIELD] = -999999.0;
-        cacheRow.textCols[DCOL_DIV_YIELD]   = DIAMONDS_NO_DATA;
-    }
-}
-
 static void Diamonds_UpdateAlertCols(int conId, const std::string& symbol) {
     auto& row = diamondDataCache[conId];
     row.conId = conId;
@@ -759,7 +763,6 @@ static void Diamonds_Repopulate(HWND hWnd) {
         TradingAPI::L1Book tickInfo;
         if (api().getMarketData(pos.conId, tickInfo)) {
             Diamonds_UpdateMarketCols(pos.conId, tickInfo);
-            Diamonds_ApplyCachedDividends(cacheRow, pos.conId, tickInfo);
         }
 
         if (isHeldPosition) {
