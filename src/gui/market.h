@@ -125,6 +125,10 @@ struct TsState {
     std::string orderSide;   // "BUY" or "SELL"
 
     Sparkline sparkline;
+    
+    // ── Cached header double-buffer (avoids CreateCompatibleDC/Bitmap every paint) ──
+    HDC     hdcHeaderMem = NULL;
+    HBITMAP hbmHeader    = NULL;
 };
 static std::map<HWND, TsState*> tsStates;
 
@@ -1116,10 +1120,17 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Double-buffering: draw the entire header to a memory DC then blit once
     RECT rc; GetClientRect(hWnd, &rc);
     HDC hdcOrig = hdc;
-    HDC hdcMem = CreateCompatibleDC(hdcOrig);
-    HBITMAP hbm = CreateCompatibleBitmap(hdcOrig, rc.right, HEADER_H);
-    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, hbm);
+
+    // Width is fixed for the life of this window (non-resizable), so the
+    // memory DC/bitmap only need to be created once and reused every paint.
+    if (!state->hdcHeaderMem) {
+        state->hdcHeaderMem = CreateCompatibleDC(hdcOrig);
+        state->hbmHeader    = CreateCompatibleBitmap(hdcOrig, rc.right, HEADER_H);
+    }
+    HDC hdcMem = state->hdcHeaderMem;
+    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, state->hbmHeader);
     hdc = hdcMem; // redirect all subsequent drawing to the memory DC
+
     const bool     dark       = Settings_DarkMode();
     const COLORREF bgColor    = dark ? DM_BG   : GetSysColor(COLOR_BTNFACE);
     const COLORREF textColor  = dark ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
@@ -1364,10 +1375,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Blit the composed header to the window in a single operation
     BitBlt(hdcOrig, 0, 0, rc.right, HEADER_H, hdc, 0, 0, SRCCOPY);
 
-    // Cleanup memory DC
-    SelectObject(hdcMem, hbmOld);
-    DeleteObject(hbm);
-    DeleteDC(hdcMem);
+    SelectObject(hdcMem, hbmOld); // deselect; DC/bitmap are cached and reused next paint
 
     EndPaint(hWnd, &ps);
 }
@@ -2026,8 +2034,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SharedTts().Release();
                 state->ttsOn = false;
             }
-            // Order bar controls are children and destroyed with the window,
-            // but null the pointers so nothing uses them after destruction.
+            if (state->hbmHeader)    DeleteObject(state->hbmHeader);
+            if (state->hdcHeaderMem) DeleteDC(state->hdcHeaderMem);
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hTotalLabel = NULL;
             state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             delete state;
