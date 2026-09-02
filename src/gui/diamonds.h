@@ -448,29 +448,21 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     }
 
     if (pnlSingle.conId > 0) {
-        //if (pnlSingle.has_daily) {
-            row.sortValues[DCOL_DAILYPNL] = pnlSingle.dailyPnL;
-            row.textCols[DCOL_DAILYPNL] = std::format("{:+.2f}", pnlSingle.dailyPnL);
-        //}
-        if (pnlSingle.has_unrealized) {
-            row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
-            row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
+        row.sortValues[DCOL_DAILYPNL] = pnlSingle.dailyPnL;
+        row.textCols[DCOL_DAILYPNL] = std::format("{:+.2f}", pnlSingle.dailyPnL);
+        
+        row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
+        row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
 
-            // Recompute the % column — derived from unrealizedPnL / cost basis,
-            // NOT from last price, so it stays valid even when last == 0
-            // (market closed / no quote yet) and matches IBKR's own PnL figure
-            // rather than a reconstruction from price.
-            double shares = row.sortValues[DCOL_POSITION];
-            double costBasis = avgCost * std::fabs(shares);
-            if (costBasis > 0.0) {
-                double pct = pnlSingle.unrealizedPnL / costBasis * 100.0;
-                row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
-                row.textCols[DCOL_UNREALIZED_PL_PCT] = std::format("{:+.2f}%", pct);
-            } else {
-                row.sortValues[DCOL_UNREALIZED_PL_PCT] = -999999.0;
-                row.textCols[DCOL_UNREALIZED_PL_PCT] = "--";
-            }
-        }
+        // Recompute the % column — derived from unrealizedPnL / cost basis,
+        // NOT from last price, so it stays valid even when last == 0
+        // (market closed / no quote yet) and matches IBKR's own PnL figure
+        // rather than a reconstruction from price.
+        double shares = row.sortValues[DCOL_POSITION];
+        double costBasis = avgCost * std::fabs(shares);
+        double pct = (costBasis > 0.0) ? pnlSingle.unrealizedPnL / costBasis * 100.0 : 0;
+        row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
+        row.textCols[DCOL_UNREALIZED_PL_PCT] = std::format("{:+.2f}%", pct);
 
         diamondsDirty = true;
     }

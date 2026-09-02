@@ -262,12 +262,12 @@ static const char* s_monthNames[] = {
     "september", "october", "november", "december"
 };
 
-// Build the TraderTV watchlist URL for a given date (YYYY, MM, DD)
+/*/) Build the old TraderTV watchlist URL for a given date (YYYY, MM, DD)
 static std::string News_BuildUrl(int year, int month, int day) {
     return std::string("https://tradertv-live.beehiiv.com/p/tradertv-watchlist-")
         + s_monthNames[month] + "-" + std::to_string(day)
         + "-" + std::to_string(year);
-}
+}*/
 
 // Format a date as "Month D, YYYY" (no leading zero on day, matching Python)
 static std::string News_FormatHeader(SYSTEMTIME st) {
@@ -884,6 +884,110 @@ static std::string News_CleanWhitespace(const std::string& text) {
     return (b == std::string::npos) ? "" : joined.substr(b, e - b + 1);
 }
 
+// ── Homepage listing lookup (replaces the old predictable-slug URL builder) ──
+// beehiiv used to publish predictable slugs like
+// "tradertv-watchlist-august-31-2026", so the old News_BuildUrl() could just
+// format the URL directly from the date. As of Sept 2026 each post instead
+// gets an opaque per-post slug (e.g. "new-post-7e4e") that can't be derived
+// from the date at all, so we now fetch the homepage listing and match each
+// post's <time datetime="YYYY-MM-DDTHH:MM:SS.sssZ"> against the date we're
+// looking for to recover its real URL. The article body pipeline below
+// (News_FetchContent) is unchanged — only how we find the URL differs.
+
+// Fetches https://tradertv-live.beehiiv.com/ and returns the raw HTML, or ""
+// on any network failure.
+static std::string News_FetchHomepageHtml() {
+    HINTERNET hInet = InternetOpenA("Mozilla/5.0 (compatible; OpenClawBot/1.0)", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hInet) return "";
+
+    HINTERNET hConn = InternetOpenUrlA(hInet, "https://tradertv-live.beehiiv.com/", NULL, 0,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
+    if (!hConn) { InternetCloseHandle(hInet); return ""; }
+
+    std::string html;
+    char chunk[8192];
+    DWORD bytesRead = 0;
+    while (InternetReadFile(hConn, chunk, sizeof(chunk), &bytesRead) && bytesRead > 0)
+        html.append(chunk, bytesRead);
+
+    InternetCloseHandle(hConn);
+    InternetCloseHandle(hInet);
+    return html;
+}
+
+// Walks <a> and <time> tags in `html` in document order, tracking the
+// innermost still-open <a href="..."> so that a <time datetime="..."> found
+// inside it can be attributed to that link. On the beehiiv homepage each
+// archive card wraps its whole entry (thumbnail/date/title) in a single
+// anchor, e.g. <a href="/p/new-post-7e4e"><time datetime="2026-09-01T12:49:38.683Z">
+// 1 hour ago</time>New post</a>, so the enclosing anchor's href IS that
+// post's real URL. Returns a "YYYY-MM-DD" → absolute URL map for every post
+// found on the page (first time tag found for a given date wins).
+static std::map<std::string, std::string> News_ParseListingDates(const std::string& html) {
+    std::map<std::string, std::string> dateToUrl;
+    std::vector<std::string> anchorStack;
+
+    static const std::regex tagRe(R"(<(/?)(a|time)\b([^>]*)>)", std::regex::icase);
+    auto begin = std::sregex_iterator(html.begin(), html.end(), tagRe);
+    auto end   = std::sregex_iterator();
+
+    for (auto it = begin; it != end; ++it) {
+        bool isClose = (*it)[1].length() > 0;
+        std::string tagName = (*it)[2].str();
+        std::transform(tagName.begin(), tagName.end(), tagName.begin(), ::tolower);
+        std::string attrs = (*it)[3].str();
+
+        if (tagName == "a") {
+            if (isClose) {
+                if (!anchorStack.empty()) anchorStack.pop_back();
+            } else {
+                anchorStack.push_back(HtmlExtractAttr("<a" + attrs + ">", "href"));
+            }
+            continue;
+        }
+
+        // <time datetime="...">
+        if (isClose || anchorStack.empty()) continue;
+        std::string datetime = HtmlExtractAttr("<time" + attrs + ">", "datetime");
+        if (datetime.size() < 10) continue; // need at least "YYYY-MM-DD"
+
+        std::string href = anchorStack.back();
+        if (href.empty()) continue;
+        if (href.rfind("http", 0) != 0) {
+            if (href.empty() || href[0] != '/') href = "/" + href;
+            href = "https://tradertv-live.beehiiv.com" + href;
+        }
+
+        dateToUrl.emplace(datetime.substr(0, 10), href); // emplace: first match for a date wins
+    }
+    return dateToUrl;
+}
+
+// Returns the real article URL for a given date, or "" if no post for that
+// date is currently on the homepage listing (not published yet, or old
+// enough to have scrolled off the first archive page).
+// Caches the fetched listing for 60s so a single /week request (which calls
+// this once per day, up to 5 times) doesn't refetch the homepage repeatedly.
+static std::string News_BuildUrl(int year, int month, int day) {
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d", year, month, day);
+    std::string dateKey(buf);
+
+    static std::map<std::string, std::string> s_listingCache;
+    static ULONGLONG s_listingFetchedAt = 0;
+    ULONGLONG now = GetTickCount64();
+    if (s_listingFetchedAt == 0 || now - s_listingFetchedAt > 60000ULL) {
+        std::string html = News_FetchHomepageHtml();
+        if (!html.empty()) {
+            s_listingCache = News_ParseListingDates(html);
+            s_listingFetchedAt = now;
+        }
+    }
+
+    auto it = s_listingCache.find(dateKey);
+    return (it != s_listingCache.end()) ? it->second : "";
+}
+
 // Fetch the TraderTV page via WinInet, then run the exact same pipeline as
 // fetch_tradertv_watchlist.py's process_watchlist(): locate the article body,
 // reformat market-data table cells, extract text (with section-header blank
@@ -979,10 +1083,13 @@ static std::string HandleGetNews(int numDays) {
         // Try registry cache first
         std::string content = News_LoadCache(dateKey);
         if (content.empty()) {
-            // Fetch from the web
+            // Resolve the real article URL from the homepage listing (see
+            // News_BuildUrl) — it's no longer a predictable date-based slug.
             std::string url = News_BuildUrl(st.wYear, st.wMonth, st.wDay);
-            LogDebug("Fetching news: " + url);
-            content = News_FetchContent(url, st.wDay, st.wMonth, st.wYear);
+            if (!url.empty()) {
+                LogDebug("Fetching news: " + url);
+                content = News_FetchContent(url, st.wDay, st.wMonth, st.wYear);
+            }
             if (content.empty()) {
                 // Page not found for this date — skip it
                 if (numDays != 1) body += "\n" + std::string(60, '=') + "\n  ";

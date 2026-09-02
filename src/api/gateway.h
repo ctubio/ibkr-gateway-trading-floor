@@ -128,8 +128,6 @@ public:
         double dailyPnL       = 0.0;
         double unrealizedPnL  = 0.0;
         double realizedPnL    = 0.0;
-        bool   has_daily      = false;
-        bool   has_unrealized = false;
     };
         
     struct PositionInfo {
