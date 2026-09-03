@@ -338,16 +338,26 @@ bool Settings_DarkMode() {
     return Settings_Load("DarkMode", 0) != 0;
 }
 
+void SaveWinPositionRaw(const std::string& winKey, int x, int y, int w, int h) {
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, winKey);
+    HKEY hKey;
+    if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL,
+        REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS)
+    {
+        DWORD dx = (DWORD)x, dy = (DWORD)y, dw = (DWORD)w, dh = (DWORD)h;
+        RegSetValueEx(hKey, "Window_X", 0, REG_DWORD, (const BYTE*)&dx, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_Y", 0, REG_DWORD, (const BYTE*)&dy, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_W", 0, REG_DWORD, (const BYTE*)&dw, sizeof(DWORD));
+        RegSetValueEx(hKey, "Window_H", 0, REG_DWORD, (const BYTE*)&dh, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
 void SaveWinPosition(HWND hWnd) {
     WINDOWPLACEMENT wp;
     wp.length = sizeof(WINDOWPLACEMENT);
     GetWindowPlacement(hWnd, &wp);
 
-    DWORD x = (DWORD)wp.rcNormalPosition.left;
-    DWORD y = (DWORD)wp.rcNormalPosition.top;
-    DWORD w = (DWORD)(wp.rcNormalPosition.right - wp.rcNormalPosition.left);
-    DWORD h = (DWORD)(wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
-    
     std::string winKey;
     char className[256] = {};
     GetClassNameA(hWnd, className, sizeof(className));
@@ -358,18 +368,10 @@ void SaveWinPosition(HWND hWnd) {
         winKey = className;
     }
 
-    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, winKey);
-
-    HKEY hKey;
-    if (RegCreateKeyEx(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, 
-        REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) 
-    {
-        RegSetValueEx(hKey, "Window_X", 0, REG_DWORD, (const BYTE*)&x, sizeof(DWORD));
-        RegSetValueEx(hKey, "Window_Y", 0, REG_DWORD, (const BYTE*)&y, sizeof(DWORD));
-        RegSetValueEx(hKey, "Window_W", 0, REG_DWORD, (const BYTE*)&w, sizeof(DWORD));
-        RegSetValueEx(hKey, "Window_H", 0, REG_DWORD, (const BYTE*)&h, sizeof(DWORD));
-        RegCloseKey(hKey);
-    }
+    SaveWinPositionRaw(winKey,
+        wp.rcNormalPosition.left, wp.rcNormalPosition.top,
+        wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
+        wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
 }
 
 bool LoadWinPosition(const char* subKeyName, int &x, int &y, int &w, int &h) {
@@ -1017,6 +1019,65 @@ void Settings_Market_CleanupOldWindows() {
         std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, name);
         RegDeleteTreeA(HKEY_CURRENT_USER, fullPath.c_str());
     }
+}
+
+// ── OpenedLast flag: 4-window "slot" layout for Market windows ───────────────
+// Exactly one Market_* subkey has OpenedLast=1 at a time. It always points at
+// whichever market window was most recently opened *or* closed (whichever
+// happened last), so StartMarket() (market.h) can decide, when opening a new
+// window:
+//   - if that window is still open and we're already at the 4-window cap,
+//     it's the one to close and replace, reusing its screen position;
+//   - if it has since been closed, its slot is free and gets reused for
+//     whatever opens next, regardless of the current window count.
+// Just another registry value under the window's own Market_<symbol>
+// subkey, so it survives restarts.
+
+void Settings_Market_SetOpenedLast(const std::string& windowKey) {
+    HKEY hRoot;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, APP_REG_ROOT, 0, KEY_READ, &hRoot) == ERROR_SUCCESS) {
+        const std::string prefix = std::string(MARKET_CLASS_NAME) + "_";
+        std::vector<std::string> allMarketKeys;
+        char subKeyName[256];
+        DWORD index = 0;
+        while (true) {
+            DWORD nameSize = sizeof(subKeyName);
+            if (RegEnumKeyExA(hRoot, index++, subKeyName, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+                break;
+            std::string name(subKeyName);
+            if (name.starts_with(prefix)) allMarketKeys.push_back(name);
+        }
+        RegCloseKey(hRoot);
+
+        for (const auto& name : allMarketKeys)
+            if (name != windowKey) RegDelete(name.c_str(), "OpenedLast");
+    }
+    // Always (re)assert on the target last -- also creates its subkey if this
+    // is a brand-new symbol that's never been saved before.
+    RegSetDword(windowKey.c_str(), "OpenedLast", 1);
+}
+
+// Returns the Market_<symbol> subkey currently flagged OpenedLast, or ""
+// if none is set (fresh install / no market window ever opened yet).
+std::string Settings_Market_GetOpenedLastKey() {
+    HKEY hRoot;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, APP_REG_ROOT, 0, KEY_READ, &hRoot) != ERROR_SUCCESS)
+        return "";
+
+    const std::string prefix = std::string(MARKET_CLASS_NAME) + "_";
+    std::string found;
+    char subKeyName[256];
+    DWORD index = 0;
+    while (true) {
+        DWORD nameSize = sizeof(subKeyName);
+        if (RegEnumKeyExA(hRoot, index++, subKeyName, &nameSize, NULL, NULL, NULL, NULL) != ERROR_SUCCESS)
+            break;
+        std::string name(subKeyName);
+        if (!name.starts_with(prefix)) continue;
+        if (RegGetDword(name.c_str(), "OpenedLast", 0) == 1) { found = name; break; }
+    }
+    RegCloseKey(hRoot);
+    return found;
 }
 
 // ── TTS voice persistence ─────────────────────────────────────────────────────
