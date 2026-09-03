@@ -2064,7 +2064,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         break;
     }
-    
+
     case WM_DESTROY:
         KillTimer(hWnd, TIMER_MARKET_PAINT);
         api().unsetMarketWindow(hWnd);

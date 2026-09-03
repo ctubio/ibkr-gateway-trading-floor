@@ -516,6 +516,9 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             Session_AddWindow(hWnd, lParam);
             return 0;
         }
+        case WM_NCACTIVATE:
+            // Pass TRUE as wParam to force DefWindowProc to render the titlebar in active state
+            return DefWindowProc(hWnd, message, TRUE, lParam);
         case WM_CLOSE:
             if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
                 ShowWindow(hWnd, SW_HIDE);
