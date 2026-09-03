@@ -26,8 +26,6 @@
 //  JSON is hand-built (no external library required).
 // ─────────────────────────────────────────────────────────────────────────────
 
-#ifndef GATEWAY_SIM
-
 // ── Config ────────────────────────────────────────────────────────────────────
 
 static constexpr unsigned short HTTP_SERVER_PORT = 4011;
@@ -1589,5 +1587,3 @@ public:
         HttpServer_Stop();
     }
 };
-
-#endif

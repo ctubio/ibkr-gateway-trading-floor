@@ -1,12 +1,13 @@
 #pragma once
 
-#ifndef GATEWAY_SIM
-int WindowSettingsHeight = 683;
-#else
-int WindowSettingsHeight = 569 - 138;
-#endif
+// Layout: two columns. Column 1 holds Gateway/Display/Audio; column 2 holds Trading/Configuration.
+// Client area is 560px wide: two 252px fieldsets with a 16px gutter between them (252 + 16 + 252 = 560).
+// The outer window (title bar + borders) adds ~36px horizontally and ~30px vertically, giving a
+// total size of 596x713.
+int WindowSettingsWidth = 543;
+int WindowSettingsHeight = 405;
 
-void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", 276, WindowSettingsHeight); }
+void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", WindowSettingsWidth, WindowSettingsHeight); }
 
 void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TWSAPIClientTradingFloor.DebugLog", 790, 243); }
 
@@ -104,11 +105,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             int m  = 8;   // outer margin
             int gm = 14;  // inner margin inside a group box
-            int w  = 252; // usable width inside client area
+            int w  = 252; // usable width of one column (fieldset)
             int gw = w - gm * 2; // control width inside group box
+            int col2_x = m + w + 16; // x origin of the second column (fieldset + gutter)
             int y  = m;
 
-#ifndef GATEWAY_SIM
             // ── Gateway ──────────────────────────────────────────────────────
             hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -165,8 +166,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_GROUP_ID, hInst, NULL);
             SetWindowTextA(hGroupIdEdit, std::format("{}", (int)Settings_Load("GroupId", 4)).c_str());
 
-            y += 198; // was 138
-#endif
+            y += 198;
 
             // ── Display ──────────────────────────────────────────────────────
             hSettingBox2 = CreateWindowA("BUTTON", "Display:",
@@ -248,12 +248,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (selectIdx < 0) selectIdx = (herenaIdx >= 0) ? herenaIdx : 0;
             if (!settingsVoices.empty())
                 SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
-            y += 86;
+            y = m;
 
-            // ── Trading ──────────────────────────────────────────────────────
+            // ── Trading ────────────────────────────────────────────────────── (column 2)
             hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 37 * 5,
+                col2_x, y, w, 37 * 5,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -262,12 +262,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             auto MakeRow = [&](const char* label, UINT id, int rowY, bool isInt) -> HWND {
                 CreateWindowA("STATIC", label,
                     WS_CHILD | WS_VISIBLE,
-                    m + gm, y + rowY, 72, 20,
+                    col2_x + gm, y + rowY, 72, 20,
                     hWnd, NULL, hInst, NULL);
                 DWORD numStyle = isInt ? ES_NUMBER : 0;
                 return CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                     WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | numStyle,
-                    m + gm + 76, y + rowY - 3, 80, 26,
+                    col2_x + gm + 76, y + rowY - 3, 80, 26,
                     hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
             };
 
@@ -284,27 +284,29 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
             SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
 
-            // ── System Tools ───────────────────────────────────────────
+            // ── System Tools ─────────────────────────────────────────── (column 2)
             hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 78,
+                col2_x, y, w, 78,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox5, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox5, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
+            // Two buttons share the row: Backup (left) and Restore (right), with a 4px gutter.
+            int btn = (gw - 4) / 2; // width of each button
             CreateWindowA("BUTTON", "Backup",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                m + gm, y + 20, (gw / 2) - 2, 22,
+                col2_x + gm, y + 20, btn, 22,
                 hWnd, (HMENU)ID_SETTINGS_BACKUP_DOWNLOAD, hInst, NULL);
-            
+
             CreateWindowA("BUTTON", "Restore",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                m + gm + (gw / 2) - 2 + 4, y + 20, (gw / 2) - 2, 22,
-                hWnd, (HMENU)ID_SETTINGS_BACKUP_RESTORE, hInst, NULL);                
+                col2_x + gm + btn + 4, y + 20, btn, 22,
+                hWnd, (HMENU)ID_SETTINGS_BACKUP_RESTORE, hInst, NULL);
 
             CreateWindowA("BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                m + gm, y + 48, gw, 22,
+                col2_x + gm, y + 48, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
 
             break;
@@ -315,7 +317,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case WM_COMMAND:
-#ifndef GATEWAY_SIM
             if (LOWORD(wParam) == ID_SETTINGS_AUTO_GATEWAY) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_AUTO_GATEWAY);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
@@ -358,7 +359,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 }
                 Settings_Save("ClientId", clientId);
             }
-#endif
             if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;

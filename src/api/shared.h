@@ -517,13 +517,11 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             return 0;
         }
         case WM_CLOSE:
-#ifndef GATEWAY_SIM
             if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
                 ShowWindow(hWnd, SW_HIDE);
                 ToggleTWS(SW_HIDE);
             }
             else
-#endif
                 DestroyWindow(hWnd);
             return 0;
         case WM_SIZE:
