@@ -806,13 +806,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
 
     case WM_CREATE: {
-        // ZERO-FLICKER FIX: Prevent the parent from drawing over the list view
-        //SetWindowLong(hWnd, GWL_STYLE, GetWindowLong(hWnd, GWL_STYLE) | WS_CLIPCHILDREN);
-
-        // ZERO-FLICKER FIX: Remove the class background brush so Windows never
-        // auto-erases behind our back during DefWindowProc(WM_SIZE) etc.
-        //SetClassLongPtr(hWnd, GCLP_HBRBACKGROUND, (LONG_PTR)NULL);
-
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
         HWND hList = CreateWindowExA(

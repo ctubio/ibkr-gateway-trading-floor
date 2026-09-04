@@ -1655,14 +1655,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         UpdateMarketRegistry();
         break;
     }
-
-    case WM_GETMINMAXINFO: {
-        MINMAXINFO* mmi = (MINMAXINFO*)lParam;
-        mmi->ptMinTrackSize.x = windowMarketWidth;
-        mmi->ptMaxTrackSize.x = windowMarketWidth;
-        return 0;
-    }
-
+    
     case WM_SIZE:
         Market_Layout(hWnd, state);
         InvalidateRect(hWnd, NULL, FALSE);
