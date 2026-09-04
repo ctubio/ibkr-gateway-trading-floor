@@ -55,6 +55,7 @@ struct TsState {
     bool isOvernight = false;
     std::string symbol;
     int conId = 0;
+    std::string titlebar;
 
     // ── Level 1 quote ─────────────────────────────
     TradingAPI::L1Book l1Info;
@@ -1286,7 +1287,11 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
 
-    SetWindowTextA(hWnd, (state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice)).c_str());
+    std::string titlebar = state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice);
+    if (state->titlebar != titlebar) {
+        state->titlebar = titlebar;
+        SetWindowTextA(hWnd, state->titlebar.c_str());
+    }
 
     // Helper: draw a row of stat pairs starting at (startX, y0).
     // Returns the x position after the last pair.
