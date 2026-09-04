@@ -475,6 +475,7 @@ static void Diamonds_ApplySort(HWND hList) {
 // Sentinel string displayed whenever a value cannot be computed (e.g. market closed, last == 0).
 static const char* DIAMONDS_NO_DATA = "--";
 
+static const double BOTTOM_SORT_VALUE = -999999.0;
 
 static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     // Grab our new unified cache row
@@ -553,7 +554,7 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
         cacheRow.sortValues[DCOL_DIV_YIELD] = 0.0;
         cacheRow.textCols[DCOL_DIV_YIELD]   = "0.00%";
     } else {
-        cacheRow.sortValues[DCOL_DIV_YIELD] = -999999.0;
+        cacheRow.sortValues[DCOL_DIV_YIELD] = BOTTOM_SORT_VALUE;
         cacheRow.textCols[DCOL_DIV_YIELD]   = DIAMONDS_NO_DATA;
     }
 }
@@ -582,7 +583,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     };
 
     auto setNA = [&](int col, std::string placeHolder = DIAMONDS_NO_DATA) {
-        row.sortValues[col] = -999999.0; // Pushes NA to bottom on sorts
+        row.sortValues[col] = BOTTOM_SORT_VALUE; // Pushes NA to bottom on sorts
         row.textCols[col] = placeHolder;
     };
 
@@ -711,13 +712,13 @@ static void Diamonds_UpdateAlertCols(int conId, const std::string& symbol) {
     std::string upStr, downStr;
     Settings_Alerts_Load(symbol, conId, upStr, downStr);
 
-    row.textCols[DCOL_ALERTHIGH]   = upStr;
-    row.textCols[DCOL_ALERTLOW] = downStr;
+    row.textCols[DCOL_ALERTHIGH] = upStr;
+    row.textCols[DCOL_ALERTLOW]  = downStr;
 
-    try { row.sortValues[DCOL_ALERTHIGH]   = upStr.empty()   ? -999999.0 : std::stod(upStr); }
-    catch (...) { row.sortValues[DCOL_ALERTHIGH] = -999999.0; }
-    try { row.sortValues[DCOL_ALERTLOW] = downStr.empty() ? -999999.0 : std::stod(downStr); }
-    catch (...) { row.sortValues[DCOL_ALERTLOW] = -999999.0; }
+    try { row.sortValues[DCOL_ALERTHIGH]   = upStr.empty()   ? BOTTOM_SORT_VALUE : std::stod(upStr); }
+    catch (...) { row.sortValues[DCOL_ALERTHIGH] = BOTTOM_SORT_VALUE; }
+    try { row.sortValues[DCOL_ALERTLOW] = downStr.empty() ? BOTTOM_SORT_VALUE : std::stod(downStr); }
+    catch (...) { row.sortValues[DCOL_ALERTLOW] = BOTTOM_SORT_VALUE; }
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
@@ -1252,16 +1253,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = diamondDisplayOrder[rowIndex];
-                        const std::string& textVal = diamondDataCache[conId].textCols[cd->iSubItem];
+                        double val = diamondDataCache[conId].sortValues[cd->iSubItem];
+                        if (val == BOTTOM_SORT_VALUE) val = 0.0;
                         // Guard: skip colouring the "--" sentinel — atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
                         // explicit avoids any locale-specific atof surprises.
-                        if (!textVal.empty()) {
-                            double val = atof(textVal.c_str());
-                            if      (val > 0.0) cd->clrText = COINS_CLR_GREEN;
-                            else if (val < 0.0) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
-                        }
+                        if      (val > 0.0) cd->clrText = COINS_CLR_GREEN;
+                        else if (val < 0.0) cd->clrText = COINS_CLR_RED;
+                        else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         if (cd->iSubItem == DCOL_CHG5MIN) {
                             SelectObject(cd->nmcd.hdc, hFont14pt.get());
@@ -1325,15 +1324,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_BID) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = diamondDisplayOrder[rowIndex];
-                        const std::string& textValB = diamondDataCache[conId].textCols[DCOL_BIDSIZE];
-                        const std::string& textValA = diamondDataCache[conId].textCols[DCOL_ASKSIZE];
-                        if (!textValB.empty() && !textValA.empty()) {
-                            double valB = atof(textValB.c_str());
-                            double valA = atof(textValA.c_str());
-                            if (valA > valB) cd->clrText = COINS_CLR_RED;
-                            else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
-                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
-                        }
+                        const double valB = diamondDataCache[conId].sortValues[DCOL_BIDSIZE];
+                        const double valA = diamondDataCache[conId].sortValues[DCOL_ASKSIZE];
+                        if (valA > valB) cd->clrText = COINS_CLR_RED;
+                        else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
+                        else cd->clrText = dark ? DM_TEXT : LM_TEXT;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
@@ -1358,15 +1353,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     if (cd->iSubItem == DCOL_ALERTHIGH || cd->iSubItem == DCOL_ALERTLOW) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = diamondDisplayOrder[rowIndex];
-                        const std::string& textValA = diamondDataCache[conId].textCols[cd->iSubItem];
-                        const std::string& textValB = diamondDataCache[conId].textCols[DCOL_LAST];
-                        if (!textValB.empty() && !textValA.empty()) {
-                            double valB = atof(textValB.c_str());
-                            double valA = atof(textValA.c_str());
-                            if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTHIGH && valA <= valB) cd->clrText = COINS_CLR_GREEN;
-                            else if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTLOW && valA >= valB) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = COINS_CLR_GRAY;
-                        } else cd->clrText   = COINS_CLR_GRAY;
+                        double valA = diamondDataCache[conId].sortValues[cd->iSubItem];
+                        double valB = diamondDataCache[conId].sortValues[DCOL_LAST];
+                        if (valA == BOTTOM_SORT_VALUE) valA = 0.0;
+                        if (valB == BOTTOM_SORT_VALUE) valB = 0.0;
+                        if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTHIGH && valA <= valB) cd->clrText = COINS_CLR_GREEN;
+                        else if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTLOW && valA >= valB) cd->clrText = COINS_CLR_RED;
+                        else cd->clrText = COINS_CLR_GRAY;
                         if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
