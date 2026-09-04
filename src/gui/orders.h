@@ -61,6 +61,7 @@ static COLORREF Orders_StatusColor(const std::string& orderType, const std::stri
         else if (orderType == "SELL") return RGB(102, 43, 43);
     } 
     if (status == "Partially Filled")                 return RGB(255, 200, 60);
+    if (status == "Inactive")                 return COINS_CLR_GRAY;
     if (status == "Submitted" || status == "PreSubmitted" || status == "PreSub" || status == "PendingSubmit" || status == "Pending" || status == "Unsent") {
         if (orderType == "BUY") return RGB(80, 200, 120);
         else if (orderType == "SELL") return RGB(220, 80, 80);
