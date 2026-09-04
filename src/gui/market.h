@@ -1,7 +1,7 @@
 #pragma once
 
-int windowMarketWidth = 550;
-int windowMarketHeight = 550;
+int windowMarketWidth = 545;
+int windowMarketHeight = 545;
 
 void StartMarketSearch(); // Forward declaration
 void StartMarket(const std::string& symbol = "", int conId = 0);
@@ -33,7 +33,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0);
 static const int HEADER_H = 52;   // two-row header height
 static const int EXEC_W   = 126;  // Initial height-independent width for hExecList before
                                    // layout (now stacked under Level 2, sharing its column)
-static const int L2_W     = 140;  // Fixed width of the Level 2 / Executions column (far left)
+static const int L2_W     = 135;  // Fixed width of the Level 2 / Executions column (far left)
 static const int ORDER_BAR_H = 84;
 
 // ── Volume / print-frequency rate windows ─────────────────────────────────────
@@ -183,7 +183,7 @@ static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
         0, 0, L2_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_L2_LIST, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
@@ -223,10 +223,18 @@ static HWND Market_CreateExecList(HWND hParent, HINSTANCE hInst) {
 }
 
 static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
+    RECT rc; GetClientRect(hParent, &rc);
+    const int bodyW = rc.right;
+    const int splitThick = 4;
+    const int tsW = bodyW - L2_W - splitThick;
+    int leftW  = (int)((tsW - splitThick) / 2);
+
+    const int bodyH = rc.bottom - HEADER_H - ORDER_BAR_H;
+
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
-        0, 0, 10, 10, hParent, (HMENU)(intptr_t)id, hInst, NULL);
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
+        0, 0, leftW, bodyH, hParent, (HMENU)(intptr_t)id, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
     lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
@@ -1522,8 +1530,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hExecList    = Market_CreateExecList(hWnd, hInst);
         state->hL2List      = Market_CreateL2List(hWnd, hInst);
-        state->hTsList      = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0001,       hInst);
-        state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0100,  hInst);
+        state->hTsList      = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0001, hInst);
+        state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0100, hInst);
         state->hTsListF1000 = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F1000, hInst);
         SetWindowSubclass(state->hTsList,      Market_ListForwardCtrlProc, 10, 0);
         SetWindowSubclass(state->hTsListF100,  Market_ListForwardCtrlProc, 11, 0);

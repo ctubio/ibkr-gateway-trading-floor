@@ -89,42 +89,44 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
 }
 
 HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
-    // Multi-instance windows (windowKey differs from className, e.g. market per-symbol)
-    // are distinguished by title - each has a unique one. Single-instance windows match
-    // on class alone. Either way no map needed: FindWindowA does the work.
-    bool multiInstance = !windowKey.empty() && windowKey != className;
+    bool allowIsolatedInstances = (strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0);
+    bool allowInstancesBySymbol = !windowKey.empty() && windowKey != className;
+    
     HWND hWnd = NULL;
-    if (multiInstance) {
-        auto tsWindows = EnumerateMarketWindows();
-        for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
-            TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
-            if (data && data->winKey == windowKey) {
-                hWnd = tsWindows[i].hWnd;
-                break;
-            }
-        }
-    } else {
-        hWnd = FindWindowA(className, NULL);
-    }
 
-    if (hWnd && IsWindow(hWnd)) {
-        if (IsIconic(hWnd)) {
-            ShowWindow(hWnd, SW_RESTORE);
-            SetForegroundWindow(hWnd);
+    if (!allowIsolatedInstances) {
+        if (allowInstancesBySymbol) {
+            auto tsWindows = EnumerateMarketWindows();
+            for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
+                TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
+                if (data && data->winKey == windowKey) {
+                    hWnd = tsWindows[i].hWnd;
+                    break;
+                }
+            }
         } else {
-            ShowWindow(hWnd, SW_SHOW);
+            hWnd = FindWindowA(className, NULL);
         }
-        SetForegroundWindow(hWnd);
-        SetActiveWindow(hWnd);
-        SetFocus(hWnd);
-        return hWnd;
+
+        if (hWnd && IsWindow(hWnd)) {
+            if (IsIconic(hWnd)) {
+                ShowWindow(hWnd, SW_RESTORE);
+                SetForegroundWindow(hWnd);
+            } else {
+                ShowWindow(hWnd, SW_SHOW);
+            }
+            SetForegroundWindow(hWnd);
+            SetActiveWindow(hWnd);
+            SetFocus(hWnd);
+            return hWnd;
+        }
     }
 
     int w = defaultW, h = defaultH;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
     
-    LoadWinPosition(multiInstance ? windowKey.c_str() : className, x, y, w, h);
+    LoadWinPosition(allowInstancesBySymbol ? windowKey.c_str() : className, x, y, w, h);
 
     if (hInst) { // dashboard window
         hWnd = CreateWindow(className, title, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, x, y, w, h, NULL, NULL, hInst, lpParam);
