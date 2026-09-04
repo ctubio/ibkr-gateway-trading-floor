@@ -49,6 +49,9 @@ TradingAPI& api() {
     return *TWS_API;
 }
 
+// ── Global Account Summary ───────────────────────────────────────────────────────────
+static double NetLiquidation = 0.0;
+
 // ── Label Colors ───────────────────────────────────────────────────────────
 static void SetCtrlColor(HWND hw, COLORREF c) {
     if (!hw) return;

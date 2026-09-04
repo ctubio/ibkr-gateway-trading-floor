@@ -411,18 +411,17 @@ void Coins_UpdateLabels(HWND hWnd) {
     
     std::string prevCurrency = dashboardState.currencyDashboard;
     dashboardState.currencyDashboard = "--";
-    double netLiq = 0.0;
     auto tryParse = [&](const std::string& k) -> double {
         auto it = summary.find(k);
         if (it == summary.end()) return 0.0;
         try { return std::stod(it->second); } catch (...) { return 0.0; }
     };
     if (summary.count("EUR_NetLiquidation")) {
-        dashboardState.currencyDashboard = "EUR"; netLiq = tryParse("EUR_NetLiquidation");
+        dashboardState.currencyDashboard = "EUR"; NetLiquidation = tryParse("EUR_NetLiquidation");
     } else if (summary.count("USD_NetLiquidation")) {
-        dashboardState.currencyDashboard = "USD"; netLiq = tryParse("USD_NetLiquidation");
+        dashboardState.currencyDashboard = "USD"; NetLiquidation = tryParse("USD_NetLiquidation");
     } else if (summary.count("NetLiquidation")) {
-        netLiq = tryParse("NetLiquidation");
+        NetLiquidation = tryParse("NetLiquidation");
         for (auto const& [k, v] : summary)
             if (k.find("_NetLiquidation") != std::string::npos)
                 { dashboardState.currencyDashboard = k.substr(0, k.find('_')); break; }
@@ -439,7 +438,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     int y3 = y2 + box2H + 9;
 
     if (dashboardState.hCoin_NetLiq) {
-        std::string formattedNum = FormatWithCommas(netLiq, dashboardState.fullDetails);
+        std::string formattedNum = FormatWithCommas(NetLiquidation, dashboardState.fullDetails);
         if (SetWindowTextIfChanged(dashboardState.hCoin_NetLiq, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
             SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -455,7 +454,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         }
     }
     if (dashboardState.hCoin_Pct) {
-        double pct = (netLiq != 0.0) ? (daily / netLiq * 100.0) : 0.0;
+        double pct = (NetLiquidation != 0.0) ? (daily / NetLiquidation * 100.0) : 0.0;
         std::string formattedNum = FormatWithCommas(pct);
         if (pct >= 0.0) formattedNum = "+" + formattedNum;
         if (SetWindowTextIfChanged(dashboardState.hCoin_Pct, std::format("{}%", formattedNum))) {

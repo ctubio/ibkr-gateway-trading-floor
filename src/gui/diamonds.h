@@ -89,6 +89,35 @@ static bool diamondsSortAsc = true;
 // Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
 static std::map<int, MiniSparkline> diamondsSparklines;
 
+// Weekly reference closes are immutable once received for a conId. Keep them
+// outside the live portfolio map so market-data updates do not need to lock it
+// after the values have been populated.
+struct DiamondsWeeklyCloseCache {
+    double closeAgo13Week = 0.0;
+    double closeAgo26Week = 0.0;
+    double closeAgo52Week = 0.0;
+};
+static std::unordered_map<int, DiamondsWeeklyCloseCache> diamondsWeeklyCloseCache;
+
+static DiamondsWeeklyCloseCache Diamonds_GetWeeklyCloseCache(int conId) {
+    auto& cached = diamondsWeeklyCloseCache[conId];
+    if (cached.closeAgo13Week > 0.0 && cached.closeAgo26Week > 0.0 && cached.closeAgo52Week > 0.0)
+        return cached;
+
+    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+    auto& portfolio = api().getPortfolioMap();
+    auto it = portfolio.find(conId);
+    if (it != portfolio.end()) {
+        if (it->second.closeAgo13Week > 0.0)
+            cached.closeAgo13Week = it->second.closeAgo13Week;
+        if (it->second.closeAgo26Week > 0.0)
+            cached.closeAgo26Week = it->second.closeAgo26Week;
+        if (it->second.closeAgo52Week > 0.0)
+            cached.closeAgo52Week = it->second.closeAgo52Week;
+    }
+    return cached;
+}
+
 // ── Unified Virtual List Cache (Replaces diamondsPnlCache) ─────────────────
 struct DiamondRowCache {
     int conId = 0;
@@ -573,17 +602,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else setNA(DCOL_DIV_YIELD);
     Diamonds_ApplyCachedDividends(row, conId, t);
 
-    double closeAgo13Week = 0.0, closeAgo26Week = 0.0, closeAgo52Week = 0.0;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        auto& pm = api().getPortfolioMap();
-        auto pit = pm.find(conId);
-        if (pit != pm.end()) {
-            closeAgo13Week = pit->second.closeAgo13Week;
-            closeAgo26Week = pit->second.closeAgo26Week;
-            closeAgo52Week = pit->second.closeAgo52Week;
-        }
-    }
     auto setWeekChangePct = [&](int col, double closeAgo) {
         if (closeAgo > 0.0 && t.last > 0.0) {
             double pct = (t.last - closeAgo) / closeAgo * 100.0;
@@ -594,9 +612,10 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         }
     };
 
-    setWeekChangePct(DCOL_CHG13WEEK, closeAgo13Week);
-    setWeekChangePct(DCOL_CHG26WEEK, closeAgo26Week);
-    setWeekChangePct(DCOL_CHG52WEEK, closeAgo52Week);
+    DiamondsWeeklyCloseCache weeklyCloses = Diamonds_GetWeeklyCloseCache(conId);
+    setWeekChangePct(DCOL_CHG13WEEK, weeklyCloses.closeAgo13Week);
+    setWeekChangePct(DCOL_CHG26WEEK, weeklyCloses.closeAgo26Week);
+    setWeekChangePct(DCOL_CHG52WEEK, weeklyCloses.closeAgo52Week);
 
     // Day high/low, used by the Last column's custom-draw color (see WM_NOTIFY/NM_CUSTOMDRAW).
     row.dayHigh = t.high;
@@ -605,14 +624,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.halted = t.halted;
 
     double shares = row.sortValues[DCOL_POSITION];
-    double netLiq = 0.0;
-    auto summary = api().getAccountSummary();
-    if (summary.count("NetLiquidation")) {
-        try { netLiq = std::stod(summary["NetLiquidation"]); } catch (...) {}
-    }
 
     double mktVal = shares * (t.last > 0 ? t.last : t.prevClose);
-    double pctNetLiq = (netLiq > 0.0 && mktVal != 0.0) ? (mktVal / netLiq * 100.0) : 0.0;
+    double pctNetLiq = (NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0;
 
     setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
     setCol(DCOL_PCT_NETLIQ, pctNetLiq, "{:.2f}%", true);

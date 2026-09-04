@@ -475,13 +475,6 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         profitDist = state->orderSide == "BUY" ? profitDist - state->l1Info.last : state->l1Info.last - profitDist;
     }
 
-    double netLiq = 0.0;
-    {
-        std::map<std::string, std::string> summary = api().getAccountSummary();
-        auto it = summary.find("NetLiquidation");
-        if (it != summary.end()) netLiq = std::atof(it->second.c_str());
-    }
-
     const float riskPct = Settings_LoadFloat("RiskPct", 1.0f); // target risk per trade, % of NLV
 
     // ── hTotalLabel: Notional value only ─────────────────────────────────────
@@ -496,7 +489,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     std::string lossPctStr = "--", lossValueStr = "!!";
     if (stopDist > 0.0 && qty > 0.0) {
         double lossDollars = stopDist * qty;
-        lossPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", lossDollars / netLiq * 100.0) : "--";
+        lossPctStr = (NetLiquidation > 0.0) ? std::format("{:.2f}%", lossDollars / NetLiquidation * 100.0) : "--";
         lossValueStr = std::format("{:.2f}", lossDollars);
     } else if (stopDist > 0.0) {
         lossValueStr = "--";
@@ -506,7 +499,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     std::string profitPctStr = "--", profitValueStr = "--";
     if (profitDist > 0.0 && qty > 0.0) {
         double profitDollars = profitDist * qty;
-        profitPctStr = (netLiq > 0.0) ? std::format("{:.2f}%", profitDollars / netLiq * 100.0) : "--";
+        profitPctStr = (NetLiquidation > 0.0) ? std::format("{:.2f}%", profitDollars / NetLiquidation * 100.0) : "--";
         profitValueStr = std::format("{:.2f}", profitDollars);
     }
 
@@ -527,8 +520,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     // 4) Position size at target risk — bottom-left of Qty input
     std::string optQtyText = "--";
     {
-        if (stopDist > 0.0 && netLiq > 0.0) {
-            int optQty = (int)((netLiq * riskPct / 100.0) / stopDist);
+        if (stopDist > 0.0 && NetLiquidation > 0.0) {
+            int optQty = (int)((NetLiquidation * riskPct / 100.0) / stopDist);
             optQtyText = std::format("{}", optQty);
             SetCtrlColor(state->hOptQtyLabel, qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY);
         } else {
@@ -539,8 +532,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     // 5) Stop distance at target risk — bottom-right of Stop input
     std::string optStopText = "--";
     {
-        if (qty > 0.0 && netLiq > 0.0) {
-            double optStop = (netLiq * riskPct / 100.0) / qty;
+        if (qty > 0.0 && NetLiquidation > 0.0) {
+            double optStop = (NetLiquidation * riskPct / 100.0) / qty;
             if (price <= 0.0) {
                 optStop = state->orderSide == "BUY" ? state->l1Info.last - optStop : state->l1Info.last + optStop;
             }
