@@ -1468,21 +1468,6 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
     SetFocus(hWnd);
 }
 
-void Market_RefreshPositionAndAvg(HWND hWnd, TsState* state) {
-    if (!state) return;
-    std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
-    auto& pm = api().getPortfolioMap();
-    auto it = pm.find(state->conId);
-    if (it != pm.end()) {
-        state->position      = it->second.shares;
-        state->avgPrice      = it->second.avgCost;
-        state->dailyPnL      = it->second.pnlSingle.dailyPnL;
-        state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
-    }
-
-    state->marketHdrDirty = true;
-}
-
 // ── Window procedure ──────────────────────────────────────────────────────────
 LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
@@ -1625,9 +1610,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api().addApiUpdateWindow(hWnd);
         api().setMarketWindow(hWnd, state->conId, state->symbol);
         SetTimer(hWnd, TIMER_MARKET_PAINT, MARKET_PAINT_TIMER_MS, NULL);
-        // Seed L1 from watchlist cache so VWAP (and other ticks) are
-        // immediately visible before the first L1 update fires
+        // Seed immediately
         PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
+        PostMessage(hWnd, WM_PNL_SINGLE, 0, (LPARAM)state->conId);
         // Seed executions list from any already-loaded orders
         Market_RefreshExec(hWnd, state);
         UpdateMarketRegistry();
@@ -1701,8 +1686,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.askSize   > 0.0) state->l1Info.askSize   = fresh.askSize;
             if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
             if (fresh.volume    > 0.0) state->l1Info.volume    = fresh.volume;
+            state->marketHdrDirty = true;
         }
-        Market_RefreshPositionAndAvg(hWnd, state);
         break;
     }
 
@@ -1857,7 +1842,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (state->volRecentBoundaryIdx > 0) --state->volRecentBoundaryIdx;
             }
 
-            Market_RefreshPositionAndAvg(hWnd, state);
+            state->marketHdrDirty = true;
         }
         delete tick;
         break;
@@ -1866,7 +1851,17 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_PNL_SINGLE: {
         int conId = (int)lParam;
         if (!conId || !state || state->conId != conId) break;
-        Market_RefreshPositionAndAvg(hWnd, state);
+        std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
+        auto& pm = api().getPortfolioMap();
+        auto it = pm.find(state->conId);
+        if (it != pm.end()) {
+            state->position      = it->second.shares;
+            state->avgPrice      = it->second.avgCost;
+            state->dailyPnL      = it->second.pnlSingle.dailyPnL;
+            state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
+        }
+
+        state->marketHdrDirty = true;
         break;
     }
 
