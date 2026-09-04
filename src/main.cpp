@@ -27,6 +27,8 @@ public:
         RegisterWindowClass(hInst_, WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,      105, true);
         RegisterWindowClass(hInst_, WndProcSettings,           SETTINGS_CLASS_NAME,           107);
         RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,           108, true);
+
+        darkMode = Settings_DarkMode();
         
         StartDashboard(hInst_);
 

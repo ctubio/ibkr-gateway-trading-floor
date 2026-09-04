@@ -873,7 +873,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             bool checked = (diamondsCheckedTabs >> i) & 1;
             HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
             SendMessage(tab, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
-            SetCtrlColor(tab, checked ? (Settings_DarkMode() ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
+            SetCtrlColor(tab, checked ? (darkMode ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
         }
         Diamonds_UpdateDivColumnsVisibility(hWnd);
 
@@ -932,7 +932,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
                 if (SendMessage(tab, BM_GETCHECK, 0, 0) == BST_CHECKED) {
                     diamondsCheckedTabs |= (1u << i);
-                    SetCtrlColor(tab, Settings_DarkMode() ? DM_TEXT : LM_TEXT);
+                    SetCtrlColor(tab, darkMode ? DM_TEXT : LM_TEXT);
                 } else {
                     SetCtrlColor(tab, COINS_CLR_GRAY);
                 }
@@ -1216,15 +1216,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         if (hdr->code == NM_CUSTOMDRAW) {
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
-            bool dark = Settings_DarkMode();
-
             switch (cd->nmcd.dwDrawStage) {
                 case CDDS_PREPAINT:
                     return CDRF_NOTIFYITEMDRAW;
 
                 case CDDS_ITEMPREPAINT:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
-                    if (dark) {
+                    if (darkMode) {
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         cd->clrText   = DM_TEXT;
                     } else {
@@ -1244,7 +1242,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (cit != diamondsSymbolColors.end() &&
                             cit->second >= 0 && cit->second < DIAMONDS_COLOR_COUNT) {
                             cd->clrText = diamondColorPalette[cit->second].rgb;
-                            if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                            if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         }
                         return CDRF_NEWFONT;
                     }
@@ -1260,8 +1258,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         // explicit avoids any locale-specific atof surprises.
                         if      (val > 0.0) cd->clrText = COINS_CLR_GREEN;
                         else if (val < 0.0) cd->clrText = COINS_CLR_RED;
-                        else cd->clrText = dark ? DM_TEXT : LM_TEXT;
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         if (cd->iSubItem == DCOL_CHG5MIN) {
                             SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         } else {
@@ -1278,7 +1276,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         int conId = diamondDisplayOrder[rowIndex];
                         bool halted = diamondDataCache[conId].halted;
                         cd->clrText = halted ? COINS_CLR_GRAY : COINS_CLR_BLUE;
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
@@ -1290,9 +1288,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             double diff = cacheRow.sortValues[DCOL_VWAP];
                             if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
                             else if (diff < 0.0) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                         }
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
@@ -1309,15 +1307,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             double pct = (last - low) / (high - low) * 100.0; // 0% at low, 100% at high
                             if (pct <= 25.0) cd->clrText = COINS_CLR_RED;
                             else if (pct >= 75.0) cd->clrText = COINS_CLR_GREEN;
-                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                         } else if (last > 0.0 && prevClose > 0.0) {
                             if (last > prevClose) cd->clrText = COINS_CLR_GREEN;
                             else if (last < prevClose) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                         } else {
-                            cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                            cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                         }
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
                     }
@@ -1328,19 +1326,19 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         const double valA = diamondDataCache[conId].sortValues[DCOL_ASKSIZE];
                         if (valA > valB) cd->clrText = COINS_CLR_RED;
                         else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
-                        else cd->clrText = dark ? DM_TEXT : LM_TEXT;
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_PCT_NETLIQ) {
                         cd->clrText = COINS_CLR_GRAY;
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
-                        if (dark) {
+                        if (darkMode) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
                         } else {
@@ -1360,13 +1358,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTHIGH && valA <= valB) cd->clrText = COINS_CLR_GREEN;
                         else if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTLOW && valA >= valB) cd->clrText = COINS_CLR_RED;
                         else cd->clrText = COINS_CLR_GRAY;
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
                         cd->clrText = COINS_CLR_PURPLE;
-                        if (dark) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }

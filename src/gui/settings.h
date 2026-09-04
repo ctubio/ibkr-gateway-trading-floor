@@ -180,7 +180,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 m + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
-            if (Settings_DarkMode())
+            if (darkMode)
                 SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
 
             HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
@@ -377,6 +377,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("DarkMode", checked);
+                darkMode = (checked == 1);
                 ApplyDarkModeToAllWindows();
                 // Force full repaint of this window and all children
                 InvalidateRect(hWnd, NULL, TRUE);

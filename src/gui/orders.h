@@ -788,15 +788,13 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             if (hdr->code == NM_CUSTOMDRAW) {
                 NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
-                bool dark = Settings_DarkMode();
-
                 switch (cd->nmcd.dwDrawStage) {
                     case CDDS_PREPAINT:
                         return CDRF_NOTIFYITEMDRAW;
 
                     case CDDS_ITEMPREPAINT:
                         cd->nmcd.uItemState &= ~CDIS_SELECTED;
-                        if (dark) {
+                        if (darkMode) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
                         } else {
@@ -807,7 +805,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         // lItemlParam is the LVITEM.lParam set in Orders_Repopulate (the orderId).
                         if (s_editState.panelVisible && s_editState.orderId != 0 &&
                             (int)cd->nmcd.lItemlParam == s_editState.orderId) {
-                            cd->clrTextBk = dark ? RGB(40, 50, 75) : RGB(255, 244, 190);
+                            cd->clrTextBk = darkMode ? RGB(40, 50, 75) : RGB(255, 244, 190);
                             return CDRF_NOTIFYSUBITEMDRAW;
                         }
                         return CDRF_NOTIFYSUBITEMDRAW;
@@ -827,12 +825,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             std::string orderType;
                             if (len >= 3 && strcmp(buf + len - 3, "BUY") == 0)       orderType = "BUY";
                             else if (len >= 4 && strcmp(buf + len - 4, "SELL") == 0) orderType = "SELL";
-                            cd->clrText = Orders_StatusColor(orderType, statusStr, dark);
+                            cd->clrText = Orders_StatusColor(orderType, statusStr, darkMode);
                             bool isEditRow = s_editState.panelVisible && s_editState.orderId != 0 &&
                                              (int)cd->nmcd.lItemlParam == s_editState.orderId;
                             if (isEditRow)
-                                cd->clrTextBk = dark ? RGB(40, 50, 75) : RGB(255, 244, 190);
-                            else if (dark)
+                                cd->clrTextBk = darkMode ? RGB(40, 50, 75) : RGB(255, 244, 190);
+                            else if (darkMode)
                                 cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             if (cd->iSubItem == OCOL_STATUS) {
                                 SelectObject(cd->nmcd.hdc, hFont11pt.get());

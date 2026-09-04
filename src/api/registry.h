@@ -13,6 +13,8 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATE
 #define LM_BG        GetSysColor(COLOR_BTNFACE)
 #define LM_TEXT      GetSysColor(COLOR_WINDOWTEXT)
 
+static bool darkMode = false;
+
 HBRUSH hDarkBrush = NULL;
 HBRUSH hDarkBrush2 = NULL;
 HBRUSH hBrushDarkGreen = NULL; // dark green background for BUY-side price inputs
@@ -416,7 +418,7 @@ LRESULT CALLBACK RichEditColorScrollSubclass(HWND hWnd, UINT uMsg, WPARAM wParam
 {
     switch (uMsg) {
         case WM_NCPAINT: {
-            if (!Settings_DarkMode()) return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            if (!darkMode) return DefSubclassProc(hWnd, uMsg, wParam, lParam);
             
             HDC hdc = GetWindowDC(hWnd);
             if (hdc) {
@@ -463,7 +465,7 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
         
         // The Header control sends paint messages (NM_CUSTOMDRAW) to its parent (the ListView)
         if (hdr->code == NM_CUSTOMDRAW && hdr->hwndFrom == ListView_GetHeader(hWnd)) {
-            if (!Settings_DarkMode()) return DefSubclassProc(hWnd, msg, wParam, lParam);
+            if (!darkMode) return DefSubclassProc(hWnd, msg, wParam, lParam);
 
             NMCUSTOMDRAW* cd = (NMCUSTOMDRAW*)lParam;
             switch (cd->dwDrawStage) {
@@ -548,7 +550,7 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
         // Let Windows paint the NC area first (scrollbars etc.)
         LRESULT res = DefSubclassProc(hWnd, msg, wParam, lParam);
 
-        if (!Settings_DarkMode()) return res;
+        if (!darkMode) return res;
 
         // Now overdraw just the border with our dark colour.
         // GetWindowDC covers the full window rect including NC area.
@@ -646,7 +648,7 @@ BOOL CALLBACK EnumChildProcForEdits(HWND hwnd, LPARAM lParam) {
 }
 
 void ApplyDarkMode(HWND hWnd) {
-    BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
+    BOOL dark = darkMode ? TRUE : FALSE;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
 
     // Automatically find and theme any ListViews and RichEdit inside this window

@@ -286,7 +286,7 @@ static void Coins_ToggleTTS(HWND hWnd) {
             dashboardState.coinsTtsOn = false;
             return;
         }
-        SetCtrlColor(dashboardState.hCoin_Speaker, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);   // bright = active
+        SetCtrlColor(dashboardState.hCoin_Speaker, darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK);   // bright = active
         SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
         Coins_SpeakDailyPnL();                          // speak immediately
     } else {

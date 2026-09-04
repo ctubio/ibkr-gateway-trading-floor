@@ -1161,11 +1161,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, state->hbmHeader);
     hdc = hdcMem; // redirect all subsequent drawing to the memory DC
 
-    const bool     dark       = Settings_DarkMode();
-    const COLORREF bgColor    = dark ? DM_BG   : GetSysColor(COLOR_BTNFACE);
-    const COLORREF textColor  = dark ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
-    const COLORREF labelColor = dark ? RGB(160,160,160) : RGB(110,110,110);
-    const COLORREF sepColor   = dark ? RGB(60,60,60)    : RGB(200,200,200);
+    const COLORREF bgColor    = darkMode ? DM_BG   : GetSysColor(COLOR_BTNFACE);
+    const COLORREF textColor  = darkMode ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
+    const COLORREF labelColor = darkMode ? RGB(160,160,160) : RGB(110,110,110);
+    const COLORREF sepColor   = darkMode ? RGB(60,60,60)    : RGB(200,200,200);
 
     // Fill background
     RECT hdrRc = { 0, 0, rc.right, HEADER_H };
@@ -1438,7 +1437,7 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
     if (state->ttsOn) {
         if (!SharedTts().Acquire()) { state->ttsOn = false; return; }
         if (state->hSpeakerBtn)
-            SetCtrlColor(state->hSpeakerBtn, Settings_DarkMode() ? COINS_CLR_WHITE : COINS_CLR_BLACK);
+            SetCtrlColor(state->hSpeakerBtn, darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK);
         SetTimer(hWnd, TIMER_MARKET_SPEAKER, 21000, NULL);
         Market_SpeakLast(state);
     } else {
@@ -1881,8 +1880,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
-                    BOOL dark = Settings_DarkMode() ? TRUE : FALSE;
-                    if (dark)
+                    if (darkMode)
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                     LPARAM itemParam = cd->nmcd.lItemlParam;
                     COLORREF rowColor = static_cast<COLORREF>(itemParam & 0xFFFFFFFF);
@@ -1892,7 +1890,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         if (diff < 0) diff += 86400;
                         bool isMatch = (diff >= 0 && diff <= 1);
                         if (isMatch) {
-                            cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                            cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                         } else {
                             cd->clrText = COINS_CLR_GRAY;
                         }
@@ -1900,7 +1898,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     else if (rowColor && cd->iSubItem != 0)
                         cd->clrText = rowColor;
                     else
-                        cd->clrText = dark ? DM_TEXT : LM_TEXT;
+                        cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                     return CDRF_DODEFAULT;
             }
             break;
@@ -1912,11 +1910,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
-                    bool dark = Settings_DarkMode();
                     // lParam stores 1=ask, 2=bid
                     LPARAM side = cd->nmcd.lItemlParam;
                     COLORREF clr = (side == 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
-                    COLORREF bg  = dark
+                    COLORREF bg  = darkMode
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     cd->clrTextBk = bg;
@@ -1936,7 +1933,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     // lParam stores 1=BUY (blue/green), 2=SELL (red)
                     LPARAM side = cd->nmcd.lItemlParam;
                     COLORREF clr = (side == 1) ? COINS_CLR_BLUE : COINS_CLR_RED;
-                    COLORREF bg  = Settings_DarkMode()
+                    COLORREF bg  = darkMode
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;

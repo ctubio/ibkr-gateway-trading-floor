@@ -321,7 +321,7 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
 
 static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
                                                  UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
-    if (msg == WM_PAINT && Settings_DarkMode()) {
+    if (msg == WM_PAINT && darkMode) {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hCtrl, &ps);
         RECT rc;
@@ -398,12 +398,12 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             HDC hdc = (HDC)wParam;
             RECT rc;
             GetClientRect(hWnd, &rc);
-            FillRect(hdc, &rc, Settings_DarkMode() ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
+            FillRect(hdc, &rc, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
             return 1;
         }
         case WM_CTLCOLOREDIT:
         case WM_CTLCOLORLISTBOX: {
-            if (!Settings_DarkMode()) return 0;
+            if (!darkMode) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG2);
             return (LRESULT)hDarkBrush2;
@@ -415,7 +415,7 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 COLORREF clr = GetCtrlColor((HWND)lParam);
                 if (clr != COLOR_THEME) {
                     SetTextColor((HDC)wParam, clr);
-                    if (Settings_DarkMode()) {
+                    if (darkMode) {
                         SetBkColor((HDC)wParam, DM_BG);
                         return (LRESULT)hDarkBrush;
                     } else {
@@ -424,13 +424,13 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     }
                 }
             }
-            if (!Settings_DarkMode()) return 0;
+            if (!darkMode) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG);
             return (LRESULT)hDarkBrush;
         }
         case WM_CTLCOLORBTN: {
-            if (!Settings_DarkMode()) return 0;
+            if (!darkMode) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG);
             return (LRESULT)hDarkBrush;
@@ -439,24 +439,23 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)lParam;
             if (dis->CtlType != ODT_BUTTON) return 0;
 
-            bool dark = Settings_DarkMode();
             bool pressed  = (dis->itemState & ODS_SELECTED);
             bool disabled = (dis->itemState & ODS_DISABLED);
             bool focused  = (dis->itemState & ODS_FOCUS);
 
             // 1. Modern, softer background colors
-            COLORREF bgColor = dark 
+            COLORREF bgColor = darkMode 
                 ? (pressed ? RGB(75, 75, 75) : RGB(45, 45, 45))
                 : (pressed ? RGB(210, 210, 210) : RGB(240, 240, 240));
 
             // 2. Subtle border colors that blend smoothly
-            COLORREF borderColor = dark 
+            COLORREF borderColor = darkMode 
                 ? (pressed ? RGB(100, 100, 100) : RGB(65, 65, 65))
                 : (pressed ? RGB(180, 180, 180) : RGB(215, 215, 215));
 
             COLORREF textColor = disabled 
-                ? (dark ? RGB(120, 120, 120) : RGB(160, 160, 160)) 
-                : (dark ? DM_TEXT : LM_TEXT);
+                ? (darkMode ? RGB(120, 120, 120) : RGB(160, 160, 160)) 
+                : (darkMode ? DM_TEXT : LM_TEXT);
 
             // --- Fill Background ---
             HBRUSH hBg = CreateSolidBrush(bgColor);
@@ -494,7 +493,7 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (focused && !pressed) {
                 RECT rcFocus = dis->rcItem;
                 InflateRect(&rcFocus, -2, -2); // shrink by 2 pixels
-                HPEN hFocusPen = CreatePen(PS_DOT, 1, dark ? RGB(100, 100, 100) : RGB(170, 170, 170));
+                HPEN hFocusPen = CreatePen(PS_DOT, 1, darkMode ? RGB(100, 100, 100) : RGB(170, 170, 170));
                 HPEN hOldFocus = (HPEN)SelectObject(dis->hDC, hFocusPen);
                 Rectangle(dis->hDC, rcFocus.left, rcFocus.top, rcFocus.right, rcFocus.bottom);
                 SelectObject(dis->hDC, hOldFocus);
