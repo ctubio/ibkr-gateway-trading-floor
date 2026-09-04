@@ -670,7 +670,16 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             MINMAXINFO* mmi = (MINMAXINFO*)lParam;
             mmi->ptMinTrackSize.x = windowOrdersWidth;
             mmi->ptMaxTrackSize.x = windowOrdersWidth;
-            return 0;
+            
+            RECT workArea;
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+
+            // 3. Force the maximized size and position to respect the work area
+            mmi->ptMaxSize.x = workArea.right - workArea.left;
+            mmi->ptMaxSize.y = workArea.bottom - workArea.top;
+            mmi->ptMaxPosition.x = workArea.left - workArea.left + ((mmi->ptMaxSize.x - mmi->ptMaxTrackSize.x)/2); // relative to monitor, or workArea.left
+            mmi->ptMaxPosition.y = workArea.top - workArea.top;
+            return DefWindowProc(hWnd, WM_GETMINMAXINFO, wParam, lParam);
         }
         
         case WM_SIZE: {

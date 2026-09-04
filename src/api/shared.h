@@ -128,17 +128,15 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     
     LoadWinPosition(allowInstancesBySymbol ? windowKey.c_str() : className, x, y, w, h);
 
+    DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
     if (hInst) { // dashboard window
-        hWnd = CreateWindow(className, title, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, x, y, w, h, NULL, NULL, hInst, lpParam);
-        ShowWindow(hWnd, SW_SHOW);
+        hWnd = CreateWindow(className, title, dwStyle, x, y, w, h, NULL, NULL, hInst, lpParam);
         UpdateWindow(hWnd);
     } else {
         HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
-        DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
         if (strcmp(className, ORDERS_CLASS_NAME)    == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
-         || strcmp(className, MARKET_CLASS_NAME)    == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }

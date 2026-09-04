@@ -189,7 +189,20 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
 
     RECT windowRect;
     GetWindowRect(hWnd, &windowRect);
-    MoveWindow(hWnd, windowRect.left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
+
+    WINDOWPLACEMENT wp;
+    wp.length = sizeof(WINDOWPLACEMENT);
+
+    int left = windowRect.left;
+    if (GetWindowPlacement(hWnd, &wp)) {
+        if (wp.showCmd == SW_SHOWMAXIMIZED) {    
+            RECT workArea;
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+            left = workArea.left - workArea.left + ((workArea.right - workArea.left - windowDiamondsWidth - extraWidth)/2); // relative to monitor, or workArea.left
+        }
+    }
+
+    MoveWindow(hWnd, left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
 }
 
 static HIMAGELIST diamondsRowHeightImageList = NULL;
@@ -880,8 +893,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
         MINMAXINFO* mmi = (MINMAXINFO*)lParam;
         mmi->ptMinTrackSize.x = windowDiamondsWidth + extraWidth;
-        mmi->ptMaxTrackSize.x = windowDiamondsWidth + extraWidth;
-        return 0;
+        mmi->ptMaxTrackSize.x = windowDiamondsWidth + extraWidth;// 2. Retrieve the desktop work area (excludes the taskbar)
+        RECT workArea;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+
+        // 3. Force the maximized size and position to respect the work area
+        mmi->ptMaxSize.x = workArea.right - workArea.left;
+        mmi->ptMaxSize.y = workArea.bottom - workArea.top;
+        mmi->ptMaxPosition.x = workArea.left - workArea.left + ((mmi->ptMaxSize.x - mmi->ptMaxTrackSize.x)/2); // relative to monitor, or workArea.left
+        mmi->ptMaxPosition.y = workArea.top - workArea.top;
+        return DefWindowProc(hWnd, WM_GETMINMAXINFO, wParam, lParam);
     }
 
     case WM_SIZE: {
