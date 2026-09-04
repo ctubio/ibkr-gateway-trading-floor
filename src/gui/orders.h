@@ -48,8 +48,8 @@ struct OrderCol { const char* header; int width; int fmt; };
 static const OrderCol orderCols[] = {
     { "Side",           0,  LVCFMT_CENTER},
     { "Symbol",        80,  LVCFMT_CENTER},
-    { "Quote",        180,  LVCFMT_LEFT },
-    { "Status",       165,  LVCFMT_CENTER},
+    { "Quote",        185,  LVCFMT_LEFT },
+    { "Status",       160,  LVCFMT_CENTER},
 };
 static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]));
 // ── Helpers ───────────────────────────────────────────────────────────────────
