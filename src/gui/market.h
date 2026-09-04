@@ -198,6 +198,17 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
             ListView_SetColumn(hList, i, &lvcUpdate);
         }
     }
+    // Keep one stable row for each supported book position. Depth callbacks
+    // can then update or clear a single row without rebuilding the control.
+    for (int i = 0; i < 12; ++i) {
+        LVITEMA lvi = {};
+        lvi.mask = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem = i;
+        lvi.lParam = (i < 6) ? 1 : 2;
+        lvi.pszText = (LPSTR)"";
+        ListView_InsertItem(hList, &lvi);
+        ListView_SetItemText(hList, i, 1, (LPSTR)"");
+    }
     return hList;
 }
 
@@ -1062,49 +1073,23 @@ static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now)
 // ── L2 list refresh ───────────────────────────────────────────────────────────
 // Renders asks (red) on top, bids (blue) below in a single Price/Size list.
 // lParam: 1 = ask row, 2 = bid row  (used by NM_CUSTOMDRAW for colouring).
-static void Market_RefreshL2(HWND hWnd, TsState* state) {
-    if (!state || !state->hL2List) return;
+static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* update) {
+    if (!state || !state->hL2List || !update) return;
+    if (update->position < 0 || update->position >= 6 || (update->side != 0 && update->side != 1)) return;
 
-    std::vector<TradingAPI::Level2Entry> bids, asks;
-    api().getLevel2Snapshot(state->conId, bids, asks);
-
-    HWND hList = state->hL2List;
-    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
-    ListView_DeleteAllItems(hList);
-
-    int row = 0;
-
-    // Asks: IBKR position 0 = best ask (lowest price) → they arrive in ascending
-    // order so we reverse them so the worst ask is at the top and the best ask
-    // (lowest price, closest to mid) sits just above the bids.
-    for (int i = (int)asks.size() - 1; i >= 0; --i) {
-        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
-        lvi.iItem  = row;
-        lvi.lParam = 1;  // ask
-        std::string priceStr = Market_Fmt(asks[i].price);
-        lvi.pszText = (LPSTR)priceStr.c_str();
-        ListView_InsertItem(hList, &lvi);
-        std::string sizeStr = Market_FmtQty(asks[i].size);
-        ListView_SetItemText(hList, row, 1, (LPSTR)sizeStr.c_str());
-        ++row;
+    // Ask position 0 is the best ask, displayed immediately above bids.
+    // Fixed slots reverse asks so the best ask remains closest to the spread.
+    int row = update->side == 0 ? 5 - update->position : 6 + update->position;
+    if (update->operation == 2) {
+        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
+        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
+    } else {
+        std::string price = Market_Fmt(update->entry.price);
+        std::string size = Market_FmtQty(update->entry.size);
+        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)price.c_str());
+        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)size.c_str());
     }
-
-    // Bids: IBKR position 0 = best bid (highest price) → insert in order so best
-    // bid appears immediately below the asks.
-    for (int i = 0; i < (int)bids.size(); ++i) {
-        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
-        lvi.iItem  = row;
-        lvi.lParam = 2;  // bid
-        std::string priceStr = Market_Fmt(bids[i].price);
-        lvi.pszText = (LPSTR)priceStr.c_str();
-        ListView_InsertItem(hList, &lvi);
-        std::string sizeStr = Market_FmtQty(bids[i].size);
-        ListView_SetItemText(hList, row, 1, (LPSTR)sizeStr.c_str());
-        ++row;
-    }
-
-    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-    InvalidateRect(hList, NULL, FALSE);
+    ListView_RedrawItems(state->hL2List, row, row);
 }
 
 // ── Executions list refresh ───────────────────────────────────────────────────
@@ -1653,6 +1638,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Seed executions list from any already-loaded orders
         Market_RefreshExec(hWnd, state);
         UpdateMarketRegistry();
+        Market_Layout(hWnd, state);
         break;
     }
 
@@ -1727,9 +1713,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
-    case WM_MARKET_L2:
-        if (state) Market_RefreshL2(hWnd, state);
+    case WM_MARKET_L2: {
+        auto* update = reinterpret_cast<TradingAPI::Level2Update*>(lParam);
+        if (state) Market_ApplyL2Update(state, update);
+        delete update;
         break;
+    }
 
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == STN_CLICKED && state) {
@@ -1980,7 +1969,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 ListView_DeleteAllItems(state->hTsList);
                 if (state->hTsListF100)  ListView_DeleteAllItems(state->hTsListF100);
                 if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
-                if (state->hL2List)      ListView_DeleteAllItems(state->hL2List);
+                if (state->hL2List) {
+                    for (int row = 0; row < 12; ++row) {
+                        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
+                        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
+                    }
+                }
                 if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
                 state->l1Info = TradingAPI::L1Book{};
                 state->volHistory.clear();   // stale on disconnect — avoid a phantom ratio off a frozen history

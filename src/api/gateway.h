@@ -64,7 +64,7 @@
 #define WM_DIAMONDS_UPDATE  (WM_USER +  7)
 #define WM_MARKET_TICK      (WM_USER +  8)
 #define WM_MARKET_L1        (WM_USER +  9)
-#define WM_MARKET_L2        (WM_USER + 10)   // Level 2 depth change — handler calls getLevel2Snapshot()
+#define WM_MARKET_L2        (WM_USER + 10)   // Level 2 depth delta — lParam = Level2Update*
 #define WM_PNL_SINGLE       (WM_USER + 11)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
 #define WM_API_EXECUTION    (WM_USER + 12)
 #define WM_FX_RATE_UPDATE   (WM_USER + 13)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
@@ -229,13 +229,20 @@ public:
     };
 
     // ── Level 2 depth entry (one row per side) ────────────────────────────────
-    // Retrieved with getLevel2Snapshot(); bids sorted best-first (price desc),
-    // asks sorted best-first (price asc).
-    // Posted via WM_MARKET_L2 (no lParam — call getLevel2Snapshot to read).
     struct Level2Entry {
         std::string mmid;      // market-maker ID or venue name (may be empty)
         double      price = 0.0;
         double      size  = 0.0;
+    };
+
+    // One Level 2 book mutation routed to the owning Market window.
+    // The UI applies this delta directly instead of requesting and rebuilding
+    // the complete book for every depth callback.
+    struct Level2Update {
+        int position = 0;
+        int operation = 0;    // 0 = insert, 1 = update, 2 = delete
+        int side = 0;         // 0 = ask, 1 = bid
+        Level2Entry entry;
     };
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -305,13 +312,6 @@ public:
 
     bool getMarketData(int conId, L1Book& out);
     
-    // ── Level 2 data (market window) ────────────────────────────────
-
-    // Returns a sorted snapshot of the order book for the given market window.
-    //   bids : sorted by price descending  (bids[0] = best bid)
-    //   asks : sorted by price ascending   (asks[0] = best ask)
-    // Call from the WM_MARKET_L2 handler; thread-safe.
-    bool getLevel2Snapshot(int conId, std::vector<Level2Entry>& bids, std::vector<Level2Entry>& asks);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 
