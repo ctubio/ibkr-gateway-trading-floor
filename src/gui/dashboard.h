@@ -163,10 +163,12 @@ static void UpdateMarketClock(HWND hWnd) {
     // Define NY Market Boundaries in seconds from Midnight
     const int T_PREMARKET = 4 * 3600;                     // 04:00 ET
     const int T_OPEN_IMBAL = 9 * 3600;                    // 09:00 ET (20m before 09:20)
-    const int T_OPEN_BELL = 9 * 3600 + 20 * 60;           // 09:20 ET (10m before 09:30)
+    //const int T_OPEN_BELL = 9 * 3600 + 20 * 60;           // 09:20 ET (10m before 09:30)
+    const int T_OPEN_BELL = 8 * 3600 + 30 * 60;          // 08:30 ET (60m before 09:30)
     const int T_OPEN = 9 * 3600 + 30 * 60;                // 09:30 ET
     const int T_CLOSE_IMBAL = 15 * 3600 + 30 * 60;        // 15:30 ET (20m before 15:50)
-    const int T_CLOSE_BELL = 15 * 3600 + 50 * 60;         // 15:50 ET (10m before 16:00)
+    //const int T_CLOSE_BELL = 15 * 3600 + 50 * 60;         // 15:50 ET (10m before 16:00)
+    const int T_CLOSE_BELL = 15 * 3600 + 00 * 60;        // 15:00 ET (60m before 16:00)
     const int T_CLOSE = 16 * 3600;                        // 16:00 ET
     const int T_AFTERHOURS_END = 20 * 3600;               // 20:00 ET
     const int T_SUNDAY_OPEN = 20 * 3600;                  // 20:00 ET (Sunday 8:00 PM)
