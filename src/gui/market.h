@@ -922,7 +922,10 @@ void StartMarket(const std::string& symbol, int conId) {
     // find and focus it; none of the capacity/position logic applies.
     bool alreadyOpen = false;
     for (auto& mw : tsWindows) {
-        if (std::string(MARKET_CLASS_NAME) + "_" + mw.symbol == key) { alreadyOpen = true; break; }
+        if (mw.symbol == symbol) {
+            alreadyOpen = true;
+            break;
+        }
     }
 
     if (!alreadyOpen) {

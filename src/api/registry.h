@@ -1296,6 +1296,7 @@ void Session_RestoreWindows(
                     if (dot != std::string::npos) {
                         int cid = std::stoi(token.substr(0, dot));
                         std::string sym = token.substr(dot + 1);
+                        Settings_Market_SetOpenedLast(std::string(MARKET_CLASS_NAME) + "_" + sym);
                         StartMarket(sym, cid);
                     }
                     start = end + 1;
