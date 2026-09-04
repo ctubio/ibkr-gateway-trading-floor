@@ -25,7 +25,7 @@ static std::unordered_set<int> firedAlertsDown;
 static UINT diamondsCheckedTabs = 0x7;
 
 // Maps conId → assigned group (DTAB_ALL = untagged = shown when bit 0 is set).
-static std::map<int,int> diamondsTabMap;
+static std::unordered_map<int,int> diamondsTabMap;
 
 // ── Symbol color palette ──────────────────────────────────────────────────────
 // Index 0-5 = named colors.  No entry in the map (or index -1) = inherit theme.
@@ -43,7 +43,7 @@ static const DiamondsColorDef diamondColorPalette[DIAMONDS_COLOR_COUNT] = {
 };
 
 // Maps conId → color index (0..DIAMONDS_COLOR_COUNT-1), or not present = inherit.
-static std::map<int,int> diamondsSymbolColors;
+static std::unordered_map<int,int> diamondsSymbolColors;
 
 static bool diamondsChkVisible = false;
 
