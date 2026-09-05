@@ -1089,7 +1089,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             AlertPopupData* data = (AlertPopupData*)lParam;
             if (data) {
                 FlashScreen(data->isUp, 1000);
-                StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 152, NULL, "", data);
+                StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
                 PlaySound_Async(209);
             }
             return 0;

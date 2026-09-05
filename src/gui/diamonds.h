@@ -637,7 +637,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     if (alertHigh > 0.0 && t.last >= alertHigh) {
         if (firedAlertsUp.find(conId) == firedAlertsUp.end()) {
             firedAlertsUp.insert(conId); // Mark as fired
-            std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
+            //std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
+            std::string msg = std::format("{:.2f}", t.last);
             std::string title = std::format("{}: Alert UP!", row.symbol);
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
@@ -651,7 +652,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     if (alertLow > 0.0 && t.last <= alertLow) {
         if (firedAlertsDown.find(conId) == firedAlertsDown.end()) {
             firedAlertsDown.insert(conId); // Mark as fired
-            std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
+            //std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
+            std::string msg = std::format("{:.2f}", t.last);
             std::string title = std::format("{}: Alert DOWN!", row.symbol);
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {

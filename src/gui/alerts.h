@@ -13,6 +13,7 @@
 
 #define ID_ALERTS_UP_EDIT    5301
 #define ID_ALERTS_DOWN_EDIT  5302
+#define ID_ALERT_EDIT_BTN    5303
 
 struct AlertsEditState {
     std::string symbol;   // symbol currently loaded into the popup
@@ -271,28 +272,38 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
             SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
 
             // Message text
+            HWND hSymbol = CreateWindowA("STATIC", data->symbol.c_str(),
+                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                10, 20, 140, 40, hWnd, NULL, cs->hInstance, NULL);
+            SendMessage(hSymbol, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
+            SetCtrlColor(hSymbol, data->isUp ? COINS_CLR_GREEN : COINS_CLR_RED);
+            
             HWND hMsg = CreateWindowA("STATIC", data->msg.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                8, 20, 260, 60, hWnd, NULL, cs->hInstance, NULL);
-            SendMessage(hMsg, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
-            SetCtrlColor(hMsg, data->isUp ? COINS_CLR_GREEN : COINS_CLR_RED);
+                150, 20, 140, 40, hWnd, NULL, cs->hInstance, NULL);
+            SendMessage(hMsg, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
             
             // Buttons
             HWND hKeep = CreateWindowA("BUTTON", "Keep",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                0, 100, (300 / 2) - 4, 22, hWnd, (HMENU)ID_ALERT_KEEP_BTN, cs->hInstance, NULL);
+                0, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_KEEP_BTN, cs->hInstance, NULL);
             SendMessage(hKeep, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+            HWND hEdit = CreateWindowA("BUTTON", "Edit",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+                (300 / 3), 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_EDIT_BTN, cs->hInstance, NULL);
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
             
             HWND hDelete = CreateWindowA("BUTTON", "Delete",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                (300 / 2) + 4, 100, (300 / 2) - 4, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
+                (300 / 3) * 2, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
             SendMessage(hDelete, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             break;
         }
         case WM_COMMAND: {
             int wmId = LOWORD(wParam);
-            if (wmId == ID_ALERT_KEEP_BTN || wmId == ID_ALERT_DELETE_BTN) {
+            if (wmId == ID_ALERT_KEEP_BTN || wmId == ID_ALERT_DELETE_BTN || wmId == ID_ALERT_EDIT_BTN) {
                 if (wmId == ID_ALERT_DELETE_BTN) {
                     AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
                     if (data) {
@@ -302,6 +313,12 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                         else downStr = "";
                         Settings_Alerts_Save(data->symbol, data->conId, upStr, downStr);
                         Alerts_NotifyChanged(data->conId);
+                    }
+                }
+                if (wmId == ID_ALERT_EDIT_BTN) {
+                    AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                    if (data) {
+                        StartAlertsEditor(data->symbol, data->conId);
                     }
                 }
                 DestroyWindow(hWnd);
