@@ -234,6 +234,28 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     MoveWindow(hWnd, left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
 }
 
+static HIMAGELIST diamondsRowHeightImageList = NULL;
+
+static void Diamonds_SetRowHeight(HWND hList, int rowHeight) {
+    if (diamondsRowHeightImageList) {
+        ImageList_Destroy(diamondsRowHeightImageList);
+        diamondsRowHeightImageList = NULL;
+    }
+    // Width can stay tiny (1px) since LVS_REPORT never shows the icon glyph
+    // area when there's no LVCFMT_IMAGE column, but height controls row height.
+    diamondsRowHeightImageList = ImageList_Create(1, rowHeight, ILC_COLOR32 | ILC_MASK, 1, 1);
+    if (!diamondsRowHeightImageList) return;
+
+    // Add one fully-transparent 1x1 bitmap so the image list is non-empty.
+    HBITMAP hbmImage = CreateBitmap(1, rowHeight, 1, 1, NULL);
+    HBITMAP hbmMask  = CreateBitmap(1, rowHeight, 1, 1, NULL);
+    ImageList_Add(diamondsRowHeightImageList, hbmImage, hbmMask);
+    DeleteObject(hbmImage);
+    DeleteObject(hbmMask);
+
+    ListView_SetImageList(hList, diamondsRowHeightImageList, LVSIL_SMALL);
+}
+
 // ── Registry persistence for tab assignments ──────────────────────────────────
 
 // Saves diamondsTabMap to the registry as two space-separated conId lists.
@@ -812,7 +834,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Start the paint-limiter timer so Diamonds_ApplySort's dirty flag is flushed.
         SetTimer(hWnd, TIMER_DIAMONDS_PAINT, DIAMONDS_PAINT_TIMER_MS, NULL);
 
-        SendMessage(hList, WM_SETFONT, (WPARAM)hFont19pt.get(), TRUE);
+        Diamonds_SetRowHeight(hList, 28);
+        SendMessage(hList, WM_SETFONT, (WPARAM)hFont16pt.get(), TRUE);
         SendMessage(ListView_GetHeader(hList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
 
@@ -1410,6 +1433,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         api().removeApiUpdateWindow(hWnd);
         diamondDataCache.clear();
         diamondsSparklines.clear();
+        if (diamondsRowHeightImageList) {
+            ImageList_Destroy(diamondsRowHeightImageList);
+            diamondsRowHeightImageList = NULL;
+        }
         break;
     }
 
