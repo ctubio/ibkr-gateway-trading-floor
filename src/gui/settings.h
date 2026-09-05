@@ -243,7 +243,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Trading ────────────────────────────────────────────────────── (column 2)
             hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 14 + (30 * 5),
+                col2_x, y, w, 37 * 5,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -266,7 +266,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE,  86, false);
             HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,   119, false);
             HWND hSafetyEdit = MakeRow("Safety:",     ID_SETTINGS_SAFETY_VALUE, 152, false);
-            y += 172;
+            y += 152 + 40;
 
             SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 20)).c_str());
             SetWindowTextA(hStopEdit,   std::format("{:.2f}", Settings_LoadFloat("StopPrice",  1.0f)).c_str());

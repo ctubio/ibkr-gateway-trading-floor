@@ -91,13 +91,14 @@ BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
             //bool containsAtSymbol = (windowTitle.find(L"@") != std::wstring::npos);
             //bool containsU423 = (windowTitle.find(L"Interactive Brokers") != std::wstring::npos);
             //bool containsGateway = (windowTitle.find(L"IBKR Gateway") != std::wstring::npos);
-            bool containsToolkit   = (windowTitle.find(L"ToolkitWindow") != std::wstring::npos);
-            bool containsPortfolio = (windowTitle.find(L"Portfolio") != std::wstring::npos);
-            bool containsLoading   = (windowTitle.find(L"Loading") != std::wstring::npos);
+            bool containsToolkit       = (windowTitle.find(L"ToolkitWindow") != std::wstring::npos);
+            bool containsPortfolio     = (windowTitle.find(L"Portfolio") != std::wstring::npos);
+            bool containsLoading       = (windowTitle.find(L"Loading") != std::wstring::npos);
+            bool containsLoginMessages = (windowTitle.find(L"Login Messages") != std::wstring::npos);
 
             // Only add the window if it matches your specific criteria
             //if (containsAtSymbol || containsU423 || containsGateway) {
-            if (data->swState == SW_HIDE || (!containsToolkit && !containsLoading && !containsPortfolio)) {
+            if (data->swState == SW_HIDE || (!containsToolkit && !containsLoading && !containsPortfolio && !containsLoginMessages)) {
                 data->foundWindows.push_back(hwnd);
             }
         }
@@ -168,6 +169,9 @@ struct EnsureOnceFlag {
 };
 
 bool alreadyEnsureGatewayRunning = false;
+
+bool ensureGatewayLoggedInOnce = false;
+
 bool EnsureGatewayRunning(HWND hWnd) {
     if (alreadyEnsureGatewayRunning || !Settings_AutoGateway()) return false;
 
@@ -185,11 +189,12 @@ bool EnsureGatewayRunning(HWND hWnd) {
         SaveGatewayPath(path);
     }
     LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");
+    ensureGatewayLoggedInOnce = false;
     ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
     return true;
 }
 
-            // Helper function to send a string as keyboard input
+// Helper function to send a string as keyboard input
 void SendString(const std::string& text) {
     std::vector<INPUT> inputs;
     for (char c : text) {
@@ -222,7 +227,7 @@ void SendKey(WORD vKey) {
 }
 
 void EnsureGatewayLoggedIn(HWND hWnd) {
-    if (!Settings_AutoGateway()) return;
+    if (ensureGatewayLoggedInOnce || !Settings_AutoGateway()) return;
 
     std::string path = GetGatewayPath();
     if (path.empty()) return;
@@ -250,6 +255,7 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
         GetWindowTextA(hwnd, title, sizeof(title));
         std::string titleStr(title);
         if (titleStr.find("Login") != std::string::npos) {
+            ensureGatewayLoggedInOnce = true;
             LogDebug("Found login window: " + titleStr);
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
