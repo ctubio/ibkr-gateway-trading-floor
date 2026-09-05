@@ -134,7 +134,7 @@ struct DiamondRowCache {
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
-static std::map<int, DiamondRowCache> diamondDataCache;
+static std::unordered_map<int, DiamondRowCache> diamondDataCache;
 
 // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
 static std::vector<int> diamondDisplayOrder;

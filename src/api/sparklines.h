@@ -11,7 +11,10 @@ private:
 
     // NEW: long-lived history (~65 min) used only for the 10/20/30/40/50-min reference dots.
     // Kept completely separate from `data` so the existing sparkline logic is untouched.
-    std::vector<SparkPoint> priceHistory;
+    // PERF: std::deque instead of std::vector — AddPrice() prunes stale entries off
+    // the *front* every call. On a vector that's an O(n) shift per erase (and this
+    // loop can erase repeatedly in one call); on a deque, pop_front() is O(1).
+    std::deque<SparkPoint> priceHistory;
 
     // Equivalent to your d3_scale_linear
     float MapScale(double value, double minDomain, double maxDomain, float minRange, float maxRange) {
@@ -48,20 +51,37 @@ private:
     // NEW: finds the price closest to (now - minutesAgo) in priceHistory.
     // Returns false if we don't yet have history reaching that far back
     // (this is what makes the dots appear one by one as time passes).
+    //
+    // PERF: priceHistory is appended in strictly non-decreasing time order
+    // (every AddPrice() call timestamps with GetTickCount64()), so instead of
+    // scanning every entry to find the closest one (O(n), and this runs 5x
+    // per Draw() call — once per reference dot — at ~30 FPS per open Market
+    // window), binary-search for the insertion point and only compare the
+    // two neighbors around it. O(log n) instead of O(n).
     bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice) const {
         ULONGLONG minMs = minutesAgo * 60000ULL;
         if (now < minMs) return false;
         ULONGLONG target = now - minMs;
         if (priceHistory.empty() || priceHistory.front().date > target) return false;
 
-        size_t bestIdx = 0;
-        ULONGLONG bestDiff = (priceHistory[0].date > target)
-            ? (priceHistory[0].date - target) : (target - priceHistory[0].date);
-        for (size_t i = 1; i < priceHistory.size(); ++i) {
-            ULONGLONG diff = (priceHistory[i].date > target)
-                ? (priceHistory[i].date - target) : (target - priceHistory[i].date);
-            if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+        auto it = std::lower_bound(priceHistory.begin(), priceHistory.end(), target,
+            [](const SparkPoint& p, ULONGLONG t) { return p.date < t; });
+
+        size_t bestIdx;
+        if (it == priceHistory.end()) {
+            // target is at/after the newest sample — nothing after it to compare
+            bestIdx = priceHistory.size() - 1;
+        } else if (it == priceHistory.begin()) {
+            // target is at/before the oldest sample
+            bestIdx = 0;
+        } else {
+            size_t idxAfter  = (size_t)(it - priceHistory.begin());
+            size_t idxBefore = idxAfter - 1;
+            ULONGLONG diffAfter  = it->date - target;
+            ULONGLONG diffBefore = target - priceHistory[idxBefore].date;
+            bestIdx = (diffAfter < diffBefore) ? idxAfter : idxBefore;
         }
+
         outPrice = priceHistory[bestIdx].price;
         return true;
     }
@@ -91,8 +111,12 @@ public:
             priceHistory.push_back({ now, price });
         }
         const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL; // keep ~65 minutes
+        // PERF: pop_front() on a deque is O(1); this used to be
+        // priceHistory.erase(priceHistory.begin()) on a vector, which is O(n)
+        // per call (shifts every remaining element down) and this loop can
+        // run it repeatedly in a single AddPrice().
         while (!priceHistory.empty() && now > maxAge && priceHistory.front().date < now - maxAge) {
-            priceHistory.erase(priceHistory.begin());
+            priceHistory.pop_front();
         }
     }
 
@@ -186,7 +210,8 @@ private:
     std::vector<MiniSparkPoint> data;
 
     // NEW: same idea as in Sparkline, a separate long-lived history for the dots
-    std::vector<MiniSparkPoint> priceHistory;
+    // PERF: deque, not vector — see the comment on Sparkline::priceHistory above.
+    std::deque<MiniSparkPoint> priceHistory;
 
     float MapScale(double value, double minD, double maxD, float minR, float maxR) const {
         if (maxD == minD) return minR + (maxR - minR) / 2.0f;
@@ -219,6 +244,10 @@ private:
         }
     }
 
+    // PERF: same binary-search treatment as Sparkline::GetPriceAgo. This one
+    // matters even more — it's called once per L1 tick per symbol from
+    // Diamonds_UpdateMarketCols() -> GetPriceMinutesAgo(), i.e. on the raw
+    // unthrottled tick-ingest path, in addition to 5x per Draw() per visible row.
     bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice, bool strict = true) const {
         if (priceHistory.empty()) return false;
 
@@ -228,14 +257,20 @@ private:
 
         if (strict && (now < minMs || priceHistory.front().date > target)) return false;
 
-        size_t bestIdx = 0;
-        ULONGLONG bestDiff = (priceHistory[0].date > target)
-            ? (priceHistory[0].date - target) : (target - priceHistory[0].date);
-        
-        for (size_t i = 1; i < priceHistory.size(); ++i) {
-            ULONGLONG diff = (priceHistory[i].date > target)
-                ? (priceHistory[i].date - target) : (target - priceHistory[i].date);
-            if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+        auto it = std::lower_bound(priceHistory.begin(), priceHistory.end(), target,
+            [](const MiniSparkPoint& p, ULONGLONG t) { return p.date < t; });
+
+        size_t bestIdx;
+        if (it == priceHistory.end()) {
+            bestIdx = priceHistory.size() - 1;
+        } else if (it == priceHistory.begin()) {
+            bestIdx = 0;
+        } else {
+            size_t idxAfter  = (size_t)(it - priceHistory.begin());
+            size_t idxBefore = idxAfter - 1;
+            ULONGLONG diffAfter  = it->date - target;
+            ULONGLONG diffBefore = target - priceHistory[idxBefore].date;
+            bestIdx = (diffAfter < diffBefore) ? idxAfter : idxBefore;
         }
         
         outPrice = priceHistory[bestIdx].price;
@@ -258,8 +293,9 @@ public:
             priceHistory.push_back({ now, price });
         }
         const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL;
+        // PERF: pop_front() is O(1) on a deque — see Sparkline::AddPrice comment.
         while (!priceHistory.empty() && now > maxAge && priceHistory.front().date < now - maxAge) {
-            priceHistory.erase(priceHistory.begin());
+            priceHistory.pop_front();
         }
     }
 
