@@ -272,20 +272,66 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
     }
 }
 
+struct EnumData {
+    DWORD dwProcessId;
+    HWND hMainWindow;
+};
+
+BOOL CALLBACK EnumTWSMainWindowProc(HWND hWnd, LPARAM lParam) {
+    EnumData& data = *reinterpret_cast<EnumData*>(lParam);
+    DWORD dwProcessId = 0;
+    GetWindowThreadProcessId(hWnd, &dwProcessId);
+
+    if (dwProcessId == data.dwProcessId) {
+        if (!IsWindowVisible(hWnd)) {
+            return TRUE;
+        }
+
+        if (GetWindow(hWnd, GW_OWNER) != NULL) {
+            return TRUE; 
+        }
+
+        char windowTitle[256] = {0};
+        GetWindowTextA(hWnd, windowTitle, sizeof(windowTitle));
+        std::string title(windowTitle);
+
+        if (title.empty()) {
+            return TRUE;
+        }
+
+        // Check if the title matches the core application frame
+        // TWS main windows typically include "Interactive Brokers"
+        if (title.find("Interactive Brokers") != std::string::npos) {
+            data.hMainWindow = hWnd;
+            return FALSE; // Stop enumeration: main window found
+        }
+    }
+    return TRUE;
+}
+
 void KillGateway() {
     std::string path = GetGatewayPath();
     if (path.empty()) return;
+
+    std::string targetExe = std::filesystem::path(path).filename().string();
+
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) return;
+
     PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
     if (Process32First(hSnap, &pe)) {
         do {
-            if (_stricmp(pe.szExeFile, std::filesystem::path(path).filename().string().c_str()) == 0) {
-                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                if (hProcess) {
-                    TerminateProcess(hProcess, 0);
-                    CloseHandle(hProcess);
+            if (_stricmp(pe.szExeFile, targetExe.c_str()) == 0) {
+                EnumData data = { pe.th32ProcessID, NULL };
+                
+                EnumWindows(EnumTWSMainWindowProc, reinterpret_cast<LPARAM>(&data));
+
+                if (data.hMainWindow) {
+                    // How to verify: Check if the window handle is valid
+                    // Send WM_CLOSE specifically to the main container frame
+                    PostMessage(data.hMainWindow, WM_CLOSE, 0, 0);
                 }
+                break;
             }
         } while (Process32Next(hSnap, &pe));
     }
