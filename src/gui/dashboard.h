@@ -727,7 +727,7 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 }
 // ─── Lock keyword popup ───────────────────────────────────────────────────
 //
-// Single-instance popup (same pattern as ALERTS_CLASS_NAME) used to gate
+// Single-instance popup (same pattern as ALERTS_EDITOR_CLASS_NAME) used to gate
 // unlocking the dashboard hotkeys. Locking never needs the keyword — only
 // unlocking does — so this window is only ever opened on the "unlock" path,
 // either from WndProcDashboard's Scroll Lock handler or, at startup, from

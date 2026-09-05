@@ -188,7 +188,7 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 // if already open (e.g. for a different symbol), it's repointed at `symbol`
 // instead of a second window being created.
 void StartAlertsEditor(const std::string& symbol, int conId) {
-    HWND hWnd = StartGenericWindow(ALERTS_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 260, 130);
+    HWND hWnd = StartGenericWindow(ALERTS_EDITOR_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 250, 110);
     if (hWnd) AlertsEditor_Populate(hWnd, symbol, conId);
 }
 
