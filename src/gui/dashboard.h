@@ -1055,18 +1055,13 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (wParam == TIMER_WATCHDOG_DELAYED_START)
                     KillTimer(hWnd, TIMER_WATCHDOG_DELAYED_START);
                 if (dashboardState.shouldBeConnected && !api().isConnected()) {
-#ifndef GATEWAY_SIM
-                    EnsureGatewayRunning(hWnd);
-#endif
-                    api().connect(
-#ifndef GATEWAY_SIM
-                        std::filesystem::path(GetGatewayPath()).filename() == "ibgateway.exe" ? 4001 : 7496
-#else
-                        0
-#endif
-                    , (int)Settings_Load("ClientId", 0)
-                    , (int)Settings_Load("GroupId", 4)
-                    );
+                    if (EnsureGatewayRunning(hWnd)) {
+                        EnsureGatewayLoggedIn(hWnd);
+                    }
+                    int port = std::filesystem::path(GetGatewayPath()).filename() == "ibgateway.exe" ? 4001 : 7496;
+                    int clientId = (int)Settings_Load("ClientId", 0);
+                    int groupId = (int)Settings_Load("GroupId", 4);
+                    api().connect(port , clientId, groupId);
                 } else if (!dashboardState.shouldBeConnected && api().isConnected()) {
                     api().disconnect();
                 }

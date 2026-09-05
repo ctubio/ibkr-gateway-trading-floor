@@ -29,6 +29,8 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_BACKUP_RESTORE     4016
 #define ID_SETTINGS_BACKUP_DOWNLOAD    4017
 #define ID_SETTINGS_FULL_SCREEN_ALERTS 4018
+#define ID_SETTINGS_USERNAME           4019
+#define ID_SETTINGS_PASSWORD           4020
 
 static HWND hSettingBox1 = NULL;
 static HWND hSettingBox2 = NULL;
@@ -113,7 +115,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Gateway ──────────────────────────────────────────────────────
             hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 190,
+                m, y, w, 250,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox1, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -143,14 +145,32 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
             SetWindowTextA(hGatewayEdit, GetGatewayPath().c_str());
 
-            // Client ID — passed as the second parameter to api().connect().
-            CreateWindowA("STATIC", "Client ID:",
+            CreateWindowA("STATIC", "Username:",
                 WS_CHILD | WS_VISIBLE,
                 m + gm, y + 128, 72, 20,
                 hWnd, NULL, hInst, NULL);
+            HWND hUsernameEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                m + gm + 76, y + 125, 148, 26,
+                hWnd, (HMENU)ID_SETTINGS_USERNAME, hInst, NULL);
+            
+            CreateWindowA("STATIC", "Password:",
+                WS_CHILD | WS_VISIBLE,
+                m + gm, y + 158, 72, 20,
+                hWnd, NULL, hInst, NULL);
+            HWND hPasswordEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
+                m + gm + 76, y + 155, 148, 26,
+                hWnd, (HMENU)ID_SETTINGS_PASSWORD, hInst, NULL);
+
+            // Client ID — passed as the second parameter to api().connect().
+            CreateWindowA("STATIC", "Client ID:",
+                WS_CHILD | WS_VISIBLE,
+                m + gm, y + 188, 72, 20,
+                hWnd, NULL, hInst, NULL);
             HWND hClientIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                m + gm + 76, y + 125, 80, 26,
+                m + gm + 76, y + 185, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_CLIENT_ID, hInst, NULL);
             SetWindowTextA(hClientIdEdit, std::format("{}", (int)Settings_Load("ClientId", 0)).c_str());
 
@@ -158,38 +178,15 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // subscribeToGroupEvents()/updateDisplayGroup().
             CreateWindowA("STATIC", "Group ID:",
                 WS_CHILD | WS_VISIBLE,
-                m + gm, y + 158, 72, 20,
+                m + gm, y + 218, 72, 20,
                 hWnd, NULL, hInst, NULL);
             HWND hGroupIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                m + gm + 76, y + 155, 80, 26,
+                m + gm + 76, y + 215, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_GROUP_ID, hInst, NULL);
             SetWindowTextA(hGroupIdEdit, std::format("{}", (int)Settings_Load("GroupId", 4)).c_str());
 
-            y += 198;
-
-            // ── Display ──────────────────────────────────────────────────────
-            hSettingBox2 = CreateWindowA("BUTTON", "Display:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 14 + (30 * 2),
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
-
-            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
-            if (darkMode)
-                SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
-
-            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 44, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
-            if (Settings_Load("FullScreenAlerts", 0))
-                SendMessage(hChkAlerts, BM_SETCHECK, BST_CHECKED, 0);
-            y += 84;
+            y += 258;
 
             // ── Audio ────────────────────────────────────────────────────────
             hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
@@ -284,6 +281,30 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
             SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
 
+            
+            // ── Display ──────────────────────────────────────────────────────
+            hSettingBox2 = CreateWindowA("BUTTON", "Display:",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                col2_x, y, w, 14 + (30 * 2),
+                hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                col2_x + gm, y + 18, gw, 22,
+                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
+            if (darkMode)
+                SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
+
+            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                col2_x + gm, y + 44, gw, 22,
+                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
+            if (Settings_Load("FullScreenAlerts", 0))
+                SendMessage(hChkAlerts, BM_SETCHECK, BST_CHECKED, 0);
+            y += 84;
+
             // ── System Tools ─────────────────────────────────────────── (column 2)
             hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -367,6 +388,10 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
                 StartDebugLog();
                 FlushDebugBuffer();
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_USERNAME) {
+            }
+            if (LOWORD(wParam) == ID_SETTINGS_PASSWORD) {
             }
             if (LOWORD(wParam) == ID_SETTINGS_FULL_SCREEN_ALERTS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_FULL_SCREEN_ALERTS);

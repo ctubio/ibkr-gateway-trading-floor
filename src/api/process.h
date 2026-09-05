@@ -1,7 +1,5 @@
 #pragma once
 
-#ifndef GATEWAY_SIM
-
 #include <tlhelp32.h>
 DWORD PIDProcessRunning(const char* processName) {
     DWORD pid = 0;
@@ -63,108 +61,6 @@ static bool IsAnyProcessRunningUnder(const std::string& rootDir) {
     return found;
 }
 
-std::string GetGatewayPath() {
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        char path[MAX_PATH] = {};
-        DWORD size = sizeof(path);
-        if (RegQueryValueExA(hKey, "Gateway_Path", NULL, NULL, (LPBYTE)path, &size) == ERROR_SUCCESS && strlen(path) > 0) {
-            RegCloseKey(hKey);
-            return std::string(path);
-        }
-        RegCloseKey(hKey);
-    }
-    return "";
-}
-
-void SaveGatewayPath(const std::string& path) {
-    HKEY hKey;
-    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
-    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, "Gateway_Path", 0, REG_SZ, (const BYTE*)path.c_str(), (DWORD)path.size() + 1);
-        RegCloseKey(hKey);
-    }
-}
-
-std::string AskGatewayPath(HWND hParent) {
-    OPENFILENAMEA ofn = {};
-    char path[MAX_PATH] = "";
-    char folder[MAX_PATH] = "C:\\";
-    
-    std::string gatewayPath = GetGatewayPath();
-    if (!gatewayPath.empty()) {
-        auto systemPath = std::filesystem::path(gatewayPath);
-        std::string filename = systemPath.filename().string();
-        std::string pathname = systemPath.remove_filename().string();
-        if (!filename.empty()) {
-            strncpy(path, filename.c_str(), sizeof(path) - 1);
-            path[sizeof(path) - 1] = '\0';
-        }
-        if (!pathname.empty()) {
-            strncpy(folder, pathname.c_str(), sizeof(folder) - 1);
-            folder[sizeof(folder) - 1] = '\0';
-        }
-    }
-    ofn.lStructSize     = sizeof(ofn);
-    ofn.hwndOwner       = hParent;
-    ofn.lpstrFilter     = "Executable\0*.exe\0All Files\0*.*\0";
-    ofn.lpstrFile       = path;
-    ofn.nMaxFile        = sizeof(path);
-    ofn.lpstrTitle      = "Locate ibgateway.exe or tws.exe";
-    ofn.lpstrInitialDir = folder;
-    ofn.Flags           = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-    if (GetOpenFileNameA(&ofn)) return std::string(path);
-    return "";
-}
-
-struct EnsureOnceFlag {
-    bool& flag;
-    EnsureOnceFlag(bool& f) : flag(f) { flag = true; }
-    ~EnsureOnceFlag() { flag = false; }
-};
-
-bool alreadyEnsureGatewayRunning = false;
-void EnsureGatewayRunning(HWND hParent) {
-    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway()) return;
-
-    std::string path   = GetGatewayPath();
-    std::string installRoot = path.empty() ? "" : std::filesystem::path(path).parent_path().string();
-
-    if (PIDProcessRunning("ibgateway.exe") > 0 || PIDProcessRunning("tws.exe") > 0 || IsAnyProcessRunningUnder(installRoot))
-        return;
-
-    EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
-    if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        MessageBoxA(hParent, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
-        path = AskGatewayPath(hParent);
-        if (path.empty()) return;
-        SaveGatewayPath(path);
-    }
-    LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");
-    ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
-}
-
-void KillGateway() {
-    std::string path = GetGatewayPath();
-    if (path.empty()) return;
-    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnap == INVALID_HANDLE_VALUE) return;
-    PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
-    if (Process32First(hSnap, &pe)) {
-        do {
-            if (_stricmp(pe.szExeFile, std::filesystem::path(path).filename().string().c_str()) == 0) {
-                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                if (hProcess) {
-                    TerminateProcess(hProcess, 0);
-                    CloseHandle(hProcess);
-                }
-            }
-        } while (Process32Next(hSnap, &pe));
-    }
-    CloseHandle(hSnap);
-}
-
 // Structure to pass data to our EnumWindows callback
 struct WindowFinderData {
     DWORD targetPID;
@@ -210,6 +106,180 @@ BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
     return TRUE; // Continue enumerating
 }
 
+std::string GetGatewayPath() {
+    HKEY hKey;
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        char path[MAX_PATH] = {};
+        DWORD size = sizeof(path);
+        if (RegQueryValueExA(hKey, "Gateway_Path", NULL, NULL, (LPBYTE)path, &size) == ERROR_SUCCESS && strlen(path) > 0) {
+            RegCloseKey(hKey);
+            return std::string(path);
+        }
+        RegCloseKey(hKey);
+    }
+    return "";
+}
+
+void SaveGatewayPath(const std::string& path) {
+    HKEY hKey;
+    std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
+    if (RegCreateKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, "Gateway_Path", 0, REG_SZ, (const BYTE*)path.c_str(), (DWORD)path.size() + 1);
+        RegCloseKey(hKey);
+    }
+}
+
+std::string AskGatewayPath(HWND hWnd) {
+    OPENFILENAMEA ofn = {};
+    char path[MAX_PATH] = "";
+    char folder[MAX_PATH] = "C:\\";
+    
+    std::string gatewayPath = GetGatewayPath();
+    if (!gatewayPath.empty()) {
+        auto systemPath = std::filesystem::path(gatewayPath);
+        std::string filename = systemPath.filename().string();
+        std::string pathname = systemPath.remove_filename().string();
+        if (!filename.empty()) {
+            strncpy(path, filename.c_str(), sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+        }
+        if (!pathname.empty()) {
+            strncpy(folder, pathname.c_str(), sizeof(folder) - 1);
+            folder[sizeof(folder) - 1] = '\0';
+        }
+    }
+    ofn.lStructSize     = sizeof(ofn);
+    ofn.hwndOwner       = hWnd;
+    ofn.lpstrFilter     = "Executable\0*.exe\0All Files\0*.*\0";
+    ofn.lpstrFile       = path;
+    ofn.nMaxFile        = sizeof(path);
+    ofn.lpstrTitle      = "Locate ibgateway.exe or tws.exe";
+    ofn.lpstrInitialDir = folder;
+    ofn.Flags           = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+    if (GetOpenFileNameA(&ofn)) return std::string(path);
+    return "";
+}
+
+struct EnsureOnceFlag {
+    bool& flag;
+    EnsureOnceFlag(bool& f) : flag(f) { flag = true; }
+    ~EnsureOnceFlag() { flag = false; }
+};
+
+bool alreadyEnsureGatewayRunning = false;
+bool EnsureGatewayRunning(HWND hWnd) {
+    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway()) return false;
+
+    std::string path   = GetGatewayPath();
+    std::string installRoot = path.empty() ? "" : std::filesystem::path(path).parent_path().string();
+
+    if (PIDProcessRunning("ibgateway.exe") > 0 || PIDProcessRunning("tws.exe") > 0 || IsAnyProcessRunningUnder(installRoot))
+        return true;
+
+    EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
+    if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        MessageBoxA(hWnd, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
+        path = AskGatewayPath(hWnd);
+        if (path.empty()) return false;
+        SaveGatewayPath(path);
+    }
+    LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");
+    ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
+    return true;
+}
+
+            // Helper function to send a string as keyboard input
+void SendString(const std::string& text) {
+    std::vector<INPUT> inputs;
+    for (char c : text) {
+        INPUT input = {0};
+        input.type = INPUT_KEYBOARD;
+        input.ki.wScan = c;
+        input.ki.dwFlags = KEYEVENTF_UNICODE;
+        inputs.push_back(input);
+        
+        input.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+        inputs.push_back(input);
+    }
+    SendInput(inputs.size(), inputs.data(), sizeof(INPUT));
+}
+
+// Helper function to simulate a specific virtual key (like VK_TAB or VK_RETURN)
+void SendKey(WORD vKey) {
+    INPUT inputs[2] = {0};
+    
+    // Key down
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = vKey;
+    
+    // Key up
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = vKey;
+    inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    
+    SendInput(2, inputs, sizeof(INPUT));
+}
+
+void EnsureGatewayLoggedIn(HWND hWnd) {
+    if (!Settings_AutoGateway()) return;
+
+    std::string path = GetGatewayPath();
+    if (path.empty()) return;
+
+    std::string filename = std::filesystem::path(path).filename().string();
+    if (filename != "ibgateway.exe" && filename != "tws.exe") return;
+
+    DWORD pid = PIDProcessRunning(filename.c_str());
+    if (pid == 0) return;
+
+    WindowFinderData data;
+    data.targetPID = pid;
+    data.swState = SW_SHOW;
+    
+    EnumWindows(EnumAnyWindowsCallback, reinterpret_cast<LPARAM>(&data));
+
+    for (HWND hwnd : data.foundWindows) {
+        char title[256] = {};
+        GetWindowTextA(hwnd, title, sizeof(title));
+        std::string titleStr(title);
+        if (titleStr.find("Login") != std::string::npos) {
+            LogDebug("Found login window: " + titleStr);
+            ShowWindow(hwnd, SW_RESTORE);
+            SetForegroundWindow(hwnd);
+            Sleep(100);
+            SendString("my_username");
+            Sleep(50);
+            SendKey(VK_TAB);
+            Sleep(50);
+            SendString("my_password");
+            Sleep(50);
+            SendKey(VK_RETURN);
+            break;
+        }
+    }
+}
+
+void KillGateway() {
+    std::string path = GetGatewayPath();
+    if (path.empty()) return;
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnap == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32 pe = { sizeof(PROCESSENTRY32) };
+    if (Process32First(hSnap, &pe)) {
+        do {
+            if (_stricmp(pe.szExeFile, std::filesystem::path(path).filename().string().c_str()) == 0) {
+                HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+                if (hProcess) {
+                    TerminateProcess(hProcess, 0);
+                    CloseHandle(hProcess);
+                }
+            }
+        } while (Process32Next(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
+}
+
 static void ToggleTWS(int swState) {
     DWORD pid = PIDProcessRunning(std::filesystem::path(GetGatewayPath()).filename().string().c_str());
     if (pid == 0) return;
@@ -230,8 +300,6 @@ static void ToggleTWS(int swState) {
         }
     }
 }
-
-#endif
 
 LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
     DWORD code = exceptionInfo->ExceptionRecord->ExceptionCode;
