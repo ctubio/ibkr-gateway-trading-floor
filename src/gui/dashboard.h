@@ -725,6 +725,151 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
+// ─── Lock keyword popup ───────────────────────────────────────────────────
+//
+// Single-instance popup (same pattern as ALERTS_CLASS_NAME) used to gate
+// unlocking the dashboard hotkeys. Locking never needs the keyword — only
+// unlocking does — so this window is only ever opened on the "unlock" path,
+// either from WndProcDashboard's Scroll Lock handler or, at startup, from
+// PromptLockAtStartup() before the rest of the app is even created.
+
+#define ID_LOCK_EDIT 5501
+
+struct LockState {
+    bool startupMode = false; // true while gating app startup (see PromptLockAtStartup)
+    bool success      = false; // set true the moment the correct keyword is submitted
+};
+static LockState lockState;
+
+// Compares the entered keyword against the saved one.
+//   - Correct: marks success, performs the dashboard unlock (unless we're in
+//     startup mode, where nothing has been hidden yet), then closes.
+//   - Incorrect: shows the same error box as before and leaves the popup open
+//     so the user can retry.
+static void Lock_TrySubmit(HWND hWnd) {
+    HWND hEdit = GetDlgItem(hWnd, ID_LOCK_EDIT);
+    char buf[128] = {};
+    if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
+
+    std::string savedLock = Settings_LoadString("Lock", "");
+    if (savedLock != std::string(buf)) {
+        MessageBoxA(hWnd, "Incorrect Lock Keyword", "Lock Keyword Required", MB_ICONERROR);
+        if (hEdit) {
+            SetWindowTextA(hEdit, "");
+            SetFocus(hEdit);
+        }
+        return;
+    }
+
+    lockState.success = true;
+
+    if (!lockState.startupMode) {
+        // Runtime unlock: reverse exactly what the "lock" branch in
+        // WndProcDashboard's WM_KEYDOWN did.
+        lockHotkeys = false;
+        ShowWindow(dashboardState.hCoin_Lock, SW_HIDE);
+        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        if (hDashboard && IsWindow(hDashboard))
+            PostMessage(hDashboard, WM_ACTIVATE, WA_ACTIVE, 0);
+        ToggleTWS(SW_SHOW);
+    }
+    // Startup mode: nothing to reverse yet — just report success to
+    // PromptLockAtStartup() via lockState.success and close.
+
+    DestroyWindow(hWnd);
+}
+
+// ESC cancels without unlocking. At startup this means the app never opens
+// (see PromptLockAtStartup); at runtime it just leaves the dashboard locked.
+static LRESULT CALLBACK LockEdit_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
+                                                  UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
+    if (msg == WM_CHAR) {
+        if (wParam == VK_RETURN || wParam == VK_ESCAPE)
+            return 0;
+    }
+    if (msg == WM_KEYDOWN) {
+        HWND hParent = GetParent(hCtrl);
+        if (wParam == VK_RETURN) {
+            Lock_TrySubmit(hParent);
+            return 0;
+        }
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hParent);
+            return 0;
+        }
+    }
+    if (msg == WM_NCDESTROY)
+        RemoveWindowSubclass(hCtrl, LockEdit_KeySubclassProc, uIdSubclass);
+    return DefSubclassProc(hCtrl, msg, wParam, lParam);
+}
+
+LRESULT CALLBACK WndProcLock(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+        case WM_CREATE: {
+            HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+
+            CreateWindowA("STATIC", "Enter Lock Keyword:",
+                WS_CHILD | WS_VISIBLE | SS_CENTER,
+                10, 14, 220, 20, hWnd, NULL, hInst, NULL);
+
+            HWND hEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
+                20, 42, 200, 26, hWnd, (HMENU)ID_LOCK_EDIT, hInst, NULL);
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont12pt.get(), TRUE);
+            SetWindowSubclass(hEdit, LockEdit_KeySubclassProc, 1, 0);
+
+            SetFocus(hEdit);
+            break;
+        }
+
+        case WM_KEYDOWN:
+            if (wParam == VK_ESCAPE) {
+                DestroyWindow(hWnd);
+                return 0;
+            }
+            break;
+
+        case WM_DESTROY:
+            break;
+    }
+    return HandleCommonMessages(hWnd, message, wParam, lParam);
+}
+
+// Opens (or refocuses) the Lock popup. Single-instance, same pattern as
+// StartAlertsEditor().
+void StartLock() {
+    lockState.success = false;
+
+    HWND hWnd = StartGenericWindow(LOCK_CLASS_NAME, "Enter Lock Keyword", L"TWSAPIClientTradingFloor.Lock", 260, 110);
+    if (!hWnd) return;
+
+    HWND hEdit = GetDlgItem(hWnd, ID_LOCK_EDIT);
+    if (hEdit) {
+        SetWindowTextA(hEdit, "");
+        SetFocus(hEdit);
+    }
+}
+
+// Blocks by running its own message loop — WinMain hasn't started the real
+// one yet, and nothing else exists at this point, so this is safe — until
+// the Lock popup is dismissed. Returns true iff the correct keyword was
+// entered; false on ESC/close, meaning the caller should abort startup.
+static bool PromptLockAtStartup() {
+    lockState.startupMode = true;
+    lockState.success     = false;
+
+    StartLock();
+
+    HWND hLockWnd = FindWindowA(LOCK_CLASS_NAME, NULL);
+    MSG msg;
+    while (hLockWnd && IsWindow(hLockWnd) && GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    lockState.startupMode = false;
+    return lockState.success;
+}
 
 LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
@@ -1199,22 +1344,26 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         case WM_KEYDOWN: {
             if (wParam == VK_SCROLL) {
-                /*
-                if (lockHotKeys) {
+                if (lockHotkeys) {
+                    // Currently locked -> unlocking requires the saved keyword.
+                    // Nothing changes here until Lock_TrySubmit() confirms it;
+                    // if no keyword is configured, unlock immediately instead.
                     std::string lockPass = Settings_LoadString("Lock", "");
-                    if (!lockPass.empty()) {
-                        std::string inputLock = PromptForLock();
-                        if (lockPass != inputLock) {
-                            MessageBoxA(hWnd, "Incorrect Lock Keyword", "Lock Keyword Required", MB_ICONERROR);}
-                            return 0;
-                        }
+                    if (lockPass.empty()) {
+                        lockHotkeys = false;
+                        ShowWindow(dashboardState.hCoin_Lock, SW_HIDE);
+                        PostMessage(hWnd, WM_ACTIVATE, WA_ACTIVE, 0);
+                        ToggleTWS(SW_SHOW);
+                    } else {
+                        StartLock();
                     }
+                } else {
+                    // Locking never requires the keyword.
+                    lockHotkeys = true;
+                    ShowWindow(dashboardState.hCoin_Lock, SW_SHOW);
+                    PostMessage(hWnd, WM_ACTIVATE, WA_INACTIVE, 0);
+                    ToggleTWS(SW_HIDE);
                 }
-                lockHotkeys = !lockHotkeys;
-                ShowWindow(dashboardState.hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
-                PostMessage(hWnd, WM_ACTIVATE, lockHotkeys ? WA_INACTIVE : WA_ACTIVE, 0);
-                ToggleTWS(lockHotkeys ? SW_HIDE : SW_SHOW);
-                */
                 return 0;
             }
         }
