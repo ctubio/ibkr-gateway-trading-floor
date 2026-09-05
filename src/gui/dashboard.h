@@ -1199,10 +1199,22 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
         case WM_KEYDOWN: {
             if (wParam == VK_SCROLL) {
+                /*
+                if (lockHotKeys) {
+                    std::string lockPass = Settings_LoadString("Lock", "");
+                    if (!lockPass.empty()) {
+                        std::string inputLock = PromptForLock();
+                        if (lockPass != inputLock) {
+                            MessageBoxA(hWnd, "Incorrect Lock Keyword", "Lock Keyword Required", MB_ICONERROR);}
+                            return 0;
+                        }
+                    }
+                }
                 lockHotkeys = !lockHotkeys;
                 ShowWindow(dashboardState.hCoin_Lock, lockHotkeys ? SW_SHOW : SW_HIDE);
                 PostMessage(hWnd, WM_ACTIVATE, lockHotkeys ? WA_INACTIVE : WA_ACTIVE, 0);
                 ToggleTWS(lockHotkeys ? SW_HIDE : SW_SHOW);
+                */
                 return 0;
             }
         }

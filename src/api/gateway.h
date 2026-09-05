@@ -3,6 +3,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <windowsx.h>
+#include <wincred.h>
 #include <wininet.h>
 #include <shobjidl.h>
 #include <dwmapi.h>

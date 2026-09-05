@@ -31,6 +31,7 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_FULL_SCREEN_ALERTS 4018
 #define ID_SETTINGS_USERNAME           4019
 #define ID_SETTINGS_PASSWORD           4020
+#define ID_SETTINGS_LOCK               4021
 
 static HWND hSettingBox1 = NULL;
 static HWND hSettingBox2 = NULL;
@@ -100,6 +101,14 @@ void ApplyDarkModeToAllWindows() {
     }, 0);
 }
 
+// Add near the top of settings.h, e.g. just above WndProcSettings:
+static void Settings_SaveCredentialsFromUI(HWND hWnd) {
+    char userBuf[256] = {}, passBuf[256] = {};
+    GetWindowTextA(GetDlgItem(hWnd, ID_SETTINGS_USERNAME), userBuf, sizeof(userBuf));
+    GetWindowTextA(GetDlgItem(hWnd, ID_SETTINGS_PASSWORD), passBuf, sizeof(passBuf));
+    Credentials_Save(userBuf, passBuf);
+}
+
 LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
@@ -151,7 +160,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, NULL, hInst, NULL);
             HWND hUsernameEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                m + gm + 76, y + 125, 148, 26,
+                m + gm + 76, y + 125, 147, 26,
                 hWnd, (HMENU)ID_SETTINGS_USERNAME, hInst, NULL);
             
             CreateWindowA("STATIC", "Password:",
@@ -160,8 +169,17 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, NULL, hInst, NULL);
             HWND hPasswordEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
-                m + gm + 76, y + 155, 148, 26,
+                m + gm + 76, y + 155, 147, 26,
                 hWnd, (HMENU)ID_SETTINGS_PASSWORD, hInst, NULL);
+
+            // ── Populate from Windows Credential Manager (if previously saved) ────────
+            {
+                std::string savedUsername, savedPassword;
+                if (Credentials_Load(savedUsername, savedPassword)) {
+                    SetWindowTextA(hUsernameEdit, savedUsername.c_str());
+                    SetWindowTextA(hPasswordEdit, savedPassword.c_str());
+                }
+            }
 
             // Client ID — passed as the second parameter to api().connect().
             CreateWindowA("STATIC", "Client ID:",
@@ -188,17 +206,86 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             y += 258;
 
+            // ── Display ──────────────────────────────────────────────────────
+            hSettingBox2 = CreateWindowA("BUTTON", "Display:",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                m, y, w, 14 + (30 * 3),
+                hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                m + gm, y + 18, gw, 22,
+                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
+            if (darkMode)
+                SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
+
+            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                m + gm, y + 44, gw, 22,
+                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
+            if (Settings_Load("FullScreenAlerts", 0))
+                SendMessage(hChkAlerts, BM_SETCHECK, BST_CHECKED, 0);
+                
+            CreateWindowA("STATIC", "Lock:",
+                WS_CHILD | WS_VISIBLE,
+                m + gm, y + 70, 72, 20,
+                hWnd, NULL, hInst, NULL);
+            HWND hLockEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
+                m + gm + 76, y + 67, 147, 26,
+                hWnd, (HMENU)ID_SETTINGS_LOCK, hInst, NULL);
+            SetWindowTextA(hLockEdit, Settings_LoadString("Lock", "").c_str());
+            //y += 114;
+            y = m;
+
+            // ── Trading ────────────────────────────────────────────────────── (column 2)
+            hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
+                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                col2_x, y, w, 14 + (30 * 5),
+                hWnd, NULL, hInst, NULL);
+            SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+            // Row helper: label + edit
+            auto MakeRow = [&](const char* label, UINT id, int rowY, bool isInt) -> HWND {
+                CreateWindowA("STATIC", label,
+                    WS_CHILD | WS_VISIBLE,
+                    col2_x + gm, y + rowY, 72, 20,
+                    hWnd, NULL, hInst, NULL);
+                DWORD numStyle = isInt ? ES_NUMBER : 0;
+                return CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | numStyle,
+                    col2_x + gm + 76, y + rowY - 3, 80, 26,
+                    hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
+            };
+
+            HWND hQtyEdit    = MakeRow("Quantity:",   ID_SETTINGS_QTY_VALUE,     20, true);
+            HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,    53, false);
+            HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE,  86, false);
+            HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,   119, false);
+            HWND hSafetyEdit = MakeRow("Safety:",     ID_SETTINGS_SAFETY_VALUE, 152, false);
+            y += 172;
+
+            SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 20)).c_str());
+            SetWindowTextA(hStopEdit,   std::format("{:.2f}", Settings_LoadFloat("StopPrice",  1.0f)).c_str());
+            SetWindowTextA(hProfitEdit, std::format("{:.2f}", Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
+            SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
+            SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
+
+            
             // ── Audio ────────────────────────────────────────────────────────
             hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 78,
+                col2_x, y, w, 14 + (30 * 2),
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox3, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 18, gw, 22,
+                col2_x + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
             if (Settings_Load("PlaySounds", 0))
                 SendMessage(hChkSounds, BM_SETCHECK, BST_CHECKED, 0);
@@ -206,12 +293,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── TTS Voice selector ───────────────────────────────────────────
             CreateWindowA("STATIC", "Voice:",
                 WS_CHILD | WS_VISIBLE,
-                m + gm, y + 44, 40, 20,
+                col2_x + gm, y + 44, 40, 20,
                 hWnd, NULL, hInst, NULL);
 
             HWND hVoiceCombo = CreateWindowA("COMBOBOX", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-                m + gm + 44, y + 42, gw - 44, 200,
+                col2_x + gm + 44, y + 42, gw - 44, 200,
                 hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
 
             // Enumerate all system voices and fill the combo
@@ -245,65 +332,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (selectIdx < 0) selectIdx = (herenaIdx >= 0) ? herenaIdx : 0;
             if (!settingsVoices.empty())
                 SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
-            y = m;
 
-            // ── Trading ────────────────────────────────────────────────────── (column 2)
-            hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 37 * 5,
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
-
-            // Row helper: label + edit
-            auto MakeRow = [&](const char* label, UINT id, int rowY, bool isInt) -> HWND {
-                CreateWindowA("STATIC", label,
-                    WS_CHILD | WS_VISIBLE,
-                    col2_x + gm, y + rowY, 72, 20,
-                    hWnd, NULL, hInst, NULL);
-                DWORD numStyle = isInt ? ES_NUMBER : 0;
-                return CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | numStyle,
-                    col2_x + gm + 76, y + rowY - 3, 80, 26,
-                    hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
-            };
-
-            HWND hQtyEdit    = MakeRow("Quantity:",   ID_SETTINGS_QTY_VALUE,     20, true);
-            HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,    53, false);
-            HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE,  86, false);
-            HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,   119, false);
-            HWND hSafetyEdit = MakeRow("Safety:",     ID_SETTINGS_SAFETY_VALUE, 152, false);
-            y += 152 + 40;
-
-            SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 20)).c_str());
-            SetWindowTextA(hStopEdit,   std::format("{:.2f}", Settings_LoadFloat("StopPrice",  1.0f)).c_str());
-            SetWindowTextA(hProfitEdit, std::format("{:.2f}", Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
-            SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
-            SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
-
-            
-            // ── Display ──────────────────────────────────────────────────────
-            hSettingBox2 = CreateWindowA("BUTTON", "Display:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 14 + (30 * 2),
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
-
-            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                col2_x + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
-            if (darkMode)
-                SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
-
-            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                col2_x + gm, y + 44, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
-            if (Settings_Load("FullScreenAlerts", 0))
-                SendMessage(hChkAlerts, BM_SETCHECK, BST_CHECKED, 0);
-            y += 84;
+            y += 82;
 
             // ── System Tools ─────────────────────────────────────────── (column 2)
             hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
@@ -389,9 +419,19 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 StartDebugLog();
                 FlushDebugBuffer();
             }
-            if (LOWORD(wParam) == ID_SETTINGS_USERNAME) {
+            if ((LOWORD(wParam) == ID_SETTINGS_PASSWORD || LOWORD(wParam) == ID_SETTINGS_USERNAME) && HIWORD(wParam) == EN_CHANGE) {
+                Settings_SaveCredentialsFromUI(hWnd);
             }
-            if (LOWORD(wParam) == ID_SETTINGS_PASSWORD) {
+            if ((LOWORD(wParam) == ID_SETTINGS_LOCK)) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
+                int len = GetWindowTextLength(hEdit);
+                std::string lock = "";
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    lock = std::string(buf);
+                }
+                Settings_SaveString("Lock", lock);
             }
             if (LOWORD(wParam) == ID_SETTINGS_FULL_SCREEN_ALERTS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_FULL_SCREEN_ALERTS);

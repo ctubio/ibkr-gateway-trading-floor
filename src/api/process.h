@@ -230,6 +230,12 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
     std::string filename = std::filesystem::path(path).filename().string();
     if (filename != "ibgateway.exe" && filename != "tws.exe") return;
 
+    std::string username, password;
+    if (!Credentials_Load(username, password) || username.empty() || password.empty()) {
+        LogDebug("EnsureGatewayLoggedIn: no saved credentials, skipping auto-login.");
+        return;
+    }
+
     DWORD pid = PIDProcessRunning(filename.c_str());
     if (pid == 0) return;
 
@@ -248,11 +254,11 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
             Sleep(100);
-            SendString("my_username");
+            SendString(username);
             Sleep(50);
             SendKey(VK_TAB);
             Sleep(50);
-            SendString("my_password");
+            SendString(password);
             Sleep(50);
             SendKey(VK_RETURN);
             break;

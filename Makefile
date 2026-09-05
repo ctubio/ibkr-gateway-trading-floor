@@ -13,7 +13,7 @@ COMMON_CXXFLAGS := -std=c++23 -O3 -flto=auto -march=x86-64-v3 \
                     -mwindows \
                     -static -static-libgcc -static-libstdc++
 COMMON_LIBS     := -luser32 -lshell32 -ladvapi32 -lgdi32 -lws2_32 -ldwmapi \
-                    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 \
+                    -lwinmm -ldbghelp -lwinpthread -lpropsys -lole32 -ladvapi32 \
                     -lshlwapi -lwininet -lcomctl32 -luxtheme -lriched20 -lgdiplus
 
 .PHONY: all sim clean push MAJOR MINOR PATCH BUILD release

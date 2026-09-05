@@ -1307,3 +1307,46 @@ void Session_RestoreWindows(
         p += strlen(p) + 1;
     }
 }
+
+// ── Credential Manager (secure username/password storage) ───────────────────
+// Stores the IBKR Gateway/TWS login under a single generic credential entry
+// in Windows Credential Manager, instead of the registry or plain text.
+// CRED_PERSIST_LOCAL_MACHINE keeps it available across reboots on this
+// machine only (not roamed), matching how the rest of the app's settings
+// are scoped per-machine.
+
+static const char* CRED_TARGET_NAME = "TWS_Gateway_Credentials";
+
+// Saves username + password, replacing any existing entry. Passing both
+// empty deletes the stored credential instead of writing an empty one.
+static bool Credentials_Save(const std::string& username, const std::string& password) {
+    if (username.empty() && password.empty()) {
+        CredDeleteA(CRED_TARGET_NAME, CRED_TYPE_GENERIC, 0);
+        return true;
+    }
+
+    CREDENTIALA cred = {};
+    cred.Type               = CRED_TYPE_GENERIC;
+    cred.TargetName         = (LPSTR)CRED_TARGET_NAME;
+    cred.CredentialBlobSize = (DWORD)password.size();
+    cred.CredentialBlob     = (LPBYTE)password.data();
+    cred.Persist            = CRED_PERSIST_LOCAL_MACHINE;
+    cred.UserName           = (LPSTR)username.c_str();
+
+    return CredWriteA(&cred, 0) == TRUE;
+}
+
+// Loads the username + password previously saved by Credentials_Save().
+// Returns false (leaving outUsername/outPassword untouched) if nothing is
+// currently stored under CRED_TARGET_NAME.
+static bool Credentials_Load(std::string& outUsername, std::string& outPassword) {
+    PCREDENTIALA pcred = nullptr;
+    if (!CredReadA(CRED_TARGET_NAME, CRED_TYPE_GENERIC, 0, &pcred) || !pcred)
+        return false;
+
+    outUsername = pcred->UserName ? pcred->UserName : "";
+    outPassword.assign((char*)pcred->CredentialBlob, pcred->CredentialBlobSize);
+
+    CredFree(pcred);
+    return true;
+}
