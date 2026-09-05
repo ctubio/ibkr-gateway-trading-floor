@@ -1161,16 +1161,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, state->hbmHeader);
     hdc = hdcMem; // redirect all subsequent drawing to the memory DC
 
-    const COLORREF bgColor    = darkMode ? DM_BG   : GetSysColor(COLOR_BTNFACE);
     const COLORREF textColor  = darkMode ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
     const COLORREF labelColor = darkMode ? RGB(160,160,160) : RGB(110,110,110);
-    const COLORREF sepColor   = darkMode ? RGB(60,60,60)    : RGB(200,200,200);
 
     // Fill background
     RECT hdrRc = { 0, 0, rc.right, HEADER_H };
-    HBRUSH hBgBrush = CreateSolidBrush(bgColor);
-    FillRect(hdc, &hdrRc, hBgBrush);
-    DeleteObject(hBgBrush);
+    FillRect(hdc, &hdrRc, darkMode ? hDarkBrush : hLightBrush);
     SetBkMode(hdc, TRANSPARENT);
 
     const TradingAPI::L1Book& L1 = state->l1Info;
@@ -1398,12 +1394,10 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── Bottom separator ──────────────────────────────────────────────────────
     SelectObject(hdc, hFont11ptbold.get());
-    HPEN hSepPen = CreatePen(PS_SOLID, 1, sepColor);
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hSepPen);
+    HPEN hOldPen = (HPEN)SelectObject(hdc, darkMode ? hSeparatorPenDark : hSeparatorPenLight);
     MoveToEx(hdc, 0, HEADER_H - 1, NULL);
     LineTo(hdc, rc.right, HEADER_H - 1);
     SelectObject(hdc, hOldPen);
-    DeleteObject(hSepPen);
 
     // Blit the composed header to the window in a single operation
     BitBlt(hdcOrig, 0, 0, rc.right, HEADER_H, hdc, 0, 0, SRCCOPY);

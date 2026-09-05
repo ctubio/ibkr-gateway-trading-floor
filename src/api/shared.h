@@ -68,15 +68,33 @@ static COLORREF GetCtrlColor(HWND hw) {
     return (COLORREF)((uintptr_t)h - 1);
 }
 
+static Gdiplus::Color sparkColors[3];
+static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
+
 void InitDarkBrushes() {
-    hDarkBrush  = CreateSolidBrush(DM_BG);
-    hDarkBrush2 = CreateSolidBrush(DM_BG2);
+    if (hDarkBrush) return;
+    hDarkBrush      = CreateSolidBrush(DM_BG);
+    hLightBrush     = CreateSolidBrush(GetSysColor(COLOR_BTNFACE));
+    hDarkBrush2     = CreateSolidBrush(DM_BG2);
     hBrushDarkGreen = CreateSolidBrush(COINS_BG_DARK_GREEN);
     hBrushDarkRed   = CreateSolidBrush(COINS_BG_DARK_RED);
+    hBrushGreen     = CreateSolidBrush(COINS_CLR_GREEN);
+    hBrushRed       = CreateSolidBrush(COINS_CLR_RED);
+    hGrayBrush      = CreateSolidBrush(RGB(45, 45, 45));
+    
+    hSeparatorPenDark   = CreatePen(PS_SOLID, 1, RGB(60,60,60));
+    hSeparatorPenLight  = CreatePen(PS_SOLID, 1, RGB(200,200,200));
+    hColumnSeparatorPen = CreatePen(PS_SOLID, 1, DM_SEPARATOR);
+    hColumnHeaderPen    = CreatePen(PS_SOLID, 1, DM_BORDER);
+    hBorderPen          = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
 
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+    sparkColors[0] = Gdiplus::Color(178, 1, 166, 1);   // Green
+    sparkColors[1] = Gdiplus::Color(178, 255, 165, 0); // Orange
+    sparkColors[2] = Gdiplus::Color(178, 255, 0, 0);    // Red
 }
 
 void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
@@ -304,7 +322,7 @@ std::unordered_map<std::string, HICON> offlineIcons;
 std::unordered_map<std::string, HICON> onlineIcons;
 
 void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className, int iconId, bool isPopup = false) {
-    if (hDarkBrush == NULL || hDarkBrush2 == NULL) InitDarkBrushes();
+    InitDarkBrushes();
     HICON& offlineIcon = offlineIcons[std::string(className)];
     HICON& onlineIcon  = onlineIcons[std::string(className)];
     onlineIcon  = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
@@ -355,8 +373,7 @@ static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wP
         }
 
         // 6. Draw gray border (RGB(100, 100, 100))
-        HPEN hPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
-        HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+        HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
         HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, (HBRUSH)GetStockObject(NULL_BRUSH));
 
         // Shift the top down by half the text height so the line intersects the vertical center of the text
@@ -364,7 +381,6 @@ static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wP
 
         SelectObject(hdc, hOldBrush);
         SelectObject(hdc, hOldPen);
-        DeleteObject(hPen);
 
         // 7. Restore the clipping region so we can draw the text
         SelectClipRgn(hdc, NULL);

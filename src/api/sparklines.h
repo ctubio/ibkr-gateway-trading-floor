@@ -159,18 +159,14 @@ public:
         }
 
         // Create the Canvas Gradient (Alpha 0.7 * 255 = ~178)
-        Gdiplus::PointF pntTop(0.0f, clientRect.top);
-        Gdiplus::PointF pntBottom(0.0f, clientRect.top+H+2); 
-        Gdiplus::LinearGradientBrush brush(pntTop, pntBottom, Gdiplus::Color(255,0,0,0), Gdiplus::Color(255,0,0,0)); 
+        Gdiplus::LinearGradientBrush brush(
+            Gdiplus::PointF(0.0f, clientRect.top),
+            Gdiplus::PointF(0.0f, clientRect.top + H + 2),
+            Gdiplus::Color(255,0,0,0),
+            Gdiplus::Color(255,0,0,0)); 
         
         // Match JS color stops: 0 = Green, 0.20 = Orange, 0.25 = Red
-        Gdiplus::Color colors[] = {
-            Gdiplus::Color(178, 1, 166, 1),   // Green
-            Gdiplus::Color(178, 255, 165, 0), // Orange
-            Gdiplus::Color(178, 255, 0, 0)    // Red
-        };
-        float positions[] = { 0.0f, 0.50f, 1.0f }; // Clamped red to the bottom
-        brush.SetInterpolationColors(colors, positions, 3);
+        brush.SetInterpolationColors(sparkColors, sparkStops, 3);
 
         // Match JS lineWidth = 3
         Gdiplus::Pen pen(&brush, 3.0f);
@@ -345,13 +341,7 @@ public:
             Gdiplus::PointF(0.f, oy + H + 1),
             Gdiplus::Color(200, 1, 166, 1),
             Gdiplus::Color(200, 1, 166, 1));
-        Gdiplus::Color  cols[] = {
-            Gdiplus::Color(200,   1, 166,   1),  // green
-            Gdiplus::Color(200, 255, 165,   0),  // orange
-            Gdiplus::Color(200, 255,   0,   0)   // red
-        };
-        float stops[] = { 0.0f, 0.50f, 1.0f };
-        brush.SetInterpolationColors(cols, stops, 3);
+        brush.SetInterpolationColors(sparkColors, sparkStops, 3);
 
         Gdiplus::Pen pen(&brush, 3.0f);
         pen.SetLineJoin(Gdiplus::LineJoinRound);

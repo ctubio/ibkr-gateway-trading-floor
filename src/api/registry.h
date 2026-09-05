@@ -16,9 +16,19 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATE
 static bool darkMode = false;
 
 HBRUSH hDarkBrush = NULL;
+HBRUSH hLightBrush = NULL;
 HBRUSH hDarkBrush2 = NULL;
 HBRUSH hBrushDarkGreen = NULL; // dark green background for BUY-side price inputs
 HBRUSH hBrushDarkRed = NULL;   // dark red background for SELL-side price inputs
+HBRUSH hBrushGreen = NULL;     // bright green background for BUY-side price inputs
+HBRUSH hBrushRed = NULL;       // bright red background for SELL-side price inputs
+HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and other UI elements
+
+HPEN hSeparatorPenLight = NULL;
+HPEN hSeparatorPenDark = NULL;
+HPEN hColumnSeparatorPen = NULL;
+HPEN hColumnHeaderPen = NULL;
+HPEN hBorderPen = NULL;
 
 static std::deque<std::string> debugBuffer; // stores messages when window is closed
 
@@ -434,12 +444,7 @@ LRESULT CALLBACK RichEditColorScrollSubclass(HWND hWnd, UINT uMsg, WPARAM wParam
                 int scrollWidth = GetSystemMetrics(SM_CXVSCROLL);
                 RECT rcScroll = { winWidth - scrollWidth, 0, winWidth, winHeight };
 
-                // 4. Paint over it with your custom theme color brush
-                HBRUSH hCustomBrush = CreateSolidBrush(RGB(45, 45, 45)); // Dark palette
-                FillRect(hdc, &rcScroll, hCustomBrush);
-
-                // Clean up GDI assets
-                DeleteObject(hCustomBrush);
+                FillRect(hdc, &rcScroll, hGrayBrush);
                 ReleaseDC(hWnd, hdc);
             }
             return 0; // Signify message handled
@@ -484,22 +489,18 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                     RECT rc = cd->rc;
 
                     // 1. Draw modern, subtle separators
-                    HPEN hPen = CreatePen(PS_SOLID, 1, DM_SEPARATOR);
-                    HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+                    HPEN hOldPen = (HPEN)SelectObject(hdc, hColumnSeparatorPen);
                     
                     // Draw a vertical divider, inset by 4 pixels (doesn't touch top/bottom edges)
                     MoveToEx(hdc, rc.right - 1, rc.top + 4, NULL);
                     LineTo(hdc, rc.right - 1, rc.bottom - 4);
 
                     // Draw a single subtle bottom border under the header
-                    HPEN hBotPen = CreatePen(PS_SOLID, 1, DM_BORDER);
-                    SelectObject(hdc, hBotPen);
+                    SelectObject(hdc, hColumnHeaderPen);
                     MoveToEx(hdc, rc.left, rc.bottom - 1, NULL);
                     LineTo(hdc, rc.right, rc.bottom - 1);
 
                     SelectObject(hdc, hOldPen);
-                    DeleteObject(hPen);
-                    DeleteObject(hBotPen);
 
                     // 2. Get the Column Text and its Alignment
                     char text[128] = {0};
@@ -562,8 +563,7 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
             OffsetRect(&rcWin, -rcWin.left, -rcWin.top);
 
             // WS_EX_CLIENTEDGE draws a 2-pixel sunken border; overdraw it.
-            HPEN hPen  = CreatePen(PS_SOLID, 1, DM_BORDER);
-            HPEN hOld  = (HPEN)SelectObject(hdc, hPen);
+            HPEN hOld  = (HPEN)SelectObject(hdc, hColumnHeaderPen);
             HBRUSH hBr = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
 
             // Outer edge
@@ -573,7 +573,6 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 
             SelectObject(hdc, hOld);
             SelectObject(hdc, hBr);
-            DeleteObject(hPen);
             ReleaseDC(hWnd, hdc);
         }
         return res;

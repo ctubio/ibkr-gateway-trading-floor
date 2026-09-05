@@ -221,10 +221,6 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
         wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
         RegisterClassA(&wc);
 
-        // Pick color: Red or Green with alpha transparency (~50% opacity so you can still see charts)
-        COLORREF rgb = isGreen ? COINS_CLR_GREEN : COINS_CLR_RED;
-        HBRUSH hBrush = CreateSolidBrush(rgb);
-
         // Cover all virtual screens (supports multi-monitor setups)
         int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
         int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -240,14 +236,11 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
             NULL, NULL, hInstance, NULL
         );
 
-        if (!hwnd) {
-            DeleteObject(hBrush);
-            return;
-        }
+        if (!hwnd) return;
 
         // Set 45% transparency (69 out of 255) so it flashes nicely without blinding you
         SetLayeredWindowAttributes(hwnd, 0, 69, LWA_ALPHA);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)hBrush);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)(isGreen ? hBrushGreen : hBrushRed));
         ShowWindow(hwnd, SW_SHOW);
         UpdateWindow(hwnd);
 
@@ -256,7 +249,6 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
 
         DestroyWindow(hwnd);
         UnregisterClassA("ScreenFlashOverlay", hInstance);
-        DeleteObject(hBrush);
     }).detach();
 }
 
