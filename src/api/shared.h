@@ -69,6 +69,7 @@ static COLORREF GetCtrlColor(HWND hw) {
 }
 
 static Gdiplus::Color sparkColors[3];
+static Gdiplus::Color sparkColorsMini[3];
 static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
 
 void InitDarkBrushes() {
@@ -95,6 +96,9 @@ void InitDarkBrushes() {
     sparkColors[0] = Gdiplus::Color(178, 1, 166, 1);   // Green
     sparkColors[1] = Gdiplus::Color(178, 255, 165, 0); // Orange
     sparkColors[2] = Gdiplus::Color(178, 255, 0, 0);    // Red
+    sparkColorsMini[0] = Gdiplus::Color(200, 1, 166, 1);   // Green
+    sparkColorsMini[1] = Gdiplus::Color(200, 255, 165, 0); // Orange
+    sparkColorsMini[2] = Gdiplus::Color(200, 255, 0, 0);    // Red
 }
 
 void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {

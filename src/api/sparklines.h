@@ -9,6 +9,25 @@ class Sparkline {
 private:
     std::vector<SparkPoint> data;
 
+    // Graphics is tied to the paint HDC, but the gradient resources are not.
+    // The sparkline geometry is fixed for the lifetime of its owner, so these
+    // are initialized once and reused for every paint.
+    mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
+    mutable std::unique_ptr<Gdiplus::Pen> gradientPen;
+
+    void PrepareGradient(float height, float originY) const {
+        if (!gradientBrush) {
+            gradientBrush = std::make_unique<Gdiplus::LinearGradientBrush>(
+                Gdiplus::PointF(0.0f, originY),
+                Gdiplus::PointF(0.0f, originY + height + 2.0f),
+                Gdiplus::Color(255, 0, 0, 0),
+                Gdiplus::Color(255, 0, 0, 0));
+            gradientBrush->SetInterpolationColors(sparkColors, sparkStops, 3);
+            gradientPen = std::make_unique<Gdiplus::Pen>(gradientBrush.get(), 3.0f);
+            gradientPen->SetLineJoin(Gdiplus::LineJoinRound);
+        }
+    }
+
     // NEW: long-lived history (~65 min) used only for the 10/20/30/40/50-min reference dots.
     // Kept completely separate from `data` so the existing sparkline logic is untouched.
     // PERF: std::deque instead of std::vector — AddPrice() prunes stale entries off
@@ -158,21 +177,8 @@ public:
             points[i] = Gdiplus::PointF(clientRect.left + x, clientRect.top + y);
         }
 
-        // Create the Canvas Gradient (Alpha 0.7 * 255 = ~178)
-        Gdiplus::LinearGradientBrush brush(
-            Gdiplus::PointF(0.0f, clientRect.top),
-            Gdiplus::PointF(0.0f, clientRect.top + H + 2),
-            Gdiplus::Color(255,0,0,0),
-            Gdiplus::Color(255,0,0,0)); 
-        
-        // Match JS color stops: 0 = Green, 0.20 = Orange, 0.25 = Red
-        brush.SetInterpolationColors(sparkColors, sparkStops, 3);
-
-        // Match JS lineWidth = 3
-        Gdiplus::Pen pen(&brush, 3.0f);
-        pen.SetLineJoin(Gdiplus::LineJoinRound);
-
-        graphics.DrawLines(&pen, points.data(), (INT)points.size());
+        PrepareGradient(H, (float)clientRect.top);
+        graphics.DrawLines(gradientPen.get(), points.data(), (INT)points.size());
 
         // NEW: draw the 5 reference dots (10/20/30/40/50 min ago), top to bottom.
         // Both color saturation and dot size scale with the magnitude of % change.
@@ -204,6 +210,24 @@ class MiniSparkline {
 private:
     struct MiniSparkPoint { ULONGLONG date; double price; };
     std::vector<MiniSparkPoint> data;
+
+    // Graphics is tied to the paint HDC, but the sparkline geometry is fixed
+    // for the lifetime of its owner, so these are initialized once per instance.
+    mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
+    mutable std::unique_ptr<Gdiplus::Pen> gradientPen;
+
+    void PrepareGradient(float height, float originY) const {
+        if (!gradientBrush) {
+            gradientBrush = std::make_unique<Gdiplus::LinearGradientBrush>(
+                Gdiplus::PointF(0.0f, originY),
+                Gdiplus::PointF(0.0f, originY + height + 1.0f),
+                Gdiplus::Color(200, 1, 166, 1),
+                Gdiplus::Color(200, 1, 166, 1));
+            gradientBrush->SetInterpolationColors(sparkColors, sparkStops, 3);
+            gradientPen = std::make_unique<Gdiplus::Pen>(gradientBrush.get(), 3.0f);
+            gradientPen->SetLineJoin(Gdiplus::LineJoinRound);
+        }
+    }
 
     // NEW: same idea as in Sparkline, a separate long-lived history for the dots
     // PERF: deque, not vector — see the comment on Sparkline::priceHistory above.
@@ -335,17 +359,8 @@ public:
                 pts[i]  = Gdiplus::PointF(ox + x, oy + y);
             }
 
-        // Gradient: green (top/recent-high) → orange → red (bottom/loss)
-        Gdiplus::LinearGradientBrush brush(
-            Gdiplus::PointF(0.f, oy),
-            Gdiplus::PointF(0.f, oy + H + 1),
-            Gdiplus::Color(200, 1, 166, 1),
-            Gdiplus::Color(200, 1, 166, 1));
-        brush.SetInterpolationColors(sparkColors, sparkStops, 3);
-
-        Gdiplus::Pen pen(&brush, 3.0f);
-        pen.SetLineJoin(Gdiplus::LineJoinRound);
-        g.DrawLines(&pen, pts.data(), (INT)pts.size());
+        PrepareGradient(H, oy);
+        g.DrawLines(gradientPen.get(), pts.data(), (INT)pts.size());
 
         // NEW: draw the 5 reference dots (10/20/30/40/50 min ago), top to bottom
         ULONGLONG now = GetTickCount64();
