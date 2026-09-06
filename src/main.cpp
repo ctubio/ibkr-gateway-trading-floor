@@ -30,14 +30,14 @@ public:
         RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,           108, true);
         RegisterWindowClass(hInst_, WndProcLock,               LOCK_CLASS_NAME,               110, true);
 
-        darkMode = Settings_DarkMode();
+        LoadRegistrySettings();
 
         // Gate the whole app behind the saved keyword, if one is set. Nothing
         // has been hidden yet (lockHotkeys is still false), so on success we
         // just fall straight into normal startup below -- no toggle/reshow
         // needed. On failure/cancel, skip StartDashboard/Session_RestoreWindows
         // entirely and let WinMain exit via ok().
-        if (!Settings_LoadString("Lock", "").empty()) {
+        if (!lockScreen.empty()) {
             if (!PromptLockAtStartup()) {
                 startupOk_ = false;
                 return;

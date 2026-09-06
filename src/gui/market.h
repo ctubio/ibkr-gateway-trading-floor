@@ -1,10 +1,67 @@
 #pragma once
 
-int windowMarketWidth = 545;
+int windowMarketWidth  = 545;
 int windowMarketHeight = 545;
 
-void StartMarketSearch(); // Forward declaration
-void StartMarket(const std::string& symbol = "", int conId = 0);
+void StartMarketSearch() {
+    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        (GetSystemMetrics(SM_CXSCREEN) - 268) / 2, (GetSystemMetrics(SM_CYSCREEN) - 255) / 2, 268, 255,
+        NULL, NULL, GetModuleHandle(NULL), NULL);
+}
+
+void StartMarket(const std::string& symbol = "", int conId = 0) {
+    if (symbol.empty() || conId == 0) {
+        StartMarketSearch();
+        return;
+    }
+    std::string key = std::string(MARKET_CLASS_NAME) + "_" + symbol;
+
+    auto tsWindows = EnumerateMarketWindows();
+
+    // Already open for this symbol -- StartGenericWindow below will just
+    // find and focus it; none of the capacity/position logic applies.
+    bool alreadyOpen = false;
+    for (auto& mw : tsWindows) {
+        if (mw.symbol == symbol) {
+            alreadyOpen = true;
+            break;
+        }
+    }
+
+    if (!alreadyOpen) {
+        // ── 4-window "slot" layout ────────────────────────────────────────
+        std::string flaggedKey = Settings_Market_GetOpenedLastKey();
+        if (!flaggedKey.empty()) {
+            HWND hFlaggedWnd = NULL;
+            for (auto& mw : tsWindows) {
+                if (std::string(MARKET_CLASS_NAME) + "_" + mw.symbol == flaggedKey) { hFlaggedWnd = mw.hWnd; break; }
+            }
+
+            if (hFlaggedWnd && IsWindow(hFlaggedWnd)) {
+                // Flagged window is still open -- only steal its slot once
+                // we're already at capacity.
+                if ((int)tsWindows.size() >= 4) {
+                    WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+                    GetWindowPlacement(hFlaggedWnd, &wp);
+                    SaveWinPositionRaw(key,
+                        wp.rcNormalPosition.left, wp.rcNormalPosition.top,
+                        wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
+                        wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
+                    DestroyWindow(hFlaggedWnd); // synchronous -- runs WM_DESTROY, which re-flags itself
+                }
+            } else {
+                // Flagged window is already closed -- its slot is free.
+                int fx, fy, fw, fh;
+                if (LoadWinPosition(flaggedKey.c_str(), fx, fy, fw, fh))
+                    SaveWinPositionRaw(key, fx, fy, fw, fh);
+            }
+        }
+    }
+
+    TradingAPI::MarketInitData* data = new TradingAPI::MarketInitData{symbol, conId, key};
+    StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+}
 
 #define ID_MARKET_OVERNIGHT            6003
 #define ID_MARKET_TIMESALES_LIST_F0001 6004
@@ -124,7 +181,7 @@ struct TsState {
     HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
-
+    
     Sparkline sparkline;
     
     // ── Cached header double-buffer (avoids CreateCompatibleDC/Bitmap every paint) ──
@@ -476,8 +533,6 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         profitDist = state->orderSide == "BUY" ? profitDist - state->l1Info.last : state->l1Info.last - profitDist;
     }
 
-    const float riskPct = Settings_LoadFloat("RiskPct", 1.0f); // target risk per trade, % of NLV
-
     // ── hTotalLabel: Notional value only ─────────────────────────────────────
     std::string notionalText = (price > 0.0 && qty > 0.0) ? FormatWithCommas(price * qty) : "--";
     SetWindowTextA(state->hTotalLabel, notionalText.c_str());
@@ -522,7 +577,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     std::string optQtyText = "--";
     {
         if (stopDist > 0.0 && NetLiquidation > 0.0) {
-            int optQty = (int)((NetLiquidation * riskPct / 100.0) / stopDist);
+            int optQty = (int)((NetLiquidation * riskGateway / 100.0) / stopDist);
             optQtyText = std::format("{}", optQty);
             SetCtrlColor(state->hOptQtyLabel, qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY);
         } else {
@@ -534,7 +589,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     std::string optStopText = "--";
     {
         if (qty > 0.0 && NetLiquidation > 0.0) {
-            double optStop = (NetLiquidation * riskPct / 100.0) / qty;
+            double optStop = (NetLiquidation * riskGateway / 100.0) / qty;
             if (price <= 0.0) {
                 optStop = state->orderSide == "BUY" ? state->l1Info.last - optStop : state->l1Info.last + optStop;
             }
@@ -579,7 +634,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
     
     SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
-    int qty = ((int)Settings_Load("OrderQty", 20)) * (side == "BUY" ? 1 : -1);
+    int qty = qtyGateway * (side == "BUY" ? 1 : -1);
     SetWindowTextA(state->hOrderQty, std::format("{:+}", qty).c_str());
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
@@ -594,8 +649,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hRRLabel,        state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOptQtyLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOptStopLabel,   state->isOvernight ? SW_HIDE : SW_SHOW);
-    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("StopPrice", 1.0f)).c_str());
-    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
+    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : stopGateway).c_str());
+    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : profitGateway).c_str());
     Market_UpdateOrderRiskLabel(state);
 
     Market_Layout(hWnd, state);
@@ -691,11 +746,10 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
                     if (price > 0 && stopPrice > 0) stopPrice = st->orderSide == "BUY" ? price - stopPrice : price + stopPrice;
                     if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
-                    double safety = Settings_LoadFloat("Safety", 2.0f);
                     if (price > 0) {
                         if (st->orderSide == "BUY") {
-                            if (price > st->l1Info.last + safety) {
-                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                            if (price > st->l1Info.last + safetyGateway) {
+                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safetyGateway).c_str(), "Invalid Entry Price", MB_ICONERROR);
                                 return 0;
                             }
                             if (stopPrice > 0 && stopPrice >= price) {
@@ -708,8 +762,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                             }
                         }
                         if (st->orderSide == "SELL") {
-                            if (price < st->l1Info.last - safety) {
-                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safety).c_str(), "Invalid Entry Price", MB_ICONERROR);
+                            if (price < st->l1Info.last - safetyGateway) {
+                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safetyGateway).c_str(), "Invalid Entry Price", MB_ICONERROR);
                                 return 0;
                             }
                             if (stopPrice > 0 && stopPrice <= price) {
@@ -905,66 +959,6 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
-}
-
-void StartMarketSearch() {
-    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",
-        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
-        (GetSystemMetrics(SM_CXSCREEN) - 268) / 2, (GetSystemMetrics(SM_CYSCREEN) - 255) / 2, 268, 255,
-        NULL, NULL, GetModuleHandle(NULL), NULL);
-}
-
-void StartMarket(const std::string& symbol, int conId) {
-    if (symbol.empty() || conId == 0) {
-        StartMarketSearch();
-        return;
-    }
-    std::string key = std::string(MARKET_CLASS_NAME) + "_" + symbol;
-
-    auto tsWindows = EnumerateMarketWindows();
-
-    // Already open for this symbol -- StartGenericWindow below will just
-    // find and focus it; none of the capacity/position logic applies.
-    bool alreadyOpen = false;
-    for (auto& mw : tsWindows) {
-        if (mw.symbol == symbol) {
-            alreadyOpen = true;
-            break;
-        }
-    }
-
-    if (!alreadyOpen) {
-        // ── 4-window "slot" layout ────────────────────────────────────────
-        std::string flaggedKey = Settings_Market_GetOpenedLastKey();
-        if (!flaggedKey.empty()) {
-            HWND hFlaggedWnd = NULL;
-            for (auto& mw : tsWindows) {
-                if (std::string(MARKET_CLASS_NAME) + "_" + mw.symbol == flaggedKey) { hFlaggedWnd = mw.hWnd; break; }
-            }
-
-            if (hFlaggedWnd && IsWindow(hFlaggedWnd)) {
-                // Flagged window is still open -- only steal its slot once
-                // we're already at capacity.
-                if ((int)tsWindows.size() >= 4) {
-                    WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-                    GetWindowPlacement(hFlaggedWnd, &wp);
-                    SaveWinPositionRaw(key,
-                        wp.rcNormalPosition.left, wp.rcNormalPosition.top,
-                        wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
-                        wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
-                    DestroyWindow(hFlaggedWnd); // synchronous -- runs WM_DESTROY, which re-flags itself
-                }
-            } else {
-                // Flagged window is already closed -- its slot is free.
-                int fx, fy, fw, fh;
-                if (LoadWinPosition(flaggedKey.c_str(), fx, fy, fw, fh))
-                    SaveWinPositionRaw(key, fx, fy, fw, fh);
-            }
-        }
-    }
-
-    TradingAPI::MarketInitData* data = new TradingAPI::MarketInitData{symbol, conId, key};
-    StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
 }
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {

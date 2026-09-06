@@ -655,3 +655,20 @@ void CenterEditText(HWND hEdit) {
     RECT rect = { 0, pad, erc.right, erc.bottom - pad };
     SendMessageA(hEdit, EM_SETRECTNP, 0, (LPARAM)&rect);
 }
+
+static void LoadRegistrySettings() {
+    darkMode          = Settings_Load("DarkMode",           0) != 0;
+    playSounds        = Settings_Load("PlaySounds",         0) != 0;
+    killGatewayOnExit = Settings_Load("Gateway_KillOnExit", 0) != 0;
+    autoGateway       = Settings_Load("Gateway_AutoStart",  0) != 0;
+    fullScreenAlerts  = Settings_Load("FullScreenAlerts",   0) != 0;
+    pathGateway       = GetGatewayPath();
+    lockScreen        = Settings_LoadString("Lock", "");
+    clientIdGateway   = (int)Settings_Load("ClientId", 0);
+    groupIdGateway    = (int)Settings_Load("GroupId",  4);
+    qtyGateway        = (int)Settings_Load("OrderQty",      20);
+    stopGateway       = Settings_LoadFloat("StopPrice",   1.0f);
+    profitGateway     = Settings_LoadFloat("ProfitPrice", 2.0f);
+    riskGateway       = Settings_LoadFloat("RiskPct",     1.0f);
+    safetyGateway     = Settings_LoadFloat("Safety",      2.0f);
+}

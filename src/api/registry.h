@@ -13,7 +13,20 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATE
 #define LM_BG        GetSysColor(COLOR_BTNFACE)
 #define LM_TEXT      GetSysColor(COLOR_WINDOWTEXT)
 
-static bool darkMode = false;
+static bool darkMode           = false;
+static bool playSounds         = false;
+static bool autoGateway        = false;
+static bool killGatewayOnExit  = false;
+static bool fullScreenAlerts   = false;
+static std::string pathGateway = "";
+static std::string lockScreen  = "";
+static int clientIdGateway     = 0;
+static int groupIdGateway      = 0;
+static int qtyGateway          = 0.0;
+static double stopGateway      = 0.0;
+static double profitGateway    = 0.0;
+static double riskGateway      = 0.0;
+static double safetyGateway    = 0.0;
 
 HBRUSH hDarkBrush = NULL;
 HBRUSH hLightBrush = NULL;
@@ -338,18 +351,6 @@ void Settings_AlwaysOnTop_Delete(const char* windowClassKey) {
 
 DWORD Settings_AlwaysOnTop_Load(const char* windowClassKey, DWORD defaultValue) {
     return RegGetDword(windowClassKey, "AlwaysOnTop", defaultValue);
-}
-
-bool Settings_KillGatewayOnExit() {
-    return Settings_Load("Gateway_KillOnExit", 0) != 0;
-}
-
-bool Settings_AutoGateway() {
-    return Settings_Load("Gateway_AutoStart", 0) != 0;
-}
-
-bool Settings_DarkMode() {
-    return Settings_Load("DarkMode", 0) != 0;
 }
 
 void SaveWinPositionRaw(const std::string& winKey, int x, int y, int w, int h) {

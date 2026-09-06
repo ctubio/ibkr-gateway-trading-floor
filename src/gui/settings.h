@@ -133,15 +133,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 m + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_AUTO_GATEWAY, hInst, NULL);
-            if (Settings_AutoGateway())
-                SendMessage(hChkAutoGtw, BM_SETCHECK, BST_CHECKED, 0);
+            SendMessage(hChkAutoGtw, autoGateway ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
             HWND hChkKill = CreateWindowA("BUTTON", "Kill IBKR Gateway on exit",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 m + gm, y + 44, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_KILL_GATEWAY, hInst, NULL);
-            if (Settings_KillGatewayOnExit())
-                SendMessage(hChkKill, BM_SETCHECK, BST_CHECKED, 0);
+            SendMessage(hChkKill, killGatewayOnExit ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
             CreateWindowA("BUTTON", "Change executable path",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
@@ -152,7 +150,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_READONLY,
                 m + gm, y + 98, gw, 20,
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
-            SetWindowTextA(hGatewayEdit, GetGatewayPath().c_str());
+            SetWindowTextA(hGatewayEdit, pathGateway.c_str());
 
             CreateWindowA("STATIC", "Username:",
                 WS_CHILD | WS_VISIBLE,
@@ -190,7 +188,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
                 m + gm + 76, y + 185, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_CLIENT_ID, hInst, NULL);
-            SetWindowTextA(hClientIdEdit, std::format("{}", (int)Settings_Load("ClientId", 0)).c_str());
+            SetWindowTextA(hClientIdEdit, std::format("{}", clientIdGateway).c_str());
 
             // Group ID — TWS "linked window" group color id, used for
             // subscribeToGroupEvents()/updateDisplayGroup().
@@ -202,7 +200,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
                 m + gm + 76, y + 215, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_GROUP_ID, hInst, NULL);
-            SetWindowTextA(hGroupIdEdit, std::format("{}", (int)Settings_Load("GroupId", 4)).c_str());
+            SetWindowTextA(hGroupIdEdit, std::format("{}", groupIdGateway).c_str());
 
             y += 258;
 
@@ -218,15 +216,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 m + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
-            if (darkMode)
-                SendMessage(hChkDark, BM_SETCHECK, BST_CHECKED, 0);
+            SendMessage(hChkDark, darkMode ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
             HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 m + gm, y + 44, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
-            if (Settings_Load("FullScreenAlerts", 0))
-                SendMessage(hChkAlerts, BM_SETCHECK, BST_CHECKED, 0);
+            SendMessage(hChkAlerts, fullScreenAlerts ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
                 
             CreateWindowA("STATIC", "Lock:",
                 WS_CHILD | WS_VISIBLE,
@@ -236,7 +232,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
                 m + gm + 76, y + 67, 147, 26,
                 hWnd, (HMENU)ID_SETTINGS_LOCK, hInst, NULL);
-            SetWindowTextA(hLockEdit, Settings_LoadString("Lock", "").c_str());
+            SetWindowTextA(hLockEdit, lockScreen.c_str());
             //y += 114;
             y = m;
 
@@ -268,12 +264,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND hSafetyEdit = MakeRow("Safety:",     ID_SETTINGS_SAFETY_VALUE, 152, false);
             y += 152 + 40;
 
-            SetWindowTextA(hQtyEdit,    std::format("{}",    (int)Settings_Load("OrderQty", 20)).c_str());
-            SetWindowTextA(hStopEdit,   std::format("{:.2f}", Settings_LoadFloat("StopPrice",  1.0f)).c_str());
-            SetWindowTextA(hProfitEdit, std::format("{:.2f}", Settings_LoadFloat("ProfitPrice", 2.0f)).c_str());
-            SetWindowTextA(hRiskEdit,   std::format("{:.2f}", Settings_LoadFloat("RiskPct",    1.0f)).c_str());
-            SetWindowTextA(hSafetyEdit, std::format("{:.2f}", Settings_LoadFloat("Safety",      2.0f)).c_str());
-
+            SetWindowTextA(hQtyEdit,    std::format("{}",     qtyGateway).c_str());
+            SetWindowTextA(hStopEdit,   std::format("{:.2f}", stopGateway).c_str());
+            SetWindowTextA(hProfitEdit, std::format("{:.2f}", profitGateway).c_str());
+            SetWindowTextA(hRiskEdit,   std::format("{:.2f}", riskGateway).c_str());
+            SetWindowTextA(hSafetyEdit, std::format("{:.2f}", safetyGateway).c_str());
             
             // ── Audio ────────────────────────────────────────────────────────
             hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
@@ -287,8 +282,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 col2_x + gm, y + 18, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
-            if (Settings_Load("PlaySounds", 0))
-                SendMessage(hChkSounds, BM_SETCHECK, BST_CHECKED, 0);
+            SendMessage(hChkSounds, playSounds ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
             // ── TTS Voice selector ───────────────────────────────────────────
             CreateWindowA("STATIC", "Voice:",
@@ -372,48 +366,49 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_AUTO_GATEWAY);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("Gateway_AutoStart", checked);
+                autoGateway = (checked == 1);
             }
             if (LOWORD(wParam) == ID_SETTINGS_KILL_GATEWAY) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_KILL_GATEWAY);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("Gateway_KillOnExit", checked);
+                killGatewayOnExit = (checked == 1);
             }
             if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
                 HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);
                 if (hPathEdit != NULL) {
-                    std::string path = AskGatewayPath(hWnd);
-                    if (!path.empty()) {
-                        SaveGatewayPath(path);
-                        SetWindowTextA(hPathEdit, path.c_str());
+                    pathGateway = AskGatewayPath(hWnd);
+                    if (!pathGateway.empty()) {
+                        SaveGatewayPath(pathGateway);
+                        SetWindowTextA(hPathEdit, pathGateway.c_str());
                     }
                 }
             }
             if (LOWORD(wParam) == ID_SETTINGS_GROUP_ID) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_GROUP_ID);
                 int len = GetWindowTextLength(hEdit);
-                int groupId = 4;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    groupId = atoi(buf);
+                    groupIdGateway = atoi(buf);
                 }
-                Settings_Save("GroupId", groupId);
+                Settings_Save("GroupId", groupIdGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_CLIENT_ID) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_CLIENT_ID);
                 int len = GetWindowTextLength(hEdit);
-                int clientId = 0;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    clientId = atoi(buf);
+                    clientIdGateway = atoi(buf);
                 }
-                Settings_Save("ClientId", clientId);
+                Settings_Save("ClientId", clientIdGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("PlaySounds", checked);
+                playSounds = (checked == 1);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
                 StartDebugLog();
@@ -425,18 +420,18 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if ((LOWORD(wParam) == ID_SETTINGS_LOCK)) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
                 int len = GetWindowTextLength(hEdit);
-                std::string lock = "";
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    lock = std::string(buf);
+                    lockScreen = std::string(buf);
                 }
-                Settings_SaveString("Lock", lock);
+                Settings_SaveString("Lock", lockScreen);
             }
             if (LOWORD(wParam) == ID_SETTINGS_FULL_SCREEN_ALERTS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_FULL_SCREEN_ALERTS);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
                 Settings_Save("FullScreenAlerts", checked);
+                fullScreenAlerts = (checked == 1);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DARK_MODE) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
@@ -451,57 +446,52 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_QTY_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                int qty = 0;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    qty = atoi(buf);
+                    qtyGateway = atoi(buf);
                 }
-                Settings_Save("OrderQty", qty);
+                Settings_Save("OrderQty", qtyGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_STOP_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                float price = 1.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    price = (float)atof(buf); // atof handles decimals
+                    stopGateway = (float)atof(buf); // atof handles decimals
                 }
-                Settings_SaveFloat("StopPrice", price);
+                Settings_SaveFloat("StopPrice", stopGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_PROFIT_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_PROFIT_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                float price = 2.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    price = (float)atof(buf); // atof handles decimals
+                    profitGateway = (float)atof(buf); // atof handles decimals
                 }
-                Settings_SaveFloat("ProfitPrice", price);
+                Settings_SaveFloat("ProfitPrice", profitGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_RISK_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_RISK_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                float pct = 1.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    pct = (float)atof(buf); // atof handles decimals
+                    riskGateway = (float)atof(buf); // atof handles decimals
                 }
-                Settings_SaveFloat("RiskPct", pct);
+                Settings_SaveFloat("RiskPct", riskGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_SAFETY_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_SAFETY_VALUE);
                 int len = GetWindowTextLength(hEdit);
-                float safety = 2.0f;
                 if (len > 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
-                    safety = (float)atof(buf); // atof handles decimals
+                    safetyGateway = (float)atof(buf); // atof handles decimals
                 }
-                Settings_SaveFloat("Safety", safety);
+                Settings_SaveFloat("Safety", safetyGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);

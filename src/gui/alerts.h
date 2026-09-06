@@ -211,7 +211,7 @@ static LRESULT CALLBACK FlashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
 // Triggers a full screen flash (isGreen = true for green, false for red)
 void FlashScreen(bool isGreen, int durationMs = 800) {
-    if (!Settings_Load("FullScreenAlerts", 0)) return;
+    if (!fullScreenAlerts) return;
     
     std::thread([isGreen, durationMs]() {
         HINSTANCE hInstance = GetModuleHandle(NULL);

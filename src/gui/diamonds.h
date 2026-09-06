@@ -633,16 +633,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     double mktVal = shares * (t.last > 0 ? t.last : t.prevClose);
     row.pctNetLiq = std::format("{:.2f}%", (NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0);
     setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
-    
-    if (t.last <= 0.0) {
-        setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
-        setNA(DCOL_CHG5MIN);
-        setNA(DCOL_VWAP);
-        return;
-    }
-
-    setCol(DCOL_LAST, t.last, "{:.2f}", true);
-    diamondsSparklines[conId].AddPrice(t.last);
 
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
@@ -652,8 +642,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     }
 
     setCol(DCOL_LAST, t.last, "{:.2f}", true);
-    diamondsSparklines[conId].AddPrice(t.last);
-    
+    diamondsSparklines[conId].AddPrice(t.last);    
 
     // Alert Up Trigger (Alert High is equal to or lower than Last)
     if (row.upAlert > 0.0 && t.last >= row.upAlert) {

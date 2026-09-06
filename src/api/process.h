@@ -136,9 +136,8 @@ std::string AskGatewayPath(HWND hWnd) {
     char path[MAX_PATH] = "";
     char folder[MAX_PATH] = "C:\\";
     
-    std::string gatewayPath = GetGatewayPath();
-    if (!gatewayPath.empty()) {
-        auto systemPath = std::filesystem::path(gatewayPath);
+    if (!pathGateway.empty()) {
+        auto systemPath = std::filesystem::path(pathGateway);
         std::string filename = systemPath.filename().string();
         std::string pathname = systemPath.remove_filename().string();
         if (!filename.empty()) {
@@ -173,24 +172,23 @@ bool alreadyEnsureGatewayRunning = false;
 bool ensureGatewayLoggedInOnce = false;
 
 bool EnsureGatewayRunning(HWND hWnd) {
-    if (alreadyEnsureGatewayRunning || !Settings_AutoGateway()) return false;
+    if (alreadyEnsureGatewayRunning || !autoGateway) return false;
 
-    std::string path   = GetGatewayPath();
-    std::string installRoot = path.empty() ? "" : std::filesystem::path(path).parent_path().string();
+    std::string installRoot = pathGateway.empty() ? "" : std::filesystem::path(pathGateway).parent_path().string();
 
-    if (PIDProcessRunning("ibgateway.exe") > 0 || PIDProcessRunning("tws.exe") > 0 || IsAnyProcessRunningUnder(installRoot))
+    if (PIDProcessRunning("ibgateway.exe") > 0 || PIDProcessRunning("tws.exe") > 0 || (!installRoot.empty() && IsAnyProcessRunningUnder(installRoot)))
         return true;
 
     EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
-    if (path.empty() || GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    if (pathGateway.empty() || GetFileAttributesA(pathGateway.c_str()) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxA(hWnd, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
-        path = AskGatewayPath(hWnd);
-        if (path.empty()) return false;
-        SaveGatewayPath(path);
+        pathGateway = AskGatewayPath(hWnd);
+        if (pathGateway.empty()) return false;
+        SaveGatewayPath(pathGateway);
     }
-    LogDebug("Running " + std::filesystem::path(path).filename().string() + ", please login..");
+    LogDebug("Running " + std::filesystem::path(pathGateway).filename().string() + ", please login..");
     ensureGatewayLoggedInOnce = false;
-    ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOW);
+    ShellExecuteA(NULL, "open", pathGateway.c_str(), NULL, NULL, SW_SHOW);
     return true;
 }
 
@@ -227,12 +225,9 @@ void SendKey(WORD vKey) {
 }
 
 void EnsureGatewayLoggedIn(HWND hWnd) {
-    if (ensureGatewayLoggedInOnce || !Settings_AutoGateway()) return;
+    if (ensureGatewayLoggedInOnce || !autoGateway || pathGateway.empty()) return;
 
-    std::string path = GetGatewayPath();
-    if (path.empty()) return;
-
-    std::string filename = std::filesystem::path(path).filename().string();
+    std::string filename = std::filesystem::path(pathGateway).filename().string();
     if (filename != "ibgateway.exe" && filename != "tws.exe") return;
 
     std::string username, password;
@@ -310,10 +305,9 @@ BOOL CALLBACK EnumTWSMainWindowProc(HWND hWnd, LPARAM lParam) {
 }
 
 void KillGateway() {
-    std::string path = GetGatewayPath();
-    if (path.empty()) return;
+    if (!killGatewayOnExit || pathGateway.empty()) return;
 
-    std::string targetExe = std::filesystem::path(path).filename().string();
+    std::string targetExe = std::filesystem::path(pathGateway).filename().string();
 
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) return;
@@ -339,7 +333,7 @@ void KillGateway() {
 }
 
 static void ToggleTWS(int swState) {
-    DWORD pid = PIDProcessRunning(std::filesystem::path(GetGatewayPath()).filename().string().c_str());
+    DWORD pid = PIDProcessRunning(std::filesystem::path(pathGateway).filename().string().c_str());
     if (pid == 0) return;
 
     WindowFinderData data;

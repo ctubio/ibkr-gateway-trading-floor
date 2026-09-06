@@ -751,8 +751,7 @@ static void Lock_TrySubmit(HWND hWnd) {
     char buf[128] = {};
     if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
 
-    std::string savedLock = Settings_LoadString("Lock", "");
-    if (savedLock != std::string(buf)) {
+    if (lockScreen != std::string(buf)) {
         MessageBoxA(hWnd, "Incorrect Lock Keyword", "Lock Keyword Required", MB_ICONERROR);
         if (hEdit) {
             SetWindowTextA(hEdit, "");
@@ -1203,10 +1202,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (EnsureGatewayRunning(hWnd)) {
                         EnsureGatewayLoggedIn(hWnd);
                     }
-                    int port = std::filesystem::path(GetGatewayPath()).filename() == "ibgateway.exe" ? 4001 : 7496;
-                    int clientId = (int)Settings_Load("ClientId", 0);
-                    int groupId = (int)Settings_Load("GroupId", 4);
-                    api().connect(port , clientId, groupId);
+                    int port = std::filesystem::path(pathGateway).filename() == "ibgateway.exe" ? 4001 : 7496;
+                    api().connect(port , clientIdGateway, groupIdGateway);
                 } else if (!dashboardState.shouldBeConnected && api().isConnected()) {
                     api().disconnect();
                 }
@@ -1348,8 +1345,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     // Currently locked -> unlocking requires the saved keyword.
                     // Nothing changes here until Lock_TrySubmit() confirms it;
                     // if no keyword is configured, unlock immediately instead.
-                    std::string lockPass = Settings_LoadString("Lock", "");
-                    if (lockPass.empty()) {
+                    if (lockScreen.empty()) {
                         lockHotkeys = false;
                         ShowWindow(dashboardState.hCoin_Lock, SW_HIDE);
                         PostMessage(hWnd, WM_ACTIVATE, WA_ACTIVE, 0);
@@ -1467,10 +1463,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         case WM_DESTROY:
             api().disconnect();
-#ifndef GATEWAY_SIM
-            if (Settings_KillGatewayOnExit())
-                KillGateway();
-#endif
+            KillGateway();
             api().removeApiUpdateWindow(hWnd);
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS

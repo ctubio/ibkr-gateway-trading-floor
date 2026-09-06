@@ -2,8 +2,6 @@
 
 // ── WAV Player ─────────────────────────────────────────────────────────────────
 
-DWORD Settings_Load(const char* key, DWORD defaultValue);
-
 struct SoundQueue {
     std::mutex mutex;
     std::atomic<bool> running{true};
@@ -68,7 +66,7 @@ private:
 };
 
 void PlaySound_Async(int resourceId) {
-    if (!Settings_Load("PlaySounds", 0)) return;
+    if (!playSounds) return;
 
     static SoundQueue soundQueue;
     soundQueue.enqueue(resourceId);
