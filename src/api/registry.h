@@ -366,7 +366,7 @@ void SaveWinPositionRaw(const std::string& winKey, int x, int y, int w, int h) {
     }
 }
 
-void SaveWinPosition(HWND hWnd) {
+std::string SaveWinPosition(HWND hWnd) {
     WINDOWPLACEMENT wp;
     wp.length = sizeof(WINDOWPLACEMENT);
     GetWindowPlacement(hWnd, &wp);
@@ -374,6 +374,7 @@ void SaveWinPosition(HWND hWnd) {
     std::string winKey;
     char className[256] = {};
     GetClassNameA(hWnd, className, sizeof(className));
+    
     if (strcmp(className, MARKET_CLASS_NAME) == 0) {
         TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
         winKey = data->winKey;
@@ -385,6 +386,8 @@ void SaveWinPosition(HWND hWnd) {
         wp.rcNormalPosition.left, wp.rcNormalPosition.top,
         wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
         wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
+
+    return std::string(className);
 }
 
 bool LoadWinPosition(const char* subKeyName, int &x, int &y, int &w, int &h) {

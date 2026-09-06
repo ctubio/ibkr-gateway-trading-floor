@@ -587,14 +587,12 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             return DefWindowProc(hWnd, message, wParam, lParam);
 
         case WM_DESTROY: {
-            SaveWinPosition(hWnd);
-            char className[256] = {};
-            GetClassNameA(hWnd, className, sizeof(className));
+           std::string className = SaveWinPosition(hWnd);
 
-            if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) {
+            if (className != DASHBOARD_CLASS_NAME) {
                 Session_RemoveWindow(hWnd);
             }
-            if (strcmp(className, MARKET_CLASS_NAME) == 0) {
+            if (className == MARKET_CLASS_NAME) {
                 TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
                 if (data) delete data;
             }
