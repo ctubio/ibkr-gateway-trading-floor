@@ -35,14 +35,14 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 
 struct QuickLink { const char* label; const char* url; };
 static const QuickLink quickLinks[] = {
-    { "Today", "https://www.investing.com/dividends-calendar" },
-    { "WSB",   "https://www.reddit.com/r/wallstreetbets"      },
-    { "Scan",  "https://stockscan.io/all-stocks"              },
-    { "List",  "https://stockanalysis.com/list/"              },
-    { "Map",   "https://finviz.com/map.ashx?t=sec"            },
-    { "Data",  "https://www.benzinga.com/quote"               },
-    { "Paper", "http://192.168.1.105:2025/paper"              },
-    { "Chat",  "https://192.168.1.105/chat/"          },
+    { "Today",  "https://www.investing.com/dividends-calendar" },
+    { "WSB",    "https://www.reddit.com/r/wallstreetbets"      },
+    { "Scan",   "https://stockscan.io/all-stocks"              },
+    { "List",   "https://stockanalysis.com/list/"              },
+    { "Map",    "https://finviz.com/map.ashx?t=sec"            },
+    { "Data",   "https://www.benzinga.com/quote"               },
+    { "Paper",  "http://192.168.1.105:2025/paper"              },
+    { "Chat",   "http://192.168.1.105:2025/chat"               },
     { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
 static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]));
