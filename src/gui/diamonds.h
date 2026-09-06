@@ -83,7 +83,7 @@ static int  diamondsSortCol = DCOL_SYMBOL;
 static bool diamondsSortAsc = true;
 
 // Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
-static std::map<int, MiniSparkline> diamondsSparklines;
+static std::unordered_map<int, MiniSparkline> diamondsSparklines;
 
 // Weekly reference closes are immutable once received for a conId. Keep them
 // outside the live portfolio map so market-data updates do not need to lock it

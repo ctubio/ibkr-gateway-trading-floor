@@ -1141,7 +1141,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
         }
 
-        case WM_API_UPDATE:
+        case WM_API_UPDATE: // only called when the api connects or disconnects
             if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
                 const int m    = 10;
                 const int boxW = 226;
@@ -1151,17 +1151,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 int box2H = 124;
                 int y3 = y2 + box2H + 9; // y3 = 250
                 int box3H = 64;
-                if (dashboardState.hCoin_NetLiq)      { SetWindowTextA(dashboardState.hCoin_NetLiq,      "--"); SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_NetLiq, NULL, TRUE); }
+                if (dashboardState.hCoin_NetLiq)      { SetWindowTextA(dashboardState.hCoin_NetLiq,    "--"); SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_NetLiq, NULL, TRUE); }
                 if (dashboardState.hCoin_BigPnL)      SetWindowTextA(dashboardState.hCoin_BigPnL,      "--");
                 if (dashboardState.hCoin_Pct)         SetWindowTextA(dashboardState.hCoin_Pct,         "--");
                 if (dashboardState.hCoin_Realized)    SetWindowTextA(dashboardState.hCoin_Realized,    "--");
-                if (dashboardState.hCoin_Positions)   { SetWindowTextA(dashboardState.hCoin_Positions,   "--"); SetWindowPos(dashboardState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Positions, NULL, TRUE); }
+                if (dashboardState.hCoin_Positions)   { SetWindowTextA(dashboardState.hCoin_Positions, "--"); SetWindowPos(dashboardState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Positions, NULL, TRUE); }
                 if (dashboardState.hCoin_Unrealized)  SetWindowTextA(dashboardState.hCoin_Unrealized,  "--");
                 if (dashboardState.hCoin_Dividends)   SetWindowTextA(dashboardState.hCoin_Dividends,   "--");
                 if (dashboardState.hCoin_Accruals)    SetWindowTextA(dashboardState.hCoin_Accruals,    "--");
                 if (dashboardState.hCoin_BuyingPower) SetWindowTextA(dashboardState.hCoin_BuyingPower, "--");
                 if (dashboardState.hCoin_MaintMargin) SetWindowTextA(dashboardState.hCoin_MaintMargin, "--");
-                if (dashboardState.hCoin_Cash)        { SetWindowTextA(dashboardState.hCoin_Cash,        "--"); SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Cash, NULL, TRUE); }
+                if (dashboardState.hCoin_Cash)        { SetWindowTextA(dashboardState.hCoin_Cash,      "--"); SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Cash, NULL, TRUE); }
                 if (dashboardState.hCoin_EUR)         SetWindowTextA(dashboardState.hCoin_EUR,         "--");
                 if (dashboardState.hCoin_USD)         SetWindowTextA(dashboardState.hCoin_USD,         "--");
                 dashboardState.currencyDashboard = "--";

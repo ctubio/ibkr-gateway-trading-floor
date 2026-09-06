@@ -37,7 +37,7 @@ static OrdersEditState s_editState;
 // inline panel can be repopulated when one is clicked (they're absent from
 // api()'s ordersMap). Cleared on every Orders_Repopulate() — the same event
 // that wipes the phantom row from the ListView.
-static std::map<int, TradingAPI::OrderInfo> s_unsentOrders;
+static std::unordered_map<int, TradingAPI::OrderInfo> unsentOrders;
 
 // Column indices, matching orderCols[] order below.
 enum OrderColIdx { OCOL_SIDE = 0, OCOL_SYMBOL, OCOL_QUOTE, OCOL_STATUS };
@@ -204,10 +204,10 @@ static bool Orders_IsEditable(const std::string& status) {
              status == "Inactive" || status == "PendingCancel");
 }
 
-static void SetOrdersTitle(HWND hWnd) {
-    int submitted = (int)s_unsentOrders.size();
+static void SetOrdersTitle(HWND hWnd, const std::vector<TradingAPI::OrderInfo>& orders) {
+    int submitted = (int)unsentOrders.size();
     int filled = 0;
-    for (const auto& o : api().getOrdersSorted()) {
+    for (const auto& o : orders) {
         if (o.status == "Submitted" || o.status == "PreSubmitted" || o.status == "PendingSubmit" || o.status == "Pending") submitted++;
         if (o.status == "Filled") filled++;
     }
@@ -224,7 +224,7 @@ static void Orders_HideInlinePanel(HWND hWnd) {
 }
 
 // Rebuilds the ListView from the current snapshot, preserving any Unsent
-// placeholder rows in place. Only rows whose orderId is NOT in s_unsentOrders
+// placeholder rows in place. Only rows whose orderId is NOT in unsentOrders
 // get deleted/rebuilt; Unsent rows are left untouched unless a real order
 // with the same orderId has since appeared (meaning it was transmitted for
 // real — the placeholder is stale and gets dropped).
@@ -238,7 +238,7 @@ static void Orders_Repopulate(HWND hWnd) {
     // A placeholder whose orderId now has a real ordersMap entry has been
     // superseded (the user resubmitted it via the inline panel) — drop it so
     // its row gets removed in the sweep below instead of lingering as a dupe.
-    for (const auto& o : orders) s_unsentOrders.erase(o.orderId);
+    for (const auto& o : orders) unsentOrders.erase(o.orderId);
 
     // Remove only the rows that aren't (still) an Unsent placeholder.
     for (int i = ListView_GetItemCount(hList) - 1; i >= 0; --i) {
@@ -247,7 +247,7 @@ static void Orders_Repopulate(HWND hWnd) {
         lvi.iItem = i;
         ListView_GetItem(hList, &lvi);
         int orderId = (int)lvi.lParam;
-        if (!s_unsentOrders.count(orderId))
+        if (!unsentOrders.count(orderId))
             ListView_DeleteItem(hList, i);
     }
 
@@ -283,7 +283,7 @@ static void Orders_Repopulate(HWND hWnd) {
         ListView_SetItemText(hList, row, col++, (LPSTR)fullTypeStr.c_str());
     }
 
-    SetOrdersTitle(hWnd);
+    SetOrdersTitle(hWnd, orders);
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -393,10 +393,10 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                     if (sel >= 0) ListView_DeleteItem(hList, sel);
                     
-                    auto uit = s_unsentOrders.find(s_editState.orderId);
-                    if (uit != s_unsentOrders.end())
-                        s_unsentOrders.erase(s_editState.orderId);
-                    SetOrdersTitle(hParent);
+                    auto uit = unsentOrders.find(s_editState.orderId);
+                    if (uit != unsentOrders.end())
+                        unsentOrders.erase(s_editState.orderId);
+                    SetOrdersTitle(hParent, api().getOrdersSorted());
                 } else {
                     api().cancelOrder(s_editState.orderId);
                 }
@@ -729,10 +729,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                             if (sel >= 0) ListView_DeleteItem(hList, sel);
                     
-                            auto uit = s_unsentOrders.find(s_editState.orderId);
-                            if (uit != s_unsentOrders.end())
-                                s_unsentOrders.erase(s_editState.orderId);
-                            SetOrdersTitle(hWnd);
+                            auto uit = unsentOrders.find(s_editState.orderId);
+                            if (uit != unsentOrders.end())
+                                unsentOrders.erase(s_editState.orderId);
+                            SetOrdersTitle(hWnd, api().getOrdersSorted());
                         } else {
                             api().cancelOrder(s_editState.orderId);
                         }
@@ -778,8 +778,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     }
                 }
                 if (!found) {
-                    auto uit = s_unsentOrders.find(orderId);
-                    if (uit != s_unsentOrders.end())
+                    auto uit = unsentOrders.find(orderId);
+                    if (uit != unsentOrders.end())
                         Orders_ShowInlinePanel(hWnd, uit->second);
                     else
                         Orders_HideInlinePanel(hWnd);
@@ -847,7 +847,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_API_UNSENT_ORDER: {
             auto* info = reinterpret_cast<TradingAPI::OrderInfo*>(lParam);
             if (info) {
-                s_unsentOrders[info->orderId] = *info;
+                unsentOrders[info->orderId] = *info;
                 HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                 if (hList) {
                     int idx = ListView_GetItemCount(hList);
