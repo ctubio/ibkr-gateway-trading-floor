@@ -535,9 +535,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
 
     // ── hTotalLabel: Notional value only ─────────────────────────────────────
     std::string notionalText = (price > 0.0 && qty > 0.0) ? FormatWithCommas(price * qty) : "--";
-    SetWindowTextA(state->hTotalLabel, notionalText.c_str());
-    InvalidateRect(state->hOrderQty, NULL, TRUE);
-    InvalidateRect(state->hTotalLabel, NULL, TRUE);
+    if (SetWindowTextAIfChanged(state->hTotalLabel, notionalText))
+        InvalidateRect(state->hOrderQty, NULL, TRUE);
 
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
@@ -564,29 +563,30 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
 
     // 3) Risk/reward ratio — bottom-left of Profit input
     std::string rrText = "x";
+    COLORREF rrColor = COINS_CLR_ORANGE;
     if (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0) {
         double rrRatio = profitDist / stopDist;
         rrText += std::format("{:.2f}", rrRatio);
-        SetCtrlColor(state->hRRLabel, rrRatio < 1.0 ? COINS_CLR_RED : (rrRatio >= 2.0 ? COINS_CLR_GREEN : COINS_CLR_ORANGE));
-    } else {
-        rrText += "--";
-        SetCtrlColor(state->hRRLabel, COINS_CLR_ORANGE);
+        rrColor = rrRatio < 1.0 ? COINS_CLR_RED : (rrRatio >= 2.0 ? COINS_CLR_GREEN : COINS_CLR_ORANGE);
     }
+    else rrText += "--";
+    bool rrColorChanged = SetCtrlColorIfChanged(state->hRRLabel, rrColor);
 
     // 4) Position size at target risk — bottom-left of Qty input
     std::string optQtyText = "--";
+    COLORREF optQtyColor = COINS_CLR_GRAY;
     {
         if (stopDist > 0.0 && NetLiquidation > 0.0) {
             int optQty = (int)((NetLiquidation * riskGateway / 100.0) / stopDist);
             optQtyText = std::format("{}", optQty);
-            SetCtrlColor(state->hOptQtyLabel, qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY);
-        } else {
-            SetCtrlColor(state->hOptQtyLabel, COINS_CLR_GRAY);
+            optQtyColor = qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY;
         }
     }
+    bool optQtyColorChanged = SetCtrlColorIfChanged(state->hOptQtyLabel, optQtyColor);
 
     // 5) Stop distance at target risk — bottom-right of Stop input
     std::string optStopText = "--";
+    COLORREF optStopColor = COINS_CLR_GRAY;
     {
         if (qty > 0.0 && NetLiquidation > 0.0) {
             double optStop = (NetLiquidation * riskGateway / 100.0) / qty;
@@ -594,27 +594,27 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
                 optStop = state->orderSide == "BUY" ? state->l1Info.last - optStop : state->l1Info.last + optStop;
             }
             optStopText = std::format("{:.2f}", optStop);
-            SetCtrlColor(state->hOptStopLabel, (price > 0 ? stopDistOriginal > optStop : (state->orderSide == "BUY" ? optStop > stopDistOriginal : stopDistOriginal > optStop)) ? COINS_CLR_RED : COINS_CLR_GRAY);
-
-        } else {
-            SetCtrlColor(state->hOptStopLabel, COINS_CLR_GRAY);
+            optStopColor = (price > 0 ? stopDistOriginal > optStop : (state->orderSide == "BUY" ? optStop > stopDistOriginal : stopDistOriginal > optStop)) ? COINS_CLR_RED : COINS_CLR_GRAY;
         }
     }
+    bool optStopColorChanged = SetCtrlColorIfChanged(state->hOptStopLabel, optStopColor);
 
     // Update text, and force the underlying edit to repaint first so the
     // transparent label never leaves stale text ghosted behind the new value.
-    auto setHint = [](HWND hLabel, HWND hUnderEdit, const std::string& text) {
+    auto setHint = [](HWND hLabel, HWND hUnderEdit, const std::string& text, bool colorChanged = false) {
         if (!hLabel) return;
-        SetWindowTextA(hLabel, text.c_str());
-        if (hUnderEdit) InvalidateRect(hUnderEdit, NULL, TRUE);
-        InvalidateRect(hLabel, NULL, TRUE);
+        bool textChanged = SetWindowTextAIfChanged(hLabel, text);
+        if (textChanged || colorChanged) {
+            if (hUnderEdit) InvalidateRect(hUnderEdit, NULL, TRUE);
+            if (colorChanged && !textChanged) InvalidateRect(hLabel, NULL, TRUE);
+        }
     };
 
     setHint(state->hProfitLossPercentLabel, state->hOrderPrice, profitLossPercentageStr);
     setHint(state->hProfitLossValueLabel, state->hOrderPrice, profitLossValueStr);
-    setHint(state->hRRLabel, state->hOrderProfitPrice, rrText);
-    setHint(state->hOptQtyLabel, state->hOrderQty, optQtyText);
-    setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText);
+    setHint(state->hRRLabel, state->hOrderProfitPrice, rrText, rrColorChanged);
+    setHint(state->hOptQtyLabel, state->hOrderQty, optQtyText, optQtyColorChanged);
+    setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText, optStopColorChanged);
 }
 
 static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {

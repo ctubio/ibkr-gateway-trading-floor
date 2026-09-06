@@ -26,6 +26,15 @@ static UINT diamondsCheckedTabs = 0x7;
 
 // Maps conId → assigned group (DTAB_ALL = untagged = shown when bit 0 is set).
 static std::unordered_map<int,int> diamondsTabMap;
+// Alert values are refreshed once at startup and whenever the alert editor
+// notifies this window. Repopulation and row updates read this snapshot only.
+static std::unordered_map<int, AlertEntry> diamondsAlertCache;
+
+static void Diamonds_RefreshAlertCache() {
+    diamondsAlertCache.clear();
+    for (auto const& alert : Settings_Alerts_LoadAll())
+        diamondsAlertCache[alert.conId] = alert;
+}
 
 // ── Symbol color palette ──────────────────────────────────────────────────────
 // Index 0-5 = named colors.  No entry in the map (or index -1) = inherit theme.
@@ -355,10 +364,7 @@ static void Diamonds_CleanupStaleTabAssignments() {
             bool hasAlert = false;
             if (!isLive) {
                 auto cacheIt = diamondDataCache.find(it->first);
-                if (cacheIt != diamondDataCache.end() && !cacheIt->second.symbol.empty()) {
-                    std::string up, down;
-                    hasAlert = Settings_Alerts_Load(cacheIt->second.symbol, it->first, up, down);
-                }
+                hasAlert = diamondsAlertCache.find(it->first) != diamondsAlertCache.end();
             }
             if (!isLive && !hasAlert) { it = diamondsSymbolColors.erase(it); changedColors = true; }
             else ++it;
@@ -699,11 +705,17 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     else setNA(DCOL_CHGPCT);
 }
 
-static void Diamonds_UpdateAlertCols(int conId, const std::string& symbol) {
+static void Diamonds_UpdateAlertCols(int conId) {
     auto& row = diamondDataCache[conId];
     row.conId = conId;
 
-    Settings_Alerts_Load(symbol, conId, row.upStr, row.downStr);
+    row.upStr.clear();
+    row.downStr.clear();
+    auto alertIt = diamondsAlertCache.find(conId);
+    if (alertIt != diamondsAlertCache.end()) {
+        row.upStr = alertIt->second.upStr;
+        row.downStr = alertIt->second.downStr;
+    }
     row.upAlert = std::atof(row.upStr.c_str());
     row.downAlert = std::atof(row.downStr.c_str());
 
@@ -737,7 +749,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
     // of diamondsTabMap, since there's no held position to assign a group
     // to) — see the NM_RCLICK handler below for the disabled "Move to *".
     if ((diamondsCheckedTabs >> DTAB_QUARENTINE) & 1) {
-        for (auto const& alert : Settings_Alerts_LoadAll()) {
+        for (auto const& cacheEntry : diamondsAlertCache) {
+            const auto& alert = cacheEntry.second;
             if (portfolioConIds.count(alert.conId)) continue; // already a real held position
 
             api().watchSymbol(alert.conId, alert.symbol);
@@ -773,7 +786,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
         cacheRow.sortValues[DCOL_AVGPRICE] = pos.avgCost;
         cacheRow.textCols[DCOL_AVGPRICE] = isHeldPosition ? std::format("{:.2f}", pos.avgCost) : "--";
 
-        Diamonds_UpdateAlertCols(pos.conId, pos.symbol);
+        Diamonds_UpdateAlertCols(pos.conId);
 
         // Pre-fill market data if already cached — this also seeds the estimated
         // PnL columns for the first open (before WM_PNL_SINGLE arrives).
@@ -852,6 +865,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Load saved tab assignments, checkbox state, sort settings, and symbol colors.
         Diamonds_LoadTabMap();
         Diamonds_LoadSymbolColors();
+        Diamonds_RefreshAlertCache();
         diamondsSortCol = (int)Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
         diamondsSortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 1) != 0;
         if (diamondsSortCol < 0 || diamondsSortCol >= DCOL_COUNT) diamondsSortCol = DCOL_SYMBOL;
@@ -947,6 +961,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         firedAlertsUp.erase(conId);
         firedAlertsDown.erase(conId);
 
+        Diamonds_RefreshAlertCache();
         Diamonds_Repopulate(hWnd);
         InvalidateRect(hWnd, NULL, TRUE);
         break;

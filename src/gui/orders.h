@@ -93,9 +93,8 @@ static void UpdatePriceLabel(HWND hWnd) {
         qty = std::abs(std::stod(qtyBuf));
     } catch (...) { price = 0; qty = 0; }
 
-    SetWindowTextA(hTotalLabel, FormatWithCommas(price * qty).c_str());
-    InvalidateRect(hOrderQty, NULL, TRUE);
-    InvalidateRect(hTotalLabel, NULL, TRUE);
+    if (SetWindowTextAIfChanged(hTotalLabel, FormatWithCommas(price * qty)))
+        InvalidateRect(hOrderQty, NULL, TRUE);
 }
 
 // Price and Qty edit fields shown at the bottom of the Orders window when an

@@ -68,6 +68,22 @@ static COLORREF GetCtrlColor(HWND hw) {
     return (COLORREF)((uintptr_t)h - 1);
 }
 
+static bool SetCtrlColorIfChanged(HWND hw, COLORREF color) {
+    if (!hw || GetCtrlColor(hw) == color) return false;
+    SetCtrlColor(hw, color);
+    return true;
+}
+
+static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
+    if (!hWnd) return false;
+    char buf[256] = {};
+    GetWindowTextA(hWnd, buf, sizeof(buf));
+    if (std::string(buf) == newText) return false;
+    SetWindowTextA(hWnd, newText.c_str());
+    InvalidateRect(hWnd, NULL, TRUE);
+    return true;
+}
+
 static Gdiplus::Color sparkColors[3];
 static Gdiplus::Color sparkColorsMini[3];
 static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
