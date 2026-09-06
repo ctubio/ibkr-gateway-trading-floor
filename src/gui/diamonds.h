@@ -140,6 +140,9 @@ struct DiamondRowCache {
 
 // Data storage: Fast O(1) lookup by conId for live data streams
 static std::unordered_map<int, DiamondRowCache> diamondDataCache;
+// The list view sends one row-level custom-draw notification before that
+// row's subitems, so reuse its cache entry throughout the subitem callbacks.
+static const DiamondRowCache* diamondsPaintRowCache = nullptr;
 
 // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
 static std::vector<int> diamondDisplayOrder;
@@ -1209,6 +1212,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 case CDDS_ITEMPREPAINT:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
+                    diamondsPaintRowCache = nullptr;
+                    if (cd->nmcd.dwItemSpec < diamondDisplayOrder.size()) {
+                        int conId = diamondDisplayOrder[(size_t)cd->nmcd.dwItemSpec];
+                        auto cacheIt = diamondDataCache.find(conId);
+                        if (cacheIt != diamondDataCache.end())
+                            diamondsPaintRowCache = &cacheIt->second;
+                    }
                     if (darkMode) {
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         cd->clrText   = DM_TEXT;
@@ -1219,13 +1229,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     return CDRF_NOTIFYSUBITEMDRAW;
 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                    if (!diamondsPaintRowCache) return CDRF_DODEFAULT;
+                    const DiamondRowCache& cacheRow = *diamondsPaintRowCache;
+
                     // ── Symbol column: apply per-symbol color override ────────
                     if (cd->iSubItem == DCOL_SYMBOL) {
                         SelectObject(cd->nmcd.hdc, hFont16ptbold.get());
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        
-                        auto cit = diamondsSymbolColors.find(conId);
+                        auto cit = diamondsSymbolColors.find(cacheRow.conId);
                         if (cit != diamondsSymbolColors.end() &&
                             cit->second >= 0 && cit->second < DIAMONDS_COLOR_COUNT) {
                             cd->clrText = diamondColorPalette[cit->second].rgb;
@@ -1236,9 +1246,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // Only colour P&L / change columns — and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
                     if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        double val = diamondDataCache[conId].sortValues[cd->iSubItem];
+                        double val = cacheRow.sortValues[cd->iSubItem];
                         if (val == BOTTOM_SORT_VALUE) val = 0.0;
                         // Guard: skip colouring the "--" sentinel — atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
@@ -1260,8 +1268,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_SIZE) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = diamondDataCache[conId];
                         HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
                                                  : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
                         RECT rcCell;
@@ -1278,9 +1284,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         return CDRF_SKIPDEFAULT; 
                     }
                     if (cd->iSubItem == DCOL_VWAP) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = diamondDataCache[conId];
                         if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
                             double diff = cacheRow.sortValues[DCOL_VWAP];
                             if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
@@ -1292,9 +1295,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_LAST) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = diamondDataCache[conId];
                         double last = cacheRow.sortValues[DCOL_LAST];
                         double high = cacheRow.dayHigh;
                         double low = cacheRow.dayLow;
@@ -1318,8 +1318,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_BIDASK) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = diamondDataCache[conId];
                         HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
                                                  : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
                         RECT rcCell;
@@ -1343,8 +1341,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_MKTVAL) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = diamondDataCache[conId];
                         
                         HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
                                                 : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
@@ -1387,8 +1383,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_ALERT) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        int conId = diamondDisplayOrder[rowIndex];
-                        const auto& cacheRow = diamondDataCache[conId];
                         double last = cacheRow.sortValues[DCOL_LAST];
                         
                         HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
