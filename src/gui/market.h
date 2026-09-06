@@ -325,7 +325,7 @@ static inline int TimeToSeconds(const std::string& timeStr) {
 }
 
 static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time, COLORREF color) {
-    std::string priceStr = std::format("{:.2f}", price);
+    std::string priceStr = FormatFixed(price, 2);
     int timeSec = TimeToSeconds(time);
     LVITEMA lvi = {};
     lvi.mask = LVIF_TEXT | LVIF_PARAM;
@@ -333,7 +333,7 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
     lvi.pszText = (LPSTR)priceStr.c_str();
     lvi.lParam = (static_cast<LPARAM>(static_cast<uint32_t>(timeSec)) << 32) | static_cast<uint32_t>(color);
     ListView_InsertItem(hList, &lvi);
-    std::string sizeStr = std::format("{:.0f}", size);
+    std::string sizeStr = FormatFixed(size, 0);
     ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
 }
@@ -995,12 +995,12 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 // ── Formatting helpers ────────────────────────────────────────────────────────
 static std::string Market_Fmt(double v, int dec = 2) {
     if (v == 0.0) return "--";
-    return std::format("{:.{}f}", v, dec);
+    return FormatFixed(v, dec);
 }
 static std::string Market_FmtQty(double v) {
     if (v == 0.0) return "--";
-    if (v == (long long)v) return std::format("{}", (long long)v);
-    return std::format("{:.2f}", v);
+    if (v == (long long)v) return FormatFixed(v, 0);
+    return FormatFixed(v, 2);
 }
 
 // ── Volume rate / print-frequency rate ────────────────────────────────────────
@@ -1199,7 +1199,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont11ptbold.get());
-        std::string askSzStr = std::format(" x {}", Market_FmtQty(L1.askSize));
+        std::string askSzStr = " x " + Market_FmtQty(L1.askSize);
         RECT sr = { RB_X + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
         DrawTextA(hdc, askSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -1214,7 +1214,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont11ptbold.get());
-        std::string bidSzStr = std::format(" x {}", Market_FmtQty(L1.bidSize));
+        std::string bidSzStr = " x " + Market_FmtQty(L1.bidSize);
         RECT sr = { RB_X + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
         DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -1231,8 +1231,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Format Strings (Only show if we hold a position, else "--")
     std::string bufD, bufU;
-    bufD = std::format("{:+.2f}", dPnL);
-    bufU = std::format("{:+.2f}", uPnL);
+    bufD = FormatFixed(dPnL, 2, true);
+    bufU = FormatFixed(uPnL, 2, true);
 
     // Determine Colors
     COLORREF dPnlColor = (dPnL > 0.0) ? COINS_CLR_GREEN : (dPnL < 0.0 ? COINS_CLR_RED : textColor);
@@ -1251,7 +1251,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         chgPct = L1.changePct();
     }
     // Measure change text (smaller font)
-    std::string chgStr = std::format(" {:.2f}  {:.2f}%", chg, chgPct);
+    std::string chgStr = " " + FormatFixed(chg, 2) + "  " + FormatFixed(chgPct, 2) + "%";
 
     auto rateColor = [&](double ratio) -> COLORREF {
         if (ratio >= 3.0) return COINS_CLR_PINK;      // hot: 3x+ normal pace

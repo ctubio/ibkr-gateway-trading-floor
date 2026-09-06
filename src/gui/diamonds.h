@@ -455,16 +455,25 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
 static void Diamonds_ApplySort(HWND hList) {
     if (diamondDisplayOrder.empty()) return;
 
-    std::sort(diamondDisplayOrder.begin(), diamondDisplayOrder.end(), [](int idA, int idB) {
-        const auto& a = diamondDataCache[idA];
-        const auto& b = diamondDataCache[idB];
+    struct DiamondSortEntry {
+        int conId;
+        std::string symbol;
+        double value;
+    };
+    std::vector<DiamondSortEntry> sortEntries;
+    sortEntries.reserve(diamondDisplayOrder.size());
+    for (int conId : diamondDisplayOrder) {
+        const auto& row = diamondDataCache.at(conId);
+        sortEntries.push_back({ conId, row.textCols[DCOL_SYMBOL], row.sortValues[diamondsSortCol] });
+    }
 
+    std::sort(sortEntries.begin(), sortEntries.end(), [](const DiamondSortEntry& a, const DiamondSortEntry& b) {
         if (diamondsSortCol == DCOL_SYMBOL) {
-            int cmp = _stricmp(a.textCols[DCOL_SYMBOL].c_str(), b.textCols[DCOL_SYMBOL].c_str());
+            int cmp = _stricmp(a.symbol.c_str(), b.symbol.c_str());
             return diamondsSortAsc ? (cmp > 0) : (cmp < 0);
         } else {
-            double v1 = a.sortValues[diamondsSortCol];
-            double v2 = b.sortValues[diamondsSortCol];
+            double v1 = a.value;
+            double v2 = b.value;
             if (v1 == v2) return false;
             if (diamondsSortCol == DCOL_DIV_DATE) {
                 return diamondsSortAsc ? (v1 > v2) : (v1 < v2);
@@ -473,6 +482,8 @@ static void Diamonds_ApplySort(HWND hList) {
             }
         }
     });
+    for (size_t i = 0; i < sortEntries.size(); ++i)
+        diamondDisplayOrder[i] = sortEntries[i].conId;
 
     // ZERO-FLICKER FIX: Delegate to the paint timer instead of invalidating instantly
     diamondsDirty = true;
@@ -580,10 +591,10 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     auto& row = diamondDataCache[conId];
     row.conId = conId;
     // Helper to write both sortable raw data and display string
-    auto setCol = [&](int col, double val, std::string_view fmt, bool alwaysShow = false) {
+    auto setCol = [&](int col, double val, int decimals, bool alwaysShow = false, bool alwaysSign = false) {
         row.sortValues[col] = val;
         if (val != 0.0 || alwaysShow) {
-            row.textCols[col] = std::vformat(fmt, std::make_format_args(val));
+            row.textCols[col] = FormatFixed(val, decimals, alwaysSign);
         } else {
             row.textCols[col] = "";
         }
@@ -597,22 +608,22 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.bidSize = t.bidSize;
     row.askSize = t.askSize;
     row.sortValues[DCOL_SIZE] = t.askSize + t.bidSize;
-    row.textCols[DCOL_SIZE]   = std::format("{:.0f}\n{:.0f}", t.askSize, t.bidSize);
+    row.textCols[DCOL_SIZE]   = FormatFixed(t.askSize, 0) + "\n" + FormatFixed(t.bidSize, 0);
 
     row.bid = t.bid;
     row.ask = t.ask;
     row.sortValues[DCOL_BIDASK] = (t.ask + t.bid) / 2;
-    row.textCols[DCOL_BIDASK]   = std::format("{:.2f}\n{:.2f}", t.ask, t.bid);
+    row.textCols[DCOL_BIDASK]   = FormatFixed(t.ask, 2) + "\n" + FormatFixed(t.bid, 2);
 
 
-    setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}", true);
-    setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}", true);
+    setCol(DCOL_DIV_AMT, t.dividendAmount,  3, true);
+    setCol(DCOL_ANNUAL_DIV, t.annualDividends, 3, true);
     
     row.textCols[DCOL_DIV_DATE] = t.dividendDate;
     row.sortValues[DCOL_DIV_DATE] = t.dividendDateSortable;
 
-    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), "{:.2f}%", true);
-    else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, "{:.2f}%", true);
+    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), 2, true);
+    else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, 2, true);
     else setNA(DCOL_DIV_YIELD);
     Diamonds_ApplyCachedDividends(row, conId, t);
 
@@ -620,7 +631,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         if (closeAgo > 0.0 && t.last > 0.0) {
             double pct = (t.last - closeAgo) / closeAgo * 100.0;
             row.sortValues[col] = pct;
-            row.textCols[col]   = std::format("{:+.2f}%", pct);
+            row.textCols[col]   = FormatFixed(pct, 2, true) + "%";
         } else {
             setNA(col);
         }
@@ -640,8 +651,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     double shares = row.sortValues[DCOL_POSITION];
 
     double mktVal = shares * (t.last > 0 ? t.last : t.prevClose);
-    row.pctNetLiq = std::format("{:.2f}%", (NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0);
-    setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
+    row.pctNetLiq = FormatFixed((NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0, 2) + "%";
+    setCol(DCOL_MKTVAL, mktVal, 2, true);
 
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
@@ -650,7 +661,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         return;
     }
 
-    setCol(DCOL_LAST, t.last, "{:.2f}", true);
+    setCol(DCOL_LAST, t.last, 2, true);
     diamondsSparklines[conId].AddPrice(t.last);    
 
     // Alert Up Trigger (Alert High is equal to or lower than Last)
@@ -658,8 +669,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         if (firedAlertsUp.find(conId) == firedAlertsUp.end()) {
             firedAlertsUp.insert(conId); // Mark as fired
             //std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
-            std::string msg = std::format("{:.2f}", t.last);
-            std::string title = std::format("{}: Alert UP!", row.symbol);
+            std::string msg = FormatFixed(t.last, 2);
+            std::string title = row.symbol + ": Alert UP!";
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
                 AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, conId, true};
@@ -673,8 +684,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         if (firedAlertsDown.find(conId) == firedAlertsDown.end()) {
             firedAlertsDown.insert(conId); // Mark as fired
             //std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
-            std::string msg = std::format("{:.2f}", t.last);
-            std::string title = std::format("{}: Alert DOWN!", row.symbol);
+            std::string msg = FormatFixed(t.last, 2);
+            std::string title = row.symbol + ": Alert DOWN!";
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
                 AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, conId, false};
@@ -686,7 +697,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
     // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
     double vwapDiff = (t.vwap > 0.0 && t.last > 0.0) ? t.last - t.vwap : 0.0;
-    setCol(DCOL_VWAP, vwapDiff, "{:.2f}", true);
+    setCol(DCOL_VWAP, vwapDiff, 2, true);
 
     // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
     // sampled from the same long-lived history the sparkline's reference dots
@@ -695,14 +706,16 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     {
         double price5MinAgo = 0.0;
         if (diamondsSparklines[conId].GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
-            setCol(DCOL_CHG5MIN, t.last - price5MinAgo, "{:.2f}", true);
+            setCol(DCOL_CHG5MIN, t.last - price5MinAgo, 2, true);
         } else {
             setNA(DCOL_CHG5MIN);
         }
     }
 
-    if (t.prevClose > 0.0) setCol(DCOL_CHGPCT, t.changePct(), "{:+.2f}%", true);
-    else setNA(DCOL_CHGPCT);
+    if (t.prevClose > 0.0) {
+        setCol(DCOL_CHGPCT, t.changePct(), 2, true, true);
+        row.textCols[DCOL_CHGPCT] += "%";
+    } else setNA(DCOL_CHGPCT);
 }
 
 static void Diamonds_UpdateAlertCols(int conId) {
