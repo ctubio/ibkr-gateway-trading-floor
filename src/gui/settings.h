@@ -38,7 +38,6 @@ static HWND hSettingBox2 = NULL;
 static HWND hSettingBox3 = NULL;
 static HWND hSettingBox4 = NULL;
 static HWND hSettingBox5 = NULL;
-static HWND hDebugEdit = NULL;
 static HWND hGatewayEdit = NULL;
 static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 
@@ -63,7 +62,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
                 0, 0, 0, 0, hWnd, NULL, GetModuleHandle(NULL), NULL);
-            SetPropA(hWnd, "hDebugEdit", hDebugEdit);
             RECT rc;
             GetClientRect(hWnd, &rc);
             SetWindowPos(hDebugEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
@@ -71,7 +69,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
         }
         case WM_DESTROY:
-            RemovePropA(hWnd, "hDebugEdit");
             hDebugEdit = NULL;   // ← avoid a stale handle lingering after the window is destroyed
             break;
         case WM_SIZE: {

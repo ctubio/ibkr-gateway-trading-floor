@@ -28,22 +28,24 @@ static double profitGateway    = 0.0;
 static double riskGateway      = 0.0;
 static double safetyGateway    = 0.0;
 
-HBRUSH hDarkBrush = NULL;
-HBRUSH hLightBrush = NULL;
-HBRUSH hDarkBrush2 = NULL;
-HBRUSH hBrushDarkGreen = NULL; // dark green background for BUY-side price inputs
-HBRUSH hBrushDarkRed = NULL;   // dark red background for SELL-side price inputs
-HBRUSH hBrushGreen = NULL;     // bright green background for BUY-side price inputs
-HBRUSH hBrushRed = NULL;       // bright red background for SELL-side price inputs
-HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and other UI elements
-HBRUSH hLightBrushBg = NULL;
-HBRUSH hLightBrushBg2 = NULL;
+static HBRUSH hDarkBrush = NULL;
+static HBRUSH hLightBrush = NULL;
+static HBRUSH hDarkBrush2 = NULL;
+static HBRUSH hBrushDarkGreen = NULL; // dark green background for BUY-side price inputs
+static HBRUSH hBrushDarkRed = NULL;   // dark red background for SELL-side price inputs
+static HBRUSH hBrushGreen = NULL;     // bright green background for BUY-side price inputs
+static HBRUSH hBrushRed = NULL;       // bright red background for SELL-side price inputs
+static HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and other UI elements
+static HBRUSH hLightBrushBg = NULL;
+static HBRUSH hLightBrushBg2 = NULL;
 
-HPEN hSeparatorPenLight = NULL;
-HPEN hSeparatorPenDark = NULL;
-HPEN hColumnSeparatorPen = NULL;
-HPEN hColumnHeaderPen = NULL;
-HPEN hBorderPen = NULL;
+static HPEN hSeparatorPenLight = NULL;
+static HPEN hSeparatorPenDark = NULL;
+static HPEN hColumnSeparatorPen = NULL;
+static HPEN hColumnHeaderPen = NULL;
+static HPEN hBorderPen = NULL;
+
+static HWND hDebugEdit = NULL;
 
 static std::deque<std::string> debugBuffer; // stores messages when window is closed
 
@@ -60,17 +62,13 @@ void LogDebug(const std::string& msg) {
         debugBuffer.pop_front();
     }
 
-    HWND hLogWnd = FindWindowA(DEBUGLOG_CLASS_NAME, NULL);
-    if (hLogWnd && IsWindow(hLogWnd)) {
-        HWND hDebugEdit = (HWND)GetPropA(hLogWnd, "hDebugEdit");
-        if (hDebugEdit && IsWindow(hDebugEdit)) {
-            // Append to edit control
-            int len = GetWindowTextLength(hDebugEdit);
-            SendMessage(hDebugEdit, EM_SETSEL, len, len);
-            SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)fullMsg.c_str());
-            // Auto-scroll to bottom
-            SendMessage(hDebugEdit, EM_SCROLLCARET, 0, 0);
-        }
+    if (hDebugEdit && IsWindow(hDebugEdit)) {
+        // Append to edit control
+        int len = GetWindowTextLength(hDebugEdit);
+        SendMessage(hDebugEdit, EM_SETSEL, len, len);
+        SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)fullMsg.c_str());
+        // Auto-scroll to bottom
+        SendMessage(hDebugEdit, EM_SCROLLCARET, 0, 0);
     }
 }
 

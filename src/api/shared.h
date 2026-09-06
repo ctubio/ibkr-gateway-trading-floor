@@ -189,6 +189,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
             hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
         }
+
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }
 
