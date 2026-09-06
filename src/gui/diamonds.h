@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1360;
+int windowDiamondsWidth = 1085;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -57,13 +57,10 @@ enum DiamondColIdx {
     DCOL_SYMBOL = 0,
     DCOL_POSITION,
     DCOL_AVGPRICE,
-    DCOL_ALERTHIGH,
-    DCOL_ALERTLOW,
-    DCOL_ASKSIZE,
-    DCOL_ASK,
+    DCOL_ALERT,
     DCOL_LAST,
-    DCOL_BID,
-    DCOL_BIDSIZE,
+    DCOL_BIDASK,
+    DCOL_SIZE,
     DCOL_VWAP,
     DCOL_CHG5MIN,
     DCOL_DAILYPNL,
@@ -74,7 +71,6 @@ enum DiamondColIdx {
     DCOL_UNREALIZED_PL,
     DCOL_UNREALIZED_PL_PCT,
     DCOL_MKTVAL,
-    DCOL_PCT_NETLIQ,
     DCOL_DIV_YIELD,
     DCOL_DIV_DATE,
     DCOL_DIV_AMT,
@@ -131,6 +127,15 @@ struct DiamondRowCache {
     double dayLow = 0.0;
     double prevClose = 0.0;
     bool halted = false;
+    double bidSize = 0.0;  // for DCOL_SIZE multi-line display
+    double askSize = 0.0;  // for DCOL_SIZE multi-line display
+    double bid = 0.0;
+    double ask = 0.0;
+    std::string pctNetLiq = "";  // for DCOL_MKTVAL multi-line display
+    std::string upStr = "";  // for DCOL_ALERT multi-line display
+    std::string downStr = "";  // for DCOL_ALERT multi-line display
+    double upAlert = 0.0;  // for DCOL_ALERT multi-line display
+    double downAlert = 0.0;  // for DCOL_ALERT multi-line display
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
@@ -151,13 +156,10 @@ static const DiamondCol diamondCols[] = {
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
-    { "AlertHigh",         85, LVCFMT_RIGHT },
-    { "AlertLow",          85, LVCFMT_RIGHT },
-    { "Asks",              70, LVCFMT_RIGHT },
-    { "Ask",               90, LVCFMT_RIGHT },
+    { "Alert",             45, LVCFMT_RIGHT },
     { "Last",              90, LVCFMT_RIGHT },
-    { "Bid",               90, LVCFMT_RIGHT },
-    { "Bids",              70, LVCFMT_RIGHT },
+    { "Price",             60, LVCFMT_RIGHT },
+    { "Size",              50, LVCFMT_RIGHT },
     { "VWAP",              70, LVCFMT_RIGHT },
     { "5m",                70, LVCFMT_RIGHT },
     { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
@@ -167,8 +169,7 @@ static const DiamondCol diamondCols[] = {
     { "52w",              115, LVCFMT_RIGHT },
     { "Unrealized",       100, LVCFMT_RIGHT },
     { "Unrealized %",     105, LVCFMT_RIGHT },
-    { "Value",             95, LVCFMT_RIGHT },
-    { "Net %",             85, LVCFMT_RIGHT },
+    { "Value",             70, LVCFMT_RIGHT },
     { "Yield %",           90, LVCFMT_RIGHT },
     { "Date",             125, LVCFMT_RIGHT },
     { "Amount",            85, LVCFMT_RIGHT },
@@ -198,9 +199,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_CHG13WEEK; i <= DCOL_CHG52WEEK; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
-    for (int i = DCOL_AVGPRICE; i <= DCOL_ALERTLOW; ++i) {
-        ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
-    }
+    ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
 
     // Sum the extra width needed for each currently-visible group.
     int extraWidth = 0;
@@ -211,8 +210,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     if (showWeeks) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                       diamondCols[DCOL_CHG52WEEK].width + 
-                      diamondCols[DCOL_AVGPRICE].width +
-                      diamondCols[DCOL_ALERTHIGH].width + diamondCols[DCOL_ALERTLOW].width;
+                      diamondCols[DCOL_AVGPRICE].width;
     }
     if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
 
@@ -587,10 +585,16 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
         row.textCols[col] = placeHolder;
     };
 
-    setCol(DCOL_ASKSIZE, t.askSize, "{:.0f}");
-    setCol(DCOL_ASK,     t.ask,     "{:.2f}");
-    setCol(DCOL_BID,     t.bid,     "{:.2f}");
-    setCol(DCOL_BIDSIZE, t.bidSize, "{:.0f}");
+    row.bidSize = t.bidSize;
+    row.askSize = t.askSize;
+    row.sortValues[DCOL_SIZE] = t.askSize + t.bidSize;
+    row.textCols[DCOL_SIZE]   = std::format("{:.0f}\n{:.0f}", t.askSize, t.bidSize);
+
+    row.bid = t.bid;
+    row.ask = t.ask;
+    row.sortValues[DCOL_BIDASK] = (t.ask + t.bid) / 2;
+    row.textCols[DCOL_BIDASK]   = std::format("{:.2f}\n{:.2f}", t.ask, t.bid);
+
 
     setCol(DCOL_DIV_AMT, t.dividendAmount,  "{:.3f}", true);
     setCol(DCOL_ANNUAL_DIV, t.annualDividends, "{:.3f}", true);
@@ -627,10 +631,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     double shares = row.sortValues[DCOL_POSITION];
 
     double mktVal = shares * (t.last > 0 ? t.last : t.prevClose);
-    double pctNetLiq = (NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0;
-
+    row.pctNetLiq = std::format("{:.2f}%", (NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0);
     setCol(DCOL_MKTVAL, mktVal, "{:.2f}", true);
-    setCol(DCOL_PCT_NETLIQ, pctNetLiq, "{:.2f}%", true);
     
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
@@ -653,10 +655,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     diamondsSparklines[conId].AddPrice(t.last);
     
 
-    double alertHigh = row.sortValues[DCOL_ALERTHIGH];
-    double alertLow  = row.sortValues[DCOL_ALERTLOW];
     // Alert Up Trigger (Alert High is equal to or lower than Last)
-    if (alertHigh > 0.0 && t.last >= alertHigh) {
+    if (row.upAlert > 0.0 && t.last >= row.upAlert) {
         if (firedAlertsUp.find(conId) == firedAlertsUp.end()) {
             firedAlertsUp.insert(conId); // Mark as fired
             //std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
@@ -671,7 +671,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     }
 
     // Alert Down Trigger (Alert Low is equal to or higher than Last)
-    if (alertLow > 0.0 && t.last <= alertLow) {
+    if (row.downAlert > 0.0 && t.last <= row.downAlert) {
         if (firedAlertsDown.find(conId) == firedAlertsDown.end()) {
             firedAlertsDown.insert(conId); // Mark as fired
             //std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
@@ -711,16 +711,12 @@ static void Diamonds_UpdateAlertCols(int conId, const std::string& symbol) {
     auto& row = diamondDataCache[conId];
     row.conId = conId;
 
-    std::string upStr, downStr;
-    Settings_Alerts_Load(symbol, conId, upStr, downStr);
+    Settings_Alerts_Load(symbol, conId, row.upStr, row.downStr);
+    row.upAlert = std::atof(row.upStr.c_str());
+    row.downAlert = std::atof(row.downStr.c_str());
 
-    row.textCols[DCOL_ALERTHIGH] = upStr;
-    row.textCols[DCOL_ALERTLOW]  = downStr;
-
-    try { row.sortValues[DCOL_ALERTHIGH]   = upStr.empty()   ? BOTTOM_SORT_VALUE : std::stod(upStr); }
-    catch (...) { row.sortValues[DCOL_ALERTHIGH] = BOTTOM_SORT_VALUE; }
-    try { row.sortValues[DCOL_ALERTLOW] = downStr.empty() ? BOTTOM_SORT_VALUE : std::stod(downStr); }
-    catch (...) { row.sortValues[DCOL_ALERTLOW] = BOTTOM_SORT_VALUE; }
+    row.textCols[DCOL_ALERT] = row.upStr + "\n" + row.downStr;
+    row.sortValues[DCOL_ALERT]   = (row.upAlert + row.downAlert) / 2.0;
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
@@ -897,8 +893,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (showWeeks) {
             extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                         diamondCols[DCOL_CHG52WEEK].width + 
-                        diamondCols[DCOL_AVGPRICE].width +
-                        diamondCols[DCOL_ALERTHIGH].width + diamondCols[DCOL_ALERTLOW].width;
+                        diamondCols[DCOL_AVGPRICE].width;
         }
         if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
         MINMAXINFO* mmi = (MINMAXINFO*)lParam;
@@ -1024,6 +1019,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 nmlv->iItem >= 0 && nmlv->iItem < (int)diamondDisplayOrder.size()) {
                 int conId = diamondDisplayOrder[nmlv->iItem];
                 api().updateDisplayGroup(conId);
+                ListView_SetItemState(hdr->hwndFrom, nmlv->iItem, 0, LVIS_SELECTED);
             }
         }
 
@@ -1273,14 +1269,24 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             return CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT;
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_ASKSIZE || cd->iSubItem == DCOL_BIDSIZE) {
+                    if (cd->iSubItem == DCOL_SIZE) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = diamondDisplayOrder[rowIndex];
-                        bool halted = diamondDataCache[conId].halted;
-                        cd->clrText = halted ? COINS_CLR_GRAY : COINS_CLR_BLUE;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
-                        return CDRF_NEWFONT;
+                        const auto& cacheRow = diamondDataCache[conId];
+                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
+                                                 : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        RECT rcCell;
+                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
+                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+                        if (cacheRow.halted) SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        else if (cacheRow.askSize > cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
+                        else if (cacheRow.askSize < cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
+                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_BLUE);
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
+                        InflateRect(&rcCell, -6, 1); 
+                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_SIZE].c_str(), -1, &rcCell, DT_RIGHT | DT_TOP | DT_NOPREFIX);
+                        return CDRF_SKIPDEFAULT; 
                     }
                     if (cd->iSubItem == DCOL_VWAP) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
@@ -1321,25 +1327,65 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_ASK || cd->iSubItem == DCOL_BID) {
+                    if (cd->iSubItem == DCOL_BIDASK) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = diamondDisplayOrder[rowIndex];
-                        const double valB = diamondDataCache[conId].sortValues[DCOL_BIDSIZE];
-                        const double valA = diamondDataCache[conId].sortValues[DCOL_ASKSIZE];
-                        if (valA > valB) cd->clrText = COINS_CLR_RED;
-                        else if (valA < valB) cd->clrText = COINS_CLR_GREEN;
-                        else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont16pt.get());
-                        return CDRF_NEWFONT;
+                        const auto& cacheRow = diamondDataCache[conId];
+                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
+                                                 : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        RECT rcCell;
+                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
+                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+                        double last = cacheRow.sortValues[DCOL_LAST];
+                        if (cacheRow.halted || last <= 0.0 || cacheRow.ask <= 0.0 || cacheRow.bid <= 0.0) {
+                            SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        } else {
+                            double distAsk = std::fabs(cacheRow.ask - last);
+                            double distBid = std::fabs(last - cacheRow.bid);
+                            if (distAsk < distBid) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
+                            else if (distBid < distAsk) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
+                            else SetTextColor(cd->nmcd.hdc, COINS_CLR_WHITE);
+                        }
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
+                        InflateRect(&rcCell, -6, 1); 
+                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_BIDASK].c_str(), -1, &rcCell, DT_RIGHT | DT_TOP | DT_NOPREFIX);
+                        return CDRF_SKIPDEFAULT;
                     }
-                    if (cd->iSubItem == DCOL_PCT_NETLIQ) {
-                        cd->clrText = COINS_CLR_GRAY;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
-                        return CDRF_NEWFONT;
+                    if (cd->iSubItem == DCOL_MKTVAL) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        int conId = diamondDisplayOrder[rowIndex];
+                        const auto& cacheRow = diamondDataCache[conId];
+                        
+                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
+                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        
+                        RECT rcCell;
+                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
+                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+
+                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
+                        RECT rcTop = rcCell;
+                        RECT rcBottom = rcCell;
+                        InflateRect(&rcTop, -6, 0);
+                        InflateRect(&rcBottom, -6, 0);
+
+                        // Split the cell height vertically down the middle
+                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
+                        rcTop.bottom = midY;
+                        rcBottom.top = midY;
+
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
+
+                        SetTextColor(cd->nmcd.hdc, darkMode ? DM_TEXT : LM_TEXT);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_MKTVAL].c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+                        SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.pctNetLiq.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        return CDRF_SKIPDEFAULT;
                     }
-                    if (cd->iSubItem == DCOL_AVGPRICE || cd->iSubItem == DCOL_MKTVAL) {
+                    if (cd->iSubItem == DCOL_AVGPRICE) {
                         if (darkMode) {
                             cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                             cd->clrText   = DM_TEXT;
@@ -1350,19 +1396,40 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_ALERTHIGH || cd->iSubItem == DCOL_ALERTLOW) {
+                    if (cd->iSubItem == DCOL_ALERT) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
                         int conId = diamondDisplayOrder[rowIndex];
-                        double valA = diamondDataCache[conId].sortValues[cd->iSubItem];
-                        double valB = diamondDataCache[conId].sortValues[DCOL_LAST];
-                        if (valA == BOTTOM_SORT_VALUE) valA = 0.0;
-                        if (valB == BOTTOM_SORT_VALUE) valB = 0.0;
-                        if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTHIGH && valA <= valB) cd->clrText = COINS_CLR_GREEN;
-                        else if (valB > 0 && valA > 0 && cd->iSubItem == DCOL_ALERTLOW && valA >= valB) cd->clrText = COINS_CLR_RED;
-                        else cd->clrText = COINS_CLR_GRAY;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
-                        return CDRF_NEWFONT;
+                        const auto& cacheRow = diamondDataCache[conId];
+                        double last = cacheRow.sortValues[DCOL_LAST];
+                        
+                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
+                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        
+                        RECT rcCell;
+                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
+                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+
+                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
+                        RECT rcTop = rcCell;
+                        RECT rcBottom = rcCell;
+                        InflateRect(&rcTop, -6, 0);
+                        InflateRect(&rcBottom, -6, 0);
+
+                        // Split the cell height vertically down the middle
+                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
+                        rcTop.bottom = midY;
+                        rcBottom.top = midY;
+
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
+
+                        SetTextColor(cd->nmcd.hdc, (last > 0 && cacheRow.upAlert > 0 && cacheRow.upAlert <= last) ? COINS_CLR_GREEN : COINS_CLR_GRAY);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.upStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+                        SetTextColor(cd->nmcd.hdc, (last > 0 && cacheRow.downAlert > 0 && cacheRow.downAlert >= last) ? COINS_CLR_RED : COINS_CLR_GRAY);
+                        std::string pctStr = cacheRow.pctNetLiq;
+                        DrawTextA(cd->nmcd.hdc, cacheRow.downStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
                         cd->clrText = COINS_CLR_PURPLE;

@@ -82,6 +82,8 @@ void InitDarkBrushes() {
     hBrushGreen     = CreateSolidBrush(COINS_CLR_GREEN);
     hBrushRed       = CreateSolidBrush(COINS_CLR_RED);
     hGrayBrush      = CreateSolidBrush(RGB(45, 45, 45));
+    hLightBrushBg   = CreateSolidBrush(GetSysColor(COLOR_WINDOW));
+    hLightBrushBg2  = CreateSolidBrush(RGB(245,245,245));
     
     hSeparatorPenDark   = CreatePen(PS_SOLID, 1, RGB(60,60,60));
     hSeparatorPenLight  = CreatePen(PS_SOLID, 1, RGB(200,200,200));
@@ -306,6 +308,7 @@ public:
     HFONT get() const { return hFont; }
 };
 
+static ScopedFont hFont9ptbold(9, true);
 static ScopedFont hFont11pt(11, false);
 static ScopedFont hFont11ptbold(11, true);
 static ScopedFont hFont12pt(12, false);

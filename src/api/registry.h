@@ -23,6 +23,8 @@ HBRUSH hBrushDarkRed = NULL;   // dark red background for SELL-side price inputs
 HBRUSH hBrushGreen = NULL;     // bright green background for BUY-side price inputs
 HBRUSH hBrushRed = NULL;       // bright red background for SELL-side price inputs
 HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and other UI elements
+HBRUSH hLightBrushBg = NULL;
+HBRUSH hLightBrushBg2 = NULL;
 
 HPEN hSeparatorPenLight = NULL;
 HPEN hSeparatorPenDark = NULL;
