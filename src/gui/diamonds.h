@@ -455,25 +455,15 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
 static void Diamonds_ApplySort(HWND hList) {
     if (diamondDisplayOrder.empty()) return;
 
-    struct DiamondSortEntry {
-        int conId;
-        std::string symbol;
-        double value;
-    };
-    std::vector<DiamondSortEntry> sortEntries;
-    sortEntries.reserve(diamondDisplayOrder.size());
-    for (int conId : diamondDisplayOrder) {
-        const auto& row = diamondDataCache.at(conId);
-        sortEntries.push_back({ conId, row.textCols[DCOL_SYMBOL], row.sortValues[diamondsSortCol] });
-    }
-
-    std::sort(sortEntries.begin(), sortEntries.end(), [](const DiamondSortEntry& a, const DiamondSortEntry& b) {
+    std::sort(diamondDisplayOrder.begin(), diamondDisplayOrder.end(), [](int aConId, int bConId) {
+        const auto& a = diamondDataCache.at(aConId);
+        const auto& b = diamondDataCache.at(bConId);
         if (diamondsSortCol == DCOL_SYMBOL) {
-            int cmp = _stricmp(a.symbol.c_str(), b.symbol.c_str());
+            int cmp = _stricmp(a.textCols[DCOL_SYMBOL].c_str(), b.textCols[DCOL_SYMBOL].c_str());
             return diamondsSortAsc ? (cmp > 0) : (cmp < 0);
         } else {
-            double v1 = a.value;
-            double v2 = b.value;
+            double v1 = a.sortValues[diamondsSortCol];
+            double v2 = b.sortValues[diamondsSortCol];
             if (v1 == v2) return false;
             if (diamondsSortCol == DCOL_DIV_DATE) {
                 return diamondsSortAsc ? (v1 > v2) : (v1 < v2);
@@ -482,8 +472,6 @@ static void Diamonds_ApplySort(HWND hList) {
             }
         }
     });
-    for (size_t i = 0; i < sortEntries.size(); ++i)
-        diamondDisplayOrder[i] = sortEntries[i].conId;
 
     // ZERO-FLICKER FIX: Delegate to the paint timer instead of invalidating instantly
     diamondsDirty = true;

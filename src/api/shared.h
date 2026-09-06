@@ -460,19 +460,15 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             return (LRESULT)hDarkBrush2;
         }
         case WM_CTLCOLORSTATIC: {
-            char className[256] = {};
-            GetClassNameA(hWnd, className, sizeof(className));
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0 || strcmp(className, MARKET_CLASS_NAME) == 0 || strcmp(className, DIAMONDS_CLASS_NAME) == 0 || strcmp(className, ORDERS_CLASS_NAME) == 0 || strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0) {
-                COLORREF clr = GetCtrlColor((HWND)lParam);
-                if (clr != COLOR_THEME) {
-                    SetTextColor((HDC)wParam, clr);
-                    if (darkMode) {
-                        SetBkColor((HDC)wParam, DM_BG);
-                        return (LRESULT)hDarkBrush;
-                    } else {
-                        SetBkColor((HDC)wParam, GetSysColor(COLOR_BTNFACE));
-                        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
-                    }
+            COLORREF clr = GetCtrlColor((HWND)lParam);
+            if (clr != COLOR_THEME) {
+                SetTextColor((HDC)wParam, clr);
+                if (darkMode) {
+                    SetBkColor((HDC)wParam, DM_BG);
+                    return (LRESULT)hDarkBrush;
+                } else {
+                    SetBkColor((HDC)wParam, GetSysColor(COLOR_BTNFACE));
+                    return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
                 }
             }
             if (!darkMode) return 0;
@@ -558,11 +554,11 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 }
 
 LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    char className[256] = {};
-    GetClassNameA(hWnd, className, sizeof(className));
-
     switch (message) {
         case WM_CREATE: {
+            char className[256] = {};
+            GetClassNameA(hWnd, className, sizeof(className));
+
             HICON hIcon = api().isConnected() ? onlineIcons[std::string(className)] : offlineIcons[std::string(className)];
             SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
             SendMessage(hWnd, WM_SETICON, ICON_BIG,   (LPARAM)hIcon);
@@ -572,7 +568,10 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         case WM_NCACTIVATE:
             // Pass TRUE as wParam to force DefWindowProc to render the titlebar in active state
             return DefWindowProc(hWnd, message, TRUE, lParam);
-        case WM_CLOSE:
+        case WM_CLOSE: {
+            char className[256] = {};
+            GetClassNameA(hWnd, className, sizeof(className));
+
             if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
                 ShowWindow(hWnd, SW_HIDE);
                 ToggleTWS(SW_HIDE);
@@ -580,14 +579,18 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             else
                 DestroyWindow(hWnd);
             return 0;
+        }
             
         case WM_SIZE:
         case WM_MOVE:
             SaveWinPosition(hWnd);
             return DefWindowProc(hWnd, message, wParam, lParam);
 
-        case WM_DESTROY:
+        case WM_DESTROY: {
             SaveWinPosition(hWnd);
+            char className[256] = {};
+            GetClassNameA(hWnd, className, sizeof(className));
+
             if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) {
                 Session_RemoveWindow(hWnd);
             }
@@ -596,6 +599,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 if (data) delete data;
             }
             return 0;
+        }
         default: {
             LRESULT res = HandleDarkModeMessages(hWnd, message, wParam, lParam);
             if (res) return res;
