@@ -14,6 +14,7 @@ private:
     // are initialized once and reused for every paint.
     mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
     mutable std::unique_ptr<Gdiplus::Pen> gradientPen;
+    mutable std::unique_ptr<Gdiplus::SolidBrush> dotBrush;
 
     void PrepareGradient(float height, float originY) const {
         if (!gradientBrush) {
@@ -200,8 +201,11 @@ public:
             float dotRadius;
             GetDotStyle(pctChange, minRadius, maxRadius, dotColor, dotRadius);
 
-            Gdiplus::SolidBrush dotBrush(dotColor);
-            graphics.FillEllipse(&dotBrush, dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
+            if (!dotBrush)
+                dotBrush = std::make_unique<Gdiplus::SolidBrush>(dotColor);
+            else
+                dotBrush->SetColor(dotColor);
+            graphics.FillEllipse(dotBrush.get(), dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
         }
     }
 };
@@ -215,6 +219,7 @@ private:
     // for the lifetime of its owner, so these are initialized once per instance.
     mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
     mutable std::unique_ptr<Gdiplus::Pen> gradientPen;
+    mutable std::unique_ptr<Gdiplus::SolidBrush> dotBrush;
 
     void PrepareGradient(float height, float originY) const {
         if (!gradientBrush) {
@@ -381,8 +386,11 @@ public:
             float dotRadius;
             GetDotStyle(pctChange, minRadius, maxRadius, dotColor, dotRadius);
 
-            Gdiplus::SolidBrush dotBrush(dotColor);
-            g.FillEllipse(&dotBrush, dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
+            if (!dotBrush)
+                dotBrush = std::make_unique<Gdiplus::SolidBrush>(dotColor);
+            else
+                dotBrush->SetColor(dotColor);
+            g.FillEllipse(dotBrush.get(), dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
         }
     }
 
