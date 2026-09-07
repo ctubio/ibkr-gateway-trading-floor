@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1090;
+int windowDiamondsWidth = 970;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -63,7 +63,9 @@ static bool diamondsChkVisible = false;
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
-    DCOL_SYMBOL = 0,
+    DCOL_FAKE = 0,
+    DCOL_MKTVAL,
+    DCOL_SYMBOL,
     DCOL_POSITION,
     DCOL_AVGPRICE,
     DCOL_ALERT,
@@ -78,8 +80,6 @@ enum DiamondColIdx {
     DCOL_CHG26WEEK,
     DCOL_CHG52WEEK,
     DCOL_UNREALIZED_PL,
-    DCOL_UNREALIZED_PL_PCT,
-    DCOL_MKTVAL,
     DCOL_DIV_YIELD,
     DCOL_DIV_DATE,
     DCOL_DIV_AMT,
@@ -149,6 +149,7 @@ struct DiamondRowCache {
     std::string downStr = "";  // for DCOL_ALERT multi-line display
     double upAlert = 0.0;  // for DCOL_ALERT multi-line display
     double downAlert = 0.0;  // for DCOL_ALERT multi-line display
+    std::string unrealizedPnLPctStr = "";
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
@@ -169,6 +170,8 @@ static bool diamondsDirty = false;
 
 struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
+    { "Fake",               0, LVCFMT_RIGHT },
+    { "Value",             70, LVCFMT_RIGHT },
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
@@ -183,9 +186,7 @@ static const DiamondCol diamondCols[] = {
     { "13w",              115, LVCFMT_RIGHT },
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
-    { "Unrealized",       100, LVCFMT_RIGHT },
-    { "Unrealized %",     105, LVCFMT_RIGHT },
-    { "Value",             70, LVCFMT_RIGHT },
+    { "Unrealized",        85, LVCFMT_RIGHT },
     { "Yield %",           90, LVCFMT_RIGHT },
     { "Date",             125, LVCFMT_RIGHT },
     { "Amount",            85, LVCFMT_RIGHT },
@@ -518,8 +519,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
         double shares = row.sortValues[DCOL_POSITION];
         double costBasis = avgCost * std::fabs(shares);
         double pct = (costBasis > 0.0) ? pnlSingle.unrealizedPnL / costBasis * 100.0 : 0;
-        row.sortValues[DCOL_UNREALIZED_PL_PCT] = pct;
-        row.textCols[DCOL_UNREALIZED_PL_PCT] = std::format("{:+.2f}%", pct);
+        row.unrealizedPnLPctStr = std::format("{:.2f}%", pct);
 
         diamondsDirty = true;
     }
@@ -775,7 +775,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     // Build/refresh the cache rows.
     // Rule: only write the fields we own here (identity, position, avgCost, market
-    // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL / DCOL_UNREALIZED_PL_PCT
+    // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL
     // — those are owned by WM_PNL_SINGLE and must survive a repopulate so they
     // remain visible when the window is closed and reopened.
     for (const auto& pos : rows) {
@@ -1277,9 +1277,20 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         }
                         return CDRF_NEWFONT;
                     }
+                    if (cd->iSubItem == DCOL_VWAP) {
+                        if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
+                            double diff = cacheRow.sortValues[DCOL_VWAP];
+                            if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
+                            else if (diff < 0.0) cd->clrText = COINS_CLR_RED;
+                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        }
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
+                        return CDRF_NEWFONT;
+                    }
                     // Only colour P&L / change columns — and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
-                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_UNREALIZED_PL || cd->iSubItem == DCOL_UNREALIZED_PL_PCT || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
+                    if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
                         double val = cacheRow.sortValues[cd->iSubItem];
                         if (val == BOTTOM_SORT_VALUE) val = 0.0;
                         // Guard: skip colouring the "--" sentinel — atof("--") == 0
@@ -1300,16 +1311,40 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             return CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT;
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_VWAP) {
-                        if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
-                            double diff = cacheRow.sortValues[DCOL_VWAP];
-                            if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
-                            else if (diff < 0.0) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
-                        }
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
-                        return CDRF_NEWFONT;
+                    if (cd->iSubItem == DCOL_UNREALIZED_PL) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        
+                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
+                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        
+                        RECT rcCell;
+                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
+                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+
+                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
+                        RECT rcTop = rcCell;
+                        RECT rcBottom = rcCell;
+                        InflateRect(&rcTop, -6, 0);
+                        InflateRect(&rcBottom, -6, 0);
+
+                        // Split the cell height vertically down the middle
+                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
+                        rcTop.bottom = midY + 1;
+                        rcBottom.top = midY - 1;
+
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
+                        double val = cacheRow.sortValues[DCOL_UNREALIZED_PL];
+                        if      (val > 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
+                        else if (val < 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
+                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_UNREALIZED_PL].c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+                        if      (val > 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN_DARK2);
+                        else if (val < 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED_DARK2);
+                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.unrealizedPnLPctStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_SIZE) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
