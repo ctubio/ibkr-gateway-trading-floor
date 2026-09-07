@@ -45,7 +45,7 @@ static void Alerts_NotifyChanged(int conId) {
 // from whatever is currently saved in the registry (empty if none), and
 // focuses/selects the Alert Up field. Safe to call on an already-open popup
 // (single-instance window) to repoint it at a different symbol.
-static void AlertsEditor_Populate(HWND hWnd, const std::string& symbol, int conId) {
+static void AlertEditor_Populate(HWND hWnd, const std::string& symbol, int conId) {
     alertsEditState.symbol = symbol;
     alertsEditState.conId  = conId;
     SetWindowTextA(hWnd, (symbol + ": Edit Alerts").c_str());
@@ -66,7 +66,7 @@ static void AlertsEditor_Populate(HWND hWnd, const std::string& symbol, int conI
 }
 
 // ENTER: save both fields (empty = remove that direction's key) and close.
-static void AlertsEditor_SaveAndClose(HWND hWnd) {
+static void AlertEditor_SaveAndClose(HWND hWnd) {
     HWND hUp   = GetDlgItem(hWnd, ID_ALERTS_UP_EDIT);
     HWND hDown = GetDlgItem(hWnd, ID_ALERTS_DOWN_EDIT);
 
@@ -95,7 +95,7 @@ static void AlertsEditor_SaveAndClose(HWND hWnd) {
 //   ESC    -> close without saving
 //   ENTER  -> save + close
 //   TAB    -> toggle focus between Alert Up / Alert Down
-static LRESULT CALLBACK AlertsEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
+static LRESULT CALLBACK AlertEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
                                                       UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
     if (msg == WM_CHAR) {
         if (wParam == VK_RETURN || wParam == VK_ESCAPE || wParam == VK_TAB)
@@ -108,7 +108,7 @@ static LRESULT CALLBACK AlertsEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARA
             return 0;
         }
         if (wParam == VK_RETURN) {
-            AlertsEditor_SaveAndClose(hParent);
+            AlertEditor_SaveAndClose(hParent);
             return 0;
         }
         if (wParam == VK_TAB) {
@@ -137,7 +137,7 @@ static LRESULT CALLBACK AlertsEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARA
         }
     }
     if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hCtrl, AlertsEditor_KeySubclassProc, uIdSubclass);
+        RemoveWindowSubclass(hCtrl, AlertEditor_KeySubclassProc, uIdSubclass);
     return DefSubclassProc(hCtrl, msg, wParam, lParam);
 }
 
@@ -160,11 +160,8 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 96, 46, 130, 24, hWnd, (HMENU)ID_ALERTS_DOWN_EDIT, hInst, NULL);
 
-            SendMessage(hUp,   WM_SETFONT, (WPARAM)hFont12pt.get(), TRUE);
-            SendMessage(hDown, WM_SETFONT, (WPARAM)hFont12pt.get(), TRUE);
-
-            SetWindowSubclass(hUp,   AlertsEditor_KeySubclassProc, 1, 0);
-            SetWindowSubclass(hDown, AlertsEditor_KeySubclassProc, 2, 0);
+            SetWindowSubclass(hUp,   AlertEditor_KeySubclassProc, 1, 0);
+            SetWindowSubclass(hDown, AlertEditor_KeySubclassProc, 2, 0);
             break;
         }
 
@@ -187,9 +184,9 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 // Opens (or refocuses) the Alerts editor popup for `symbol` and `conId`. Single-instance:
 // if already open (e.g. for a different symbol), it's repointed at `symbol`
 // instead of a second window being created.
-void StartAlertsEditor(const std::string& symbol, int conId) {
+void StartAlertEditor(const std::string& symbol, int conId) {
     HWND hWnd = StartGenericWindow(ALERTS_EDITOR_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 250, 110);
-    if (hWnd) AlertsEditor_Populate(hWnd, symbol, conId);
+    if (hWnd) AlertEditor_Populate(hWnd, symbol, conId);
 }
 
 // Helper window procedure for the flash overlay
@@ -331,7 +328,7 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                 if (wmId == ID_ALERT_EDIT_BTN) {
                     AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
                     if (data) {
-                        StartAlertsEditor(data->symbol, data->conId);
+                        StartAlertEditor(data->symbol, data->conId);
                     }
                 }
                 DestroyWindow(hWnd);

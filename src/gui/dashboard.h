@@ -827,7 +827,6 @@ LRESULT CALLBACK WndProcLock(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             HWND hEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
                 20, 42, 200, 26, hWnd, (HMENU)ID_LOCK_EDIT, hInst, NULL);
-            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont12pt.get(), TRUE);
             SetWindowSubclass(hEdit, LockEdit_KeySubclassProc, 1, 0);
 
             SetFocus(hEdit);
@@ -848,11 +847,11 @@ LRESULT CALLBACK WndProcLock(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 }
 
 // Opens (or refocuses) the Lock popup. Single-instance, same pattern as
-// StartAlertsEditor().
+// StartAlertEditor().
 void StartLock() {
     lockState.success = false;
 
-    HWND hWnd = StartGenericWindow(LOCK_CLASS_NAME, "Enter Lock Keyword", L"TWSAPIClientTradingFloor.Lock", 260, 110);
+    HWND hWnd = StartGenericWindow(LOCK_CLASS_NAME, "Enter Lock Keyword", L"TWSAPIClientTradingFloor.Lock", 245, 110);
     if (!hWnd) return;
 
     HWND hEdit = GetDlgItem(hWnd, ID_LOCK_EDIT);

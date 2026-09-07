@@ -309,13 +309,11 @@ public:
 
 static ScopedFont hFont11pt(11, false);
 static ScopedFont hFont11ptbold(11, true);
-static ScopedFont hFont12pt(12, false);
 static ScopedFont hFont12ptbold(12, true);
 static ScopedFont hFont14pt(14, false);
 static ScopedFont hFont14ptbold(14, true);
 static ScopedFont hFont16pt(16, false);
 static ScopedFont hFont16ptbold(16, true);
-static ScopedFont hFont19pt(19, false);
 static ScopedFont hFont21ptbold(21, true);
 
 // Suppresses WM_ERASEBKGND on list views so custom-draw repaints stay flicker-free.

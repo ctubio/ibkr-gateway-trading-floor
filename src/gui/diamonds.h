@@ -1232,7 +1232,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             }).detach();
                         }
                     } else if (cmd == 302) {
-                        StartAlertsEditor(sym, conId);
+                        StartAlertEditor(sym, conId);
                     }
                 }
             }

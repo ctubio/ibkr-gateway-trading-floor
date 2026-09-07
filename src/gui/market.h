@@ -2014,7 +2014,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (PtInRect(&state->lastPriceRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
-                    StartAlertsEditor(state->symbol, state->conId);
+                    StartAlertEditor(state->symbol, state->conId);
                 }
             }
         }
