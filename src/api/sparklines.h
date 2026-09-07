@@ -9,15 +9,16 @@ class Sparkline {
 private:
     std::vector<SparkPoint> data;
 
-    // Graphics is tied to the paint HDC, but the gradient resources are not.
-    // The sparkline geometry is fixed for the lifetime of its owner, so these
-    // are initialized once and reused for every paint.
+    // Graphics is tied to the paint HDC, and the gradient coordinates are in
+    // that HDC's screen space, so refresh the resources when the row moves.
     mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
     mutable std::unique_ptr<Gdiplus::Pen> gradientPen;
     mutable std::unique_ptr<Gdiplus::SolidBrush> dotBrush;
+    mutable float gradientHeight = -1.0f;
+    mutable float gradientOriginY = -1.0f;
 
     void PrepareGradient(float height, float originY) const {
-        if (!gradientBrush) {
+        if (!gradientBrush || gradientHeight != height || gradientOriginY != originY) {
             gradientBrush = std::make_unique<Gdiplus::LinearGradientBrush>(
                 Gdiplus::PointF(0.0f, originY),
                 Gdiplus::PointF(0.0f, originY + height + 2.0f),
@@ -26,6 +27,8 @@ private:
             gradientBrush->SetInterpolationColors(sparkColors, sparkStops, 3);
             gradientPen = std::make_unique<Gdiplus::Pen>(gradientBrush.get(), 3.0f);
             gradientPen->SetLineJoin(Gdiplus::LineJoinRound);
+            gradientHeight = height;
+            gradientOriginY = originY;
         }
     }
 
@@ -215,22 +218,26 @@ private:
     struct MiniSparkPoint { ULONGLONG date; double price; };
     std::vector<MiniSparkPoint> data;
 
-    // Graphics is tied to the paint HDC, but the sparkline geometry is fixed
-    // for the lifetime of its owner, so these are initialized once per instance.
+    // Graphics is tied to the paint HDC, and the gradient coordinates are in
+    // that HDC's screen space, so refresh the resources when the row moves.
     mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
     mutable std::unique_ptr<Gdiplus::Pen> gradientPen;
     mutable std::unique_ptr<Gdiplus::SolidBrush> dotBrush;
+    mutable float gradientHeight = -1.0f;
+    mutable float gradientOriginY = -1.0f;
 
     void PrepareGradient(float height, float originY) const {
-        if (!gradientBrush) {
+        if (!gradientBrush || gradientHeight != height || gradientOriginY != originY) {
             gradientBrush = std::make_unique<Gdiplus::LinearGradientBrush>(
                 Gdiplus::PointF(0.0f, originY),
                 Gdiplus::PointF(0.0f, originY + height + 1.0f),
                 Gdiplus::Color(200, 1, 166, 1),
                 Gdiplus::Color(200, 1, 166, 1));
-            gradientBrush->SetInterpolationColors(sparkColors, sparkStops, 3);
+            gradientBrush->SetInterpolationColors(sparkColorsMini, sparkStops, 3);
             gradientPen = std::make_unique<Gdiplus::Pen>(gradientBrush.get(), 3.0f);
             gradientPen->SetLineJoin(Gdiplus::LineJoinRound);
+            gradientHeight = height;
+            gradientOriginY = originY;
         }
     }
 
