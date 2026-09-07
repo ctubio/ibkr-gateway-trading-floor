@@ -417,7 +417,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if ((LOWORD(wParam) == ID_SETTINGS_LOCK)) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
                 int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
+                if (len >= 0) {
                     char buf[len + 1];
                     GetWindowTextA(hEdit, buf, len + 1);
                     lockScreen = std::string(buf);
