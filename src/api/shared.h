@@ -307,7 +307,6 @@ public:
     HFONT get() const { return hFont; }
 };
 
-static ScopedFont hFont9ptbold(9, true);
 static ScopedFont hFont11pt(11, false);
 static ScopedFont hFont11ptbold(11, true);
 static ScopedFont hFont12pt(12, false);

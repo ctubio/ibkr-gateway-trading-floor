@@ -15,7 +15,7 @@
 
 class RegisterWindowRAII {
     HINSTANCE hInst_;
-    bool startupOk_ = true;
+    bool allowed = true;
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
         RegisterWindowClass(hInst_, WndProcDashboard,          DASHBOARD_CLASS_NAME,          101);
@@ -32,14 +32,9 @@ public:
 
         LoadRegistrySettings();
 
-        // Gate the whole app behind the saved keyword, if one is set. Nothing
-        // has been hidden yet (lockHotkeys is still false), so on success we
-        // just fall straight into normal startup below -- no toggle/reshow
-        // needed. On failure/cancel, skip StartDashboard/Session_RestoreWindows
-        // entirely and let WinMain exit via ok().
         if (!lockScreen.empty()) {
             if (!PromptLockAtStartup()) {
-                startupOk_ = false;
+                allowed = false;
                 return;
             }
         }
@@ -48,7 +43,7 @@ public:
 
         Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartDebugLog);
     }
-    bool ok() const { return startupOk_; }
+    bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
         UnregisterClass(DASHBOARD_CLASS_NAME, hInst_);
         UnregisterClass(DASHBOARD_EXCHANGE_CLASS_NAME, hInst_);
@@ -71,8 +66,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
         MutexGatewayInstance();
 
         RegisterWindowRAII registerWindowRAII(hInst);
-        if (!registerWindowRAII.ok()) {
-            return 0; // wrong/cancelled lock keyword at startup — exit without showing anything
+        if (!registerWindowRAII.unlocked()) {
+            return 0;
         }
 
         HttpServerRAII httpServerRAII;

@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 1085;
+int windowDiamondsWidth = 1090;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -138,8 +138,12 @@ struct DiamondRowCache {
     bool halted = false;
     double bidSize = 0.0;  // for DCOL_SIZE multi-line display
     double askSize = 0.0;  // for DCOL_SIZE multi-line display
+    std::string bidSizeStr = "";
+    std::string askSizeStr = "";
     double bid = 0.0;
     double ask = 0.0;
+    std::string bidStr = "";
+    std::string askStr = "";
     std::string pctNetLiq = "";  // for DCOL_MKTVAL multi-line display
     std::string upStr = "";  // for DCOL_ALERT multi-line display
     std::string downStr = "";  // for DCOL_ALERT multi-line display
@@ -170,7 +174,7 @@ static const DiamondCol diamondCols[] = {
     { "AvgPx",             85, LVCFMT_RIGHT },
     { "Alert",             45, LVCFMT_RIGHT },
     { "Last",              90, LVCFMT_RIGHT },
-    { "Price",             60, LVCFMT_RIGHT },
+    { "Price",             65, LVCFMT_RIGHT },
     { "Size",              50, LVCFMT_RIGHT },
     { "VWAP",              70, LVCFMT_RIGHT },
     { "5m",                70, LVCFMT_RIGHT },
@@ -595,13 +599,17 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
 
     row.bidSize = t.bidSize;
     row.askSize = t.askSize;
+    row.bidSizeStr = FormatFixed(t.bidSize, 0);
+    row.askSizeStr = FormatFixed(t.askSize, 0);
     row.sortValues[DCOL_SIZE] = t.askSize + t.bidSize;
-    row.textCols[DCOL_SIZE]   = FormatFixed(t.askSize, 0) + "\n" + FormatFixed(t.bidSize, 0);
+    row.textCols[DCOL_SIZE]   = row.askSizeStr + "\n" + row.bidSizeStr;
 
     row.bid = t.bid;
     row.ask = t.ask;
+    row.bidStr = FormatFixed(t.bid, 2);
+    row.askStr = FormatFixed(t.ask, 2);
     row.sortValues[DCOL_BIDASK] = (t.ask + t.bid) / 2;
-    row.textCols[DCOL_BIDASK]   = FormatFixed(t.ask, 2) + "\n" + FormatFixed(t.bid, 2);
+    row.textCols[DCOL_BIDASK]   = row.askStr + "\n" + row.bidStr;
 
 
     setCol(DCOL_DIV_AMT, t.dividendAmount,  3, true);
@@ -1292,23 +1300,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             return CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT;
                         return CDRF_NEWFONT;
                     }
-                    if (cd->iSubItem == DCOL_SIZE) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                 : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
-                        RECT rcCell;
-                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
-                        if (cacheRow.halted) SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        else if (cacheRow.askSize > cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
-                        else if (cacheRow.askSize < cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
-                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_BLUE);
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
-                        InflateRect(&rcCell, -6, 1); 
-                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_SIZE].c_str(), -1, &rcCell, DT_RIGHT | DT_TOP | DT_NOPREFIX);
-                        return CDRF_SKIPDEFAULT; 
-                    }
                     if (cd->iSubItem == DCOL_VWAP) {
                         if (cacheRow.textCols[DCOL_VWAP] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VWAP].empty()) {
                             double diff = cacheRow.sortValues[DCOL_VWAP];
@@ -1319,6 +1310,40 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_SIZE) {
+                        int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        
+                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
+                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        
+                        RECT rcCell;
+                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
+                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+
+                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
+                        RECT rcTop = rcCell;
+                        RECT rcBottom = rcCell;
+                        InflateRect(&rcTop, -6, 0);
+                        InflateRect(&rcBottom, -6, 0);
+
+                        // Split the cell height vertically down the middle
+                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
+                        rcTop.bottom = midY + 1;
+                        rcBottom.top = midY - 1;
+
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
+
+                        if (cacheRow.halted) SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        else if (cacheRow.askSize > cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
+                        else if (cacheRow.askSize < cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
+                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_BLUE);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.askSizeStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+                        //SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.bidSizeStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_LAST) {
                         double last = cacheRow.sortValues[DCOL_LAST];
@@ -1344,11 +1369,28 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_BIDASK) {
                         int rowIndex = (int)cd->nmcd.dwItemSpec;
+                        
                         HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                 : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
+                        
                         RECT rcCell;
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
                         FillRect(cd->nmcd.hdc, &rcCell, hBrush);
+
+                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
+                        RECT rcTop = rcCell;
+                        RECT rcBottom = rcCell;
+                        InflateRect(&rcTop, -6, 0);
+                        InflateRect(&rcBottom, -6, 0);
+
+                        // Split the cell height vertically down the middle
+                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
+                        rcTop.bottom = midY + 1;
+                        rcBottom.top = midY - 1;
+
+                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
+                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
+
                         double last = cacheRow.sortValues[DCOL_LAST];
                         if (cacheRow.halted || last <= 0.0 || cacheRow.ask <= 0.0 || cacheRow.bid <= 0.0) {
                             SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
@@ -1359,10 +1401,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             else if (distBid < distAsk) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
                             else SetTextColor(cd->nmcd.hdc, COINS_CLR_WHITE);
                         }
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
-                        InflateRect(&rcCell, -6, 1); 
-                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_BIDASK].c_str(), -1, &rcCell, DT_RIGHT | DT_TOP | DT_NOPREFIX);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.askStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+                        //SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                        DrawTextA(cd->nmcd.hdc, cacheRow.bidStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_MKTVAL) {
@@ -1383,11 +1425,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                         // Split the cell height vertically down the middle
                         int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY;
-                        rcBottom.top = midY;
+                        rcTop.bottom = midY + 1;
+                        rcBottom.top = midY - 1;
 
                         SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
+                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
 
                         SetTextColor(cd->nmcd.hdc, darkMode ? DM_TEXT : LM_TEXT);
                         DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_MKTVAL].c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -1426,11 +1468,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                         // Split the cell height vertically down the middle
                         int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY;
-                        rcBottom.top = midY;
+                        rcTop.bottom = midY + 1;
+                        rcBottom.top = midY - 1;
 
                         SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont9ptbold.get());
+                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
 
                         SetTextColor(cd->nmcd.hdc, (last > 0 && cacheRow.upAlert > 0 && cacheRow.upAlert <= last) ? COINS_CLR_GREEN : COINS_CLR_GRAY);
                         DrawTextA(cd->nmcd.hdc, cacheRow.upStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
