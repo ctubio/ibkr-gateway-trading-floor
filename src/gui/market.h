@@ -179,6 +179,9 @@ struct TsState {
     HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
     HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
     HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
+    COLORREF rrColor        = COINS_CLR_ORANGE;
+    COLORREF optQtyColor    = COINS_CLR_GRAY;
+    COLORREF optStopColor   = COINS_CLR_GRAY;
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
     
@@ -570,7 +573,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         rrColor = rrRatio < 1.0 ? COINS_CLR_RED : (rrRatio >= 2.0 ? COINS_CLR_GREEN : COINS_CLR_ORANGE);
     }
     else rrText += "--";
-    bool rrColorChanged = SetCtrlColorIfChanged(state->hRRLabel, rrColor);
+    bool rrColorChanged = state->rrColor != rrColor;
+    state->rrColor = rrColor;
 
     // 4) Position size at target risk — bottom-left of Qty input
     std::string optQtyText = "--";
@@ -582,7 +586,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
             optQtyColor = qty > optQty ? COINS_CLR_RED : COINS_CLR_GRAY;
         }
     }
-    bool optQtyColorChanged = SetCtrlColorIfChanged(state->hOptQtyLabel, optQtyColor);
+    bool optQtyColorChanged = state->optQtyColor != optQtyColor;
+    state->optQtyColor = optQtyColor;
 
     // 5) Stop distance at target risk — bottom-right of Stop input
     std::string optStopText = "--";
@@ -597,7 +602,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
             optStopColor = (price > 0 ? stopDistOriginal > optStop : (state->orderSide == "BUY" ? optStop > stopDistOriginal : stopDistOriginal > optStop)) ? COINS_CLR_RED : COINS_CLR_GRAY;
         }
     }
-    bool optStopColorChanged = SetCtrlColorIfChanged(state->hOptStopLabel, optStopColor);
+    bool optStopColorChanged = state->optStopColor != optStopColor;
+    state->optStopColor = optStopColor;
 
     // Update text, and force the underlying edit to repaint first so the
     // transparent label never leaves stale text ghosted behind the new value.
@@ -624,7 +630,6 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     Market_TrimTimeSalesLists(state);
     std::string labelStr = state->isOvernight ? std::format("OVN {}", side) : side;
     SetWindowTextA(state->hOrderLabel, labelStr.c_str());
-    SetCtrlColor(state->hOrderLabel, side == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
     InvalidateRect(state->hOrderLabel, NULL, TRUE);
 
     // Pre-fill price from current last / bid / ask
@@ -1424,29 +1429,17 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
     state->ttsOn = !state->ttsOn;
     if (state->ttsOn) {
         if (!SharedTts().Acquire()) { state->ttsOn = false; return; }
-        if (state->hSpeakerBtn)
-            SetCtrlColor(state->hSpeakerBtn, darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK);
         SetTimer(hWnd, TIMER_MARKET_SPEAKER, 21000, NULL);
         Market_SpeakLast(state);
     } else {
         KillTimer(hWnd, TIMER_MARKET_SPEAKER);
         SharedTts().Release();
-        if (state->hSpeakerBtn)
-            SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
     }
     if (state->hSpeakerBtn) InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
 }
 
 static void Market_ToggleOVN(HWND hWnd, TsState* state) {
     state->isOvernight = !state->isOvernight;
-    if (state->isOvernight) {
-        if (state->hOVNButton)
-            SetCtrlColor(state->hOVNButton, COINS_CLR_YELLOW);
-    } else {
-        if (state->hOVNButton)
-            SetCtrlColor(state->hOVNButton, COINS_CLR_GRAY);
-    }
-    
     if (state->hOVNButton) InvalidateRect(state->hOVNButton, NULL, TRUE);
     
     if (!state->symbol.empty()) {
@@ -1512,7 +1505,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
             0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_OVERNIGHT, hInst, NULL);
         SendMessage(state->hOVNButton, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-        SetCtrlColor(state->hOVNButton, COINS_CLR_GRAY);
         {
             HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
                 WS_POPUP | TTS_ALWAYSTIP,
@@ -1532,7 +1524,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
             0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_SPEAKER, hInst, NULL);
         SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-        SetCtrlColor(state->hSpeakerBtn, COINS_CLR_GRAY);
 
         // ── Order entry bar (hidden until Ctrl key pressed) ───────────────────
         state->hOrderLabel = CreateWindowA("STATIC", "BUY",
@@ -1566,20 +1557,19 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // shows through underneath the label text. Combined with
         // WS_CLIPSIBLINGS on the edits above, the edit's own repaints never
         // draw over the area a label occupies, so a label is never hidden.
-        auto makeHintLabel = [&](UINT align, COLORREF color) -> HWND {
+        auto makeHintLabel = [&](UINT align) -> HWND {
             HWND h = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
                 WS_CHILD | align | SS_NOPREFIX,
                 0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-            SetCtrlColor(h, color);
             SendMessage(h, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
             return h;
         };
-        state->hProfitLossPercentLabel = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
-        state->hProfitLossValueLabel = makeHintLabel(SS_RIGHT, COINS_CLR_ORANGE);
-        state->hRRLabel   = makeHintLabel(SS_LEFT, COINS_CLR_ORANGE);
-        state->hOptQtyLabel = makeHintLabel(SS_LEFT, COINS_CLR_GRAY);
-        state->hOptStopLabel = makeHintLabel(SS_RIGHT, COINS_CLR_GRAY);
-        state->hTotalLabel  = makeHintLabel(SS_RIGHT, COINS_CLR_ORANGE);
+        state->hProfitLossPercentLabel = makeHintLabel(SS_LEFT);
+        state->hProfitLossValueLabel = makeHintLabel(SS_RIGHT);
+        state->hRRLabel   = makeHintLabel(SS_LEFT);
+        state->hOptQtyLabel = makeHintLabel(SS_LEFT);
+        state->hOptStopLabel = makeHintLabel(SS_RIGHT);
+        state->hTotalLabel  = makeHintLabel(SS_RIGHT);
 
         // Apply font to order bar controls
         SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
@@ -1733,14 +1723,42 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             if (state) {
                 HWND hCtrl = (HWND)lParam;
-                if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hRRLabel ||
-                    hCtrl == state->hOptQtyLabel || hCtrl == state->hOptStopLabel || hCtrl == state->hTotalLabel) {
-                    HDC hdc = (HDC)wParam;
+                HDC hdc = (HDC)wParam;
+                COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
+                bool transparent = false;
+
+                if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel) {
+                    clr = COINS_CLR_ORANGE;
+                    transparent = true;
+                } else if (hCtrl == state->hRRLabel) {
+                    clr = state->rrColor;
+                    transparent = true;
+                } else if (hCtrl == state->hOptQtyLabel) {
+                    clr = state->optQtyColor;
+                    transparent = true;
+                } else if (hCtrl == state->hOptStopLabel) {
+                    clr = state->optStopColor;
+                    transparent = true;
+                } else if (hCtrl == state->hTotalLabel) {
+                    clr = COINS_CLR_ORANGE;
+                    transparent = true;
+                } else if (hCtrl == state->hOrderLabel) {
+                    clr = state->orderSide == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
+                } else if (hCtrl == state->hSpeakerBtn) {
+                    clr = state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY;
+                } else if (hCtrl == state->hOVNButton) {
+                    clr = state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
+                } else {
+                    break;
+                }
+
+                SetTextColor(hdc, clr);
+                if (transparent) {
                     SetBkMode(hdc, TRANSPARENT);
-                    COLORREF clr = GetCtrlColor(hCtrl);
-                    SetTextColor(hdc, clr != COLOR_THEME ? clr : COINS_CLR_ORANGE);
                     return (LRESULT)GetStockObject(NULL_BRUSH); // no fill = truly transparent
                 }
+                SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
+                return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
             }
             break;
         }
@@ -1900,12 +1918,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
                     // lParam stores 1=ask, 2=bid
                     LPARAM side = cd->nmcd.lItemlParam;
-                    COLORREF clr = (side == 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
-                    COLORREF bg  = darkMode
+                    cd->clrText   =  (side == 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
+                    cd->clrTextBk  = darkMode
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
-                        : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
-                    cd->clrTextBk = bg;
-                    cd->clrText   = clr;
+                        : (cd->nmcd.dwItemSpec % 2 == 0 ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245));
                     return CDRF_DODEFAULT;
                 }
             }

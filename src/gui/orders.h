@@ -554,21 +554,17 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     if (hOrderTypeHint) {
         std::string hint = order.symbol + " " + order.action;// + " " + order.orderType + " " + order.tif;
         SetWindowTextA(hOrderTypeHint, hint.c_str());
-        SetCtrlColor(hOrderTypeHint, order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED);
         InvalidateRect(hOrderTypeHint, NULL, TRUE);
     }
 
     // Side-color the Qty hints green (BUY) / red (SELL).
-    COLORREF qtyClr = order.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
     HWND hQtyTifLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL);
     if (hQtyTifLabel) {
-        SetCtrlColor(hQtyTifLabel, qtyClr);
         SetWindowTextA(hQtyTifLabel, order.tif.c_str());
         InvalidateRect(hQtyTifLabel, NULL, TRUE);
     }
     HWND hQtyTypeLabel = GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL);
     if (hQtyTypeLabel) {
-        SetCtrlColor(hQtyTypeLabel, qtyClr);
         SetWindowTextA(hQtyTypeLabel, order.orderType.c_str());
         InvalidateRect(hQtyTypeLabel, NULL, TRUE);
     }
@@ -631,7 +627,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             HWND hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",
                 WS_CHILD | SS_RIGHT | SS_NOPREFIX,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_LABEL, hInst, NULL);
-            SetCtrlColor(hTotalLabel, COINS_CLR_ORANGE);
 
             // Two small hints overlaid on the top-left / bottom-left of the Qty edit:
             // the order's time-in-force (tif) and its order type. Side-colored like
@@ -639,12 +634,10 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             HWND hQtyTifLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
                 WS_CHILD | SS_LEFT | SS_NOPREFIX,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_TIF_LABEL, hInst, NULL);
-            SetCtrlColor(hQtyTifLabel, COINS_CLR_GREEN);
 
             HWND hQtyTypeLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
                 WS_CHILD | SS_LEFT | SS_NOPREFIX,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_TYPE_LABEL, hInst, NULL);
-            SetCtrlColor(hQtyTypeLabel, COINS_CLR_GREEN);
 
             // Subclass edit fields to intercept keyboard navigation.
             SetWindowSubclass(GetDlgItem(hWnd, ID_ORDERS_PRICE_EDIT), EditField_SubclassProc, 1, 0);
@@ -914,12 +907,17 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CTLCOLORSTATIC: {
             HWND hCtrl = (HWND)lParam;
             if (hCtrl == GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL) ||
+                hCtrl == GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL) ||
                 hCtrl == GetDlgItem(hWnd, ID_ORDERS_QTY_TIF_LABEL) ||
                 hCtrl == GetDlgItem(hWnd, ID_ORDERS_QTY_TYPE_LABEL)) {
                 HDC hdc = (HDC)wParam;
                 SetBkMode(hdc, TRANSPARENT);
-                COLORREF clr = GetCtrlColor(hCtrl);
-                SetTextColor(hdc, clr != COLOR_THEME ? clr : COINS_CLR_ORANGE);
+                COLORREF clr = COINS_CLR_ORANGE;
+                if (hCtrl != GetDlgItem(hWnd, ID_ORDERS_PRICE_LABEL))
+                    clr = s_editState.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
+                SetTextColor(hdc, clr);
+                if (hCtrl == GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL))
+                    return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
                 return (LRESULT)GetStockObject(NULL_BRUSH);
             }
             break;

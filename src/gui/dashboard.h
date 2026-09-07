@@ -96,6 +96,19 @@ struct DashboardState {
     // TTS state — speech goes through the shared SharedTtsEngine (shared.h)
     // now; this just tracks whether the dashboard holds a reference to it.
     bool coinsTtsOn = false;
+
+    COLORREF clockColor = COINS_CLR_GRAY;
+    COLORREF speakerColor = COINS_CLR_GRAY;
+    COLORREF bigPnlColor = COINS_CLR_GREEN;
+    COLORREF pctColor = COINS_CLR_GREEN;
+    COLORREF realizedColor = COINS_CLR_GRAY;
+    COLORREF unrealizedColor = COINS_CLR_GRAY;
+    COLORREF dividendsColor = COINS_CLR_PURPLE;
+    COLORREF accrualsColor = COINS_CLR_GRAY;
+    COLORREF cashColor = COINS_CLR_GRAY;
+    COLORREF eurColor = COINS_CLR_GRAY;
+    COLORREF usdColor = COINS_CLR_GRAY;
+    COLORREF lockColor = COINS_CLR_GRAY;
 };
 
 // Global dashboard state instance
@@ -180,49 +193,49 @@ static void UpdateMarketClock(HWND hWnd) {
     if (wd == std::chrono::Friday && total_secs >= T_AFTERHOURS_END) {
         phase = "Market Closed"; 
         target_secs = (2 * 24 * 3600) + T_SUNDAY_OPEN; // Fri to Sun 20:00
-        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
+        dashboardState.clockColor = COINS_CLR_GRAY;
     } else if (wd == std::chrono::Saturday) {
         phase = "Market Closed"; 
         target_secs = (1 * 24 * 3600) + T_SUNDAY_OPEN; // Sat to Sun 20:00
-        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
+        dashboardState.clockColor = COINS_CLR_GRAY;
     } else if (wd == std::chrono::Sunday && total_secs < T_SUNDAY_OPEN) {
         phase = "Market Closed"; 
         target_secs = T_SUNDAY_OPEN;                   // Sunday morning/afternoon to Sun 20:00
-        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
+        dashboardState.clockColor = COINS_CLR_GRAY;
     } else if (wd == std::chrono::Sunday && total_secs >= T_SUNDAY_OPEN) {
         phase = "OVERNIGHT"; 
         target_secs = (1 * 24 * 3600) + T_PREMARKET;   // Market is OPEN! Counting to Mon 04:00 AM
-        SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
+        dashboardState.clockColor = COINS_CLR_GRAY;
     } 
     // 2. Standard Weekday State Machine (Monday - Friday)
     else {
         if (total_secs < T_PREMARKET) {
             phase = "OVERNIGHT"; target_secs = T_PREMARKET;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
+            dashboardState.clockColor = COINS_CLR_GRAY;
         } else if (total_secs < T_OPEN_IMBAL) {
             phase = "Pre-Market"; target_secs = T_OPEN;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_ORANGE);
+            dashboardState.clockColor = COINS_CLR_ORANGE;
         } else if (total_secs < T_OPEN_BELL) {
             phase = "IMBALANCE"; target_secs = T_OPEN;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_RED);
+            dashboardState.clockColor = COINS_CLR_RED;
         } else if (total_secs < T_OPEN) {
             phase = "Opening Bell"; target_secs = T_OPEN;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_BLUE);
+            dashboardState.clockColor = COINS_CLR_BLUE;
         } else if (total_secs < T_CLOSE_IMBAL) {
             phase = "Market Open"; target_secs = T_CLOSE;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_YELLOW);
+            dashboardState.clockColor = COINS_CLR_YELLOW;
         } else if (total_secs < T_CLOSE_BELL) {
             phase = "IMBALANCE"; target_secs = T_CLOSE;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_RED);
+            dashboardState.clockColor = COINS_CLR_RED;
         } else if (total_secs < T_CLOSE) {
             phase = "Closing Bell"; target_secs = T_CLOSE;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_BLUE);
+            dashboardState.clockColor = COINS_CLR_BLUE;
         } else if (total_secs < T_AFTERHOURS_END) {
             phase = "After-Hours"; target_secs = T_AFTERHOURS_END;
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_ORANGE);
+            dashboardState.clockColor = COINS_CLR_ORANGE;
         } else {
             phase = "OVERNIGHT"; target_secs = T_PREMARKET + (24 * 3600); // Tomorrow's 04:00 AM
-            SetCtrlColor(dashboardState.hCoin_Clock, COINS_CLR_GRAY);
+            dashboardState.clockColor = COINS_CLR_GRAY;
         }
     }
 
@@ -286,13 +299,13 @@ static void Coins_ToggleTTS(HWND hWnd) {
             dashboardState.coinsTtsOn = false;
             return;
         }
-        SetCtrlColor(dashboardState.hCoin_Speaker, darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK);   // bright = active
+        dashboardState.speakerColor = darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK;   // bright = active
         SetTimer(hWnd, TIMER_COINS_SPEAKER, 21000, NULL);
         Coins_SpeakDailyPnL();                          // speak immediately
     } else {
         KillTimer(hWnd, TIMER_COINS_SPEAKER);
         SharedTts().Release();                          // stop + tear down if we were the last one
-        SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);    // dim = inactive
+        dashboardState.speakerColor = COINS_CLR_GRAY;    // dim = inactive
     }
 
     if (dashboardState.hCoin_Speaker) InvalidateRect(dashboardState.hCoin_Speaker, NULL, TRUE);
@@ -452,7 +465,7 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = FormatWithCommas(daily);
         if (daily >= 0.0) formattedNum = "+" + formattedNum;
         if (SetWindowTextIfChanged(dashboardState.hCoin_BigPnL, formattedNum)) {
-            SetCtrlColor(dashboardState.hCoin_BigPnL, pnlClr);
+            dashboardState.bigPnlColor = pnlClr;
         }
     }
     if (dashboardState.hCoin_Pct) {
@@ -460,14 +473,14 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = FormatWithCommas(pct);
         if (pct >= 0.0) formattedNum = "+" + formattedNum;
         if (SetWindowTextIfChanged(dashboardState.hCoin_Pct, std::format("{}%", formattedNum))) {
-            SetCtrlColor(dashboardState.hCoin_Pct, pnlClr);
+            dashboardState.pctColor = pnlClr;
         }
     }
     if (dashboardState.hCoin_Realized) {
         std::string formattedNum = FormatWithCommas(realized);
         if (SetWindowTextIfChanged(dashboardState.hCoin_Realized, formattedNum)) {
             COLORREF clr = realized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SetCtrlColor(dashboardState.hCoin_Realized, clr);
+            dashboardState.realizedColor = clr;
         }
     }
 
@@ -483,22 +496,22 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = FormatWithCommas(unrealized, dashboardState.fullDetails);
         if (SetWindowTextIfChanged(dashboardState.hCoin_Unrealized, formattedNum)) {
             COLORREF clr = unrealized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            SetCtrlColor(dashboardState.hCoin_Unrealized, clr);
+            dashboardState.unrealizedColor = clr;
         }
     }
     if (dashboardState.hCoin_Dividends) {
         double div = tryParse("AccruedDividend");
         std::string formattedNum = FormatWithCommas(div);
         if (SetWindowTextIfChanged(dashboardState.hCoin_Dividends, formattedNum)) {
-            SetCtrlColor(dashboardState.hCoin_Dividends, COINS_CLR_PURPLE);
+            dashboardState.dividendsColor = COINS_CLR_PURPLE;
         }
     }
     if (dashboardState.hCoin_Accruals) {
         double acc = tryParse("AccruedCash");
         std::string formattedNum = FormatWithCommas(acc);
         if (SetWindowTextIfChanged(dashboardState.hCoin_Accruals, formattedNum)) {
-            COLORREF clr = acc > 0.0 ? COINS_CLR_GREEN : (acc < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(dashboardState.hCoin_Accruals, clr);
+            COLORREF clr = acc > 0.0 ? COINS_CLR_GREEN : (acc < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
+            dashboardState.accrualsColor = clr;
         }
     }
     if (dashboardState.hCoin_BuyingPower) {
@@ -516,8 +529,8 @@ void Coins_UpdateLabels(HWND hWnd) {
         double cash = tryParse("CashBalance");
         std::string formattedNum = FormatWithCommas(cash, dashboardState.fullDetails) + " " + dashboardState.currencyDashboard;
         if (SetWindowTextIfChanged(dashboardState.hCoin_Cash, formattedNum)) {
-            COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(dashboardState.hCoin_Cash, clr);
+            COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
+            dashboardState.cashColor = clr;
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
             SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
@@ -526,16 +539,16 @@ void Coins_UpdateLabels(HWND hWnd) {
         double eur = tryParse("EUR_CashBalance");
         std::string formattedNum = FormatWithCommas(eur, dashboardState.fullDetails) + (dashboardState.fullDetails ? "" : " €");
         if (SetWindowTextWIfChanged(dashboardState.hCoin_EUR, StringToWide(formattedNum))) {
-            COLORREF clr = eur > 0.0 ? COINS_CLR_GREEN : (eur < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(dashboardState.hCoin_EUR, clr);
+            COLORREF clr = eur > 0.0 ? COINS_CLR_GREEN : (eur < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
+            dashboardState.eurColor = clr;
         }
     }
     if (dashboardState.hCoin_USD) {
         double usd = tryParse("USD_CashBalance");
         std::string formattedNum = FormatWithCommas(usd, dashboardState.fullDetails) + (dashboardState.fullDetails ? "" : " $");
         if (SetWindowTextWIfChanged(dashboardState.hCoin_USD, StringToWide(formattedNum))) {
-            COLORREF clr = usd > 0.0 ? COINS_CLR_GREEN : (usd < 0.0 ? COINS_CLR_RED : COLOR_THEME);
-            SetCtrlColor(dashboardState.hCoin_USD, clr);
+            COLORREF clr = usd > 0.0 ? COINS_CLR_GREEN : (usd < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
+            dashboardState.usdColor = clr;
         }
     }
 }
@@ -896,7 +909,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + boxW - 90, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
             SendMessage(dashboardState.hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-            SetCtrlColor(dashboardState.hCoin_Lock, COINS_CLR_GRAY);
             ShowWindow(dashboardState.hCoin_Lock, SW_HIDE);
 
             dashboardState.hCoin_Clock = CreateWindowA("STATIC", "--",
@@ -914,13 +926,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + 42, y1 + 24, 20, 20, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
             SendMessage(dashboardState.hCoin_Speaker, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-            SetCtrlColor(dashboardState.hCoin_Speaker, COINS_CLR_GRAY);
 
             dashboardState.hCoin_BigPnL = CreateWindowA("STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOTIFY,
                 m + 70, y1 + 16, boxW - 82, 32, hWnd, (HMENU)ID_COIN_BIGPNL, hInst, NULL);
             SendMessage(dashboardState.hCoin_BigPnL, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
-            SetCtrlColor(dashboardState.hCoin_BigPnL, COINS_CLR_GREEN);
 
             // Row 2: PnL %: +0.00%
             HWND hLblPct = CreateWindowA("STATIC", "PnL %:",
@@ -932,7 +942,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
                 m + 70, y1 + 48, boxW - 82, 18, hWnd, (HMENU)ID_COIN_PCT, hInst, NULL);
             SendMessage(dashboardState.hCoin_Pct, WM_SETFONT, (WPARAM)hFont12ptbold.get(), TRUE);
-            SetCtrlColor(dashboardState.hCoin_Pct, COINS_CLR_GREEN);
 
             // Row 3: Realized: 0.00
             HWND hLblRealized = CreateWindowA("STATIC", "Realized:",
@@ -1369,6 +1378,28 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 ToggleTWS(SW_SHOW); 
             }
             return 0;
+
+        case WM_CTLCOLORSTATIC: {
+            HWND hCtrl = (HWND)lParam;
+            COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
+            if (hCtrl == dashboardState.hCoin_Clock) clr = dashboardState.clockColor;
+            else if (hCtrl == dashboardState.hCoin_Speaker) clr = dashboardState.speakerColor;
+            else if (hCtrl == dashboardState.hCoin_BigPnL) clr = dashboardState.bigPnlColor;
+            else if (hCtrl == dashboardState.hCoin_Pct) clr = dashboardState.pctColor;
+            else if (hCtrl == dashboardState.hCoin_Realized) clr = dashboardState.realizedColor;
+            else if (hCtrl == dashboardState.hCoin_Unrealized) clr = dashboardState.unrealizedColor;
+            else if (hCtrl == dashboardState.hCoin_Dividends) clr = dashboardState.dividendsColor;
+            else if (hCtrl == dashboardState.hCoin_Accruals) clr = dashboardState.accrualsColor;
+            else if (hCtrl == dashboardState.hCoin_Cash) clr = dashboardState.cashColor;
+            else if (hCtrl == dashboardState.hCoin_EUR) clr = dashboardState.eurColor;
+            else if (hCtrl == dashboardState.hCoin_USD) clr = dashboardState.usdColor;
+            else if (hCtrl == dashboardState.hCoin_Lock) clr = dashboardState.lockColor;
+
+            HDC hdc = (HDC)wParam;
+            SetTextColor(hdc, clr);
+            SetBkMode(hdc, TRANSPARENT);
+            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+        }
 
         case WM_COMMAND: {
             WORD id  = LOWORD(wParam);

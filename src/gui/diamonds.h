@@ -878,7 +878,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             bool checked = (diamondsCheckedTabs >> i) & 1;
             HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
             SendMessage(tab, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
-            SetCtrlColor(tab, checked ? (darkMode ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
         }
         Diamonds_UpdateDivColumnsVisibility(hWnd);
 
@@ -927,6 +926,19 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
         return 0;
 
+    case WM_CTLCOLORSTATIC: {
+        HWND hCtrl = (HWND)lParam;
+        int id = GetDlgCtrlID(hCtrl);
+        if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2) {
+            HDC hdc = (HDC)wParam;
+            bool checked = SendMessage(hCtrl, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            SetTextColor(hdc, checked ? (darkMode ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
+            SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
+            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+        }
+        break;
+    }
+
     case WM_COMMAND: {
         WORD id = LOWORD(wParam);
         if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2 && HIWORD(wParam) == BN_CLICKED) {
@@ -936,10 +948,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
                 if (SendMessage(tab, BM_GETCHECK, 0, 0) == BST_CHECKED) {
                     diamondsCheckedTabs |= (1u << i);
-                    SetCtrlColor(tab, darkMode ? DM_TEXT : LM_TEXT);
-                } else {
-                    SetCtrlColor(tab, COINS_CLR_GRAY);
                 }
+                InvalidateRect(tab, NULL, TRUE);
             }
             Settings_CheckedTabs_Save((int)diamondsCheckedTabs);
             Diamonds_UpdateDivColumnsVisibility(hWnd);

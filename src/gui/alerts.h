@@ -255,6 +255,7 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
 
 #define ID_ALERT_KEEP_BTN   5401
 #define ID_ALERT_DELETE_BTN 5402
+#define ID_ALERT_SYMBOL     5403
 
 struct AlertPopupData {
     std::string title;
@@ -274,9 +275,8 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
             // Message text
             HWND hSymbol = CreateWindowA("STATIC", data->symbol.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                10, 20, 140, 40, hWnd, NULL, cs->hInstance, NULL);
+                10, 20, 140, 40, hWnd, (HMENU)ID_ALERT_SYMBOL, cs->hInstance, NULL);
             SendMessage(hSymbol, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
-            SetCtrlColor(hSymbol, data->isUp ? COINS_CLR_GREEN : COINS_CLR_RED);
             
             HWND hMsg = CreateWindowA("STATIC", data->msg.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
@@ -299,6 +299,19 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                 (300 / 3) * 2, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
             SendMessage(hDelete, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
+            break;
+        }
+        case WM_CTLCOLORSTATIC: {
+            int id = GetDlgCtrlID((HWND)lParam);
+            if (id == ID_ALERT_SYMBOL) {
+                AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                if (data) {
+                    HDC hdc = (HDC)wParam;
+                    SetTextColor(hdc, data->isUp ? COINS_CLR_GREEN : COINS_CLR_RED);
+                    SetBkMode(hdc, TRANSPARENT);
+                    return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+                }
+            }
             break;
         }
         case WM_COMMAND: {

@@ -21,8 +21,6 @@ NOTIFYICONDATAW nid = { 0 };
 // Dark background fills for order-side colored input boxes
 #define COINS_BG_DARK_GREEN RGB( 34, 82, 50)
 #define COINS_BG_DARK_RED   RGB(102, 43, 43)
-// Sentinel: no custom col or – let HandleDarkModeMessages / system theme paint this control
-#define COLOR_THEME   ((COLORREF)0xFFFFFFFF)
 
 // glyph: E767 = Volume on (Segoe MDL2 Assets)
 static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
@@ -52,28 +50,6 @@ TradingAPI& api() {
 // ── Global Account Summary ───────────────────────────────────────────────────────────
 static double NetLiquidation = 0.0;
 
-// ── Label Colors ───────────────────────────────────────────────────────────
-static void SetCtrlColor(HWND hw, COLORREF c) {
-    if (!hw) return;
-    if (c == COLOR_THEME) {
-        RemovePropA(hw, "CtrlColor");
-    } else {
-        SetPropA(hw, "CtrlColor", (HANDLE)(uintptr_t)(c + 1));
-    }
-}
-static COLORREF GetCtrlColor(HWND hw) {
-    if (!hw) return COLOR_THEME;
-    HANDLE h = GetPropA(hw, "CtrlColor");
-    if (!h) return COLOR_THEME;
-    return (COLORREF)((uintptr_t)h - 1);
-}
-
-static bool SetCtrlColorIfChanged(HWND hw, COLORREF color) {
-    if (!hw || GetCtrlColor(hw) == color) return false;
-    SetCtrlColor(hw, color);
-    return true;
-}
-
 static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
     if (!hWnd) return false;
     char buf[256] = {};
@@ -97,14 +73,14 @@ static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
 void InitDarkBrushes() {
     if (hDarkBrush) return;
     hDarkBrush      = CreateSolidBrush(DM_BG);
-    hLightBrush     = CreateSolidBrush(GetSysColor(COLOR_BTNFACE));
+    hLightBrush     = GetSysColorBrush(COLOR_BTNFACE);
     hDarkBrush2     = CreateSolidBrush(DM_BG2);
     hBrushDarkGreen = CreateSolidBrush(COINS_BG_DARK_GREEN);
     hBrushDarkRed   = CreateSolidBrush(COINS_BG_DARK_RED);
     hBrushGreen     = CreateSolidBrush(COINS_CLR_GREEN);
     hBrushRed       = CreateSolidBrush(COINS_CLR_RED);
     hGrayBrush      = CreateSolidBrush(RGB(45, 45, 45));
-    hLightBrushBg   = CreateSolidBrush(GetSysColor(COLOR_WINDOW));
+    hLightBrushBg   = GetSysColorBrush(COLOR_WINDOW);
     hLightBrushBg2  = CreateSolidBrush(RGB(245,245,245));
     
     hSeparatorPenDark   = CreatePen(PS_SOLID, 1, RGB(60,60,60));
@@ -452,35 +428,19 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             FillRect(hdc, &rc, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
             return 1;
         }
+        case WM_CTLCOLORBTN:
+        case WM_CTLCOLORSTATIC: {
+            if (!darkMode) return 0;
+            SetTextColor((HDC)wParam, DM_TEXT);
+            SetBkColor((HDC)wParam, DM_BG);
+            return (LRESULT)hDarkBrush;
+        }
         case WM_CTLCOLOREDIT:
         case WM_CTLCOLORLISTBOX: {
             if (!darkMode) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG2);
             return (LRESULT)hDarkBrush2;
-        }
-        case WM_CTLCOLORSTATIC: {
-            COLORREF clr = GetCtrlColor((HWND)lParam);
-            if (clr != COLOR_THEME) {
-                SetTextColor((HDC)wParam, clr);
-                if (darkMode) {
-                    SetBkColor((HDC)wParam, DM_BG);
-                    return (LRESULT)hDarkBrush;
-                } else {
-                    SetBkColor((HDC)wParam, GetSysColor(COLOR_BTNFACE));
-                    return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
-                }
-            }
-            if (!darkMode) return 0;
-            SetTextColor((HDC)wParam, DM_TEXT);
-            SetBkColor((HDC)wParam, DM_BG);
-            return (LRESULT)hDarkBrush;
-        }
-        case WM_CTLCOLORBTN: {
-            if (!darkMode) return 0;
-            SetTextColor((HDC)wParam, DM_TEXT);
-            SetBkColor((HDC)wParam, DM_BG);
-            return (LRESULT)hDarkBrush;
         }
         case WM_DRAWITEM: {
             DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)lParam;
