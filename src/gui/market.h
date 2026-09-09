@@ -344,8 +344,8 @@ static void TimeSales_InsertTick(HWND hList, double price, double size, const st
 static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
-    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 20 : 18) : 23;
-    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  7) : 10;
+    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 20 : 19) : 23;
+    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 10;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
