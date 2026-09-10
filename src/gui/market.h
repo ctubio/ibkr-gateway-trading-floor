@@ -345,7 +345,7 @@ static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
     int limitLong  = state->orderBarVisible ? (state->isOvernight ? 21 : 19) : 24;
-    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 10;
+    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
