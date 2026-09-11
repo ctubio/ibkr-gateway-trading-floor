@@ -288,6 +288,9 @@ static std::vector<HWND> Market_BuildTabOrder(TsState* state) {
     return order;
 }
 
+void Market_Layout_HideBar(HWND hWnd, TsState* state);
+static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side);
+
 // Subclass for one editable-order row's Price/Qty edits.
 //   uIdSubclass == 1 → price (step 0.01, 2 dec)
 //   uIdSubclass == 2 → qty   (step 1,    0 dec)
@@ -368,6 +371,24 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
             InvalidateRect(hEdit, NULL, TRUE);
             return 0;
         }
+        if (wParam == VK_CONTROL) {
+            if (st) {
+                bool isRight = (lParam & (1 << 24)) != 0;
+                if (isRight) {
+                    if (st->orderBarVisible && st->orderSide == "SELL") {
+                        Market_Layout_HideBar(hMarket, st);
+                    } else {
+                        OrderBar_Show(hMarket, st, "SELL");
+                    }
+                } else {
+                    if (st->orderBarVisible && st->orderSide == "BUY") {
+                        Market_Layout_HideBar(hMarket, st);
+                    } else {
+                        OrderBar_Show(hMarket, st, "BUY");
+                    }
+                }
+            }
+        }
     }
 
     // Plain hover (no button held) can't change the selection — skip it so
@@ -442,6 +463,8 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
     SetWindowTextA(row.hPriceEdit, priceStr.c_str());
     std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
     SetWindowTextA(row.hQtyEdit, (" " + qtyStr).c_str());
+
+    SetFocus(row.hPriceEdit);
 
     return row;
 }
@@ -683,8 +706,10 @@ static void Market_LayoutOrderRows(TsState* state, int panelX, int panelTop, int
         int rowTop = panelTop + (int)i * MARKET_ORDER_ROW_H;
         int editY  = rowTop + (MARKET_ORDER_ROW_H - editH) / 2;
 
-        if (row.hPriceEdit)
+        if (row.hPriceEdit) {
             SetWindowPos(row.hPriceEdit, NULL, priceX, editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetFocus(row.hPriceEdit);
+        }
 
         bool showQty = !row.partialFill;
         if (row.hQtyEdit) {
