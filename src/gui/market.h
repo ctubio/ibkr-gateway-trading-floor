@@ -126,6 +126,17 @@ struct MarketOrderRow {
     std::string tif;
 };
 
+// Lightweight snapshot of one currently-open (editable) order for this
+// window's conId, used only to render the bold "open orders" rows at the
+// top of hExecList (see Market_RefreshExec). Read-only — unlike
+// MarketOrderRow it has no edit controls.
+struct MarketOpenOrderSummary {
+    int orderId = 0;
+    std::string action;   // "BUY" or "SELL"
+    double qty   = 0.0;
+    double price = 0.0;
+};
+
 struct TsState {
     HWND hTsList = NULL;
     HWND hTsListF100 = NULL;
@@ -210,7 +221,12 @@ struct TsState {
 
     // ── Editable orders panel (bottom of hTsList column) ──────────────────────
     std::vector<MarketOrderRow> orderRows;
-    
+
+    // ── Open-orders summary feeding hExecList's bold rows ─────────────────────
+    // Refreshed only by Market_SyncOrderRows() (i.e. only on real order-state
+    // changes) — never polled — and consumed by Market_RefreshExec().
+    std::vector<MarketOpenOrderSummary> openOrdersSummary;
+
     Sparkline sparkline;
     
     // ── Cached header double-buffer (avoids CreateCompatibleDC/Bitmap every paint) ──
@@ -953,6 +969,11 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
 }
 
+// Forward declaration: Market_SyncOrderRows() (below) needs to call this
+// after refreshing state->openOrdersSummary. The full definition (which also
+// renders the executed-orders rows) lives further down this file.
+static void Market_RefreshExec(HWND hWnd, TsState* state);
+
 // Rebuilds state->orderRows from api().getOrdersSorted(), keeping it limited
 // to editable orders (api().orderIsEditable()) belonging to this window's
 // conId (falling back to a symbol match for the rare case an order hasn't
@@ -975,6 +996,22 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
                        (o.conId <= 0 && !o.symbol.empty() && o.symbol == state->symbol);
         if (matches) matched.push_back(o);
     }
+
+    // ── Feed hExecList's bold "open orders" rows from the same `matched` ────
+    // list above — no extra API call. getOrdersSorted() already orders by
+    // priority (submitted/partial first) then orderId desc, so the bold rows
+    // land in that order at the top of the exec list.
+    state->openOrdersSummary.clear();
+    state->openOrdersSummary.reserve(matched.size());
+    for (auto& o : matched) {
+        MarketOpenOrderSummary sum;
+        sum.orderId = o.orderId;
+        sum.action  = o.action;
+        sum.qty     = o.totalQty;
+        sum.price   = o.price;
+        state->openOrdersSummary.push_back(sum);
+    }
+    Market_RefreshExec(hWnd, state);
 
     std::unordered_set<int> matchedIds;
     for (auto& o : matched) matchedIds.insert(o.orderId);
@@ -1421,9 +1458,14 @@ static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* updat
     ListView_RedrawItems(state->hL2List, row, row);
 }
 
-// ── Executions list refresh ───────────────────────────────────────────────────
-// Shows all orders with status=="Executed" for the current symbol.
-// lParam: 1 = BUY side, 2 = SELL side  (used by NM_CUSTOMDRAW for colouring).
+// ── Open-orders + executions list refresh ─────────────────────────────────────
+// Renders this window's currently open (editable) orders first — bold,
+// "QTY @ PRICE" — sourced from state->openOrdersSummary (refreshed only by
+// Market_SyncOrderRows() on real order-state changes; never queried here),
+// followed by every already-executed order for the current symbol, exactly
+// as before.
+// lParam per row: 1 = BUY execution, 2 = SELL execution, 3 = BUY open order
+// (bold), 4 = SELL open order (bold) — see NM_CUSTOMDRAW below.
 static void Market_RefreshExec(HWND hWnd, TsState* state) {
     if (!state || !state->hExecList) return;
 
@@ -1431,8 +1473,28 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
     ListView_DeleteAllItems(hList);
 
-    auto orders = api().getExecutions();
     int row = 0;
+
+    // ── Open orders (bold) ───────────────────────────────────────────────────
+    for (const auto& o : state->openOrdersSummary) {
+        bool isBuy = (o.action == "BUY");
+
+        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem  = row;
+        lvi.lParam = isBuy ? 3 : 4;
+        lvi.pszText = (LPSTR)o.action.c_str();
+        ListView_InsertItem(hList, &lvi);
+
+        std::string quoteStr = (o.price > 0)
+            ? std::format("{:.0f} @ {:.2f}", o.qty, o.price)
+            : std::format("{:.0f} @ MKT", o.qty);
+        ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
+
+        ++row;
+    }
+
+    // ── Executions (as before) ───────────────────────────────────────────────
+    auto orders = api().getExecutions();
     for (const auto& o : orders) {
         if (o.symbol != state->symbol) continue;
 
@@ -1931,9 +1993,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Seed immediately
         PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
         PostMessage(hWnd, WM_PNL_SINGLE, 0, (LPARAM)state->conId);
-        // Seed executions list from any already-loaded orders
-        Market_RefreshExec(hWnd, state);
-        // Seed the editable-orders panel from any already-loaded orders
+        // Seed the editable-orders panel, the open-orders summary, and the
+        // executions list from any already-loaded orders. Market_SyncOrderRows()
+        // populates state->openOrdersSummary and calls Market_RefreshExec()
+        // internally, so one call seeds everything.
         Market_SyncOrderRows(hWnd, state);
         UpdateMarketRegistry();
         Market_Layout(hWnd, state);
@@ -2296,15 +2359,22 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
                 case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
-                    // lParam stores 1=BUY (blue/green), 2=SELL (red)
+                    // lParam: 1=BUY execution, 2=SELL execution,
+                    // 3=BUY open order (bold), 4=SELL open order (bold).
                     LPARAM side = cd->nmcd.lItemlParam;
-                    COLORREF clr = (side == 1) ? COINS_CLR_BLUE : COINS_CLR_RED;
+                    bool isOpenOrder = (side == 3 || side == 4);
+                    bool isBuy       = (side == 1 || side == 3);
+                    COLORREF clr = isBuy ? COINS_CLR_BLUE : COINS_CLR_RED;
                     COLORREF bg  = darkMode
                         ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     cd->clrTextBk = bg;
                     cd->clrText   = clr;
+                    if (isOpenOrder) {
+                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
+                        return CDRF_NEWFONT;
+                    }
                     return CDRF_DODEFAULT;
                 }
             }
@@ -2340,6 +2410,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 // Editable-orders panel is stale without a live connection — drop it.
                 for (auto& row : state->orderRows) Market_DestroyOrderRow(row);
                 state->orderRows.clear();
+                state->openOrdersSummary.clear();
                 Market_Layout(hWnd, state);
                 state->l1Info = TradingAPI::L1Book{};
                 state->volHistory.clear();   // stale on disconnect — avoid a phantom ratio off a frozen history
