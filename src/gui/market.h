@@ -1486,8 +1486,8 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
         ListView_InsertItem(hList, &lvi);
 
         std::string quoteStr = (o.price > 0)
-            ? std::format("{:.0f} @ {:.2f}", o.qty, o.price)
-            : std::format("{:.0f} @ MKT", o.qty);
+            ? std::format("{:.0f} # {:.2f}", o.qty, o.price)
+            : std::format("{:.0f} # MKT", o.qty);
         ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
 
         ++row;
