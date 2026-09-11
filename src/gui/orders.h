@@ -197,12 +197,6 @@ static void Orders_LayoutPanel(HWND hWnd, bool showPanel) {
     if (show) UpdatePriceLabel(hWnd);
 }
 
-// Returns true if the given status string allows modification.
-static bool Orders_IsEditable(const std::string& status) {
-    return !(status == "Filled" || status == "Cancelled" ||
-             status == "Inactive" || status == "PendingCancel");
-}
-
 static void SetOrdersTitle(HWND hWnd, const std::vector<TradingAPI::OrderInfo>& orders) {
     int submitted = (int)unsentOrders.size();
     int filled = 0;
@@ -293,7 +287,7 @@ static void Orders_Repopulate(HWND hWnd) {
         bool stillEditable = false;
         for (const auto& o : orders) {
             if (o.orderId == s_editState.orderId) {
-                stillEditable = Orders_IsEditable(o.status);
+                stillEditable = api().orderIsEditable(o.status);
                 break;
             }
         }
@@ -347,7 +341,7 @@ static void Orders_MoveSelection(HWND hWnd, int dir) {
     auto orders = api().getOrdersSorted();
     for (const auto& o : orders) {
         if (o.orderId == orderId) {
-            if (Orders_IsEditable(o.status))
+            if (api().orderIsEditable(o.status))
                 makeSelection();
             break;
         }
@@ -762,7 +756,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 for (const auto& o : orders) {
                     if (o.orderId == orderId) {
                         found = true;
-                        if (Orders_IsEditable(o.status))
+                        if (api().orderIsEditable(o.status))
                             Orders_ShowInlinePanel(hWnd, o);
                         else
                             Orders_HideInlinePanel(hWnd);

@@ -279,6 +279,8 @@ public:
 
     // ── Orders ────────────────────────────────────────────────────────────────
 
+    bool orderIsEditable(const std::string& status) const;
+    int getOpenOrdersCount() const;
     void cancelOrders(int coinId);
     std::vector<OrderInfo> getOrdersSorted();
     std::vector<OrderInfo> getExecutions();

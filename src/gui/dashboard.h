@@ -82,6 +82,7 @@ struct DashboardState {
     
     // Box 2: Positions & Margin
     HWND hCoin_Positions = NULL;
+    HWND hCoin_Orders = NULL;
     HWND hCoin_Unrealized = NULL;
     HWND hCoin_Dividends = NULL;
     HWND hCoin_Accruals = NULL;
@@ -101,6 +102,7 @@ struct DashboardState {
     COLORREF speakerColor = COINS_CLR_GRAY;
     COLORREF bigPnlColor = COINS_CLR_GREEN;
     COLORREF pctColor = COINS_CLR_GREEN;
+    COLORREF orderColor = COINS_CLR_GRAY;
     COLORREF realizedColor = COINS_CLR_GRAY;
     COLORREF unrealizedColor = COINS_CLR_GRAY;
     COLORREF dividendsColor = COINS_CLR_PURPLE;
@@ -419,11 +421,12 @@ static bool SetWindowTextWIfChanged(HWND hWnd, const std::wstring& newText) {
 }
 
 void Coins_UpdateLabels(HWND hWnd) {
-    auto   summary    = api().getAccountSummary();
-    double daily      = api().getDailyPnL();
-    double unrealized = api().getUnrealizedPnL();
-    double realized   = api().getRealizedPnL();
-    
+    auto   summary      = api().getAccountSummary();
+    double daily        = api().getDailyPnL();
+    double unrealized   = api().getUnrealizedPnL();
+    double realized     = api().getRealizedPnL();
+    int openOrdersCount = api().getOpenOrdersCount();
+
     std::string prevCurrency = dashboardState.currencyDashboard;
     dashboardState.currencyDashboard = "--";
     auto tryParse = [&](const std::string& k) -> double {
@@ -451,6 +454,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     int y2 = y1 + box1H + 9;
     int box2H = 124;
     int y3 = y2 + box2H + 9;
+    const int boxW = 226;
 
     if (dashboardState.hCoin_NetLiq) {
         std::string formattedNum = FormatWithCommas(NetLiquidation, dashboardState.fullDetails);
@@ -460,6 +464,15 @@ void Coins_UpdateLabels(HWND hWnd) {
         }
     }
 
+    if (dashboardState.hCoin_Orders) {
+        std::string formattedNum = std::to_string(openOrdersCount);
+        if (SetWindowTextIfChanged(dashboardState.hCoin_Orders, formattedNum)) {
+            int w2 = Coins_GetTextWidth(hWnd, hFont11ptbold.get(), formattedNum.c_str());
+            SetWindowPos(dashboardState.hCoin_Orders, NULL, m + boxW - 30, y2, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            dashboardState.orderColor = openOrdersCount ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
+        }
+    }
+    
     COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (dashboardState.hCoin_BigPnL) {
         std::string formattedNum = FormatWithCommas(daily);
@@ -967,6 +980,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 m + 77, y2 - 4, 30, 18, hWnd, NULL, hInst, NULL);
             SendMessage(dashboardState.hCoin_Positions, WM_SETFONT, (WPARAM)hFont14ptbold.get(), TRUE);
 
+            dashboardState.hCoin_Orders = CreateWindowA("STATIC", "--",
+                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOTIFY,
+                m + boxW - 30, y2, 20, 18, hWnd, NULL, hInst, NULL);
+            SendMessage(dashboardState.hCoin_Orders, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
             // Row 1: Unrealized: 0.00
             HWND hLblUnrealized = CreateWindowA("STATIC", "Unrealized:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -1393,6 +1411,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             else if (hCtrl == dashboardState.hCoin_EUR) clr = dashboardState.eurColor;
             else if (hCtrl == dashboardState.hCoin_USD) clr = dashboardState.usdColor;
             else if (hCtrl == dashboardState.hCoin_Lock) clr = dashboardState.lockColor;
+            else if (hCtrl == dashboardState.hCoin_Orders) clr = dashboardState.orderColor;
 
             HDC hdc = (HDC)wParam;
             SetTextColor(hdc, clr);
