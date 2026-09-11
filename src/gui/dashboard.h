@@ -1230,7 +1230,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         EnsureGatewayLoggedIn(hWnd);
                     }
                     int port = std::filesystem::path(pathGateway).filename() == "ibgateway.exe" ? 4001 : 7496;
-                    api().connect(port , clientIdGateway, groupIdGateway);
+                    api().connect("127.0.0.1", port , clientIdGateway, groupIdGateway);
                 } else if (!dashboardState.shouldBeConnected && api().isConnected()) {
                     api().disconnect();
                 }

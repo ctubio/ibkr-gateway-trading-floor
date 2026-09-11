@@ -263,7 +263,7 @@ public:
 
     // ── Connection ────────────────────────────────────────────────────────────
 
-    bool connect(int port, int clientId = 0, int groupId = 4);
+    bool connect(std::string address, int port, int clientId = 0, int groupId = 4);
     void disconnect();
     bool isConnected()           const;
     bool isMarketDataConnected() const;
