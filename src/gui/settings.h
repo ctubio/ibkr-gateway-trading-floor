@@ -33,12 +33,6 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_PASSWORD           4020
 #define ID_SETTINGS_LOCK               4021
 
-static HWND hSettingBox1 = NULL;
-static HWND hSettingBox2 = NULL;
-static HWND hSettingBox3 = NULL;
-static HWND hSettingBox4 = NULL;
-static HWND hSettingBox5 = NULL;
-static HWND hGatewayEdit = NULL;
 static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 
 // ─── Debug Log ────────────────────────────────────────────────────────────────
@@ -119,7 +113,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             int y  = m;
 
             // ── Gateway ──────────────────────────────────────────────────────
-            hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
+            HWND hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 250,
                 hWnd, NULL, hInst, NULL);
@@ -143,7 +137,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 m + gm, y + 70, gw, 22,
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH, hInst, NULL);
 
-            hGatewayEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            HWND hGatewayEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_READONLY,
                 m + gm, y + 98, gw, 20,
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
@@ -202,7 +196,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 258;
 
             // ── Display ──────────────────────────────────────────────────────
-            hSettingBox2 = CreateWindowA("BUTTON", "Display:",
+            HWND hSettingBox2 = CreateWindowA("BUTTON", "Display:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 m, y, w, 14 + (30 * 3),
                 hWnd, NULL, hInst, NULL);
@@ -234,7 +228,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y = m;
 
             // ── Trading ────────────────────────────────────────────────────── (column 2)
-            hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
+            HWND hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 col2_x, y, w, 37 * 5,
                 hWnd, NULL, hInst, NULL);
@@ -268,7 +262,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hSafetyEdit, std::format("{:.2f}", safetyGateway).c_str());
             
             // ── Audio ────────────────────────────────────────────────────────
-            hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
+            HWND hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 col2_x, y, w, 14 + (30 * 2),
                 hWnd, NULL, hInst, NULL);
@@ -327,7 +321,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 82;
 
             // ── System Tools ─────────────────────────────────────────── (column 2)
-            hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
+            HWND hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                 col2_x, y, w, 78,
                 hWnd, NULL, hInst, NULL);
@@ -355,7 +349,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
 
         case WM_DESTROY:
-            hSettingBox1 = hSettingBox2 = hSettingBox3 = hSettingBox4 = hSettingBox5 = hDebugEdit = NULL;
+            settingsVoices.clear();
             break;
 
         case WM_COMMAND:

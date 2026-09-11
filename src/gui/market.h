@@ -198,6 +198,8 @@ struct TsState {
     // ── Alerts ────────────────────────────────────────────────────────────────
     bool hasAlert = false;   // true if this symbol has an Alert Up/Down set — colors the flag icon yellow
 
+    int lastTimeSec = 0;
+
     // ── Order entry bar ───────────────────────────────────────────────────────
     HWND  hOrderLabel       = NULL;
     HWND  hOrderPrice       = NULL;
@@ -234,8 +236,6 @@ struct TsState {
     HBITMAP hbmHeader    = NULL;
 };
 static std::map<HWND, TsState*> tsStates;
-
-static int lastTimeSec = 0;
 
 // Recomputes hTotalLabel (price × qty notional) for one editable-order row.
 static void Market_UpdateOrderRowTotalLabel(MarketOrderRow& row) {
@@ -286,187 +286,6 @@ static std::vector<HWND> Market_BuildTabOrder(TsState* state) {
         for (HWND h : barOrder) if (h) order.push_back(h);
     }
     return order;
-}
-
-void Market_Layout_HideBar(HWND hWnd, TsState* state);
-static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side);
-
-// Subclass for one editable-order row's Price/Qty edits.
-//   uIdSubclass == 1 → price (step 0.01, 2 dec)
-//   uIdSubclass == 2 → qty   (step 1,    0 dec)
-// ENTER modifies the order in place; ESC cancels every order for this symbol
-// (same as the window's own ESC handler); TAB cycles through
-// Market_BuildTabOrder(); UP/DOWN step the value like every other price/qty
-// edit in this app.
-static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
-    HWND hEdit, UINT msg, WPARAM wParam, LPARAM lParam,
-    UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
-{
-    if (msg == WM_GETDLGCODE)
-        return DefSubclassProc(hEdit, msg, wParam, lParam)
-               | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
-
-    if (msg == WM_CHAR) {
-        if (wParam == VK_ESCAPE || wParam == VK_TAB || wParam == VK_RETURN)
-            return 0;
-    }
-
-    if (msg == WM_KEYDOWN) {
-        HWND hMarket = GetParent(hEdit);
-        auto it = tsStates.find(hMarket);
-        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
-        MarketOrderRow* row = nullptr;
-        if (st) {
-            for (auto& r : st->orderRows) {
-                if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) { row = &r; break; }
-            }
-        }
-
-        if (wParam == VK_ESCAPE) {
-            if (st) api().cancelOrders(st->conId);
-            return 0;
-        }
-        if (row && wParam == VK_RETURN) {
-            char pBuf[32] = {}, qBuf[32] = {};
-            GetWindowTextA(row->hPriceEdit, pBuf, sizeof(pBuf));
-            double price = atof(pBuf);
-            double qty   = row->originalQty;
-            if (!row->partialFill) {
-                GetWindowTextA(row->hQtyEdit, qBuf, sizeof(qBuf));
-                qty = std::abs(atof(qBuf));
-            }
-            if (price > 0.0 && qty > 0.0)
-                api().modifyOrder(row->orderId, price, qty);
-            return 0;
-        }
-        if (st && wParam == VK_TAB) {
-            std::vector<HWND> order = Market_BuildTabOrder(st);
-            HWND hNext = nullptr;
-            for (size_t i = 0; i < order.size(); ++i) {
-                if (order[i] == hEdit) { hNext = order[(i + 1) % order.size()]; break; }
-            }
-            if (hNext) {
-                SetFocus(hNext);
-                int len = GetWindowTextLengthA(hNext);
-                SendMessageA(hNext, EM_SETSEL, len, len);
-            }
-            return 0;
-        }
-        if (row && (wParam == VK_UP || wParam == VK_DOWN)) {
-            char buf[32] = {};
-            GetWindowTextA(hEdit, buf, sizeof(buf));
-            double val = atof(buf);
-            if (uIdSubclass == 2) val = std::abs(val);
-            double step;
-            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) step = (uIdSubclass == 1) ? 1.0 : 10.0;
-            else                                        step = (uIdSubclass == 1) ? 0.01 : 1.0;
-            val += (wParam == VK_UP) ? step : -step;
-            if (val < 0.0) val = 0.0;
-            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val)
-                                                : std::format(" {:+}", val * (row->action == "BUY" ? 1 : -1));
-            SetWindowTextA(hEdit, s.c_str());
-            int len = GetWindowTextLengthA(hEdit);
-            SendMessageA(hEdit, EM_SETSEL, len, len);
-            Market_UpdateOrderRowTotalLabel(*row);
-            InvalidateRect(hEdit, NULL, TRUE);
-            return 0;
-        }
-        if (wParam == VK_CONTROL) {
-            if (st) {
-                bool isRight = (lParam & (1 << 24)) != 0;
-                if (isRight) {
-                    if (st->orderBarVisible && st->orderSide == "SELL") {
-                        Market_Layout_HideBar(hMarket, st);
-                    } else {
-                        OrderBar_Show(hMarket, st, "SELL");
-                    }
-                } else {
-                    if (st->orderBarVisible && st->orderSide == "BUY") {
-                        Market_Layout_HideBar(hMarket, st);
-                    } else {
-                        OrderBar_Show(hMarket, st, "BUY");
-                    }
-                }
-            }
-        }
-    }
-
-    // Plain hover (no button held) can't change the selection — skip it so
-    // we don't force a repaint on every hover pixel (mirrors market.h/orders.h).
-    if (msg == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
-        return DefSubclassProc(hEdit, msg, wParam, lParam);
-
-    if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hEdit, MarketOrderRow_EditSubclassProc, uIdSubclass);
-
-    LRESULT res = DefSubclassProc(hEdit, msg, wParam, lParam);
-
-    // Re-assert this row's hint labels on top after anything that could've
-    // changed the edit's selection/focus (mouse click/drag, etc.) — same fix
-    // as Market_RedrawHintsFor() for the order-bar edits.
-    {
-        HWND hMarket = GetParent(hEdit);
-        auto it = tsStates.find(hMarket);
-        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
-        if (st) {
-            for (auto& r : st->orderRows) {
-                if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) {
-                    auto redraw = [](HWND h) { if (h && IsWindowVisible(h)) { InvalidateRect(h, NULL, TRUE); UpdateWindow(h); } };
-                    redraw(r.hTotalLabel);
-                    redraw(r.hQtyTifLabel);
-                    break;
-                }
-            }
-        }
-    }
-    return res;
-}
-
-// Creates one editable-order row's controls (unpositioned — Market_LayoutOrderRows
-// places them) and pre-fills price/qty from the given order snapshot, mirroring
-// Orders_ShowInlinePanel() in orders.h minus its hOrderTypeHint label.
-static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const TradingAPI::OrderInfo& o) {
-    MarketOrderRow row;
-    row.orderId     = o.orderId;
-    row.action      = o.action;
-    row.orderType   = o.orderType;
-    row.tif         = o.tif;
-    row.partialFill = (o.status == "Partially Filled");
-    row.originalQty = o.totalQty;
-    std::string tifLabel = "";
-    std::string typeLabel = "";
-    if (!o.tif.empty() && o.tif != "GTC") tifLabel = std::string(1, o.tif.front());
-    if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = std::string(1, o.orderType.front());
-
-    row.hPriceEdit = CreateWindowA("EDIT", "",
-        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
-        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-    row.hQtyEdit = CreateWindowA("EDIT", "",
-        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_LEFT | ES_MULTILINE | ES_NUMBER,
-        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-    row.hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",
-        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
-        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-    row.hQtyTifLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", (tifLabel + typeLabel).c_str(),
-        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
-        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-
-    SendMessage(row.hPriceEdit,    WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-    SendMessage(row.hQtyEdit,      WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-    SendMessage(row.hTotalLabel,   WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
-    SendMessage(row.hQtyTifLabel,  WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
-
-    SetWindowSubclass(row.hPriceEdit, MarketOrderRow_EditSubclassProc, 1, 0);
-    SetWindowSubclass(row.hQtyEdit,   MarketOrderRow_EditSubclassProc, 2, 0);
-
-    std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
-    SetWindowTextA(row.hPriceEdit, priceStr.c_str());
-    std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
-    SetWindowTextA(row.hQtyEdit, (" " + qtyStr).c_str());
-
-    SetFocus(row.hPriceEdit);
-
-    return row;
 }
 
 static LRESULT CALLBACK Market_ListForwardCtrlProc(
@@ -994,84 +813,6 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
 }
 
-// Forward declaration: Market_SyncOrderRows() (below) needs to call this
-// after refreshing state->openOrdersSummary. The full definition (which also
-// renders the executed-orders rows) lives further down this file.
-static void Market_RefreshExec(HWND hWnd, TsState* state);
-
-// Rebuilds state->orderRows from api().getOrdersSorted(), keeping it limited
-// to editable orders (api().orderIsEditable()) belonging to this window's
-// conId (falling back to a symbol match for the rare case an order hasn't
-// had its conId populated yet — mirrors Market_RefreshExec's symbol match).
-// Existing rows are matched by orderId and left with their current
-// price/qty text untouched (the user may be mid-edit) — only metadata
-// (tif/orderType/partialFill) is refreshed. Rows for orders that disappeared
-// (filled/cancelled/no longer editable) are destroyed; rows for newly
-// editable orders are created and pre-filled fresh. Always relays out, since
-// the row count (and therefore hTsList's height) may have changed.
-static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
-    if (!state) return;
-    HINSTANCE hInst = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
-
-    auto orders = api().getOrdersSorted();
-    std::vector<TradingAPI::OrderInfo> matched;
-    for (auto& o : orders) {
-        if (!api().orderIsEditable(o.status)) continue;
-        bool matches = (state->conId > 0 && o.conId == state->conId) ||
-                       (o.conId <= 0 && !o.symbol.empty() && o.symbol == state->symbol);
-        if (matches) matched.push_back(o);
-    }
-
-    // ── Feed hExecList's bold "open orders" rows from the same `matched` ────
-    // list above — no extra API call. getOrdersSorted() already orders by
-    // priority (submitted/partial first) then orderId desc, so the bold rows
-    // land in that order at the top of the exec list.
-    state->openOrdersSummary.clear();
-    state->openOrdersSummary.reserve(matched.size());
-    for (auto& o : matched) {
-        MarketOpenOrderSummary sum;
-        sum.orderId = o.orderId;
-        sum.action  = o.action;
-        sum.qty     = o.totalQty;
-        sum.price   = o.price;
-        state->openOrdersSummary.push_back(sum);
-    }
-    Market_RefreshExec(hWnd, state);
-
-    std::unordered_set<int> matchedIds;
-    for (auto& o : matched) matchedIds.insert(o.orderId);
-
-    for (int i = (int)state->orderRows.size() - 1; i >= 0; --i) {
-        if (!matchedIds.count(state->orderRows[i].orderId)) {
-            Market_DestroyOrderRow(state->orderRows[i]);
-            state->orderRows.erase(state->orderRows.begin() + i);
-        }
-    }
-
-    for (auto& o : matched) {
-        MarketOrderRow* existing = nullptr;
-        for (auto& row : state->orderRows) {
-            if (row.orderId == o.orderId) { existing = &row; break; }
-        }
-        if (existing) {
-            existing->partialFill = (o.status == "Partially Filled");
-            existing->originalQty = o.totalQty;
-            existing->orderType   = o.orderType;
-            existing->tif         = o.tif;
-            std::string tifLabel = "";
-            std::string typeLabel = "";
-            if (!o.tif.empty() && o.tif != "GTC") tifLabel = o.tif; // std::string(1, o.tif.front());
-            if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = o.orderType; // std::string(1, o.orderType.front());
-            SetWindowTextA(existing->hQtyTifLabel,  (tifLabel + typeLabel).c_str());
-            InvalidateRect(existing->hQtyTifLabel,  NULL, TRUE);
-        } else {
-            state->orderRows.push_back(Market_CreateOrderRow(hWnd, hInst, o));
-        }
-    }
-
-    Market_Layout(hWnd, state);
-}
-
 void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hOrderLabel, SW_HIDE);
     ShowWindow(state->hOrderPrice, SW_HIDE);
@@ -1087,6 +828,25 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     state->orderBarVisible = false;
     Market_TrimTimeSalesLists(state);
     Market_Layout(hWnd, state);
+}
+
+// Helper: handles Ctrl+Left/Right to toggle BUY/SELL order bar.
+// isRight = true for right Ctrl (SELL), false for left Ctrl (BUY).
+static void Market_HandleCtrlOrderBar(HWND hWnd, TsState* state, bool isRight) {
+    if (!state) return;
+    if (isRight) {
+        if (state->orderBarVisible && state->orderSide == "SELL") {
+            Market_Layout_HideBar(hWnd, state);
+        } else {
+            OrderBar_Show(hWnd, state, "SELL");
+        }
+    } else {
+        if (state->orderBarVisible && state->orderSide == "BUY") {
+            Market_Layout_HideBar(hWnd, state);
+        } else {
+            OrderBar_Show(hWnd, state, "BUY");
+        }
+    }
 }
 
 // Subclass for the order-bar price and qty edit controls.
@@ -1237,19 +997,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
         if (wParam == VK_CONTROL) {
             if (st) {
                 bool isRight = (lParam & (1 << 24)) != 0;
-                if (isRight) {
-                    if (st->orderBarVisible && st->orderSide == "SELL") {
-                        Market_Layout_HideBar(hMarket, st);
-                    } else {
-                        OrderBar_Show(hMarket, st, "SELL");
-                    }
-                } else {
-                    if (st->orderBarVisible && st->orderSide == "BUY") {
-                        Market_Layout_HideBar(hMarket, st);
-                    } else {
-                        OrderBar_Show(hMarket, st, "BUY");
-                    }
-                }
+                Market_HandleCtrlOrderBar(hMarket, st, isRight);
             }
         }
         // Any other key (Left/Right/Home/End/Shift+Arrow, etc.) falls
@@ -1273,6 +1021,172 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
     LRESULT res = DefSubclassProc(hWnd, msg, wParam, lParam);
     Market_RedrawHintsFor(hWnd);
     return res;
+}
+
+// Subclass for one editable-order row's Price/Qty edits.
+//   uIdSubclass == 1 → price (step 0.01, 2 dec)
+//   uIdSubclass == 2 → qty   (step 1,    0 dec)
+// ENTER modifies the order in place; ESC cancels every order for this symbol
+// (same as the window's own ESC handler); TAB cycles through
+// Market_BuildTabOrder(); UP/DOWN step the value like every other price/qty
+// edit in this app.
+static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
+    HWND hEdit, UINT msg, WPARAM wParam, LPARAM lParam,
+    UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
+{
+    if (msg == WM_GETDLGCODE)
+        return DefSubclassProc(hEdit, msg, wParam, lParam)
+               | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
+
+    if (msg == WM_CHAR) {
+        if (wParam == VK_ESCAPE || wParam == VK_TAB || wParam == VK_RETURN)
+            return 0;
+    }
+
+    if (msg == WM_KEYDOWN) {
+        HWND hMarket = GetParent(hEdit);
+        auto it = tsStates.find(hMarket);
+        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
+        MarketOrderRow* row = nullptr;
+        if (st) {
+            for (auto& r : st->orderRows) {
+                if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) { row = &r; break; }
+            }
+        }
+
+        if (wParam == VK_ESCAPE) {
+            if (st) api().cancelOrders(st->conId);
+            return 0;
+        }
+        if (row && wParam == VK_RETURN) {
+            char pBuf[32] = {}, qBuf[32] = {};
+            GetWindowTextA(row->hPriceEdit, pBuf, sizeof(pBuf));
+            double price = atof(pBuf);
+            double qty   = row->originalQty;
+            if (!row->partialFill) {
+                GetWindowTextA(row->hQtyEdit, qBuf, sizeof(qBuf));
+                qty = std::abs(atof(qBuf));
+            }
+            if (price > 0.0 && qty > 0.0)
+                api().modifyOrder(row->orderId, price, qty);
+            return 0;
+        }
+        if (st && wParam == VK_TAB) {
+            std::vector<HWND> order = Market_BuildTabOrder(st);
+            HWND hNext = nullptr;
+            for (size_t i = 0; i < order.size(); ++i) {
+                if (order[i] == hEdit) { hNext = order[(i + 1) % order.size()]; break; }
+            }
+            if (hNext) {
+                SetFocus(hNext);
+                int len = GetWindowTextLengthA(hNext);
+                SendMessageA(hNext, EM_SETSEL, len, len);
+            }
+            return 0;
+        }
+        if (row && (wParam == VK_UP || wParam == VK_DOWN)) {
+            char buf[32] = {};
+            GetWindowTextA(hEdit, buf, sizeof(buf));
+            double val = atof(buf);
+            if (uIdSubclass == 2) val = std::abs(val);
+            double step;
+            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) step = (uIdSubclass == 1) ? 1.0 : 10.0;
+            else                                        step = (uIdSubclass == 1) ? 0.01 : 1.0;
+            val += (wParam == VK_UP) ? step : -step;
+            if (val < 0.0) val = 0.0;
+            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val)
+                                                : std::format(" {:+}", val * (row->action == "BUY" ? 1 : -1));
+            SetWindowTextA(hEdit, s.c_str());
+            int len = GetWindowTextLengthA(hEdit);
+            SendMessageA(hEdit, EM_SETSEL, len, len);
+            Market_UpdateOrderRowTotalLabel(*row);
+            InvalidateRect(hEdit, NULL, TRUE);
+            return 0;
+        }
+        if (wParam == VK_CONTROL) {
+            if (st) {
+                bool isRight = (lParam & (1 << 24)) != 0;
+                Market_HandleCtrlOrderBar(hMarket, st, isRight);
+            }
+        }
+    }
+
+    // Plain hover (no button held) can't change the selection — skip it so
+    // we don't force a repaint on every hover pixel (mirrors market.h/orders.h).
+    if (msg == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
+        return DefSubclassProc(hEdit, msg, wParam, lParam);
+
+    if (msg == WM_NCDESTROY)
+        RemoveWindowSubclass(hEdit, MarketOrderRow_EditSubclassProc, uIdSubclass);
+
+    LRESULT res = DefSubclassProc(hEdit, msg, wParam, lParam);
+
+    // Re-assert this row's hint labels on top after anything that could've
+    // changed the edit's selection/focus (mouse click/drag, etc.) — same fix
+    // as Market_RedrawHintsFor() for the order-bar edits.
+    {
+        HWND hMarket = GetParent(hEdit);
+        auto it = tsStates.find(hMarket);
+        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
+        if (st) {
+            for (auto& r : st->orderRows) {
+                if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) {
+                    auto redraw = [](HWND h) { if (h && IsWindowVisible(h)) { InvalidateRect(h, NULL, TRUE); UpdateWindow(h); } };
+                    redraw(r.hTotalLabel);
+                    redraw(r.hQtyTifLabel);
+                    break;
+                }
+            }
+        }
+    }
+    return res;
+}
+
+// Creates one editable-order row's controls (unpositioned — Market_LayoutOrderRows
+// places them) and pre-fills price/qty from the given order snapshot, mirroring
+// Orders_ShowInlinePanel() in orders.h minus its hOrderTypeHint label.
+static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const TradingAPI::OrderInfo& o) {
+    MarketOrderRow row;
+    row.orderId     = o.orderId;
+    row.action      = o.action;
+    row.orderType   = o.orderType;
+    row.tif         = o.tif;
+    row.partialFill = (o.status == "Partially Filled");
+    row.originalQty = o.totalQty;
+    std::string tifLabel = "";
+    std::string typeLabel = "";
+    if (!o.tif.empty() && o.tif != "GTC") tifLabel = std::string(1, o.tif.front());
+    if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = std::string(1, o.orderType.front());
+
+    row.hPriceEdit = CreateWindowA("EDIT", "",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
+        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+    row.hQtyEdit = CreateWindowA("EDIT", "",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_LEFT | ES_MULTILINE | ES_NUMBER,
+        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+    row.hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",
+        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
+        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+    row.hQtyTifLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", (tifLabel + typeLabel).c_str(),
+        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
+        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+
+    SendMessage(row.hPriceEdit,    WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+    SendMessage(row.hQtyEdit,      WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+    SendMessage(row.hTotalLabel,   WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
+    SendMessage(row.hQtyTifLabel,  WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
+
+    SetWindowSubclass(row.hPriceEdit, MarketOrderRow_EditSubclassProc, 1, 0);
+    SetWindowSubclass(row.hQtyEdit,   MarketOrderRow_EditSubclassProc, 2, 0);
+
+    std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
+    SetWindowTextA(row.hPriceEdit, priceStr.c_str());
+    std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
+    SetWindowTextA(row.hQtyEdit, (" " + qtyStr).c_str());
+
+    SetFocus(row.hPriceEdit);
+
+    return row;
 }
 
 // ── Search Popup ──────────────────────────────────────────────────────────────
@@ -1549,6 +1463,79 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
 
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     InvalidateRect(hList, NULL, FALSE);
+}
+
+// Rebuilds state->orderRows from api().getOrdersSorted(), keeping it limited
+// to editable orders (api().orderIsEditable()) belonging to this window's
+// conId (falling back to a symbol match for the rare case an order hasn't
+// had its conId populated yet — mirrors Market_RefreshExec's symbol match).
+// Existing rows are matched by orderId and left with their current
+// price/qty text untouched (the user may be mid-edit) — only metadata
+// (tif/orderType/partialFill) is refreshed. Rows for orders that disappeared
+// (filled/cancelled/no longer editable) are destroyed; rows for newly
+// editable orders are created and pre-filled fresh. Always relays out, since
+// the row count (and therefore hTsList's height) may have changed.
+static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
+    if (!state) return;
+    HINSTANCE hInst = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
+
+    auto orders = api().getOrdersSorted();
+    std::vector<TradingAPI::OrderInfo> matched;
+    for (auto& o : orders) {
+        if (!api().orderIsEditable(o.status)) continue;
+        bool matches = (state->conId > 0 && o.conId == state->conId) ||
+                       (o.conId <= 0 && !o.symbol.empty() && o.symbol == state->symbol);
+        if (matches) matched.push_back(o);
+    }
+
+    // ── Feed hExecList's bold "open orders" rows from the same `matched` ────
+    // list above — no extra API call. getOrdersSorted() already orders by
+    // priority (submitted/partial first) then orderId desc, so the bold rows
+    // land in that order at the top of the exec list.
+    state->openOrdersSummary.clear();
+    state->openOrdersSummary.reserve(matched.size());
+    for (auto& o : matched) {
+        MarketOpenOrderSummary sum;
+        sum.orderId = o.orderId;
+        sum.action  = o.action;
+        sum.qty     = o.totalQty;
+        sum.price   = o.price;
+        state->openOrdersSummary.push_back(sum);
+    }
+    Market_RefreshExec(hWnd, state);
+
+    std::unordered_set<int> matchedIds;
+    for (auto& o : matched) matchedIds.insert(o.orderId);
+
+    for (int i = (int)state->orderRows.size() - 1; i >= 0; --i) {
+        if (!matchedIds.count(state->orderRows[i].orderId)) {
+            Market_DestroyOrderRow(state->orderRows[i]);
+            state->orderRows.erase(state->orderRows.begin() + i);
+        }
+    }
+
+    for (auto& o : matched) {
+        MarketOrderRow* existing = nullptr;
+        for (auto& row : state->orderRows) {
+            if (row.orderId == o.orderId) { existing = &row; break; }
+        }
+        if (existing) {
+            existing->partialFill = (o.status == "Partially Filled");
+            existing->originalQty = o.totalQty;
+            existing->orderType   = o.orderType;
+            existing->tif         = o.tif;
+            std::string tifLabel = "";
+            std::string typeLabel = "";
+            if (!o.tif.empty() && o.tif != "GTC") tifLabel = o.tif; // std::string(1, o.tif.front());
+            if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = o.orderType; // std::string(1, o.orderType.front());
+            SetWindowTextA(existing->hQtyTifLabel,  (tifLabel + typeLabel).c_str());
+            InvalidateRect(existing->hQtyTifLabel,  NULL, TRUE);
+        } else {
+            state->orderRows.push_back(Market_CreateOrderRow(hWnd, hInst, o));
+        }
+    }
+
+    Market_Layout(hWnd, state);
 }
 
 // ── Header paint ──────────────────────────────────────────────────────────────
@@ -2070,19 +2057,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         if (wParam == VK_CONTROL) {
             bool isRight = (lParam & (1 << 24)) != 0;
-            if (isRight) {
-                if (state->orderBarVisible && state->orderSide == "SELL") {
-                    Market_Layout_HideBar(hWnd, state);
-                } else {
-                    OrderBar_Show(hWnd, state, "SELL");
-                }
-            } else {
-                if (state->orderBarVisible && state->orderSide == "BUY") {
-                    Market_Layout_HideBar(hWnd, state);
-                } else {
-                    OrderBar_Show(hWnd, state, "BUY");
-                }
-            }
+            Market_HandleCtrlOrderBar(hWnd, state, isRight);
         }
         break;
     }
@@ -2267,7 +2242,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
                 else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
             }
-            lastTimeSec = TimeToSeconds(tick->time);
+            state->lastTimeSec = TimeToSeconds(tick->time);
             if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
             if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
@@ -2350,8 +2325,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     LPARAM itemParam = cd->nmcd.lItemlParam;
                     COLORREF rowColor = static_cast<COLORREF>(itemParam & 0xFFFFFFFF);
                     int tickTimeSec = static_cast<int>(itemParam >> 32);
-                    if (cd->iSubItem == 0) {
-                        int diff = lastTimeSec - tickTimeSec;
+                    if (state && cd->iSubItem == 0) {
+                        int diff = state->lastTimeSec - tickTimeSec;
                         if (diff < 0) diff += 86400;
                         bool isMatch = (diff >= 0 && diff <= 1);
                         if (isMatch) {
