@@ -27,6 +27,7 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
 #define ID_M_EXIT       1102
+#define ID_M_EXIT_SOFT  1103
 
 #define ID_M_MARKET_BASE 1500
 #define ID_M_MARKET_MAX   100
@@ -125,7 +126,7 @@ void MutexGatewayInstance() {
             DWORD processId;
             GetWindowThreadProcessId(existingWnd, &processId);
 
-            PostMessage(existingWnd, WM_COMMAND, ID_M_EXIT, 0);
+            PostMessage(existingWnd, WM_COMMAND, ID_M_EXIT_SOFT, 0);
 
             HANDLE hProcess = OpenProcess(SYNCHRONIZE | PROCESS_TERMINATE, FALSE, processId);
             if (hProcess) {
@@ -1438,6 +1439,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     SendMessage(hWnd, WM_TIMER, TIMER_WATCHDOG, 0);
                     break;
 
+                case ID_M_EXIT_SOFT:
+                    killGatewayOnExit = false;
                 case ID_M_EXIT:
                     DestroyWindow(hWnd);
                     break;

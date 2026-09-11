@@ -303,7 +303,6 @@ BOOL CALLBACK EnumTWSMainWindowProc(HWND hWnd, LPARAM lParam) {
     }
     return TRUE;
 }
-
 void KillGateway() {
     if (!killGatewayOnExit || pathGateway.empty()) return;
 
