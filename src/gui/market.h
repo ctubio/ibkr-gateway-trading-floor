@@ -2050,6 +2050,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SetFocus(state->hOrderPrice);
                 int len = GetWindowTextLengthA(state->hOrderPrice);
                 SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
+            } else {
+                for (auto& row : state->orderRows) {
+                    if (row.hPriceEdit) {
+                        SetFocus(row.hPriceEdit);
+                        int len = GetWindowTextLengthA(row.hPriceEdit);
+                        SendMessageA(row.hPriceEdit, EM_SETSEL, len, len);
+                        break;
+                    }
+                }
             }
             return 0;
         }
