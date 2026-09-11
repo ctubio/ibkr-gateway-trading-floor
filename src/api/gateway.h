@@ -76,6 +76,11 @@
 #define WM_OPEN_ORDERS_WINDOW (WM_USER + 15) // Posted from background thread (e.g. HTTP server) to the
                                               // Dashboard window to request opening the Orders window on the UI thread.
 #define WM_SHOW_ALERT (WM_USER + 16)
+#define WM_MARKET_ORDERS_UPDATE (WM_USER + 17) // Broadcast to every open Market window whenever any
+                                                // order's status/fields may have changed (openOrder,
+                                                // openOrderEnd, orderStatus, completedOrdersEnd,
+                                                // execDetailsEnd), so each window's inline editable-orders
+                                                // panel (market.h) can resync via api().getOrdersSorted().
 
 static const char* DASHBOARD_CLASS_NAME          = "Dashboard" GATEWAY_NAME;
 static const char* DIAMONDS_CLASS_NAME           = "Diamonds" GATEWAY_NAME;
