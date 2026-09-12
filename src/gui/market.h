@@ -102,15 +102,6 @@ static const int ORDER_BAR_H = 84;
 static const ULONGLONG VOL_RATE_RECENT_MS   = 15000ULL;    // 15s recent window
 static const ULONGLONG VOL_RATE_BASELINE_MS = 300000ULL;   // 5 min baseline window (includes recent slice until pruned)
 
-// State mapped per-window to support infinite instances safely
-// ── Editable orders panel (bottom of hTsList column) ─────────────────────────
-// A small inline "form" — one row per currently editable order for this
-// Market window's symbol/conId — styled like the OrdersEditState inline panel
-// in orders.h (price + qty edits on one line, with 3 transparent hint labels
-// overlaid on top of them), minus orders.h's hOrderTypeHint label. Kept in
-// sync with TWS via Market_SyncOrderRows(), called whenever this window
-// receives WM_MARKET_ORDERS_UPDATE (broadcast from ibkr.cpp on any order
-// status change) or WM_API_UPDATE (connect/disconnect).
 static const int MARKET_ORDER_ROW_H = 44;   // per-row height, matches Orders.h's EDIT_PANEL_H
 
 struct MarketOrderRow {
@@ -121,6 +112,7 @@ struct MarketOrderRow {
     HWND   hQtyTifLabel  = NULL;   // top-left of Qty: time-in-force hint
     bool   partialFill   = false;
     double originalQty   = 0.0;
+    double trailStopPrice = 0.0;
     std::string action;      // "BUY" or "SELL" — drives price-edit background + hint colors
     std::string orderType;
     std::string tif;
@@ -133,8 +125,9 @@ struct MarketOrderRow {
 struct MarketOpenOrderSummary {
     int orderId = 0;
     std::string action;   // "BUY" or "SELL"
-    double qty   = 0.0;
+    double totalQty   = 0.0;
     double price = 0.0;
+    double trailStopPrice = 0.0;
 };
 
 struct TsState {
@@ -229,8 +222,6 @@ struct TsState {
     std::vector<MarketOrderRow> orderRows;
 
     // ── Open-orders summary feeding hExecList's bold rows ─────────────────────
-    // Refreshed only by Market_SyncOrderRows() (i.e. only on real order-state
-    // changes) — never polled — and consumed by Market_RefreshExec().
     std::vector<MarketOpenOrderSummary> openOrdersSummary;
 
     Sparkline sparkline;
@@ -249,17 +240,13 @@ static void Market_UpdateOrderRowTotalLabel(MarketOrderRow& row) {
     GetWindowTextA(row.hQtyEdit,   qtyBuf,   sizeof(qtyBuf));
     double price = 0.0, qty = 0.0;
     try {
-        price = std::stod(priceBuf);
+        price = row.trailStopPrice ? row. trailStopPrice : std::stod(priceBuf);
         qty   = std::abs(std::stod(qtyBuf));
     } catch (...) { price = 0.0; qty = 0.0; }
     if (SetWindowTextAIfChanged(row.hTotalLabel, FormatWithCommas(price * qty)))
         InvalidateRect(row.hQtyEdit, NULL, TRUE);
 }
 
-// Destroys one row's controls. Only call this while the parent Market window
-// is still alive (e.g. from Market_SyncOrderRows) — during WM_DESTROY the
-// parent's own destruction already tears these down, so that handler just
-// clears the vector instead (see WndProcMarket's WM_DESTROY).
 static void Market_DestroyOrderRow(MarketOrderRow& row) {
     if (row.hPriceEdit)    DestroyWindow(row.hPriceEdit);
     if (row.hQtyEdit)      DestroyWindow(row.hQtyEdit);
@@ -333,8 +320,8 @@ static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 // ── Executions column definitions ─────────────────────────────────────────────
 struct ExecCol { const char* header; int width; int fmt; };
 static const ExecCol execCols[] = {
-    { "Side",  0, LVCFMT_CENTER },
-    { "Quote", 105, LVCFMT_CENTER  },
+    { "Side",    0, LVCFMT_CENTER },
+    { "Quote", 118, LVCFMT_CENTER },
 };
 static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 
@@ -1201,6 +1188,7 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
     row.tif         = o.tif;
     row.partialFill = (o.status == "Partially Filled");
     row.originalQty = o.totalQty;
+    row.trailStopPrice = o.trailStopPrice;
     std::string tifLabel = "";
     std::string typeLabel = "";
     if (!o.tif.empty() && o.tif != "GTC") tifLabel = std::string(1, o.tif.front());
@@ -1447,8 +1435,7 @@ static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* updat
 
 // ── Open-orders + executions list refresh ─────────────────────────────────────
 // Renders this window's currently open (editable) orders first — bold,
-// "QTY @ PRICE" — sourced from state->openOrdersSummary (refreshed only by
-// Market_SyncOrderRows() on real order-state changes; never queried here),
+// "QTY @ PRICE" — sourced from state->openOrdersSummary,
 // followed by every already-executed order for the current symbol, exactly
 // as before.
 // lParam per row: 1 = BUY execution, 2 = SELL execution, 3 = BUY open order
@@ -1471,10 +1458,14 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
         lvi.lParam = isBuy ? 3 : 4;
         lvi.pszText = (LPSTR)o.action.c_str();
         ListView_InsertItem(hList, &lvi);
+        std::string quoteStr;
+        if (o.trailStopPrice > 0.0)
+            quoteStr += std::format("{:.2f} | {:.2f}", o.trailStopPrice, o.price);//quoteStr += std::format("{:.0f} @ {:.2f} | {:.2f}", o.totalQty, o.trailStopPrice, o.price);
+        else if (o.price > 0)
+            quoteStr = std::format("{:.2f}", o.price);//quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.price);
+        else
+            quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
 
-        std::string quoteStr = (o.price > 0)
-            ? std::format("{:.0f} # {:.2f}", o.qty, o.price)
-            : std::format("{:.0f} # MKT", o.qty);
         ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
 
         ++row;
@@ -1546,8 +1537,9 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
         MarketOpenOrderSummary sum;
         sum.orderId = o.orderId;
         sum.action  = o.action;
-        sum.qty     = o.totalQty;
+        sum.totalQty= o.totalQty;
         sum.price   = o.price;
+        sum.trailStopPrice   = o.trailStopPrice;
         state->openOrdersSummary.push_back(sum);
     }
     Market_RefreshExec(hWnd, state);
@@ -1572,12 +1564,29 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
             existing->originalQty = o.totalQty;
             existing->orderType   = o.orderType;
             existing->tif         = o.tif;
+
+            // Refresh price/qty from the live order — but never while the user is
+            // actively typing in that field.
+            if (existing->hPriceEdit && GetFocus() != existing->hPriceEdit) {
+                std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
+                if (SetWindowTextAIfChanged(existing->hPriceEdit, priceStr))
+                    CenterEditText(existing->hPriceEdit);
+            }
+            if (existing->hQtyEdit && !existing->partialFill && GetFocus() != existing->hQtyEdit) {
+                std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
+                if (SetWindowTextAIfChanged(existing->hQtyEdit, qtyStr))
+                    CenterEditText(existing->hQtyEdit);
+            }
+
             std::string tifLabel = "";
             std::string typeLabel = "";
-            if (!o.tif.empty() && o.tif != "GTC") tifLabel = o.tif; // std::string(1, o.tif.front());
-            if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = o.orderType; // std::string(1, o.orderType.front());
+            //if (!o.tif.empty() && o.tif != "GTC") tifLabel = o.tif;
+            //if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = o.orderType;
+            if (!o.tif.empty() && o.tif != "GTC") tifLabel = std::string(1, o.tif.front());
+            if (!o.orderType.empty() && o.orderType != "LMT") typeLabel = std::string(1, o.orderType.front());
             SetWindowTextA(existing->hQtyTifLabel,  (tifLabel + typeLabel).c_str());
             InvalidateRect(existing->hQtyTifLabel,  NULL, TRUE);
+            Market_UpdateOrderRowTotalLabel(*existing); // keep the notional hint in sync too
         } else {
             state->orderRows.push_back(Market_CreateOrderRow(hWnd, hInst, o));
         }
@@ -2083,10 +2092,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Seed immediately
         PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
         PostMessage(hWnd, WM_PNL_SINGLE, 0, (LPARAM)state->conId);
-        // Seed the editable-orders panel, the open-orders summary, and the
-        // executions list from any already-loaded orders. Market_SyncOrderRows()
-        // populates state->openOrdersSummary and calls Market_RefreshExec()
-        // internally, so one call seeds everything.
+        // Seed the editable-orders panel
         Market_SyncOrderRows(hWnd, state);
         UpdateMarketRegistry();
         Market_Layout(hWnd, state);
