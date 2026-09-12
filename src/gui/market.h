@@ -608,6 +608,15 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     MoveWindow(state->hTsList,      tsX,                        bodyY,                     leftW,  tsListH, TRUE);
     MoveWindow(state->hTsListF100,  tsX + leftW + splitThick,   bodyY,                     rightW, topH,  TRUE);
     MoveWindow(state->hTsListF1000, tsX + leftW + splitThick,   bodyY + topH + splitThick, rightW, botH,  TRUE);
+    
+    // LVS_NOSCROLL doesn't reliably clear an already-shown scrollbar after a
+    // resize (e.g. restoring from the minimized state, where these lists were
+    // squeezed to near-zero height while still holding a full set of rows).
+    // Force it hidden explicitly.
+    ShowScrollBar(state->hL2List,      SB_VERT, FALSE);
+    ShowScrollBar(state->hTsList,      SB_VERT, FALSE);
+    ShowScrollBar(state->hTsListF100,  SB_VERT, FALSE);
+    ShowScrollBar(state->hTsListF1000, SB_VERT, FALSE);
 
     Market_LayoutOrderRows(state, tsX, bodyY + tsListH, leftW);
 
@@ -1892,6 +1901,7 @@ static void Market_Minimize(HWND hWnd, TsState* state) {
     GetWindowRect(hWnd, &windowRect);
     MoveWindow(hWnd, windowRect.left, windowRect.top, windowMarketWidth, state->minimized ? (windowRect.bottom - windowRect.top) - clientRect.bottom + HEADER_H : windowMarketHeight, TRUE);
     state->marketHdrDirty = true;
+    Market_Layout(hWnd, state);
 }
 
 static void Market_ToggleTTS(HWND hWnd, TsState* state) {
