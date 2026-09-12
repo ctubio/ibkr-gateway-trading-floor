@@ -63,7 +63,9 @@ static bool diamondsChkVisible = false;
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
 enum DiamondColIdx {
-    DCOL_SYMBOL = 0,
+    DCOL_FAKE = 0,
+    DCOL_MKTVAL,
+    DCOL_SYMBOL,
     DCOL_POSITION,
     DCOL_AVGPRICE,
     DCOL_ALERT,
@@ -78,7 +80,6 @@ enum DiamondColIdx {
     DCOL_CHG26WEEK,
     DCOL_CHG52WEEK,
     DCOL_UNREALIZED_PL,
-    DCOL_MKTVAL,
     DCOL_DIV_YIELD,
     DCOL_DIV_DATE,
     DCOL_DIV_AMT,
@@ -169,6 +170,8 @@ static bool diamondsDirty = false;
 
 struct DiamondCol { const char* header; int width; int fmt; };
 static const DiamondCol diamondCols[] = {
+    { "Fake",               0, LVCFMT_RIGHT },
+    { "Value",             70, LVCFMT_RIGHT },
     { "Symbol",            90, LVCFMT_LEFT  },
     { "Position",         110, LVCFMT_RIGHT },
     { "AvgPx",             85, LVCFMT_RIGHT },
@@ -184,7 +187,6 @@ static const DiamondCol diamondCols[] = {
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
     { "Unrealized",        85, LVCFMT_RIGHT },
-    { "Value",             70, LVCFMT_RIGHT },
     { "Yield %",           90, LVCFMT_RIGHT },
     { "Date",             125, LVCFMT_RIGHT },
     { "Amount",            85, LVCFMT_RIGHT },
