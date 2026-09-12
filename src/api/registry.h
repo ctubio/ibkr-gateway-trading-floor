@@ -20,6 +20,7 @@ static bool killGatewayOnExit  = false;
 static bool fullScreenAlerts   = false;
 static std::string pathGateway = "";
 static std::string lockScreen  = "";
+static std::string addressGateway  = "";
 static int clientIdGateway     = 0;
 static int groupIdGateway      = 0;
 static int qtyGateway          = 0.0;

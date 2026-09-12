@@ -5,7 +5,7 @@
 // The outer window (title bar + borders) adds ~36px horizontally and ~30px vertically, giving a
 // total size of 596x713.
 int WindowSettingsWidth = 543;
-int WindowSettingsHeight = 405;
+int WindowSettingsHeight = 430;
 
 void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", WindowSettingsWidth, WindowSettingsHeight); }
 
@@ -32,6 +32,7 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_USERNAME           4019
 #define ID_SETTINGS_PASSWORD           4020
 #define ID_SETTINGS_LOCK               4021
+#define ID_SETTINGS_ADDRESS            4022
 
 static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 
@@ -115,7 +116,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Gateway ──────────────────────────────────────────────────────
             HWND hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 250,
+                m, y, w, 280,
                 hWnd, NULL, hInst, NULL);
             SetWindowSubclass(hSettingBox1, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(hSettingBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -143,22 +144,32 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
             SetWindowTextA(hGatewayEdit, pathGateway.c_str());
 
-            CreateWindowA("STATIC", "Username:",
+            CreateWindowA("STATIC", "Address:",
                 WS_CHILD | WS_VISIBLE,
                 m + gm, y + 128, 72, 20,
                 hWnd, NULL, hInst, NULL);
-            HWND hUsernameEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            HWND hAddressEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 m + gm + 76, y + 125, 147, 26,
+                hWnd, (HMENU)ID_SETTINGS_ADDRESS, hInst, NULL);
+            SetWindowTextA(hAddressEdit, addressGateway.c_str());
+
+            CreateWindowA("STATIC", "Username:",
+                WS_CHILD | WS_VISIBLE,
+                m + gm, y + 158, 72, 20,
+                hWnd, NULL, hInst, NULL);
+            HWND hUsernameEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                m + gm + 76, y + 155, 147, 26,
                 hWnd, (HMENU)ID_SETTINGS_USERNAME, hInst, NULL);
             
             CreateWindowA("STATIC", "Password:",
                 WS_CHILD | WS_VISIBLE,
-                m + gm, y + 158, 72, 20,
+                m + gm, y + 188, 72, 20,
                 hWnd, NULL, hInst, NULL);
             HWND hPasswordEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
-                m + gm + 76, y + 155, 147, 26,
+                m + gm + 76, y + 185, 147, 26,
                 hWnd, (HMENU)ID_SETTINGS_PASSWORD, hInst, NULL);
 
             // ── Populate from Windows Credential Manager (if previously saved) ────────
@@ -173,11 +184,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Client ID — passed as the second parameter to api().connect().
             CreateWindowA("STATIC", "Client ID:",
                 WS_CHILD | WS_VISIBLE,
-                m + gm, y + 188, 72, 20,
+                m + gm, y + 218, 72, 20,
                 hWnd, NULL, hInst, NULL);
             HWND hClientIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                m + gm + 76, y + 185, 80, 26,
+                m + gm + 76, y + 215, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_CLIENT_ID, hInst, NULL);
             SetWindowTextA(hClientIdEdit, std::format("{}", clientIdGateway).c_str());
 
@@ -185,46 +196,74 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // subscribeToGroupEvents()/updateDisplayGroup().
             CreateWindowA("STATIC", "Group ID:",
                 WS_CHILD | WS_VISIBLE,
-                m + gm, y + 218, 72, 20,
+                m + gm, y + 248, 72, 20,
                 hWnd, NULL, hInst, NULL);
             HWND hGroupIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                m + gm + 76, y + 215, 80, 26,
+                m + gm + 76, y + 245, 80, 26,
                 hWnd, (HMENU)ID_SETTINGS_GROUP_ID, hInst, NULL);
             SetWindowTextA(hGroupIdEdit, std::format("{}", groupIdGateway).c_str());
 
-            y += 258;
+            y += 288;
 
-            // ── Display ──────────────────────────────────────────────────────
-            HWND hSettingBox2 = CreateWindowA("BUTTON", "Display:",
+            // ── Audio ────────────────────────────────────────────────────────
+            HWND hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 14 + (30 * 3),
+                m, y, w, 14 + (30 * 2),
                 hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SetWindowSubclass(hSettingBox3, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
+            HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 m + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
-            SendMessage(hChkDark, darkMode ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+                hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
+            SendMessage(hChkSounds, playSounds ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
-            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 44, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
-            SendMessage(hChkAlerts, fullScreenAlerts ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
-                
-            CreateWindowA("STATIC", "Lock:",
+            // ── TTS Voice selector ───────────────────────────────────────────
+            CreateWindowA("STATIC", "Voice:",
                 WS_CHILD | WS_VISIBLE,
-                m + gm, y + 70, 72, 20,
+                m + gm, y + 44, 40, 20,
                 hWnd, NULL, hInst, NULL);
-            HWND hLockEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
-                m + gm + 76, y + 67, 147, 26,
-                hWnd, (HMENU)ID_SETTINGS_LOCK, hInst, NULL);
-            SetWindowTextA(hLockEdit, lockScreen.c_str());
-            //y += 114;
+
+            HWND hVoiceCombo = CreateWindowA("COMBOBOX", "",
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+                m + gm + 44, y + 42, gw - 44, 200,
+                hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
+
+            // Enumerate all system voices and fill the combo
+            settingsVoices = TTS_EnumerateVoices();
+            std::string savedTokenA = Settings_LoadTtsVoice();
+            std::wstring savedToken(savedTokenA.begin(), savedTokenA.end());
+
+            int selectIdx = -1;      // index to pre-select
+            int herenaIdx = -1;      // fallback: first Herena/Catalan entry
+
+            for (int i = 0; i < (int)settingsVoices.size(); ++i) {
+                const auto& v = settingsVoices[i];
+                SendMessageW(hVoiceCombo, CB_ADDSTRING, 0, (LPARAM)v.display.c_str());
+
+                if (!savedToken.empty() && v.tokenId == savedToken)
+                    selectIdx = i;
+
+                if (herenaIdx < 0 &&
+                    (TTS_ContainsCI(v.tokenId.c_str(),  L"herena") ||
+                    TTS_ContainsCI(v.display.c_str(),  L"herena")  ||
+                    TTS_ContainsCI(v.tokenId.c_str(),  L"helena")  ||
+                    TTS_ContainsCI(v.display.c_str(),  L"helena")  ||
+                    TTS_ContainsCI(v.tokenId.c_str(),  L"ca-es")   ||
+                    TTS_ContainsCI(v.display.c_str(),  L"ca-es")   ||
+                    TTS_ContainsCI(v.tokenId.c_str(),  L"catalan") ||
+                    TTS_ContainsCI(v.display.c_str(),  L"catalan")))
+                    herenaIdx = i;
+            }
+
+            // If nothing saved yet, default to first Herena-Catalan found
+            if (selectIdx < 0) selectIdx = (herenaIdx >= 0) ? herenaIdx : 0;
+            if (!settingsVoices.empty())
+                SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
+
+            //y += 82;
             y = m;
 
             // ── Trading ────────────────────────────────────────────────────── (column 2)
@@ -261,64 +300,37 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hRiskEdit,   std::format("{:.2f}", riskGateway).c_str());
             SetWindowTextA(hSafetyEdit, std::format("{:.2f}", safetyGateway).c_str());
             
-            // ── Audio ────────────────────────────────────────────────────────
-            HWND hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
+            // ── Display ──────────────────────────────────────────────────────
+            HWND hSettingBox2 = CreateWindowA("BUTTON", "Display:",
                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 14 + (30 * 2),
+                col2_x, y, w, 14 + (30 * 3),
                 hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox3, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
+            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
-            HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
+            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 col2_x + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
-            SendMessage(hChkSounds, playSounds ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
+            SendMessage(hChkDark, darkMode ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
-            // ── TTS Voice selector ───────────────────────────────────────────
-            CreateWindowA("STATIC", "Voice:",
+            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                col2_x + gm, y + 44, gw, 22,
+                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
+            SendMessage(hChkAlerts, fullScreenAlerts ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+                
+            CreateWindowA("STATIC", "Lock:",
                 WS_CHILD | WS_VISIBLE,
-                col2_x + gm, y + 44, 40, 20,
+                col2_x + gm, y + 70, 72, 20,
                 hWnd, NULL, hInst, NULL);
+            HWND hLockEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
+                col2_x + gm + 76, y + 67, 147, 26,
+                hWnd, (HMENU)ID_SETTINGS_LOCK, hInst, NULL);
+            SetWindowTextA(hLockEdit, lockScreen.c_str());
 
-            HWND hVoiceCombo = CreateWindowA("COMBOBOX", "",
-                WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-                col2_x + gm + 44, y + 42, gw - 44, 200,
-                hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
-
-            // Enumerate all system voices and fill the combo
-            settingsVoices = TTS_EnumerateVoices();
-            std::string savedTokenA = Settings_LoadTtsVoice();
-            std::wstring savedToken(savedTokenA.begin(), savedTokenA.end());
-
-            int selectIdx = -1;      // index to pre-select
-            int herenaIdx = -1;      // fallback: first Herena/Catalan entry
-
-            for (int i = 0; i < (int)settingsVoices.size(); ++i) {
-                const auto& v = settingsVoices[i];
-                SendMessageW(hVoiceCombo, CB_ADDSTRING, 0, (LPARAM)v.display.c_str());
-
-                if (!savedToken.empty() && v.tokenId == savedToken)
-                    selectIdx = i;
-
-                if (herenaIdx < 0 &&
-                    (TTS_ContainsCI(v.tokenId.c_str(),  L"herena") ||
-                    TTS_ContainsCI(v.display.c_str(),  L"herena")  ||
-                    TTS_ContainsCI(v.tokenId.c_str(),  L"helena")  ||
-                    TTS_ContainsCI(v.display.c_str(),  L"helena")  ||
-                    TTS_ContainsCI(v.tokenId.c_str(),  L"ca-es")   ||
-                    TTS_ContainsCI(v.display.c_str(),  L"ca-es")   ||
-                    TTS_ContainsCI(v.tokenId.c_str(),  L"catalan") ||
-                    TTS_ContainsCI(v.display.c_str(),  L"catalan")))
-                    herenaIdx = i;
-            }
-
-            // If nothing saved yet, default to first Herena-Catalan found
-            if (selectIdx < 0) selectIdx = (herenaIdx >= 0) ? herenaIdx : 0;
-            if (!settingsVoices.empty())
-                SendMessage(hVoiceCombo, CB_SETCURSEL, selectIdx, 0);
-
-            y += 82;
+            y += 114;
 
             // ── System Tools ─────────────────────────────────────────── (column 2)
             HWND hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
@@ -394,6 +406,18 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     clientIdGateway = atoi(buf);
                 }
                 Settings_Save("ClientId", clientIdGateway);
+            }
+            if ((LOWORD(wParam) == ID_SETTINGS_ADDRESS)) {
+                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_ADDRESS);
+                int len = GetWindowTextLength(hEdit);
+                if (len > 0) {
+                    char buf[len + 1];
+                    GetWindowTextA(hEdit, buf, len + 1);
+                    addressGateway = std::string(buf);
+                } else {
+                    addressGateway = std::string("127.0.0.1");
+                }
+                Settings_SaveString("IPAddress", addressGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);

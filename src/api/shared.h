@@ -645,9 +645,10 @@ static void LoadRegistrySettings() {
     autoGateway       = Settings_Load("Gateway_AutoStart",  0) != 0;
     fullScreenAlerts  = Settings_Load("FullScreenAlerts",   0) != 0;
     pathGateway       = GetGatewayPath();
-    lockScreen        = Settings_LoadString("Lock", "");
-    clientIdGateway   = (int)Settings_Load("ClientId", 0);
-    groupIdGateway    = (int)Settings_Load("GroupId",  4);
+    lockScreen        = Settings_LoadString("Lock",        "");
+    clientIdGateway   = (int)Settings_Load("ClientId",      0);
+    addressGateway    = Settings_LoadString("IPAddress", "127.0.0.1");
+    groupIdGateway    = (int)Settings_Load("GroupId",        4);
     qtyGateway        = (int)Settings_Load("OrderQty",      20);
     stopGateway       = Settings_LoadFloat("StopPrice",   1.0f);
     profitGateway     = Settings_LoadFloat("ProfitPrice", 2.0f);
