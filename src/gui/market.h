@@ -1895,6 +1895,9 @@ static void Market_Minimize(HWND hWnd, TsState* state) {
         std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
         Settings_Minimize_Save(windowKey.c_str(), state->minimized ? 1 : 0);
     }
+    if (state->orderBarVisible && state->minimized) {
+        Market_Layout_HideBar(hWnd, state);
+    }
     RECT windowRect, clientRect; 
     GetWindowRect(hWnd, &windowRect);
     GetClientRect(hWnd, &clientRect);
