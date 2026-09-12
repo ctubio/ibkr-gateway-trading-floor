@@ -435,7 +435,7 @@ void Coins_UpdateLabels(HWND hWnd) {
 
     if (dashboardState.hCoin_NetLiq) {
         std::string formattedNum = FormatWithCommas(NetLiquidation, dashboardState.fullDetails);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_NetLiq, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_NetLiq, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
             SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
@@ -443,7 +443,7 @@ void Coins_UpdateLabels(HWND hWnd) {
 
     if (dashboardState.hCoin_Orders) {
         std::string formattedNum = std::to_string(openOrdersCount);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Orders, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Orders, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont11ptbold.get(), formattedNum.c_str());
             SetWindowPos(dashboardState.hCoin_Orders, NULL, m + boxW - 30, y2, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
             dashboardState.orderColor = openOrdersCount ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
@@ -454,7 +454,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (dashboardState.hCoin_BigPnL) {
         std::string formattedNum = FormatWithCommas(daily);
         if (daily >= 0.0) formattedNum = "+" + formattedNum;
-        if (SetWindowTextIfChanged(dashboardState.hCoin_BigPnL, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_BigPnL, formattedNum)) {
             dashboardState.bigPnlColor = pnlClr;
         }
     }
@@ -462,13 +462,13 @@ void Coins_UpdateLabels(HWND hWnd) {
         double pct = (NetLiquidation != 0.0) ? (daily / NetLiquidation * 100.0) : 0.0;
         std::string formattedNum = FormatWithCommas(pct);
         if (pct >= 0.0) formattedNum = "+" + formattedNum;
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Pct, std::format("{}%", formattedNum))) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Pct, std::format("{}%", formattedNum))) {
             dashboardState.pctColor = pnlClr;
         }
     }
     if (dashboardState.hCoin_Realized) {
         std::string formattedNum = FormatWithCommas(realized);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Realized, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Realized, formattedNum)) {
             COLORREF clr = realized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
             dashboardState.realizedColor = clr;
         }
@@ -477,14 +477,14 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (dashboardState.hCoin_Positions) {
         double grossPos = tryParse("GrossPositionValue");
         std::string formattedNum = FormatWithCommas(grossPos, dashboardState.fullDetails);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Positions, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Positions, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
             SetWindowPos(dashboardState.hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
     if (dashboardState.hCoin_Unrealized) {
         std::string formattedNum = FormatWithCommas(unrealized, dashboardState.fullDetails);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Unrealized, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Unrealized, formattedNum)) {
             COLORREF clr = unrealized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
             dashboardState.unrealizedColor = clr;
         }
@@ -492,14 +492,14 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (dashboardState.hCoin_Dividends) {
         double div = tryParse("AccruedDividend");
         std::string formattedNum = FormatWithCommas(div);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Dividends, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Dividends, formattedNum)) {
             dashboardState.dividendsColor = COINS_CLR_PURPLE;
         }
     }
     if (dashboardState.hCoin_Accruals) {
         double acc = tryParse("AccruedCash");
         std::string formattedNum = FormatWithCommas(acc);
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Accruals, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Accruals, formattedNum)) {
             COLORREF clr = acc > 0.0 ? COINS_CLR_GREEN : (acc < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
             dashboardState.accrualsColor = clr;
         }
@@ -507,18 +507,18 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (dashboardState.hCoin_BuyingPower) {
         double bp = tryParse("BuyingPower");
         std::string formattedNum = FormatWithCommas(bp, dashboardState.fullDetails);
-        SetWindowTextIfChanged(dashboardState.hCoin_BuyingPower, formattedNum);
+        SetWindowTextAIfChanged(dashboardState.hCoin_BuyingPower, formattedNum);
     }
     if (dashboardState.hCoin_MaintMargin) {
         double mm = tryParse("MaintMarginReq");
         std::string formattedNum = FormatWithCommas(mm, dashboardState.fullDetails);
-        SetWindowTextIfChanged(dashboardState.hCoin_MaintMargin, formattedNum);
+        SetWindowTextAIfChanged(dashboardState.hCoin_MaintMargin, formattedNum);
     }
 
     if (dashboardState.hCoin_Cash) {
         double cash = tryParse("CashBalance");
         std::string formattedNum = FormatWithCommas(cash, dashboardState.fullDetails) + " " + dashboardState.currencyDashboard;
-        if (SetWindowTextIfChanged(dashboardState.hCoin_Cash, formattedNum)) {
+        if (SetWindowTextAIfChanged(dashboardState.hCoin_Cash, formattedNum)) {
             COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
             dashboardState.cashColor = clr;
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
