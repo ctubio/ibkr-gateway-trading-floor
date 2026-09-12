@@ -506,16 +506,15 @@ static const int LC_MARGIN  = 4;    // left margin and gap between icon and stat
 // therefore bodyH/panelTop too.
 static void Market_LayoutOrderRows(TsState* state, int panelX, int panelTop, int panelW) {
     const int editH      = 37;
-    const int margin     = 4;
     const int gap        = 4;
     const int hintH      = 16;
     const int hintMargin = 4;
 
-    int totalEditsW = panelW - margin * 2 - gap;
+    int totalEditsW = panelW - gap;
     if (totalEditsW < 20) totalEditsW = 20;
     int priceW = totalEditsW / 2;
     int qtyW   = totalEditsW - priceW;
-    int priceX = panelX + margin;
+    int priceX = panelX;
     int qtyX   = priceX + priceW + gap;
 
     int hintW    = std::max(65, qtyW / 2 - 6);
@@ -525,20 +524,18 @@ static void Market_LayoutOrderRows(TsState* state, int panelX, int panelTop, int
         int rowTop = panelTop + (int)i * MARKET_ORDER_ROW_H;
         int editY  = rowTop + (MARKET_ORDER_ROW_H - editH) / 2;
 
-        if (row.hPriceEdit) {
-            SetWindowPos(row.hPriceEdit, NULL, priceX, editY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-            SetFocus(row.hPriceEdit);
-        }
+        if (row.hPriceEdit)
+            SetWindowPos(row.hPriceEdit, NULL, priceX, editY, priceW - 4, editH, SWP_NOZORDER | SWP_NOACTIVATE);
 
         bool showQty = !row.partialFill;
         if (row.hQtyEdit) {
-            SetWindowPos(row.hQtyEdit, NULL, qtyX, editY, qtyW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(row.hQtyEdit, NULL, qtyX - 4, editY, qtyW + 4, editH, SWP_NOZORDER | SWP_NOACTIVATE);
             ShowWindow(row.hQtyEdit, showQty ? SW_SHOW : SW_HIDE);
         }
-        if (row.hTotalLabel)
-            SetWindowPos(row.hTotalLabel, NULL, qtyX + qtyW - hintW - hintMargin, editY + editH - hintH - 2, hintW, hintH, SWP_NOZORDER | SWP_NOACTIVATE);
         if (row.hQtyTifLabel)
-            SetWindowPos(row.hQtyTifLabel, NULL, qtyX + qtyW - hintW - hintMargin, editY + 2, hintW, hintH, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(row.hQtyTifLabel, NULL, qtyX + hintMargin, editY + 2, hintW, hintH, SWP_NOZORDER | SWP_NOACTIVATE);
+        if (row.hTotalLabel)
+            SetWindowPos(row.hTotalLabel, NULL, qtyX + hintMargin, editY + editH - hintH - 2, hintW, hintH, SWP_NOZORDER | SWP_NOACTIVATE);
 
         CenterEditText(row.hPriceEdit);
         if (showQty) CenterEditText(row.hQtyEdit);
@@ -772,6 +769,23 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText, optStopColorChanged);
 }
 
+void Market_Focus_OrderRow(TsState* state) {
+    if (state->orderBarVisible && state->hOrderPrice) {
+        SetFocus(state->hOrderPrice);
+        int len = GetWindowTextLengthA(state->hOrderPrice);
+        SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
+    } else {
+        for (auto& row : state->orderRows) {
+            if (row.hPriceEdit) {
+                SetFocus(row.hPriceEdit);
+                int len = GetWindowTextLengthA(row.hPriceEdit);
+                SendMessageA(row.hPriceEdit, EM_SETSEL, len, len);
+                break;
+            }
+        }
+    }
+}
+
 static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     if (!state || !state->hOrderLabel) return;
     state->orderSide = side;
@@ -808,9 +822,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     Market_UpdateOrderRiskLabel(state);
 
     Market_Layout(hWnd, state);
-    SetFocus(state->hOrderPrice);
-    int len = GetWindowTextLengthA(state->hOrderPrice);
-    SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
+    Market_Focus_OrderRow(state);
 }
 
 void Market_Layout_HideBar(HWND hWnd, TsState* state) {
@@ -828,6 +840,7 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     state->orderBarVisible = false;
     Market_TrimTimeSalesLists(state);
     Market_Layout(hWnd, state);
+    Market_Focus_OrderRow(state);
 }
 
 // Helper: handles Ctrl+Left/Right to toggle BUY/SELL order bar.
@@ -1095,7 +1108,7 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
             std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val)
-                                                : std::format(" {:+}", val * (row->action == "BUY" ? 1 : -1));
+                                                : std::format("{:+}", val * (row->action == "BUY" ? 1 : -1));
             SetWindowTextA(hEdit, s.c_str());
             int len = GetWindowTextLengthA(hEdit);
             SendMessageA(hEdit, EM_SETSEL, len, len);
@@ -1162,13 +1175,13 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
         0, 0, 10, 10, hWnd, NULL, hInst, NULL);
     row.hQtyEdit = CreateWindowA("EDIT", "",
-        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_LEFT | ES_MULTILINE | ES_NUMBER,
-        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-    row.hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",
-        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_RIGHT | ES_MULTILINE | ES_NUMBER,
         0, 0, 10, 10, hWnd, NULL, hInst, NULL);
     row.hQtyTifLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", (tifLabel + typeLabel).c_str(),
-        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX,
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+        0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+    row.hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
         0, 0, 10, 10, hWnd, NULL, hInst, NULL);
 
     SendMessage(row.hPriceEdit,    WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
@@ -1182,7 +1195,7 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
     std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
     SetWindowTextA(row.hPriceEdit, priceStr.c_str());
     std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
-    SetWindowTextA(row.hQtyEdit, (" " + qtyStr).c_str());
+    SetWindowTextA(row.hQtyEdit, qtyStr.c_str());
 
     SetFocus(row.hPriceEdit);
 
@@ -2033,20 +2046,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (lockHotkeys) break;
         if (!state) break;
         if (wParam == VK_TAB) {
-            if (state->orderBarVisible && state->hOrderPrice) {
-                SetFocus(state->hOrderPrice);
-                int len = GetWindowTextLengthA(state->hOrderPrice);
-                SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
-            } else {
-                for (auto& row : state->orderRows) {
-                    if (row.hPriceEdit) {
-                        SetFocus(row.hPriceEdit);
-                        int len = GetWindowTextLengthA(row.hPriceEdit);
-                        SendMessageA(row.hPriceEdit, EM_SETSEL, len, len);
-                        break;
-                    }
-                }
-            }
+            Market_Focus_OrderRow(state);
             return 0;
         }
         if (wParam == VK_ESCAPE) {
