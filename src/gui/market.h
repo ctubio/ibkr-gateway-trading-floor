@@ -183,6 +183,7 @@ struct TsState {
     // Speech goes through the shared SharedTtsEngine (shared.h) now — this
     // window just tracks whether it currently holds a reference to it.
     bool      ttsOn        = false;
+    bool      minimized    = false;
     HWND      hSpeakerBtn  = NULL;
     HWND      hOVNButton   = NULL;
 
@@ -194,6 +195,7 @@ struct TsState {
     // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
     RECT lastPriceRect = { 0, 0, 0, 0 };
     RECT flaqRect      = { 0, 0, 0, 0 };
+    RECT locateRect    = { 0, 0, 0, 0 };
 
     // ── Alerts ────────────────────────────────────────────────────────────────
     bool hasAlert = false;   // true if this symbol has an Alert Up/Down set — colors the flag icon yellow
@@ -1745,10 +1747,16 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 SIZE iconSz;
                 GetTextExtentPoint32W(hdc, items[i].wIcon, lstrlenW(items[i].wIcon), &iconSz);
                 bool isFlagIcon = (wcscmp(items[i].wIcon, FLAG_GLYPH) == 0);
-                SetTextColor(hdc, (isFlagIcon && state->hasAlert) ? COINS_CLR_YELLOW : labelColor);
+                bool isLocateIcon = (wcscmp(items[i].wIcon, LOCATE_GLYPH) == 0);
                 RECT ir = { cx, y0, cx + iconSz.cx, y1 };
                 if (isFlagIcon) {
                     state->flaqRect = ir;
+                    SetTextColor(hdc, state->hasAlert ? COINS_CLR_YELLOW : labelColor);
+                } else if (isLocateIcon) {
+                    state->locateRect = ir;
+                    SetTextColor(hdc, state->minimized ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : labelColor);
+                } else {
+                    SetTextColor(hdc, labelColor);
                 }
                 DrawTextW(hdc, items[i].wIcon, -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                 cx += iconSz.cx + 2; // small gap after icon
@@ -1870,6 +1878,20 @@ static void Market_SpeakLast(TsState* state) {
     ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
     std::replace(ws.begin(), ws.end(), L'.', L',');
     SharedTts().Speak(ws);
+}
+
+static void Market_Minimize(HWND hWnd, TsState* state) {
+    state->minimized = !state->minimized;
+    if (!state->symbol.empty()) {
+        std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
+        Settings_Minimize_Save(windowKey.c_str(), state->minimized ? 1 : 0);
+    }
+    RECT windowRect, clientRect; 
+    GetWindowRect(hWnd, &windowRect);
+    GetClientRect(hWnd, &clientRect);
+    GetWindowRect(hWnd, &windowRect);
+    MoveWindow(hWnd, windowRect.left, windowRect.top, windowMarketWidth, state->minimized ? (windowRect.bottom - windowRect.top) - clientRect.bottom + HEADER_H : windowMarketHeight, TRUE);
+    state->marketHdrDirty = true;
 }
 
 static void Market_ToggleTTS(HWND hWnd, TsState* state) {
@@ -2035,6 +2057,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (Settings_Overnight_Load(windowKey.c_str(), 0)) {
                 state->isOvernight = false;
                 Market_ToggleOVN(hWnd, state);
+            }
+            if (Settings_Minimize_Load(windowKey.c_str(), 0)) {
+                state->minimized = false;
+                Market_Minimize(hWnd, state);
             }
         }
 
@@ -2468,7 +2494,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
             if (hit == 1 || hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
-            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt)) {
+            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt) || PtInRect(&state->locateRect, pt)) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
             }
@@ -2489,6 +2515,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
                     StartAlertEditor(state->symbol, state->conId);
+                } else if (PtInRect(&state->locateRect, pt)) {
+                    Market_Minimize(hWnd, state);
                 }
             }
         }

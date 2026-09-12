@@ -340,6 +340,14 @@ void Settings_Overnight_Save(const char* windowClassKey, DWORD value) {
     RegSetDword(windowClassKey, "OVERNIGHT", value);
 }
 
+DWORD Settings_Minimize_Load(const char* windowClassKey, DWORD defaultValue) {
+    return RegGetDword(windowClassKey, "Minimized", defaultValue);
+}
+
+void Settings_Minimize_Save(const char* windowClassKey, DWORD value) {
+    RegSetDword(windowClassKey, "Minimized", value);
+}
+
 void Settings_AlwaysOnTop_Save(const char* windowClassKey, DWORD value) {
     RegSetDword(windowClassKey, "AlwaysOnTop", value);
 }
