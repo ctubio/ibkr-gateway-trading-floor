@@ -608,7 +608,7 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     MoveWindow(state->hTsList,      tsX,                        bodyY,                     leftW,  tsListH, TRUE);
     MoveWindow(state->hTsListF100,  tsX + leftW + splitThick,   bodyY,                     rightW, topH,  TRUE);
     MoveWindow(state->hTsListF1000, tsX + leftW + splitThick,   bodyY + topH + splitThick, rightW, botH,  TRUE);
-    
+
     // LVS_NOSCROLL doesn't reliably clear an already-shown scrollbar after a
     // resize (e.g. restoring from the minimized state, where these lists were
     // squeezed to near-zero height while still holding a full set of rows).
@@ -2105,8 +2105,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
 
     case WM_KEYDOWN: {
-        if (lockHotkeys) break;
-        if (!state) break;
+        if (lockHotkeys || !state || state->minimized) break;
         if (wParam == VK_TAB) {
             Market_Focus_OrderRow(state);
             return 0;
