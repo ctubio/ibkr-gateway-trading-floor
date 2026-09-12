@@ -146,22 +146,28 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
+            int editH = 37;
+            int editW = 130;
+
             CreateWindowA("STATIC", "Alert Up:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                12, 16, 80, 20, hWnd, NULL, hInst, NULL);
+                12, 20, 80, 20, hWnd, NULL, hInst, NULL);
             HWND hUp = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                96, 12, 130, 24, hWnd, (HMENU)ID_ALERTS_UP_EDIT, hInst, NULL);
+                96, 12, editW, editH, hWnd, (HMENU)ID_ALERTS_UP_EDIT, hInst, NULL);
 
             CreateWindowA("STATIC", "Alert Down:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                12, 50, 80, 20, hWnd, NULL, hInst, NULL);
+                12, 20 + editH + 8, 80, 20, hWnd, NULL, hInst, NULL);
             HWND hDown = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                96, 46, 130, 24, hWnd, (HMENU)ID_ALERTS_DOWN_EDIT, hInst, NULL);
+                96, 12 + editH + 8, editW, editH, hWnd, (HMENU)ID_ALERTS_DOWN_EDIT, hInst, NULL);
 
             SetWindowSubclass(hUp,   AlertEditor_KeySubclassProc, 1, 0);
             SetWindowSubclass(hDown, AlertEditor_KeySubclassProc, 2, 0);
+
+            SendMessage(hUp,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+            SendMessage(hDown,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             break;
         }
 
@@ -185,7 +191,7 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 // if already open (e.g. for a different symbol), it's repointed at `symbol`
 // instead of a second window being created.
 void StartAlertEditor(const std::string& symbol, int conId) {
-    HWND hWnd = StartGenericWindow(ALERTS_EDITOR_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 250, 110);
+    HWND hWnd = StartGenericWindow(ALERTS_EDITOR_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 245, 135);
     if (hWnd) AlertEditor_Populate(hWnd, symbol, conId);
 }
 

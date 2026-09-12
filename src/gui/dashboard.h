@@ -1529,6 +1529,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             dashboardState.hCoin_Positions = dashboardState.hCoin_Unrealized = dashboardState.hCoin_Dividends = dashboardState.hCoin_Accruals = dashboardState.hCoin_BuyingPower = dashboardState.hCoin_MaintMargin = NULL;
             dashboardState.hCoin_Clock = dashboardState.hLblBP = dashboardState.hLblMM = dashboardState.hLblDividends = dashboardState.hLblAccruals = dashboardState.hCoinBox1 = dashboardState.hCoinBox2 = dashboardState.hCoinBox3 = dashboardState.hCoin_Cash = dashboardState.hCoin_EUR = dashboardState.hCoin_USD = NULL;
 
+            Settings_Market_CleanupOldWindows();
+            
             PostQuitMessage(0);
             break;
     }

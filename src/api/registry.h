@@ -990,8 +990,7 @@ static bool Market_ReadOpenDateDays(const std::string& windowKey, long& outDays)
 
 // Enumerates every "<MARKET_CLASS_NAME>_*" subkey under APP_REG_ROOT and
 // deletes (subtree + all its values) any whose stamped open date is older
-// than MARKET_REGISTRY_MAX_AGE_DAYS days. Call this whenever a Market window
-// closes, so stale per-symbol entries stop accumulating forever.
+// than MARKET_REGISTRY_MAX_AGE_DAYS days.
 void Settings_Market_CleanupOldWindows() {
     HKEY hRoot;
     if (RegOpenKeyExA(HKEY_CURRENT_USER, APP_REG_ROOT, 0, KEY_READ, &hRoot) != ERROR_SUCCESS)

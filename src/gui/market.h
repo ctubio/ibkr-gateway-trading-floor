@@ -215,6 +215,8 @@ struct TsState {
     HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
     HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
     HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
+    HWND  hOptStopTarget    = NULL;
+    HWND  hOptProfitTarget  = NULL;
     COLORREF rrColor        = COINS_CLR_ORANGE;
     COLORREF optQtyColor    = COINS_CLR_GRAY;
     COLORREF optStopColor   = COINS_CLR_GRAY;
@@ -480,8 +482,10 @@ static void Market_RedrawHintsFor(HWND hEdit) {
         redraw(state->hTotalLabel);
     } else if (hEdit == state->hOrderStopPrice) {
         redraw(state->hOptStopLabel);
+        redraw(state->hOptStopTarget);
     } else if (hEdit == state->hOrderProfitPrice) {
         redraw(state->hRRLabel);
+        redraw(state->hOptProfitTarget);
     }
 }
 
@@ -645,9 +649,17 @@ static void Market_Layout(HWND hWnd, TsState* state) {
 
             // Stop input: stop distance at target risk (bottom-right)
             SetWindowPos(state->hOptStopLabel, NULL, startX + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+            
+            // Stop input: stop distance at target risk (bottom-left)
+            SetWindowPos(state->hOptStopTarget, NULL, startX + hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Profit input: risk/reward ratio (bottom-left)
-            SetWindowPos(state->hRRLabel, NULL, startX + priceW + m + hintMargin, stopY + editH - hint1H - 2, 50, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(state->hRRLabel, NULL, startX + priceW + m + hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+
+            // Profit input: risk/reward ratio (bottom-right)
+            SetWindowPos(state->hOptProfitTarget, NULL, startX + priceW + m + priceW - hintW - hintMargin, stopY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
+            
+            
         }
 
         CenterEditText(state->hOrderPrice);
@@ -677,9 +689,14 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     double stopDist = std::atof(sBuf);
     double profitDist = std::atof(profitBuf);
     double stopDistOriginal = stopDist;
+    std::string profitTargetValueStr = "";
+    std::string stopTargetValueStr = "";
     if (price <= 0.0) {
         stopDist = state->orderSide == "BUY" ? state->l1Info.last - stopDist : stopDist - state->l1Info.last;
         profitDist = state->orderSide == "BUY" ? profitDist - state->l1Info.last : state->l1Info.last - profitDist;
+    } else {
+        stopTargetValueStr = std::format("{:.2f}", state->orderSide == "BUY" ? price - stopDist : price + stopDist);
+        profitTargetValueStr = std::format("{:.2f}", state->orderSide == "BUY" ? price + profitDist : price - profitDist);
     }
 
     // ── hTotalLabel: Notional value only ─────────────────────────────────────
@@ -689,7 +706,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
 
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
-    // 1) Loss @ stop distance — bottom-left of Price input
+    // Loss @ stop distance — bottom-left of Price input
     std::string lossPctStr = "--", lossValueStr = "!!";
     if (stopDist > 0.0 && qty > 0.0) {
         double lossDollars = stopDist * qty;
@@ -699,7 +716,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         lossValueStr = "--";
     }
 
-    // 2) Profit @ profit distance — bottom-right of Price input
+    // Profit @ profit distance — bottom-right of Price input
     std::string profitPctStr = "--", profitValueStr = "--";
     if (profitDist > 0.0 && qty > 0.0) {
         double profitDollars = profitDist * qty;
@@ -710,7 +727,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     std::string profitLossValueStr      = profitValueStr + "\r\n" + lossValueStr;
     std::string profitLossPercentageStr = profitPctStr + "\r\n" + lossPctStr;
 
-    // 3) Risk/reward ratio — bottom-left of Profit input
+    // Risk/reward ratio — bottom-left of Profit input
     std::string rrText = "x";
     COLORREF rrColor = COINS_CLR_ORANGE;
     if (stopDist > 0.0 && profitDist > 0.0 && qty > 0.0) {
@@ -722,7 +739,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     bool rrColorChanged = state->rrColor != rrColor;
     state->rrColor = rrColor;
 
-    // 4) Position size at target risk — bottom-left of Qty input
+    // Position size at target risk — bottom-left of Qty input
     std::string optQtyText = "--";
     COLORREF optQtyColor = COINS_CLR_GRAY;
     {
@@ -735,7 +752,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     bool optQtyColorChanged = state->optQtyColor != optQtyColor;
     state->optQtyColor = optQtyColor;
 
-    // 5) Stop distance at target risk — bottom-right of Stop input
+    // Stop distance at target risk — bottom-right of Stop input
     std::string optStopText = "--";
     COLORREF optStopColor = COINS_CLR_GRAY;
     {
@@ -762,11 +779,13 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         }
     };
 
-    setHint(state->hProfitLossPercentLabel, state->hOrderPrice, profitLossPercentageStr);
-    setHint(state->hProfitLossValueLabel, state->hOrderPrice, profitLossValueStr);
-    setHint(state->hRRLabel, state->hOrderProfitPrice, rrText, rrColorChanged);
-    setHint(state->hOptQtyLabel, state->hOrderQty, optQtyText, optQtyColorChanged);
-    setHint(state->hOptStopLabel, state->hOrderStopPrice, optStopText, optStopColorChanged);
+    setHint(state->hProfitLossPercentLabel, state->hOrderPrice,       profitLossPercentageStr);
+    setHint(state->hProfitLossValueLabel,   state->hOrderPrice,       profitLossValueStr);
+    setHint(state->hOptStopTarget,          state->hOrderStopPrice,   stopTargetValueStr);
+    setHint(state->hOptProfitTarget,        state->hOrderProfitPrice, profitTargetValueStr);
+    setHint(state->hRRLabel,                state->hOrderProfitPrice, rrText,                   rrColorChanged);
+    setHint(state->hOptQtyLabel,            state->hOrderQty,         optQtyText,               optQtyColorChanged);
+    setHint(state->hOptStopLabel,           state->hOrderStopPrice,   optStopText,              optStopColorChanged);
 }
 
 void Market_Focus_OrderRow(TsState* state) {
@@ -806,7 +825,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     SetWindowTextA(state->hOrderQty, std::format("{:+}", qty).c_str());
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
-    ShowWindow(state->hTotalLabel,  SW_SHOW);
+    ShowWindow(state->hTotalLabel, SW_SHOW);
     ShowWindow(state->hOrderPrice, SW_SHOW);
     ShowWindow(state->hOrderQty,   SW_SHOW);
 
@@ -814,9 +833,12 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hProfitLossPercentLabel,      state->isOvernight ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hProfitLossValueLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hRRLabel,        state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOptQtyLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOptStopLabel,   state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hRRLabel,         state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptQtyLabel,     state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptStopLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptStopTarget,   state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptProfitTarget, state->isOvernight ? SW_HIDE : SW_SHOW);
+    
     SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : stopGateway).c_str());
     SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : profitGateway).c_str());
     Market_UpdateOrderRiskLabel(state);
@@ -837,6 +859,8 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     ShowWindow(state->hRRLabel, SW_HIDE);
     ShowWindow(state->hOptQtyLabel, SW_HIDE);
     ShowWindow(state->hOptStopLabel, SW_HIDE);
+    ShowWindow(state->hOptStopTarget, SW_HIDE);
+    ShowWindow(state->hOptProfitTarget, SW_HIDE);
     state->orderBarVisible = false;
     Market_TrimTimeSalesLists(state);
     Market_Layout(hWnd, state);
@@ -1990,6 +2014,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hProfitLossPercentLabel = makeHintLabel(SS_LEFT);
         state->hProfitLossValueLabel = makeHintLabel(SS_RIGHT);
         state->hRRLabel   = makeHintLabel(SS_LEFT);
+        state->hOptStopTarget   = makeHintLabel(SS_LEFT);
+        state->hOptProfitTarget   = makeHintLabel(SS_RIGHT);
         state->hOptQtyLabel = makeHintLabel(SS_LEFT);
         state->hOptStopLabel = makeHintLabel(SS_RIGHT);
         state->hTotalLabel  = makeHintLabel(SS_RIGHT);
@@ -2151,7 +2177,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
                 bool transparent = false;
 
-                if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel) {
+                if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hTotalLabel || hCtrl == state->hOptStopTarget || hCtrl == state->hOptProfitTarget) {
                     clr = COINS_CLR_ORANGE;
                     transparent = true;
                 } else if (hCtrl == state->hRRLabel) {
@@ -2162,9 +2188,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     transparent = true;
                 } else if (hCtrl == state->hOptStopLabel) {
                     clr = state->optStopColor;
-                    transparent = true;
-                } else if (hCtrl == state->hTotalLabel) {
-                    clr = COINS_CLR_ORANGE;
                     transparent = true;
                 } else if (hCtrl == state->hOrderLabel) {
                     clr = state->orderSide == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
@@ -2516,7 +2539,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hbmHeader)    DeleteObject(state->hbmHeader);
             if (state->hdcHeaderMem) DeleteDC(state->hdcHeaderMem);
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hTotalLabel = NULL;
-            state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
+            state->hOptProfitTarget = state->hOptStopTarget = state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             // Row controls are children of hWnd — DestroyWindow(hWnd) tears them
             // down (and unsubclasses them via their own WM_NCDESTROY) automatically.
             state->orderRows.clear();
@@ -2528,7 +2551,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             tsStates.erase(hWnd);
         }
         UpdateMarketRegistry();
-        Settings_Market_CleanupOldWindows();
         break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);   
