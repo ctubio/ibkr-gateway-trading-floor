@@ -50,6 +50,7 @@ TradingAPI& api() {
 // ── Global Account Summary ───────────────────────────────────────────────────────────
 static double NetLiquidation = 0.0;
 
+// ── Text Labels ───────────────────────────────────────────────────────────
 static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
     if (!hWnd) return false;
     char buf[256] = {};
@@ -60,12 +61,25 @@ static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
     return true;
 }
 
+static bool SetWindowTextWIfChanged(HWND hWnd, const std::wstring& newText) {
+    if (!hWnd) return false;
+    wchar_t buf[256];
+    GetWindowTextW(hWnd, buf, sizeof(buf));
+    if (std::wstring(buf) != newText) {
+        SetWindowTextW(hWnd, newText.c_str());
+        InvalidateRect(hWnd, NULL, TRUE);
+        return true;
+    }
+    return false;
+}
+
 static std::string FormatFixed(double value, int decimals, bool alwaysSign = false) {
     char buf[64];
     std::snprintf(buf, sizeof(buf), alwaysSign ? "%+.*f" : "%.*f", decimals, value);
     return std::string(buf);
 }
 
+// ── Sparklines ───────────────────────────────────────────────────────────
 static Gdiplus::Color sparkColors[3];
 static Gdiplus::Color sparkColorsMini[3];
 static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };

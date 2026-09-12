@@ -397,30 +397,6 @@ void UpdateTrayIcon(HWND hWnd) {
 
 // ─── Labels update ─────────────────────────────────────────────────────────────
 
-static bool SetWindowTextIfChanged(HWND hWnd, const std::string& newText) {
-    if (!hWnd) return false;
-    char buf[256];
-    GetWindowTextA(hWnd, buf, sizeof(buf));
-    if (std::string(buf) != newText) {
-        SetWindowTextA(hWnd, newText.c_str());
-        InvalidateRect(hWnd, NULL, TRUE);
-        return true;
-    }
-    return false;
-}
-
-static bool SetWindowTextWIfChanged(HWND hWnd, const std::wstring& newText) {
-    if (!hWnd) return false;
-    wchar_t buf[256];
-    GetWindowTextW(hWnd, buf, sizeof(buf));
-    if (std::wstring(buf) != newText) {
-        SetWindowTextW(hWnd, newText.c_str());
-        InvalidateRect(hWnd, NULL, TRUE);
-        return true;
-    }
-    return false;
-}
-
 void Coins_UpdateLabels(HWND hWnd) {
     auto   summary      = api().getAccountSummary();
     double daily        = api().getDailyPnL();
