@@ -1008,7 +1008,7 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
             if (uIdSubclass == 2) val = std::abs(val);
             double step;
             if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) step = (uIdSubclass == 1) ? 1.0 : 10.0;
-            else                                        step = (uIdSubclass == 1) ? 0.01 : 1.0;
+            else                                       step = (uIdSubclass == 1) ? 0.01 : 1.0;
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
             std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val)

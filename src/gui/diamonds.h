@@ -454,6 +454,30 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
     Diamonds_Layout(hWnd);
 }
 
+static void DrawTwoLineCell(HDC hdc, const RECT& cellRect,
+                            const char* topText, COLORREF topColor,
+                            const char* bottomText, COLORREF bottomColor,
+                            HBRUSH backgroundBrush) {
+    FillRect(hdc, &cellRect, backgroundBrush);
+
+    RECT topRect = cellRect;
+    RECT bottomRect = cellRect;
+    InflateRect(&topRect, -6, 0);
+    InflateRect(&bottomRect, -6, 0);
+
+    int midY = cellRect.top + (cellRect.bottom - cellRect.top) / 2;
+    topRect.bottom = midY + 1;
+    bottomRect.top = midY - 1;
+
+    SetBkMode(hdc, TRANSPARENT);
+    SelectObject(hdc, hFont11ptbold.get());
+
+    SetTextColor(hdc, topColor);
+    DrawTextA(hdc, topText, -1, &topRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SetTextColor(hdc, bottomColor);
+    DrawTextA(hdc, bottomText, -1, &bottomRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+}
+
 // ── Virtual Sort ──────────────────────────────────────────────────────────────
 
 static void Diamonds_ApplySort(HWND hList) {
@@ -1318,31 +1342,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         RECT rcCell;
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
-
-                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
-                        RECT rcTop = rcCell;
-                        RECT rcBottom = rcCell;
-                        InflateRect(&rcTop, -6, 0);
-                        InflateRect(&rcBottom, -6, 0);
-
-                        // Split the cell height vertically down the middle
-                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY + 1;
-                        rcBottom.top = midY - 1;
-
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
                         double val = cacheRow.sortValues[DCOL_UNREALIZED_PL];
-                        if      (val > 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
-                        else if (val < 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
-                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_UNREALIZED_PL].c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-                        if      (val > 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN_DARK2);
-                        else if (val < 0.0) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED_DARK2);
-                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.unrealizedPnLPctStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        COLORREF topColor = val > 0.0 ? COINS_CLR_GREEN : val < 0.0 ? COINS_CLR_RED : COINS_CLR_GRAY;
+                        COLORREF bottomColor = val > 0.0 ? COINS_CLR_GREEN_DARK2 : val < 0.0 ? COINS_CLR_RED_DARK2 : COINS_CLR_GRAY;
+                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
+                                        cacheRow.textCols[DCOL_UNREALIZED_PL].c_str(), topColor,
+                                        cacheRow.unrealizedPnLPctStr.c_str(), bottomColor, hBrush);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_SIZE) {
@@ -1353,30 +1358,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         RECT rcCell;
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
-
-                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
-                        RECT rcTop = rcCell;
-                        RECT rcBottom = rcCell;
-                        InflateRect(&rcTop, -6, 0);
-                        InflateRect(&rcBottom, -6, 0);
-
-                        // Split the cell height vertically down the middle
-                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY + 1;
-                        rcBottom.top = midY - 1;
-
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
-
-                        if (cacheRow.halted) SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        else if (cacheRow.askSize > cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
-                        else if (cacheRow.askSize < cacheRow.bidSize) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
-                        else SetTextColor(cd->nmcd.hdc, COINS_CLR_BLUE);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.askSizeStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-                        //SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.bidSizeStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        COLORREF sizeColor = cacheRow.halted ? COINS_CLR_GRAY
+                            : cacheRow.askSize > cacheRow.bidSize ? COINS_CLR_RED
+                            : cacheRow.askSize < cacheRow.bidSize ? COINS_CLR_GREEN
+                            : COINS_CLR_BLUE;
+                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
+                                        cacheRow.askSizeStr.c_str(), sizeColor,
+                                        cacheRow.bidSizeStr.c_str(), sizeColor, hBrush);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_LAST) {
@@ -1409,36 +1397,19 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         RECT rcCell;
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
-
-                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
-                        RECT rcTop = rcCell;
-                        RECT rcBottom = rcCell;
-                        InflateRect(&rcTop, -6, 0);
-                        InflateRect(&rcBottom, -6, 0);
-
-                        // Split the cell height vertically down the middle
-                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY + 1;
-                        rcBottom.top = midY - 1;
-
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
-
                         double last = cacheRow.sortValues[DCOL_LAST];
+                        COLORREF quoteColor = COINS_CLR_WHITE;
                         if (cacheRow.halted || last <= 0.0 || cacheRow.ask <= 0.0 || cacheRow.bid <= 0.0) {
-                            SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
+                            quoteColor = COINS_CLR_GRAY;
                         } else {
                             double distAsk = std::fabs(cacheRow.ask - last);
                             double distBid = std::fabs(last - cacheRow.bid);
-                            if (distAsk < distBid) SetTextColor(cd->nmcd.hdc, COINS_CLR_GREEN);
-                            else if (distBid < distAsk) SetTextColor(cd->nmcd.hdc, COINS_CLR_RED);
-                            else SetTextColor(cd->nmcd.hdc, COINS_CLR_WHITE);
+                            if (distAsk < distBid) quoteColor = COINS_CLR_GREEN;
+                            else if (distBid < distAsk) quoteColor = COINS_CLR_RED;
                         }
-                        DrawTextA(cd->nmcd.hdc, cacheRow.askStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-                        //SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.bidStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
+                                        cacheRow.askStr.c_str(), quoteColor,
+                                        cacheRow.bidStr.c_str(), quoteColor, hBrush);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_MKTVAL) {
@@ -1449,27 +1420,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         RECT rcCell;
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
-
-                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
-                        RECT rcTop = rcCell;
-                        RECT rcBottom = rcCell;
-                        InflateRect(&rcTop, -6, 0);
-                        InflateRect(&rcBottom, -6, 0);
-
-                        // Split the cell height vertically down the middle
-                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY + 1;
-                        rcBottom.top = midY - 1;
-
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
-
-                        SetTextColor(cd->nmcd.hdc, darkMode ? DM_TEXT : LM_TEXT);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.textCols[DCOL_MKTVAL].c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-                        SetTextColor(cd->nmcd.hdc, COINS_CLR_GRAY);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.pctNetLiq.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
+                                        cacheRow.textCols[DCOL_MKTVAL].c_str(), darkMode ? DM_TEXT : LM_TEXT,
+                                        cacheRow.pctNetLiq.c_str(), COINS_CLR_GRAY, hBrush);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE) {
@@ -1492,28 +1445,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         RECT rcCell;
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        FillRect(cd->nmcd.hdc, &rcCell, hBrush);
-
-                        // Create separate rectangles for top and bottom lines, adding horizontal padding (-6)
-                        RECT rcTop = rcCell;
-                        RECT rcBottom = rcCell;
-                        InflateRect(&rcTop, -6, 0);
-                        InflateRect(&rcBottom, -6, 0);
-
-                        // Split the cell height vertically down the middle
-                        int midY = rcCell.top + (rcCell.bottom - rcCell.top) / 2;
-                        rcTop.bottom = midY + 1;
-                        rcBottom.top = midY - 1;
-
-                        SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
-
-                        SetTextColor(cd->nmcd.hdc, (last > 0 && cacheRow.upAlert > 0 && cacheRow.upAlert <= last) ? COINS_CLR_GREEN : COINS_CLR_GRAY);
-                        DrawTextA(cd->nmcd.hdc, cacheRow.upStr.c_str(), -1, &rcTop, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-                        SetTextColor(cd->nmcd.hdc, (last > 0 && cacheRow.downAlert > 0 && cacheRow.downAlert >= last) ? COINS_CLR_RED : COINS_CLR_GRAY);
-                        std::string pctStr = cacheRow.pctNetLiq;
-                        DrawTextA(cd->nmcd.hdc, cacheRow.downStr.c_str(), -1, &rcBottom, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                        COLORREF upColor = (last > 0 && cacheRow.upAlert > 0 && cacheRow.upAlert <= last) ? COINS_CLR_GREEN : COINS_CLR_GRAY;
+                        COLORREF downColor = (last > 0 && cacheRow.downAlert > 0 && cacheRow.downAlert >= last) ? COINS_CLR_RED : COINS_CLR_GRAY;
+                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
+                                        cacheRow.upStr.c_str(), upColor,
+                                        cacheRow.downStr.c_str(), downColor, hBrush);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
