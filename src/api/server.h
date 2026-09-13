@@ -989,7 +989,7 @@ static std::string News_BuildUrl(int year, int month, int day) {
 // lines), strip the "click to watch" call-out, strip inline source lists,
 // strip the attribution footer, then normalise whitespace.
 // Returns empty string if the page is not found (404 / "doesn't exist" page).
-static std::string News_FetchContent(const std::string& url, int day, int month, int year) {
+static std::string News_FetchContent(const std::string& url) {
     HINTERNET hInet = InternetOpenA("Mozilla/5.0 (compatible; OpenClawBot/1.0)", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInet) return "";
 
@@ -1083,7 +1083,7 @@ static std::string HandleGetNews(int numDays) {
             std::string url = News_BuildUrl(st.wYear, st.wMonth, st.wDay);
             if (!url.empty()) {
                 LogDebug("Fetching news: " + url);
-                content = News_FetchContent(url, st.wDay, st.wMonth, st.wYear);
+                content = News_FetchContent(url);
             }
             if (content.empty()) {
                 // Page not found for this date — skip it

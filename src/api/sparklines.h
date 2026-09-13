@@ -11,7 +11,7 @@ static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
 
 class Sparkline {
 private:
-    std::vector<SparkPoint> data;
+    std::deque<SparkPoint> data;
 
     // Graphics is tied to the paint HDC, and the gradient coordinates are in
     // that HDC's screen space, so refresh the resources when the row moves.
@@ -220,7 +220,7 @@ public:
 class MiniSparkline {
 private:
     struct MiniSparkPoint { ULONGLONG date; double price; };
-    std::vector<MiniSparkPoint> data;
+    std::deque<MiniSparkPoint> data;
 
     // Graphics is tied to the paint HDC, and the gradient coordinates are in
     // that HDC's screen space, so refresh the resources when the row moves.

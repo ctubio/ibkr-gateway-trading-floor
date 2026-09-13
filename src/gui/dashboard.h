@@ -402,6 +402,10 @@ struct IconUpdateContext {
 };
 
 BOOL CALLBACK IconsEnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    DWORD pid;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId()) return TRUE;
+
     IconUpdateContext* ctx = (IconUpdateContext*)lParam;
 
     char className[256];

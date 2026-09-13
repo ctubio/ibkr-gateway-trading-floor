@@ -238,8 +238,8 @@ static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
 
 static bool SetWindowTextWIfChanged(HWND hWnd, const std::wstring& newText) {
     if (!hWnd) return false;
-    wchar_t buf[256];
-    GetWindowTextW(hWnd, buf, sizeof(buf));
+    wchar_t buf[256] = {};
+    GetWindowTextW(hWnd, buf, _countof(buf));
     if (std::wstring(buf) != newText) {
         SetWindowTextW(hWnd, newText.c_str());
         InvalidateRect(hWnd, NULL, TRUE);
