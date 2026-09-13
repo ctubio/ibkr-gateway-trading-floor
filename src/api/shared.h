@@ -50,6 +50,135 @@ TradingAPI& api() {
 // ── Global Account Summary ───────────────────────────────────────────────────────────
 static double NetLiquidation = 0.0;
 
+struct MarketOrderRow {
+    int    orderId       = 0;
+    HWND   hPriceEdit    = NULL;
+    HWND   hQtyEdit      = NULL;
+    HWND   hTotalLabel   = NULL;   // bottom-right of Qty: notional value hint
+    HWND   hQtyTifLabel  = NULL;   // top-left of Qty: time-in-force hint
+    bool   partialFill   = false;
+    double originalQty   = 0.0;
+    double trailStopPrice = 0.0;
+    std::string action;      // "BUY" or "SELL" — drives price-edit background + hint colors
+    std::string orderType;
+    std::string tif;
+};
+
+// Lightweight snapshot of one currently-open (editable) order for this
+// window's conId, used only to render the bold "open orders" rows at the
+// top of hExecList (see Market_RefreshExec). Read-only — unlike
+// MarketOrderRow it has no edit controls.
+struct MarketOpenOrderSummary {
+    int orderId = 0;
+    std::string action;   // "BUY" or "SELL"
+    double totalQty   = 0.0;
+    double price = 0.0;
+    double trailStopPrice = 0.0;
+};
+
+struct TsState {
+    HWND hTsList = NULL;
+    HWND hTsListF100 = NULL;
+    HWND hTsListF1000 = NULL;
+    HWND hL2List = NULL;
+    HWND hExecList = NULL;   // Executions list (far left, beside L2)
+    bool isOvernight = false;
+    std::string symbol;
+    int conId = 0;
+    std::string titlebar;
+
+    // ── Level 1 quote ─────────────────────────────
+    TradingAPI::L1Book l1Info;
+
+    // ── Paint limiter ─────────────────────────────────────────────────────────
+    bool marketHdrDirty = false;
+
+    // ── Portfolio snapshot ────────────────────────────────────────────────────
+    double position = 0.0;
+    double avgPrice = 0.0;
+    
+    // ── PnL State ─────────────────────────────────────────────────────────────
+    double dailyPnL = 0.0;
+    double unrealizedPnL = 0.0;
+
+    // ── Volume / print-frequency tracking (tick-by-tick) ─────────────────────
+    // Rolling history of every trade print received via WM_MARKET_TICK, kept
+    // just long enough (VOL_RATE_BASELINE_MS) to derive a recent-vs-baseline
+    // rate ratio. Same "small rolling vector, pruned lazily" pattern as
+    // Sparkline::priceHistory — sampled at paint time, not recomputed per tick.
+    struct VolTick { ULONGLONG time; double size; };
+    std::deque<VolTick> volHistory;
+    ULONGLONG volTrackingStart = 0;   // time tracking began (since last clear); NOT touched by
+                                       // pruning, so the vol-rate "ready" gate below can't flicker
+
+    // ── Incremental volume sums (updated on tick arrival / prune, read on paint) ──
+    // Avoids iterating the full deque on every WM_PAINT.
+    double volSumTotal   = 0.0;  // sum of all ticks in volHistory (trailing 5 min)
+    double volSumRecent  = 0.0;  // sum of ticks in the most recent 15 s window
+    double volSumBaseline = 0.0; // volSumTotal - volSumRecent (the older 4 min 45 s)
+    size_t volRecentBoundaryIdx = 0; // index into volHistory of the first entry still "recent"
+
+    // ── TTS state ─────────────────────────────────────────────────────────────
+    // Speech goes through the shared SharedTtsEngine (shared.h) now — this
+    // window just tracks whether it currently holds a reference to it.
+    bool      ttsOn        = false;
+    bool      minimized    = false;
+    HWND      hSpeakerBtn  = NULL;
+    HWND      hOVNButton   = NULL;
+
+    // ── Splitter state ────────────────────────────────────────────────────────
+    float splitY     = 0.5f;   // right column: hTsListF100 (top) / hTsListF1000 (bottom)
+    float splitYExec = 0.6f;   // far-left column: hL2List (top) / hExecList (bottom)
+    int dragMode = 0;          // 0 = none, 1 = right column splitter, 2 = L2/Exec splitter
+
+    // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
+    RECT lastPriceRect = { 0, 0, 0, 0 };
+    RECT flaqRect      = { 0, 0, 0, 0 };
+    RECT locateRect    = { 0, 0, 0, 0 };
+
+    // ── Alerts ────────────────────────────────────────────────────────────────
+    bool hasAlert = false;   // true if this symbol has an Alert Up/Down set — colors the flag icon yellow
+
+    int lastTimeSec = 0;
+
+    // ── Order entry bar ───────────────────────────────────────────────────────
+    HWND  hOrderLabel       = NULL;
+    HWND  hOrderPrice       = NULL;
+    HWND  hOrderStopPrice   = NULL;
+    HWND  hOrderProfitPrice = NULL;
+    HWND  hOrderQty         = NULL;
+    HWND  hTotalLabel       = NULL; // right of hOrderLabel: Notional value only
+     // Hint overlays: transparent 12pt labels painted on top of the price/qty/
+     // stop/profit inputs, corner-anchored. Input itself stays untouched —
+     // still centered / fully editable underneath.
+    HWND  hProfitLossPercentLabel        = NULL; // bottom-left of hOrderPrice: lossPct% \n lossDollars R
+    HWND  hProfitLossValueLabel      = NULL; // bottom-right of hOrderPrice: profitPct% \n profitDollars P
+    HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
+    HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
+    HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
+    HWND  hOptStopTarget    = NULL;
+    HWND  hOptProfitTarget  = NULL;
+    COLORREF rrColor        = COINS_CLR_ORANGE;
+    COLORREF optQtyColor    = COINS_CLR_GRAY;
+    COLORREF optStopColor   = COINS_CLR_GRAY;
+    bool  orderBarVisible   = false;
+    std::string orderSide;   // "BUY" or "SELL"
+
+    // ── Editable orders panel (bottom of hTsList column) ──────────────────────
+    std::vector<MarketOrderRow> orderRows;
+
+    // ── Open-orders summary feeding hExecList's bold rows ─────────────────────
+    std::vector<MarketOpenOrderSummary> openOrdersSummary;
+
+    Sparkline sparkline;
+    
+    // ── Cached header double-buffer (avoids CreateCompatibleDC/Bitmap every paint) ──
+    HDC     hdcHeaderMem = NULL;
+    HBITMAP hbmHeader    = NULL;
+};
+// ── Market Windows States ─────────────────────
+static std::map<HWND, TsState*> marketStates;
+
 // ── Text Labels ───────────────────────────────────────────────────────────
 static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
     if (!hWnd) return false;
@@ -80,9 +209,6 @@ static std::string FormatFixed(double value, int decimals, bool alwaysSign = fal
 }
 
 // ── Sparklines ───────────────────────────────────────────────────────────
-static Gdiplus::Color sparkColors[3];
-static Gdiplus::Color sparkColorsMini[3];
-static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
 
 void InitDarkBrushes() {
     if (hDarkBrush) return;
@@ -127,6 +253,15 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
     }
 }
 
+HWND Market_FindWindowByKey(const std::string& windowKey) {
+    for (const auto& [h, st] : marketStates) {
+        if (st && (std::string(MARKET_CLASS_NAME) + "_" + st->symbol == windowKey)) {
+            return h;
+        }
+    }
+    return NULL;
+}
+
 HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
     bool allowIsolatedInstances = (strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0);
     bool allowInstancesBySymbol = !windowKey.empty() && windowKey != className;
@@ -135,14 +270,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
 
     if (!allowIsolatedInstances) {
         if (allowInstancesBySymbol) {
-            auto tsWindows = EnumerateMarketWindows();
-            for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
-                TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
-                if (data && data->winKey == windowKey) {
-                    hWnd = tsWindows[i].hWnd;
-                    break;
-                }
-            }
+            hWnd = Market_FindWindowByKey(windowKey);
         } else {
             hWnd = FindWindowA(className, NULL);
         }

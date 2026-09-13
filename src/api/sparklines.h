@@ -5,6 +5,10 @@ struct SparkPoint {
     double price;
 };
 
+static Gdiplus::Color sparkColors[3];
+static Gdiplus::Color sparkColorsMini[3];
+static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
+
 class Sparkline {
 private:
     std::vector<SparkPoint> data;

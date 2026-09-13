@@ -1295,14 +1295,19 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds"); }
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders"); }
 
-                    auto tsWindows = EnumerateMarketWindows();
-                    std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
+                    struct OpenMarketItem { HWND hWnd; std::string symbol; };
+                    std::vector<OpenMarketItem> openMarkets;
+                    openMarkets.reserve(marketStates.size());
+                    for (const auto& [h, st] : marketStates) {
+                        if (st && !st->symbol.empty()) openMarkets.push_back({h, st->symbol});
+                    }
+                    std::sort(openMarkets.begin(), openMarkets.end(), [](const auto& a, const auto& b) {
                         return a.symbol < b.symbol;
                     });
-                    for (size_t i = 0; i < tsWindows.size() && i < ID_M_MARKET_MAX; ++i) {
-                        std::wstring label = IsMarketAlwaysOnTop(tsWindows[i].symbol) ? 
-                            L"[ ★ ] Market: " + StringToWide(tsWindows[i].symbol) : 
-                            L"[  ] Market: " + StringToWide(tsWindows[i].symbol);
+                    for (size_t i = 0; i < openMarkets.size() && i < ID_M_MARKET_MAX; ++i) {
+                        std::wstring label = IsMarketAlwaysOnTop(openMarkets[i].symbol) ? 
+                            L"[ ★ ] Market: " + StringToWide(openMarkets[i].symbol) : 
+                            L"[  ] Market: " + StringToWide(openMarkets[i].symbol);
                             
                         hasSubmenus++;
                         AppendMenuW(hMenu, MF_STRING, ID_M_MARKET_BASE + (int)i, label.c_str());
@@ -1497,13 +1502,18 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 
                 default:
                     if (LOWORD(wParam) >= ID_M_MARKET_BASE && LOWORD(wParam) < ID_M_MARKET_BASE + ID_M_MARKET_MAX) {
-                        auto tsWindows = EnumerateMarketWindows();
-                         std::sort(tsWindows.begin(), tsWindows.end(), [](const auto& a, const auto& b) {
+                        struct OpenMarketItem { HWND hWnd; std::string symbol; };
+                        std::vector<OpenMarketItem> openMarkets;
+                        openMarkets.reserve(marketStates.size());
+                        for (const auto& [h, st] : marketStates) {
+                            if (st && !st->symbol.empty()) openMarkets.push_back({h, st->symbol});
+                        }
+                        std::sort(openMarkets.begin(), openMarkets.end(), [](const auto& a, const auto& b) {
                             return a.symbol < b.symbol;
                         });
-                         int index = LOWORD(wParam) - ID_M_MARKET_BASE;
-                        if (index >= 0 && index < (int)tsWindows.size()) {
-                            ToggleMarketAlwaysOnTop(tsWindows[index].hWnd, tsWindows[index].symbol);
+                        int index = LOWORD(wParam) - ID_M_MARKET_BASE;
+                        if (index >= 0 && index < (int)openMarkets.size()) {
+                            ToggleMarketAlwaysOnTop(openMarkets[index].hWnd, openMarkets[index].symbol);
                         }
                     }
                     break;

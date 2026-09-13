@@ -21,24 +21,24 @@ struct AlertsEditState {
 };
 static AlertsEditState alertsEditState;
 
+void Market_NotifyAlertsChanged(int conId) {
+    for (const auto& [hWnd, st] : marketStates) {
+        if (st && st->conId == conId) {
+            PostMessage(hWnd, WM_ALERTS_CHANGED, 0, (LPARAM)conId);
+            break;
+        }
+    }
+}
+
 // Posts WM_ALERTS_CHANGED directly to the two window classes that actually
 // handle it (WndProcMarket / WndProcDiamonds) instead of enumerating every
-// top-level window in the process and filtering by PID. Diamonds is
-// single-instance; Market can have many, so we walk all of them the same way
-// EnumerateMarketWindows() in registry.h does.
+// top-level window in the process.
 static void Alerts_NotifyChanged(int conId) {
     HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
     if (hDiamonds && IsWindow(hDiamonds))
         PostMessage(hDiamonds, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);
     
-    auto tsWindows = EnumerateMarketWindows();
-    for (size_t i = 0; i < tsWindows.size() && i < 100; ++i) {
-        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
-        if (data && data->conId == conId) {
-            PostMessage(tsWindows[i].hWnd, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);
-            break; // only 1 market window per symbol exists
-        }
-    }
+    Market_NotifyAlertsChanged(conId);
 }
 
 // (Re)loads the popup for `symbol` and `conId`: updates the title and both edit fields
@@ -57,6 +57,8 @@ static void AlertEditor_Populate(HWND hWnd, const std::string& symbol, int conId
     HWND hDown = GetDlgItem(hWnd, ID_ALERTS_DOWN_EDIT);
     if (hUp)   SetWindowTextA(hUp,   upStr.c_str());
     if (hDown) SetWindowTextA(hDown, downStr.c_str());
+    CenterEditText(hUp);
+    CenterEditText(hDown);
 
     if (hUp) {
         SetFocus(hUp);
@@ -152,14 +154,14 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             CreateWindowA("STATIC", "Alert Up:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 12, 20, 80, 20, hWnd, NULL, hInst, NULL);
-            HWND hUp = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            HWND hUp = CreateWindowA("EDIT", "",
                 WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
                 96, 12, editW, editH, hWnd, (HMENU)ID_ALERTS_UP_EDIT, hInst, NULL);
 
             CreateWindowA("STATIC", "Alert Down:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 12, 20 + editH + 8, 80, 20, hWnd, NULL, hInst, NULL);
-            HWND hDown = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            HWND hDown = CreateWindowA("EDIT", "",
                 WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
                 96, 12 + editH + 8, editW, editH, hWnd, (HMENU)ID_ALERTS_DOWN_EDIT, hInst, NULL);
 
@@ -168,9 +170,6 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             SendMessage(hUp,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hDown,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-
-            CenterEditText(hUp);
-            CenterEditText(hDown);
             break;
         }
 

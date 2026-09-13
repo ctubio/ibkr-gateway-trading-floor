@@ -17,13 +17,11 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
     }
     std::string key = std::string(MARKET_CLASS_NAME) + "_" + symbol;
 
-    auto tsWindows = EnumerateMarketWindows();
-
     // Already open for this symbol -- StartGenericWindow below will just
     // find and focus it; none of the capacity/position logic applies.
     bool alreadyOpen = false;
-    for (auto& mw : tsWindows) {
-        if (mw.symbol == symbol) {
+    for (const auto& [h, st] : marketStates) {
+        if (st && st->symbol == symbol) {
             alreadyOpen = true;
             break;
         }
@@ -38,14 +36,17 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
     std::string flaggedKey = Settings_Market_GetOpenedLastKey();
     if (!flaggedKey.empty()) {
         HWND hFlaggedWnd = NULL;
-        for (auto& mw : tsWindows) {
-            if (std::string(MARKET_CLASS_NAME) + "_" + mw.symbol == flaggedKey) { hFlaggedWnd = mw.hWnd; break; }
+        for (const auto& [h, st] : marketStates) {
+            if (st && (std::string(MARKET_CLASS_NAME) + "_" + st->symbol == flaggedKey)) {
+                hFlaggedWnd = h;
+                break;
+            }
         }
 
         if (hFlaggedWnd && IsWindow(hFlaggedWnd)) {
             // Flagged window is still open -- only steal its slot once
             // we're already at capacity.
-            if ((int)tsWindows.size() >= 4) {
+            if ((int)marketStates.size() >= 4) {
                 WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
                 GetWindowPlacement(hFlaggedWnd, &wp);
                 SaveWinPositionRaw(key,
@@ -109,134 +110,6 @@ static const ULONGLONG VOL_RATE_RECENT_MS   = 15000ULL;    // 15s recent window
 static const ULONGLONG VOL_RATE_BASELINE_MS = 300000ULL;   // 5 min baseline window (includes recent slice until pruned)
 
 static const int MARKET_ORDER_ROW_H = 44;   // per-row height, matches Orders.h's EDIT_PANEL_H
-
-struct MarketOrderRow {
-    int    orderId       = 0;
-    HWND   hPriceEdit    = NULL;
-    HWND   hQtyEdit      = NULL;
-    HWND   hTotalLabel   = NULL;   // bottom-right of Qty: notional value hint
-    HWND   hQtyTifLabel  = NULL;   // top-left of Qty: time-in-force hint
-    bool   partialFill   = false;
-    double originalQty   = 0.0;
-    double trailStopPrice = 0.0;
-    std::string action;      // "BUY" or "SELL" — drives price-edit background + hint colors
-    std::string orderType;
-    std::string tif;
-};
-
-// Lightweight snapshot of one currently-open (editable) order for this
-// window's conId, used only to render the bold "open orders" rows at the
-// top of hExecList (see Market_RefreshExec). Read-only — unlike
-// MarketOrderRow it has no edit controls.
-struct MarketOpenOrderSummary {
-    int orderId = 0;
-    std::string action;   // "BUY" or "SELL"
-    double totalQty   = 0.0;
-    double price = 0.0;
-    double trailStopPrice = 0.0;
-};
-
-struct TsState {
-    HWND hTsList = NULL;
-    HWND hTsListF100 = NULL;
-    HWND hTsListF1000 = NULL;
-    HWND hL2List = NULL;
-    HWND hExecList = NULL;   // Executions list (far left, beside L2)
-    bool isOvernight = false;
-    std::string symbol;
-    int conId = 0;
-    std::string titlebar;
-
-    // ── Level 1 quote ─────────────────────────────
-    TradingAPI::L1Book l1Info;
-
-    // ── Paint limiter ─────────────────────────────────────────────────────────
-    bool marketHdrDirty = false;
-
-    // ── Portfolio snapshot ────────────────────────────────────────────────────
-    double position = 0.0;
-    double avgPrice = 0.0;
-    
-    // ── PnL State ─────────────────────────────────────────────────────────────
-    double dailyPnL = 0.0;
-    double unrealizedPnL = 0.0;
-
-    // ── Volume / print-frequency tracking (tick-by-tick) ─────────────────────
-    // Rolling history of every trade print received via WM_MARKET_TICK, kept
-    // just long enough (VOL_RATE_BASELINE_MS) to derive a recent-vs-baseline
-    // rate ratio. Same "small rolling vector, pruned lazily" pattern as
-    // Sparkline::priceHistory — sampled at paint time, not recomputed per tick.
-    struct VolTick { ULONGLONG time; double size; };
-    std::deque<VolTick> volHistory;
-    ULONGLONG volTrackingStart = 0;   // time tracking began (since last clear); NOT touched by
-                                       // pruning, so the vol-rate "ready" gate below can't flicker
-
-    // ── Incremental volume sums (updated on tick arrival / prune, read on paint) ──
-    // Avoids iterating the full deque on every WM_PAINT.
-    double volSumTotal   = 0.0;  // sum of all ticks in volHistory (trailing 5 min)
-    double volSumRecent  = 0.0;  // sum of ticks in the most recent 15 s window
-    double volSumBaseline = 0.0; // volSumTotal - volSumRecent (the older 4 min 45 s)
-    size_t volRecentBoundaryIdx = 0; // index into volHistory of the first entry still "recent"
-
-    // ── TTS state ─────────────────────────────────────────────────────────────
-    // Speech goes through the shared SharedTtsEngine (shared.h) now — this
-    // window just tracks whether it currently holds a reference to it.
-    bool      ttsOn        = false;
-    bool      minimized    = false;
-    HWND      hSpeakerBtn  = NULL;
-    HWND      hOVNButton   = NULL;
-
-    // ── Splitter state ────────────────────────────────────────────────────────
-    float splitY     = 0.5f;   // right column: hTsListF100 (top) / hTsListF1000 (bottom)
-    float splitYExec = 0.6f;   // far-left column: hL2List (top) / hExecList (bottom)
-    int dragMode = 0;          // 0 = none, 1 = right column splitter, 2 = L2/Exec splitter
-
-    // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
-    RECT lastPriceRect = { 0, 0, 0, 0 };
-    RECT flaqRect      = { 0, 0, 0, 0 };
-    RECT locateRect    = { 0, 0, 0, 0 };
-
-    // ── Alerts ────────────────────────────────────────────────────────────────
-    bool hasAlert = false;   // true if this symbol has an Alert Up/Down set — colors the flag icon yellow
-
-    int lastTimeSec = 0;
-
-    // ── Order entry bar ───────────────────────────────────────────────────────
-    HWND  hOrderLabel       = NULL;
-    HWND  hOrderPrice       = NULL;
-    HWND  hOrderStopPrice   = NULL;
-    HWND  hOrderProfitPrice = NULL;
-    HWND  hOrderQty         = NULL;
-    HWND  hTotalLabel       = NULL; // right of hOrderLabel: Notional value only
-     // Hint overlays: transparent 12pt labels painted on top of the price/qty/
-     // stop/profit inputs, corner-anchored. Input itself stays untouched —
-     // still centered / fully editable underneath.
-    HWND  hProfitLossPercentLabel        = NULL; // bottom-left of hOrderPrice: lossPct% \n lossDollars R
-    HWND  hProfitLossValueLabel      = NULL; // bottom-right of hOrderPrice: profitPct% \n profitDollars P
-    HWND  hRRLabel          = NULL; // bottom-left of hOrderProfitPrice: risk/reward ratio (x#.##)
-    HWND  hOptQtyLabel      = NULL; // bottom-left of hOrderQty: riskPct% \n optQty Q
-    HWND  hOptStopLabel     = NULL; // bottom-right of hOrderStopPrice: riskPct% \n optStop S
-    HWND  hOptStopTarget    = NULL;
-    HWND  hOptProfitTarget  = NULL;
-    COLORREF rrColor        = COINS_CLR_ORANGE;
-    COLORREF optQtyColor    = COINS_CLR_GRAY;
-    COLORREF optStopColor   = COINS_CLR_GRAY;
-    bool  orderBarVisible   = false;
-    std::string orderSide;   // "BUY" or "SELL"
-
-    // ── Editable orders panel (bottom of hTsList column) ──────────────────────
-    std::vector<MarketOrderRow> orderRows;
-
-    // ── Open-orders summary feeding hExecList's bold rows ─────────────────────
-    std::vector<MarketOpenOrderSummary> openOrdersSummary;
-
-    Sparkline sparkline;
-    
-    // ── Cached header double-buffer (avoids CreateCompatibleDC/Bitmap every paint) ──
-    HDC     hdcHeaderMem = NULL;
-    HBITMAP hbmHeader    = NULL;
-};
-static std::map<HWND, TsState*> tsStates;
 
 // Recomputes hTotalLabel (price × qty notional) for one editable-order row.
 static void Market_UpdateOrderRowTotalLabel(MarketOrderRow& row) {
@@ -302,7 +175,7 @@ static LRESULT CALLBACK Market_ListForwardCtrlProc(
 
 static void UpdateMarketRegistry() {
     std::vector<std::string> sessions;
-    for (const auto& pair : tsStates) {
+    for (const auto& pair : marketStates) {
         if (pair.second && pair.second->conId != 0 && !pair.second->symbol.empty()) {
             sessions.push_back(std::to_string(pair.second->conId) + "." + pair.second->symbol);
         }
@@ -457,8 +330,8 @@ static void Market_TrimTimeSalesLists(TsState* state) {
 // since EDIT draws its selection highlight directly via GetDC.
 static void Market_RedrawHintsFor(HWND hEdit) {
     HWND hMarket = GetParent(hEdit);
-    auto it = tsStates.find(hMarket);
-    if (it == tsStates.end() || !it->second) return;
+    auto it = marketStates.find(hMarket);
+    if (it == marketStates.end() || !it->second) return;
     TsState* state = it->second;
 
     auto redraw = [](HWND h) {
@@ -905,8 +778,8 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
 
     if (msg == WM_KEYDOWN) {
         HWND hMarket = GetParent(hWnd);
-        auto it = tsStates.find(hMarket);
-        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
+        auto it = marketStates.find(hMarket);
+        TsState* st = (it != marketStates.end()) ? it->second : nullptr;
 
         if (wParam == VK_ESCAPE) {
             if (st) {
@@ -1083,8 +956,8 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
 
     if (msg == WM_KEYDOWN) {
         HWND hMarket = GetParent(hEdit);
-        auto it = tsStates.find(hMarket);
-        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
+        auto it = marketStates.find(hMarket);
+        TsState* st = (it != marketStates.end()) ? it->second : nullptr;
         MarketOrderRow* row = nullptr;
         if (st) {
             for (auto& r : st->orderRows) {
@@ -1164,8 +1037,8 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
     // as Market_RedrawHintsFor() for the order-bar edits.
     {
         HWND hMarket = GetParent(hEdit);
-        auto it = tsStates.find(hMarket);
-        TsState* st = (it != tsStates.end()) ? it->second : nullptr;
+        auto it = marketStates.find(hMarket);
+        TsState* st = (it != marketStates.end()) ? it->second : nullptr;
         if (st) {
             for (auto& r : st->orderRows) {
                 if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) {
@@ -1947,8 +1820,8 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
 LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
     if (message != WM_CREATE) {
-        auto it = tsStates.find(hWnd);
-        if (it != tsStates.end()) state = it->second;
+        auto it = marketStates.find(hWnd);
+        if (it != marketStates.end()) state = it->second;
     }
 
     switch (message) {
@@ -1966,7 +1839,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             std::string alertUp, alertDown;
             state->hasAlert = Settings_Alerts_Load(state->symbol, state->conId, alertUp, alertDown);
         }
-        tsStates[hWnd] = state;
+        marketStates[hWnd] = state;
 
         // ── Lists ─────────────────────────────────────────────────────────────
         state->hExecList    = Market_CreateExecList(hWnd, hInst);
@@ -2596,7 +2469,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (!state->symbol.empty())
                 Settings_Market_SetOpenedLast(std::string(MARKET_CLASS_NAME) + "_" + state->symbol);
             delete state;
-            tsStates.erase(hWnd);
+            marketStates.erase(hWnd);
         }
         UpdateMarketRegistry();
         break;
