@@ -58,6 +58,8 @@ struct DashboardState {
     bool fullDetails = true;
     bool shouldBeConnected = true;
     std::string currencyDashboard = "--";
+    ITaskbarList3* taskbar = nullptr;
+    bool taskbarComInitialized = false;
     
     // Group boxes
     HWND hCoinBox1 = NULL;
@@ -116,6 +118,17 @@ struct DashboardState {
 
 // Global dashboard state instance
 static DashboardState dashboardState;
+
+static void Dashboard_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
+    if (!dashboardState.taskbar) return;
+
+    if (openOrdersCount > 0) {
+        dashboardState.taskbar->SetProgressState(hWnd, TBPF_ERROR);
+        dashboardState.taskbar->SetProgressValue(hWnd, 100, 100);
+    } else {
+        dashboardState.taskbar->SetProgressState(hWnd, TBPF_NOPROGRESS);
+    }
+}
 
 void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
@@ -513,6 +526,7 @@ void Coins_UpdateLabels(HWND hWnd) {
             dashboardState.orderColor = openOrdersCount ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
         }
     }
+    Dashboard_UpdateTaskbarOrders(hWnd, openOrdersCount);
     
     COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (dashboardState.hCoin_BigPnL) {
@@ -1135,6 +1149,14 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             api().addApiUpdateWindow(hWnd);
 
+            if (SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED)))
+                dashboardState.taskbarComInitialized = true;
+            if (SUCCEEDED(CoCreateInstance(CLSID_TaskbarList, NULL, CLSCTX_INPROC_SERVER,
+                                           IID_PPV_ARGS(&dashboardState.taskbar)))) {
+                dashboardState.taskbar->HrInit();
+                dashboardState.taskbar->SetProgressState(hWnd, TBPF_NOPROGRESS);
+            }
+
             BindTrayIcon(hWnd);
 
             if (RegGetDword(DASHBOARD_CLASS_NAME, "Speaker", 0)) {
@@ -1188,6 +1210,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (dashboardState.hCoin_EUR)         SetWindowTextA(dashboardState.hCoin_EUR,         "--");
                 if (dashboardState.hCoin_USD)         SetWindowTextA(dashboardState.hCoin_USD,         "--");
                 dashboardState.currencyDashboard = "--";
+                Dashboard_UpdateTaskbarOrders(hWnd, 0);
             }
             UpdateTrayIcon(hWnd);
             break;
@@ -1530,6 +1553,16 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 SharedTts().Release();
             }
             dashboardState.coinsTtsOn = false;
+
+            if (dashboardState.taskbar) {
+                dashboardState.taskbar->SetProgressState(hWnd, TBPF_NOPROGRESS);
+                dashboardState.taskbar->Release();
+                dashboardState.taskbar = nullptr;
+            }
+            if (dashboardState.taskbarComInitialized) {
+                CoUninitialize();
+                dashboardState.taskbarComInitialized = false;
+            }
 
             dashboardState.hLblEUR = dashboardState.hLblUSD = dashboardState.hCoin_NetLiq = dashboardState.hCoin_BigPnL = dashboardState.hCoin_Pct = dashboardState.hCoin_Realized = dashboardState.hCoin_Speaker = dashboardState.hCoin_Lock = NULL;
             dashboardState.hCoin_Positions = dashboardState.hCoin_Unrealized = dashboardState.hCoin_Dividends = dashboardState.hCoin_Accruals = dashboardState.hCoin_BuyingPower = dashboardState.hCoin_MaintMargin = NULL;
