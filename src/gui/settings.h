@@ -516,7 +516,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     std::string tidA(tid.begin(), tid.end());
                     Settings_SaveTtsVoice(tidA);
                     // Notify all open windows to hot-swap to the new voice immediately
-                    DWORD pid = GetCurrentProcessId();
                     EnumWindows([](HWND hw, LPARAM) -> BOOL {
                         DWORD wpid;
                         GetWindowThreadProcessId(hw, &wpid);

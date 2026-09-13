@@ -164,7 +164,8 @@ static void UpdateMarketClock(HWND hWnd) {
 
     // Get current time in New York (Eastern Time)
     auto now = std::chrono::system_clock::now();
-    std::chrono::zoned_time zt{"America/New_York", now};
+    static const std::chrono::time_zone* nyZone = std::chrono::locate_zone("America/New_York");
+    std::chrono::zoned_time zt{nyZone, now};
     auto ny_time = zt.get_local_time();
     
     // Extract exact time of day and weekday
@@ -258,6 +259,66 @@ static void UpdateMarketClock(HWND hWnd) {
 
     SetWindowTextA(dashboardState.hCoin_Clock, time_left_str.c_str());
     InvalidateRect(dashboardState.hCoin_Clock, NULL, TRUE);
+}
+
+static void Dashboard_ApplyFocusLayout(HWND hWnd, bool active) {
+    const int m = 10;
+    const int boxW = 226;
+    const int y1 = 8;
+    const int box1H = 94;
+    const int y2 = y1 + box1H + 9;
+    const int box2H = 124;
+    const int y3 = y2 + box2H + 9;
+    const int box3H = 64;
+
+    const int show = active ? SW_SHOW : SW_HIDE;
+    ShowWindow(dashboardState.hLblDividends, show);
+    ShowWindow(dashboardState.hLblAccruals, show);
+    ShowWindow(dashboardState.hCoin_Accruals, show);
+    ShowWindow(dashboardState.hCoin_Dividends, show);
+    ShowWindow(dashboardState.hCoin_Cash, show);
+    ShowWindow(dashboardState.hLblEUR, show);
+    ShowWindow(dashboardState.hLblUSD, show);
+
+    HWND controls[] = {
+        dashboardState.hCoinBox2, dashboardState.hLblBP,
+        dashboardState.hCoin_BuyingPower, dashboardState.hLblMM,
+        dashboardState.hCoin_MaintMargin, dashboardState.hCoinBox3,
+        dashboardState.hCoin_EUR, dashboardState.hCoin_USD
+    };
+    HDWP hdwp = BeginDeferWindowPos((int)std::size(controls));
+    if (!hdwp) return;
+
+    if (active) {
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoinBox2, NULL, m, y2, boxW, box2H, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hLblBP, NULL, m + 12, y2 + 80, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_BuyingPower, NULL, m + 105, y2 + 80, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hLblMM, NULL, m + 12, y2 + 100, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_MaintMargin, NULL, m + 97, y2 + 100, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoinBox3, NULL, m, y3, boxW, box3H, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_EUR, NULL, m + 50, y3 + 20, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_USD, NULL, m + 50, y3 + 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+    } else {
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoinBox2, NULL, m, y2, boxW, box2H - 40, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hLblBP, NULL, m + 12, y2 + 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_BuyingPower, NULL, m + 105, y2 + 40, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hLblMM, NULL, m + 12, y2 + 60, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_MaintMargin, NULL, m + 97, y2 + 60, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoinBox3, NULL, m, y3 - 40, boxW, box3H - 20, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_EUR, NULL, m + 12, y3 - 20, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+        hdwp = DeferWindowPos(hdwp, dashboardState.hCoin_USD, NULL, m + 112, y3 - 20, boxW - 124, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    EndDeferWindowPos(hdwp);
+
+    LONG_PTR style = GetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE);
+    style &= ~SS_TYPEMASK;
+    SetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE, style | (active ? SS_RIGHT : SS_LEFT));
+
+    RECT windowRect;
+    GetWindowRect(hWnd, &windowRect);
+    MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth,
+               active ? windowDashboardHeight : windowDashboardHeight - 60 - 38, TRUE);
+    dashboardState.fullDetails = active;
 }
 
 #define ID_COIN_NETLIQ   5100
@@ -432,12 +493,14 @@ void Coins_UpdateLabels(HWND hWnd) {
     int box2H = 124;
     int y3 = y2 + box2H + 9;
     const int boxW = 226;
+    HDWP valueLabelMoves = BeginDeferWindowPos(4);
 
     if (dashboardState.hCoin_NetLiq) {
         std::string formattedNum = FormatWithCommas(NetLiquidation, dashboardState.fullDetails);
         if (SetWindowTextAIfChanged(dashboardState.hCoin_NetLiq, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
-            SetWindowPos(dashboardState.hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            if (valueLabelMoves)
+                valueLabelMoves = DeferWindowPos(valueLabelMoves, dashboardState.hCoin_NetLiq, NULL, m + 10 + 48, y1 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
 
@@ -445,7 +508,8 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = std::to_string(openOrdersCount);
         if (SetWindowTextAIfChanged(dashboardState.hCoin_Orders, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont11ptbold.get(), formattedNum.c_str());
-            SetWindowPos(dashboardState.hCoin_Orders, NULL, m + boxW - 30, y2, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            if (valueLabelMoves)
+                valueLabelMoves = DeferWindowPos(valueLabelMoves, dashboardState.hCoin_Orders, NULL, m + boxW - 30, y2, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
             dashboardState.orderColor = openOrdersCount ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
         }
     }
@@ -479,7 +543,8 @@ void Coins_UpdateLabels(HWND hWnd) {
         std::string formattedNum = FormatWithCommas(grossPos, dashboardState.fullDetails);
         if (SetWindowTextAIfChanged(dashboardState.hCoin_Positions, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
-            SetWindowPos(dashboardState.hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            if (valueLabelMoves)
+                valueLabelMoves = DeferWindowPos(valueLabelMoves, dashboardState.hCoin_Positions, NULL, m + 10 + 70, y2 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
     if (dashboardState.hCoin_Unrealized) {
@@ -522,7 +587,8 @@ void Coins_UpdateLabels(HWND hWnd) {
             COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
             dashboardState.cashColor = clr;
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
-            SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+            if (valueLabelMoves)
+                valueLabelMoves = DeferWindowPos(valueLabelMoves, dashboardState.hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
     if (dashboardState.hCoin_EUR) {
@@ -541,6 +607,7 @@ void Coins_UpdateLabels(HWND hWnd) {
             dashboardState.usdColor = clr;
         }
     }
+    if (valueLabelMoves) EndDeferWindowPos(valueLabelMoves);
 }
 
 void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HMENU menuId, int iconId) {
@@ -1074,7 +1141,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 Coins_ToggleTTS(hWnd);
             }
             
-            SetTimer(hWnd, TIMER_MARKET_CLOCK, 21000, NULL); // live market clock
+            SetTimer(hWnd, TIMER_MARKET_CLOCK, 21000, NULL); // live market clock, intentionaly delayed 21 seconds
             SendMessage(hWnd, WM_TIMER, TIMER_MARKET_CLOCK, 0);
 
             SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
@@ -1084,58 +1151,11 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
         
         case WM_ACTIVATE: {
-            RECT windowRect; 
-            GetWindowRect(hWnd, &windowRect);
-            const int m    = 10;
-            const int boxW = 226;
-            int y1 = 8;
-            int box1H = 94;
-            int y2 = y1 + box1H + 9; // y2 = 114
-            int box2H = 124;
-            int y3 = y2 + box2H + 9; // y3 = 250
-            int box3H = 64;
-            LONG_PTR style = GetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE);
             if (LOWORD(wParam) != WA_INACTIVE) {
                 if (lockHotkeys) break;
-                ShowWindow(dashboardState.hLblDividends, SW_SHOW);
-                ShowWindow(dashboardState.hLblAccruals, SW_SHOW);
-                ShowWindow(dashboardState.hCoin_Accruals, SW_SHOW);
-                ShowWindow(dashboardState.hCoin_Dividends, SW_SHOW);
-                ShowWindow(dashboardState.hCoin_Cash, SW_SHOW);
-                ShowWindow(dashboardState.hLblEUR, SW_SHOW);
-                ShowWindow(dashboardState.hLblUSD, SW_SHOW);
-                SetWindowPos(dashboardState.hCoinBox2, NULL, m, y2, boxW, box2H, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hLblBP, NULL,  m + 12, y2 + 80, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoin_BuyingPower, NULL, m + 105, y2 + 80, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hLblMM, NULL, m + 12, y2 + 100, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoin_MaintMargin, NULL, m + 97, y2 + 100, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoinBox3, NULL, m, y3, boxW, box3H, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoin_EUR, NULL, m + 50, y3 + 20, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                style &= ~SS_TYPEMASK;
-                SetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE, style | SS_RIGHT);
-                SetWindowPos(dashboardState.hCoin_USD, NULL, m + 50, y3 + 40, boxW - 62, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight     , TRUE);
-                dashboardState.fullDetails = true;
+                Dashboard_ApplyFocusLayout(hWnd, true);
             } else {
-                ShowWindow(dashboardState.hLblDividends, SW_HIDE);
-                ShowWindow(dashboardState.hLblAccruals, SW_HIDE);
-                ShowWindow(dashboardState.hCoin_Accruals, SW_HIDE);
-                ShowWindow(dashboardState.hCoin_Dividends, SW_HIDE);
-                ShowWindow(dashboardState.hCoin_Cash, SW_HIDE);
-                ShowWindow(dashboardState.hLblEUR, SW_HIDE);
-                ShowWindow(dashboardState.hLblUSD, SW_HIDE);
-                SetWindowPos(dashboardState.hCoinBox2, NULL, m, y2, boxW, box2H - 40, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hLblBP, NULL,  m + 12, y2 + 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoin_BuyingPower, NULL, m + 105, y2 + 40, boxW - 117, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hLblMM, NULL, m + 12, y2 + 60, 85, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoin_MaintMargin, NULL, m + 97, y2 + 60, boxW - 109, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoinBox3, NULL, m, y3 - 40, boxW, box3H - 20, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(dashboardState.hCoin_EUR, NULL, m + 12, y3 + 20 - 40, 100, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                style &= ~SS_TYPEMASK;
-                SetWindowLongPtr(dashboardState.hCoin_EUR, GWL_STYLE, style | SS_LEFT);
-                SetWindowPos(dashboardState.hCoin_USD, NULL, m + 112, y3 + 20 - 40, boxW - 124, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth, windowDashboardHeight - 60 - 38, TRUE);
-                dashboardState.fullDetails = false;
+                Dashboard_ApplyFocusLayout(hWnd, false);
             }
             if (api().isMarketDataConnected() && api().isTradingConnected()) {
                 Coins_UpdateLabels(hWnd);
@@ -1434,7 +1454,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
                     HMENU hMenu = CreatePopupMenu();
                     for (int i = 0; i < LINKS_COUNT; ++i) {
-                        if (quickLinks[i].label == "Paper" || quickLinks[i].label == "GitHub")
+                        if (strcmp(quickLinks[i].label, "Paper") == 0 || strcmp(quickLinks[i].label, "GitHub") == 0)
                             AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
                         AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
                     }

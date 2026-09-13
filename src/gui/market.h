@@ -415,16 +415,13 @@ static inline int TimeToSeconds(const std::string& timeStr) {
     return 0;
 }
 
-static void TimeSales_InsertTick(HWND hList, double price, double size, const std::string& time, COLORREF color) {
-    std::string priceStr = FormatFixed(price, 2);
-    int timeSec = TimeToSeconds(time);
+static void TimeSales_InsertTick(HWND hList, const std::string& time, COLORREF color, std::string priceStr, std::string sizeStr, int timeSec) {
     LVITEMA lvi = {};
     lvi.mask = LVIF_TEXT | LVIF_PARAM;
     lvi.iItem = 0;
     lvi.pszText = (LPSTR)priceStr.c_str();
     lvi.lParam = (static_cast<LPARAM>(static_cast<uint32_t>(timeSec)) << 32) | static_cast<uint32_t>(color);
     ListView_InsertItem(hList, &lvi);
-    std::string sizeStr = FormatFixed(size, 0);
     ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
     ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
 }
@@ -438,12 +435,8 @@ static void Market_TrimTimeSalesLists(TsState* state) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
         if (count <= maxRows) return;
-        int excess = count - maxRows;
-        while (excess-- > 0) {
-            int last = ListView_GetItemCount(hList) - 1;
-            if (last < 0) break;
-            ListView_DeleteItem(hList, last);
-        }
+        for (int row = count - 1; row >= maxRows; --row)
+            ListView_DeleteItem(hList, row);
     };
 
     trim(state->hTsList,      limitLong);
@@ -2301,7 +2294,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            tick->side = 0;
+            tick->side = darkMode ? DM_TEXT : LM_TEXT;
             if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0 && tick->price != state->l1Info.last) {
                 if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
                 else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
@@ -2310,10 +2303,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
                 else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
             }
-            state->lastTimeSec = TimeToSeconds(tick->time);
-            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->price, tick->size, tick->time, tick->side);
-            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->price, tick->size, tick->time, tick->side);
-            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->price, tick->size, tick->time, tick->side);
+            state->lastTimeSec   = TimeToSeconds(tick->time);
+            std::string priceStr = FormatFixed(tick->price, 2);
+            std::string sizeStr  = FormatFixed(tick->size, 0);
+            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec );
+            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
+            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
             Market_TrimTimeSalesLists(state);
 
             // ── Volume rate / print-frequency rate: feed the rolling tick history ──
