@@ -1200,7 +1200,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         }
 
         case WM_ACCOUNT_SUMMARY:
-        case WM_PNL_UPDATE:
             Coins_UpdateLabels(hWnd);
             break;
 
