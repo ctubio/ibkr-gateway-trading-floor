@@ -18,17 +18,17 @@ class RegisterWindowRAII {
     bool allowed = true;
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
-        RegisterWindowClass(hInst_, WndProcDashboard,          DASHBOARD_CLASS_NAME,          101);
-        RegisterWindowClass(hInst_, WndProcExchange,           DASHBOARD_EXCHANGE_CLASS_NAME, 106, true);
-        RegisterWindowClass(hInst_, WndProcAlerts,             ALERTS_EDITOR_CLASS_NAME,             102, true);
-        RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,       102, true);
-        RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,             103);
-        RegisterWindowClass(hInst_, WndProcDiamonds,           DIAMONDS_CLASS_NAME,           104);
-        RegisterWindowClass(hInst_, WndProcMarket,             MARKET_CLASS_NAME,             105);
-        RegisterWindowClass(hInst_, WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,      105, true);
-        RegisterWindowClass(hInst_, WndProcSettings,           SETTINGS_CLASS_NAME,           107);
-        RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,           108, true);
-        RegisterWindowClass(hInst_, WndProcLock,               LOCK_CLASS_NAME,               110, true);
+        RegisterWindowClass(hInst_, WndProcDashboard,          DASHBOARD_CLASS_NAME,            101);
+        RegisterWindowClass(hInst_, WndProcExchange,           DASHBOARD_EXCHANGE_CLASS_NAME,   106, true);
+        RegisterWindowClass(hInst_, WndProcAlerts,             ALERTS_EDITOR_CLASS_NAME,        102, true);
+        RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true);
+        RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,               103);
+        RegisterWindowClass(hInst_, WndProcDiamonds,           DIAMONDS_CLASS_NAME,             104);
+        RegisterWindowClass(hInst_, WndProcMarket,             MARKET_CLASS_NAME,               105);
+        RegisterWindowClass(hInst_, WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,        105, true);
+        RegisterWindowClass(hInst_, WndProcSettings,           SETTINGS_CLASS_NAME,             107);
+        RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,             108, true);
+        RegisterWindowClass(hInst_, WndProcLock,               LOCK_CLASS_NAME,                 110, true);
         RegisterWindowClass(hInst_, WndProcScreenFlashOverlay, SCREEN_FLASH_OVERLAY_CLASS_NAME, 102, true);
 
         CreateScreenFlashOverlay(hInst_);

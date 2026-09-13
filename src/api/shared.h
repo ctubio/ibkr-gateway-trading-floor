@@ -223,7 +223,7 @@ struct TsState {
     HBITMAP hbmHeader    = NULL;
 };
 // ── Market Windows States ─────────────────────
-static std::map<HWND, TsState*> marketStates;
+static std::unordered_map<HWND, TsState*> marketStates;
 
 // ── Text Labels ───────────────────────────────────────────────────────────
 static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
@@ -299,14 +299,6 @@ void SetWindowTaskbarId(HWND hWnd, const wchar_t* id) {
     }
 }
 
-HWND Market_FindWindowByKey(const std::string& windowKey) {
-    for (const auto& [h, st] : marketStates) {
-        if (st && (std::string(MARKET_CLASS_NAME) + "_" + st->symbol == windowKey)) {
-            return h;
-        }
-    }
-    return NULL;
-}
 
 HWND StartGenericWindow(const char* className, const char* title, const wchar_t* taskbarId, int defaultW, int defaultH, HINSTANCE hInst = NULL, const std::string& windowKey = "", LPVOID lpParam = NULL) {
     bool allowIsolatedInstances = (strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0);
@@ -316,7 +308,12 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
 
     if (!allowIsolatedInstances) {
         if (allowInstancesBySymbol) {
-            hWnd = Market_FindWindowByKey(windowKey);
+            for (const auto& [h, st] : marketStates) {
+                if (st && (std::string(MARKET_CLASS_NAME) + "_" + st->symbol == windowKey)) {
+                    hWnd = h;
+                    break;
+                }
+            }
         } else {
             hWnd = FindWindowA(className, NULL);
         }
