@@ -141,7 +141,7 @@ void MutexGatewayInstance() {
         
         if (hMutex) CloseHandle(hMutex);
         
-        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1021));
     }
@@ -1365,6 +1365,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 }
                 return 0;
             }
+            break;
         }
 
         case WM_SHOWWINDOW:

@@ -36,7 +36,7 @@ static void Alerts_NotifyChanged(int conId) {
         TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(tsWindows[i].hWnd, GWLP_USERDATA);
         if (data && data->conId == conId) {
             PostMessage(tsWindows[i].hWnd, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);
-            break;
+            break; // only 1 market window per symbol exists
         }
     }
 }

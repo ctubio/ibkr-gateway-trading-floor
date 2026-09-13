@@ -56,16 +56,17 @@ static const int ORDER_COL_COUNT = (int)(sizeof(orderCols) / sizeof(orderCols[0]
 
 // Returns a color for the status text (used in NM_CUSTOMDRAW).
 static COLORREF Orders_StatusColor(const std::string& orderType, const std::string& status, bool dark) {
-    if (status == "Filled")  { // return RGB(196, 110, 43);
-        if (orderType == "BUY") return RGB(34, 82, 50);
-        else if (orderType == "SELL") return RGB(102, 43, 43);
-    } 
-    if (status == "Partially Filled")                 return RGB(255, 200, 60);
-    if (status == "Inactive")                 return COINS_CLR_GRAY;
-    if (status == "Submitted" || status == "PreSubmitted" || status == "PreSub" || status == "PendingSubmit" || status == "Pending" || status == "Unsent") {
-        if (orderType == "BUY") return RGB(80, 200, 120);
-        else if (orderType == "SELL") return RGB(220, 80, 80);
-    }
+    if (status == "Filled")
+        return orderType == "BUY" ? RGB(34, 82, 50) : RGB(102, 43, 43);
+
+    else if (status == "Partially Filled")
+        return RGB(255, 200, 60);
+
+    else if (status == "Inactive")
+        return COINS_CLR_GRAY;
+
+    else if (status == "Submitted" || status == "PreSubmitted" || status == "PreSub" || status == "PendingSubmit" || status == "Pending" || status == "Unsent")
+        return orderType == "BUY" ? RGB(80, 200, 120) : RGB(220, 80, 80);
         
     return dark ? DM_TEXT : LM_TEXT;
 }

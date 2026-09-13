@@ -391,9 +391,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_GROUP_ID);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    groupIdGateway = atoi(buf);
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    groupIdGateway = atoi(buf.data());
                 }
                 Settings_Save("GroupId", groupIdGateway);
             }
@@ -401,9 +401,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_CLIENT_ID);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    clientIdGateway = atoi(buf);
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    clientIdGateway = atoi(buf.data());
                 }
                 Settings_Save("ClientId", clientIdGateway);
             }
@@ -411,9 +411,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_ADDRESS);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    addressGateway = std::string(buf);
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    addressGateway = std::string(buf.data());
                 } else {
                     addressGateway = std::string("127.0.0.1");
                 }
@@ -436,9 +436,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
                 int len = GetWindowTextLength(hEdit);
                 if (len >= 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    lockScreen = std::string(buf);
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    lockScreen = std::string(buf.data());
                 }
                 Settings_SaveString("Lock", lockScreen);
             }
@@ -462,9 +462,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    qtyGateway = atoi(buf);
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    qtyGateway = atoi(buf.data());
                 }
                 Settings_Save("OrderQty", qtyGateway);
             }
@@ -472,9 +472,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    stopGateway = (float)atof(buf); // atof handles decimals
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    stopGateway = (float)atof(buf.data()); // atof handles decimals
                 }
                 Settings_SaveFloat("StopPrice", stopGateway);
             }
@@ -482,9 +482,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_PROFIT_VALUE);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    profitGateway = (float)atof(buf); // atof handles decimals
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    profitGateway = (float)atof(buf.data()); // atof handles decimals
                 }
                 Settings_SaveFloat("ProfitPrice", profitGateway);
             }
@@ -492,9 +492,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_RISK_VALUE);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    riskGateway = (float)atof(buf); // atof handles decimals
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    riskGateway = (float)atof(buf.data()); // atof handles decimals
                 }
                 Settings_SaveFloat("RiskPct", riskGateway);
             }
@@ -502,9 +502,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_SAFETY_VALUE);
                 int len = GetWindowTextLength(hEdit);
                 if (len > 0) {
-                    char buf[len + 1];
-                    GetWindowTextA(hEdit, buf, len + 1);
-                    safetyGateway = (float)atof(buf); // atof handles decimals
+                    std::vector<char> buf(len + 1);
+                    GetWindowTextA(hEdit, buf.data(), len + 1);
+                    safetyGateway = (float)atof(buf.data()); // atof handles decimals
                 }
                 Settings_SaveFloat("Safety", safetyGateway);
             }

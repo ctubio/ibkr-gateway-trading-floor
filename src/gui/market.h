@@ -235,14 +235,18 @@ static std::map<HWND, TsState*> tsStates;
 // Recomputes hTotalLabel (price × qty notional) for one editable-order row.
 static void Market_UpdateOrderRowTotalLabel(MarketOrderRow& row) {
     if (!row.hTotalLabel || !row.hPriceEdit || !row.hQtyEdit) return;
-    char priceBuf[32] = {}, qtyBuf[32] = {};
-    GetWindowTextA(row.hPriceEdit, priceBuf, sizeof(priceBuf));
+    double price = 0.0;
+    if (row.trailStopPrice > 0) {
+        price = row.trailStopPrice;
+    } else {
+        char priceBuf[32] = {};
+        GetWindowTextA(row.hPriceEdit, priceBuf, sizeof(priceBuf));
+        try { price = std::stod(priceBuf); } catch (...) { price = 0.0; }
+    }
+    double qty = 0.0;
+    char qtyBuf[32] = {};
     GetWindowTextA(row.hQtyEdit,   qtyBuf,   sizeof(qtyBuf));
-    double price = 0.0, qty = 0.0;
-    try {
-        price = row.trailStopPrice ? row. trailStopPrice : std::stod(priceBuf);
-        qty   = std::abs(std::stod(qtyBuf));
-    } catch (...) { price = 0.0; qty = 0.0; }
+    try { qty   = std::abs(std::stod(qtyBuf)); } catch (...) { qty = 0.0; }
     if (SetWindowTextAIfChanged(row.hTotalLabel, FormatWithCommas(price * qty)))
         InvalidateRect(row.hQtyEdit, NULL, TRUE);
 }
@@ -1288,7 +1292,6 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND hTsSearchList = CreateWindowA("LISTBOX", "", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY, 10, 40, 240, 180, hWnd, (HMENU)ID_MARKET_SEARCH_LIST, hInst, NULL);
             SetWindowSubclass(hTsSearchList, TsSearchListSubclass, 2, 0);
             SendMessage(hTsSearchList, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
-            SendMessage(ListView_GetHeader(hTsSearchList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
             SetFocus(hTsSearchEdit);
             break;
         }
@@ -1885,8 +1888,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 static void Market_SpeakLast(TsState* state) {
     if (!state->ttsOn) return;
     if (state->l1Info.last <= 0.0) return;
-    state->sparkline.AddPrice(state->l1Info.last);
-    state->sparkline.AddPrice(state->l1Info.last-1);
     std::string s = std::format("{:.2f}", state->l1Info.last);
     std::wstring ws(s.begin(), s.end());
     size_t dotPos = ws.find(L".00");
@@ -1908,7 +1909,6 @@ static void Market_Minimize(HWND hWnd, TsState* state) {
         Market_Layout_HideBar(hWnd, state);
     }
     RECT windowRect, clientRect; 
-    GetWindowRect(hWnd, &windowRect);
     GetClientRect(hWnd, &clientRect);
     GetWindowRect(hWnd, &windowRect);
     MoveWindow(hWnd, windowRect.left, windowRect.top, windowMarketWidth, state->minimized ? (windowRect.bottom - windowRect.top) - clientRect.bottom + HEADER_H : windowMarketHeight, TRUE);
@@ -2160,7 +2160,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
-    case WM_COMMAND:
+    case WM_COMMAND: {
         if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == STN_CLICKED && state) {
             Market_ToggleOVN(hWnd, state);
         }
@@ -2180,89 +2180,90 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
         }
         break;
+    }
 
-        // Paint order-bar edit backgrounds by orderSide.
-        // Price: BUY = dark green, SELL = dark red
-        // Stop: BUY = dark red, SELL = dark green
-        // Profit: BUY = dark red, SELL = dark green
-        // Qty (and anything else) falls through to the default dark/light handling.
-        case WM_CTLCOLOREDIT: {
-            if (state) {
-                HWND hCtrl = (HWND)lParam;
-                HDC hdc = (HDC)wParam;
-                bool isBuy = (state->orderSide == "BUY");
+    // Paint order-bar edit backgrounds by orderSide.
+    // Price: BUY = dark green, SELL = dark red
+    // Stop: BUY = dark red, SELL = dark green
+    // Profit: BUY = dark red, SELL = dark green
+    // Qty (and anything else) falls through to the default dark/light handling.
+    case WM_CTLCOLOREDIT: {
+        if (state) {
+            HWND hCtrl = (HWND)lParam;
+            HDC hdc = (HDC)wParam;
+            bool isBuy = (state->orderSide == "BUY");
 
-                if (hCtrl == state->hOrderPrice) {
+            if (hCtrl == state->hOrderPrice) {
+                SetTextColor(hdc, DM_TEXT);
+                SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
+                return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
+            }
+            if (hCtrl == state->hOrderStopPrice || hCtrl == state->hOrderProfitPrice) {
+                SetTextColor(hdc, DM_TEXT);
+                SetBkColor(hdc, isBuy ? COINS_BG_DARK_RED : COINS_BG_DARK_GREEN);
+                return (LRESULT)(isBuy ? hBrushDarkRed : hBrushDarkGreen);
+            }
+            for (auto& row : state->orderRows) {
+                if (hCtrl == row.hPriceEdit) {
+                    bool rowIsBuy = (row.action == "BUY");
                     SetTextColor(hdc, DM_TEXT);
-                    SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
-                    return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
+                    SetBkColor(hdc, rowIsBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
+                    return (LRESULT)(rowIsBuy ? hBrushDarkGreen : hBrushDarkRed);
                 }
-                if (hCtrl == state->hOrderStopPrice || hCtrl == state->hOrderProfitPrice) {
-                    SetTextColor(hdc, DM_TEXT);
-                    SetBkColor(hdc, isBuy ? COINS_BG_DARK_RED : COINS_BG_DARK_GREEN);
-                    return (LRESULT)(isBuy ? hBrushDarkRed : hBrushDarkGreen);
-                }
+            }
+        }
+        break;
+    }
+
+    case WM_CTLCOLORSTATIC: {
+        if (state) {
+            HWND hCtrl = (HWND)lParam;
+            HDC hdc = (HDC)wParam;
+            COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
+            bool transparent = false;
+
+            if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hTotalLabel || hCtrl == state->hOptStopTarget || hCtrl == state->hOptProfitTarget) {
+                clr = COINS_CLR_ORANGE;
+                transparent = true;
+            } else if (hCtrl == state->hRRLabel) {
+                clr = state->rrColor;
+                transparent = true;
+            } else if (hCtrl == state->hOptQtyLabel) {
+                clr = state->optQtyColor;
+                transparent = true;
+            } else if (hCtrl == state->hOptStopLabel) {
+                clr = state->optStopColor;
+                transparent = true;
+            } else if (hCtrl == state->hOrderLabel) {
+                clr = state->orderSide == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
+            } else if (hCtrl == state->hSpeakerBtn) {
+                clr = state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY;
+            } else if (hCtrl == state->hOVNButton) {
+                clr = state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
+            } else {
+                bool matchedRow = false;
                 for (auto& row : state->orderRows) {
-                    if (hCtrl == row.hPriceEdit) {
-                        bool rowIsBuy = (row.action == "BUY");
-                        SetTextColor(hdc, DM_TEXT);
-                        SetBkColor(hdc, rowIsBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
-                        return (LRESULT)(rowIsBuy ? hBrushDarkGreen : hBrushDarkRed);
+                    if (hCtrl == row.hTotalLabel) {
+                        clr = COINS_CLR_ORANGE; transparent = true; matchedRow = true; break;
+                    }
+                    if (hCtrl == row.hQtyTifLabel) {
+                        clr = (row.action == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED;
+                        transparent = true; matchedRow = true; break;
                     }
                 }
+                if (!matchedRow) break;
             }
-            break;
-        }
 
-        case WM_CTLCOLORSTATIC: {
-            if (state) {
-                HWND hCtrl = (HWND)lParam;
-                HDC hdc = (HDC)wParam;
-                COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
-                bool transparent = false;
-
-                if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hTotalLabel || hCtrl == state->hOptStopTarget || hCtrl == state->hOptProfitTarget) {
-                    clr = COINS_CLR_ORANGE;
-                    transparent = true;
-                } else if (hCtrl == state->hRRLabel) {
-                    clr = state->rrColor;
-                    transparent = true;
-                } else if (hCtrl == state->hOptQtyLabel) {
-                    clr = state->optQtyColor;
-                    transparent = true;
-                } else if (hCtrl == state->hOptStopLabel) {
-                    clr = state->optStopColor;
-                    transparent = true;
-                } else if (hCtrl == state->hOrderLabel) {
-                    clr = state->orderSide == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
-                } else if (hCtrl == state->hSpeakerBtn) {
-                    clr = state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY;
-                } else if (hCtrl == state->hOVNButton) {
-                    clr = state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
-                } else {
-                    bool matchedRow = false;
-                    for (auto& row : state->orderRows) {
-                        if (hCtrl == row.hTotalLabel) {
-                            clr = COINS_CLR_ORANGE; transparent = true; matchedRow = true; break;
-                        }
-                        if (hCtrl == row.hQtyTifLabel) {
-                            clr = (row.action == "BUY") ? COINS_CLR_GREEN : COINS_CLR_RED;
-                            transparent = true; matchedRow = true; break;
-                        }
-                    }
-                    if (!matchedRow) break;
-                }
-
-                SetTextColor(hdc, clr);
-                if (transparent) {
-                    SetBkMode(hdc, TRANSPARENT);
-                    return (LRESULT)GetStockObject(NULL_BRUSH); // no fill = truly transparent
-                }
-                SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
-                return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+            SetTextColor(hdc, clr);
+            if (transparent) {
+                SetBkMode(hdc, TRANSPARENT);
+                return (LRESULT)GetStockObject(NULL_BRUSH); // no fill = truly transparent
             }
-            break;
+            SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
+            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
         }
+        break;
+    }
 
     case WM_TIMER:
         if (wParam == TIMER_MARKET_SPEAKER && state && state->ttsOn)
