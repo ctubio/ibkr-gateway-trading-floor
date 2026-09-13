@@ -76,6 +76,14 @@ struct MarketOpenOrderSummary {
     double trailStopPrice = 0.0;
 };
 
+struct TimeSalesRow {
+    std::string time;
+    std::string price;
+    std::string size;
+    COLORREF color = 0;
+    int timeSec = 0;
+};
+
 struct TsState {
     HWND hTsList = NULL;
     HWND hTsListF100 = NULL;
@@ -89,6 +97,10 @@ struct TsState {
 
     // ── Level 1 quote ─────────────────────────────
     TradingAPI::L1Book l1Info;
+
+    std::deque<TimeSalesRow> tsRows;
+    std::deque<TimeSalesRow> tsRowsF100;
+    std::deque<TimeSalesRow> tsRowsF1000;
 
     // ── Paint limiter ─────────────────────────────────────────────────────────
     bool marketHdrDirty = false;
