@@ -60,6 +60,7 @@ struct DashboardState {
     std::string currencyDashboard = "--";
     ITaskbarList3* taskbar = nullptr;
     bool taskbarComInitialized = false;
+    TBPFLAG taskbarLastState = TBPF_NOPROGRESS;
     
     // Group boxes
     HWND hCoinBox1 = NULL;
@@ -123,9 +124,13 @@ static void Dashboard_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
     if (!dashboardState.taskbar) return;
 
     if (openOrdersCount > 0) {
-        dashboardState.taskbar->SetProgressState(hWnd, TBPF_ERROR);
-        dashboardState.taskbar->SetProgressValue(hWnd, 100, 100);
-    } else {
+        if (dashboardState.taskbarLastState != TBPF_ERROR) {
+            dashboardState.taskbarLastState = TBPF_ERROR;
+            dashboardState.taskbar->SetProgressState(hWnd, TBPF_ERROR);
+            dashboardState.taskbar->SetProgressValue(hWnd, 100, 100);
+        }
+    } else if (dashboardState.taskbarLastState != TBPF_NOPROGRESS) {
+        dashboardState.taskbarLastState = TBPF_NOPROGRESS;
         dashboardState.taskbar->SetProgressState(hWnd, TBPF_NOPROGRESS);
     }
 }
