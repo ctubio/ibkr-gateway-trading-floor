@@ -1,3 +1,5 @@
+1 RT_MANIFEST "res/app.manifest"
+
 101 ICON "res/ico/money_bag_3d.ico"
 102 ICON "res/ico/bell_3d.ico"
 103 ICON "res/ico/memo_3d.ico"

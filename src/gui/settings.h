@@ -78,21 +78,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
-// Call this on every window after creating it
-void ApplyDarkModeToAllWindows() {
-    // Enumerate all top-level windows owned by this process
-    EnumWindows([](HWND hWnd, LPARAM) -> BOOL {
-        DWORD pid;
-        GetWindowThreadProcessId(hWnd, &pid);
-        if (pid == GetCurrentProcessId()) {
-            ApplyDarkMode(hWnd);
-            InvalidateRect(hWnd, NULL, TRUE); // ← force repaint
-            RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
-        }
-        return TRUE;
-    }, 0);
-}
-
 // Add near the top of settings.h, e.g. just above WndProcSettings:
 static void Settings_SaveCredentialsFromUI(HWND hWnd) {
     char userBuf[256] = {}, passBuf[256] = {};

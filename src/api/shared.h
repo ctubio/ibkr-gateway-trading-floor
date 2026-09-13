@@ -1,5 +1,39 @@
 #pragma once
 
+// Call this on every window after creating it
+void ApplyDarkModeToAllWindows() {
+    // Enumerate all top-level windows owned by this process
+    EnumWindows([](HWND hWnd, LPARAM) -> BOOL {
+        DWORD pid;
+        GetWindowThreadProcessId(hWnd, &pid);
+        if (pid == GetCurrentProcessId()) {
+            ApplyDarkMode(hWnd);
+            InvalidateRect(hWnd, NULL, TRUE); // ← force repaint
+            RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
+        }
+        return TRUE;
+    }, 0);
+}
+
+static void SyncDarkModeFromWindows() {
+    DWORD appsUseLightTheme = 1;
+    DWORD valueSize = sizeof(appsUseLightTheme);
+    LSTATUS status = RegGetValueA(
+        HKEY_CURRENT_USER,
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "AppsUseLightTheme",
+        RRF_RT_REG_DWORD,
+        NULL,
+        &appsUseLightTheme,
+        &valueSize);
+    if (status != ERROR_SUCCESS) return;
+
+    bool windowsDarkMode = (appsUseLightTheme == 0);
+    if (darkMode == windowsDarkMode) return;
+    darkMode = windowsDarkMode;
+    ApplyDarkModeToAllWindows();
+}
+
 static NOTIFYICONDATAW nid = { 0 };
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
@@ -680,6 +714,14 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
         case WM_NCACTIVATE:
             // Pass TRUE as wParam to force DefWindowProc to render the titlebar in active state
             return DefWindowProc(hWnd, message, TRUE, lParam);
+        case WM_SETTINGCHANGE:
+            // Windows normally supplies "ImmersiveColorSet", but some builds
+            // send a null or different setting name for the same theme change.
+            SyncDarkModeFromWindows();
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        case WM_THEMECHANGED:
+            SyncDarkModeFromWindows();
+            return DefWindowProc(hWnd, message, wParam, lParam);
         case WM_CLOSE: {
             char className[256] = {};
             GetClassNameA(hWnd, className, sizeof(className));
