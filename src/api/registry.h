@@ -137,10 +137,12 @@ void RegDelete(const char* subPath, const char* valueName) {
 // connection at all (e.g. weekends). Populated by TradingAPI::Impl's one-shot
 // dividend fetch (see queueDividendFetch / HandleDividendTick in ibkr.cpp),
 // which fires once per position per connection and then drops its subscription.
-
 void Settings_Dividends_Save(const std::string& symbol, int conId, double annualDividends, double dividendAmount,
                               const std::string& dividendDate, double dividendDateSortable) {
-    std::string packed = std::format("{} {} {} {}", annualDividends, dividendAmount, dividendDate, dividendDateSortable);
+    // dividendDate is packed LAST and read as "everything remaining" on load,
+    // since it's the only field whose content (format) we don't control and
+    // it could contain a space.
+    std::string packed = std::format("{} {} {} {}", annualDividends, dividendAmount, dividendDateSortable, dividendDate);
     std::string key = std::format("{}_{}", symbol, conId);
     RegSetString("Dividends", key.c_str(), packed);
 }
@@ -151,20 +153,22 @@ bool Settings_Dividends_Load(const std::string& symbol, int conId, double& annua
     std::string packed = RegGetString("Dividends", key.c_str(), "");
     if (packed.empty()) return false;
 
-    std::vector<std::string> parts;
-    size_t pos = 0;
-    while (true) {
-        size_t next = packed.find(' ', pos);
-        parts.push_back(packed.substr(pos, next == std::string::npos ? std::string::npos : next - pos));
-        if (next == std::string::npos) break;
-        pos = next + 1;
-    }
-    if (parts.size() < 4) return false;
+    // Fields are packed as "annualDividends dividendAmount dividendDateSortable dividendDate".
+    // Only the first 3 spaces are delimiters; everything after the 3rd is taken
+    // verbatim as dividendDate, so a space inside the date can't shift/corrupt
+    // the numeric fields.
+    size_t pos1 = packed.find(' ');
+    if (pos1 == std::string::npos) return false;
+    size_t pos2 = packed.find(' ', pos1 + 1);
+    if (pos2 == std::string::npos) return false;
+    size_t pos3 = packed.find(' ', pos2 + 1);
+    if (pos3 == std::string::npos) return false;
+
     try {
-        annualDividends     = std::stod(parts[0]);
-        dividendAmount      = std::stod(parts[1]);
-        dividendDate         = parts[2];
-        dividendDateSortable = std::stod(parts[3]);
+        annualDividends      = std::stod(packed.substr(0, pos1));
+        dividendAmount       = std::stod(packed.substr(pos1 + 1, pos2 - pos1 - 1));
+        dividendDateSortable = std::stod(packed.substr(pos2 + 1, pos3 - pos2 - 1));
+        dividendDate          = packed.substr(pos3 + 1);
     } catch (...) { return false; }
     return true;
 }

@@ -480,7 +480,25 @@ static std::string HtmlStripTagsToPlainText(const std::string& fragment, const s
 // close tag (mirrors soup.find(tagName, class_=...) + reading that element's contents).
 static std::string HtmlFindElementBodyIf(const std::string& html, const std::string& tagName,
                                           const std::function<bool(const std::string&)>& matches) {
-    std::regex openRe("<" + tagName + R"(\b[^>]*>)", std::regex::icase);
+    using RegexPair = std::pair<std::regex, std::regex>;
+    static std::mutex regexCacheMutex;
+    static std::map<std::string, RegexPair> regexCache;
+    const RegexPair* patterns;
+    {
+        std::lock_guard<std::mutex> lock(regexCacheMutex);
+        auto it = regexCache.find(tagName);
+        if (it == regexCache.end()) {
+            it = regexCache.emplace(
+                tagName,
+                RegexPair{
+                    std::regex("<" + tagName + R"(\b[^>]*>)", std::regex::icase),
+                    std::regex("<\\s*(/?)\\s*" + tagName + R"(\b[^>]*>)", std::regex::icase)
+                }).first;
+        }
+        patterns = &it->second;
+    }
+
+    const std::regex& openRe = patterns->first;
     auto begin = std::sregex_iterator(html.begin(), html.end(), openRe);
     auto end   = std::sregex_iterator();
 
@@ -490,7 +508,7 @@ static std::string HtmlFindElementBodyIf(const std::string& html, const std::str
         if (tag.size() >= 2 && tag[tag.size() - 2] == '/') return ""; // self-closed, no body
 
         size_t contentStart = (size_t)it->position() + tag.size();
-        std::regex tagRe("<\\s*(/?)\\s*" + tagName + R"(\b[^>]*>)", std::regex::icase);
+        const std::regex& tagRe = patterns->second;
         int depth = 1;
         auto tb = std::sregex_iterator(html.begin() + contentStart, html.end(), tagRe);
         auto te = std::sregex_iterator();
