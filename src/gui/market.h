@@ -1,7 +1,7 @@
 #pragma once
 
-int windowMarketWidth  = 545;
-int windowMarketHeight = 545;
+static const int windowMarketWidth  = 545;
+static const int windowMarketHeight = 545;
 
 void StartMarketSearch() {
     HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",

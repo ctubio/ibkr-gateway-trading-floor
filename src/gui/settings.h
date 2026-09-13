@@ -4,8 +4,8 @@
 // Client area is 560px wide: two 252px fieldsets with a 16px gutter between them (252 + 16 + 252 = 560).
 // The outer window (title bar + borders) adds ~36px horizontally and ~30px vertically, giving a
 // total size of 596x713.
-int WindowSettingsWidth = 543;
-int WindowSettingsHeight = 430;
+static const int WindowSettingsWidth = 543;
+static const int WindowSettingsHeight = 430;
 
 void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", WindowSettingsWidth, WindowSettingsHeight); }
 

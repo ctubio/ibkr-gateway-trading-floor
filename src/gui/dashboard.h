@@ -1,7 +1,7 @@
 #pragma once
 
-int windowDashboardWidth  = 250;
-int windowDashboardHeight = 382;
+static const int windowDashboardWidth  = 250;
+static const int windowDashboardHeight = 382;
 
 void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor" GATEWAY_SPACE GATEWAY_NAME, L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 

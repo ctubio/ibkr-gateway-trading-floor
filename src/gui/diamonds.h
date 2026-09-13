@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-int windowDiamondsWidth = 970;
+static const int windowDiamondsWidth = 970;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001

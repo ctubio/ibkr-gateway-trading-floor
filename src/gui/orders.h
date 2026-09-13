@@ -1,6 +1,6 @@
 #pragma once
 
-int windowOrdersWidth = 465;
+static const int windowOrdersWidth = 465;
 
 void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPIClientTradingFloor.Orders", windowOrdersWidth, 240); }
 
