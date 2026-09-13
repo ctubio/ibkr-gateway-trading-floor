@@ -269,11 +269,8 @@ void InitDarkBrushes() {
     hLightBrushBg   = GetSysColorBrush(COLOR_WINDOW);
     hLightBrushBg2  = CreateSolidBrush(RGB(245,245,245));
     
-    hSeparatorPenDark   = CreatePen(PS_SOLID, 1, RGB(60,60,60));
-    hSeparatorPenLight  = CreatePen(PS_SOLID, 1, RGB(200,200,200));
-    hColumnSeparatorPen = CreatePen(PS_SOLID, 1, DM_SEPARATOR);
-    hColumnHeaderPen    = CreatePen(PS_SOLID, 1, DM_BORDER);
-    hBorderPen          = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+    hBorderPenLight = CreatePen(PS_SOLID, 1, RGB(200,200,200));
+    hBorderPen      = CreatePen(PS_SOLID, 1, DM_BORDER);
 
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;

@@ -1747,7 +1747,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── Bottom separator ──────────────────────────────────────────────────────
     SelectObject(hdc, hFont11ptbold.get());
-    HPEN hOldPen = (HPEN)SelectObject(hdc, darkMode ? hSeparatorPenDark : hSeparatorPenLight);
+    HPEN hOldPen = (HPEN)SelectObject(hdc, darkMode ? hBorderPen : hBorderPenLight);
     MoveToEx(hdc, 0, HEADER_H - 1, NULL);
     LineTo(hdc, rc.right, HEADER_H - 1);
     SelectObject(hdc, hOldPen);

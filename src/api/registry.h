@@ -7,7 +7,6 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATE
 #define DM_BG2       RGB(34,  34,  43)   // Header/Alternate row background
 #define DM_TEXT      RGB(230, 230, 230)  // Crisp, slightly off-white text
 #define DM_BORDER    RGB(65,  65,  65)   // Outer borders
-#define DM_SEPARATOR RGB(85,  85,  85)   // Subtle inner column dividers
 
 // Light mode colors  
 #define LM_BG        GetSysColor(COLOR_BTNFACE)
@@ -40,10 +39,7 @@ static HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and othe
 static HBRUSH hLightBrushBg = NULL;
 static HBRUSH hLightBrushBg2 = NULL;
 
-static HPEN hSeparatorPenLight = NULL;
-static HPEN hSeparatorPenDark = NULL;
-static HPEN hColumnSeparatorPen = NULL;
-static HPEN hColumnHeaderPen = NULL;
+static HPEN hBorderPenLight = NULL;
 static HPEN hBorderPen = NULL;
 
 static HWND hDebugEdit = NULL;
@@ -506,14 +502,14 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                     RECT rc = cd->rc;
 
                     // 1. Draw modern, subtle separators
-                    HPEN hOldPen = (HPEN)SelectObject(hdc, hColumnSeparatorPen);
+                    HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
                     
                     // Draw a vertical divider, inset by 4 pixels (doesn't touch top/bottom edges)
                     MoveToEx(hdc, rc.right - 1, rc.top + 4, NULL);
                     LineTo(hdc, rc.right - 1, rc.bottom - 4);
 
                     // Draw a single subtle bottom border under the header
-                    SelectObject(hdc, hColumnHeaderPen);
+                    SelectObject(hdc, hBorderPen);
                     MoveToEx(hdc, rc.left, rc.bottom - 1, NULL);
                     LineTo(hdc, rc.right, rc.bottom - 1);
 
@@ -580,7 +576,7 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
             OffsetRect(&rcWin, -rcWin.left, -rcWin.top);
 
             // WS_EX_CLIENTEDGE draws a 2-pixel sunken border; overdraw it.
-            HPEN hOld  = (HPEN)SelectObject(hdc, hColumnHeaderPen);
+            HPEN hOld  = (HPEN)SelectObject(hdc, hBorderPen);
             HBRUSH hBr = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
 
             // Outer edge
