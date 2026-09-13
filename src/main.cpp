@@ -29,6 +29,9 @@ public:
         RegisterWindowClass(hInst_, WndProcSettings,           SETTINGS_CLASS_NAME,           107);
         RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,           108, true);
         RegisterWindowClass(hInst_, WndProcLock,               LOCK_CLASS_NAME,               110, true);
+        RegisterWindowClass(hInst_, WndProcScreenFlashOverlay, SCREEN_FLASH_OVERLAY_CLASS_NAME, 102, true);
+
+        CreateScreenFlashOverlay(hInst_);
 
         LoadRegistrySettings();
 
@@ -45,6 +48,7 @@ public:
     }
     bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
+        DestroyScreenFlashOverlay();
         UnregisterClass(DASHBOARD_CLASS_NAME, hInst_);
         UnregisterClass(DASHBOARD_EXCHANGE_CLASS_NAME, hInst_);
         UnregisterClass(ALERTS_EDITOR_CLASS_NAME, hInst_);
@@ -56,6 +60,7 @@ public:
         UnregisterClass(SETTINGS_CLASS_NAME, hInst_);
         UnregisterClass(DEBUGLOG_CLASS_NAME, hInst_);
         UnregisterClass(LOCK_CLASS_NAME, hInst_);
+        UnregisterClass(SCREEN_FLASH_OVERLAY_CLASS_NAME, hInst_);
     }
 };
 

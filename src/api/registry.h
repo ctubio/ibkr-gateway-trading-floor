@@ -1307,10 +1307,13 @@ void Session_RestoreWindows(
                     std::string token = tsSaved.substr(start, end - start);
                     auto dot = token.find('.');
                     if (dot != std::string::npos) {
-                        int cid = std::stoi(token.substr(0, dot));
-                        std::string sym = token.substr(dot + 1);
-                        Settings_Market_SetOpenedLast(std::string(MARKET_CLASS_NAME) + "_" + sym);
-                        StartMarket(sym, cid);
+                        int conId = 0;
+                        try { conId = std::stoi(token.substr(0, dot)); } catch (...) { conId = 0; }
+                        if (conId > 0) {
+                            std::string sym = token.substr(dot + 1);
+                            Settings_Market_SetOpenedLast(std::string(MARKET_CLASS_NAME) + "_" + sym);
+                            StartMarket(sym, conId);
+                        }
                     }
                     start = end + 1;
                 }

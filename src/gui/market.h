@@ -29,38 +29,44 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
         }
     }
 
-    if (!alreadyOpen) {
-        // ── 4-window "slot" layout ────────────────────────────────────────
-        std::string flaggedKey = Settings_Market_GetOpenedLastKey();
-        if (!flaggedKey.empty()) {
-            HWND hFlaggedWnd = NULL;
-            for (auto& mw : tsWindows) {
-                if (std::string(MARKET_CLASS_NAME) + "_" + mw.symbol == flaggedKey) { hFlaggedWnd = mw.hWnd; break; }
-            }
+    if (alreadyOpen) {
+        StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, NULL);
+        return;
+    }
 
-            if (hFlaggedWnd && IsWindow(hFlaggedWnd)) {
-                // Flagged window is still open -- only steal its slot once
-                // we're already at capacity.
-                if ((int)tsWindows.size() >= 4) {
-                    WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-                    GetWindowPlacement(hFlaggedWnd, &wp);
-                    SaveWinPositionRaw(key,
-                        wp.rcNormalPosition.left, wp.rcNormalPosition.top,
-                        wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
-                        wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
-                    DestroyWindow(hFlaggedWnd); // synchronous -- runs WM_DESTROY, which re-flags itself
-                }
-            } else {
-                // Flagged window is already closed -- its slot is free.
-                int fx, fy, fw, fh;
-                if (LoadWinPosition(flaggedKey.c_str(), fx, fy, fw, fh))
-                    SaveWinPositionRaw(key, fx, fy, fw, fh);
+    // ── 4-window "slot" layout ────────────────────────────────────────
+    std::string flaggedKey = Settings_Market_GetOpenedLastKey();
+    if (!flaggedKey.empty()) {
+        HWND hFlaggedWnd = NULL;
+        for (auto& mw : tsWindows) {
+            if (std::string(MARKET_CLASS_NAME) + "_" + mw.symbol == flaggedKey) { hFlaggedWnd = mw.hWnd; break; }
+        }
+
+        if (hFlaggedWnd && IsWindow(hFlaggedWnd)) {
+            // Flagged window is still open -- only steal its slot once
+            // we're already at capacity.
+            if ((int)tsWindows.size() >= 4) {
+                WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+                GetWindowPlacement(hFlaggedWnd, &wp);
+                SaveWinPositionRaw(key,
+                    wp.rcNormalPosition.left, wp.rcNormalPosition.top,
+                    wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
+                    wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
+                DestroyWindow(hFlaggedWnd); // synchronous -- runs WM_DESTROY, which re-flags itself
             }
+        } else {
+            // Flagged window is already closed -- its slot is free.
+            int fx, fy, fw, fh;
+            if (LoadWinPosition(flaggedKey.c_str(), fx, fy, fw, fh))
+                SaveWinPositionRaw(key, fx, fy, fw, fh);
         }
     }
 
     TradingAPI::MarketInitData* data = new TradingAPI::MarketInitData{symbol, conId, key};
-    StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+    HWND hWnd = StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+    if (!hWnd || (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA) != data) {
+        delete data;
+    }
 }
 
 #define ID_MARKET_OVERNIGHT            6003

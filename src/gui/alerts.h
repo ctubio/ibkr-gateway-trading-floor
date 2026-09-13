@@ -153,14 +153,14 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 12, 20, 80, 20, hWnd, NULL, hInst, NULL);
             HWND hUp = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
                 96, 12, editW, editH, hWnd, (HMENU)ID_ALERTS_UP_EDIT, hInst, NULL);
 
             CreateWindowA("STATIC", "Alert Down:",
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 12, 20 + editH + 8, 80, 20, hWnd, NULL, hInst, NULL);
             HWND hDown = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
+                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
                 96, 12 + editH + 8, editW, editH, hWnd, (HMENU)ID_ALERTS_DOWN_EDIT, hInst, NULL);
 
             SetWindowSubclass(hUp,   AlertEditor_KeySubclassProc, 1, 0);
@@ -168,6 +168,9 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             SendMessage(hUp,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             SendMessage(hDown,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+
+            CenterEditText(hUp);
+            CenterEditText(hDown);
             break;
         }
 
@@ -195,65 +198,134 @@ void StartAlertEditor(const std::string& symbol, int conId) {
     if (hWnd) AlertEditor_Populate(hWnd, symbol, conId);
 }
 
-// Helper window procedure for the flash overlay
-static LRESULT CALLBACK FlashWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (msg == WM_PAINT) {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-        HBRUSH hBrush = (HBRUSH)GetWindowLongPtr(hwnd, GWLP_USERDATA);
-        FillRect(hdc, &ps.rcPaint, hBrush);
-        EndPaint(hwnd, &ps);
-        return 0;
+#define IDT_SCREEN_FLASH_TIMER 5450
+static const BYTE FLASH_PEAK_ALPHA = 69;
+
+static HWND  hScreenFlashOverlay = NULL;
+static DWORD s_flashStartTime      = 0;
+static int   s_flashDurationMs     = 800;
+
+// SetTimer callback to adjust opacity and hide the pre-created fullscreen overlay window
+static VOID CALLBACK FlashTimerProc(HWND hwnd, UINT /*uMsg*/, UINT_PTR idEvent, DWORD dwTime) {
+    if (idEvent != IDT_SCREEN_FLASH_TIMER) return;
+
+    DWORD now = dwTime ? dwTime : GetTickCount();
+    DWORD elapsed = now - s_flashStartTime;
+
+    if (elapsed >= (DWORD)s_flashDurationMs || s_flashDurationMs <= 0) {
+        KillTimer(hwnd, idEvent);
+        SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+        ShowWindow(hwnd, SW_HIDE);
+        return;
     }
-    if (msg == WM_LBUTTONDOWN || msg == WM_KEYDOWN) {
-        DestroyWindow(hwnd); // Dismiss early if clicked or keyed
-        return 0;
+
+    // Smoothly fade out opacity from peak alpha to 0
+    float progress = (float)elapsed / (float)s_flashDurationMs;
+    int currentAlpha = (int)(FLASH_PEAK_ALPHA * (1.0f - progress));
+    if (currentAlpha < 0)   currentAlpha = 0;
+    if (currentAlpha > 255) currentAlpha = 255;
+
+    SetLayeredWindowAttributes(hwnd, 0, (BYTE)currentAlpha, LWA_ALPHA);
+}
+
+// Window procedure for the pre-created fullscreen flash overlay
+LRESULT CALLBACK WndProcScreenFlashOverlay(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            HBRUSH hBrush = (HBRUSH)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+            if (!hBrush) hBrush = hBrushGreen;
+            FillRect(hdc, &ps.rcPaint, hBrush);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+
+        case WM_ERASEBKGND:
+            return 1;
+
+        case WM_LBUTTONDOWN:
+        case WM_KEYDOWN:
+            KillTimer(hwnd, IDT_SCREEN_FLASH_TIMER);
+            SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+            ShowWindow(hwnd, SW_HIDE);
+            return 0;
+
+        case WM_DESTROY:
+            KillTimer(hwnd, IDT_SCREEN_FLASH_TIMER);
+            return 0;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+// Pre-creates the layered fullscreen overlay window on the main UI thread
+void CreateScreenFlashOverlay(HINSTANCE hInst = NULL) {
+    if (hScreenFlashOverlay && IsWindow(hScreenFlashOverlay)) return;
+    if (!hInst) hInst = GetModuleHandle(NULL);
+
+    int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    if (w == 0 || h == 0) {
+        x = 0; y = 0;
+        w = GetSystemMetrics(SM_CXSCREEN);
+        h = GetSystemMetrics(SM_CYSCREEN);
+    }
+
+    hScreenFlashOverlay = CreateWindowExA(
+        WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        SCREEN_FLASH_OVERLAY_CLASS_NAME, "",
+        WS_POPUP,
+        x, y, w, h,
+        NULL, NULL, hInst, NULL
+    );
+
+    if (hScreenFlashOverlay) {
+        SetLayeredWindowAttributes(hScreenFlashOverlay, 0, 0, LWA_ALPHA);
+        ShowWindow(hScreenFlashOverlay, SW_HIDE);
+    }
+}
+
+// Destroys the pre-created overlay window before unregistering the class
+void DestroyScreenFlashOverlay() {
+    if (hScreenFlashOverlay && IsWindow(hScreenFlashOverlay)) {
+        KillTimer(hScreenFlashOverlay, IDT_SCREEN_FLASH_TIMER);
+        DestroyWindow(hScreenFlashOverlay);
+        hScreenFlashOverlay = NULL;
+    }
 }
 
 // Triggers a full screen flash (isGreen = true for green, false for red)
 void FlashScreen(bool isGreen, int durationMs = 800) {
     if (!fullScreenAlerts) return;
-    
-    std::thread([isGreen, durationMs]() {
-        HINSTANCE hInstance = GetModuleHandle(NULL);
-        WNDCLASSA wc = {};
-        wc.lpfnWndProc   = FlashWndProc;
-        wc.hInstance     = hInstance;
-        wc.lpszClassName = "ScreenFlashOverlay";
-        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-        RegisterClassA(&wc);
 
-        // Cover all virtual screens (supports multi-monitor setups)
-        int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
-        int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
-        int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-        int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    if (!hScreenFlashOverlay || !IsWindow(hScreenFlashOverlay)) return;
 
-        // WS_EX_LAYERED + WS_EX_TRANSPARENT allows clicks to pass *right through* the flash overlay
-        HWND hwnd = CreateWindowExA(
-            WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW,
-            "ScreenFlashOverlay", "",
-            WS_POPUP | WS_VISIBLE,
-            x, y, w, h,
-            NULL, NULL, hInstance, NULL
-        );
+    // Cover all virtual screens (supports multi-monitor setups)
+    int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    if (w == 0 || h == 0) {
+        x = 0; y = 0;
+        w = GetSystemMetrics(SM_CXSCREEN);
+        h = GetSystemMetrics(SM_CYSCREEN);
+    }
 
-        if (!hwnd) return;
+    SetWindowPos(hScreenFlashOverlay, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
 
-        // Set 45% transparency (69 out of 255) so it flashes nicely without blinding you
-        SetLayeredWindowAttributes(hwnd, 0, 69, LWA_ALPHA);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)(isGreen ? hBrushGreen : hBrushRed));
-        ShowWindow(hwnd, SW_SHOW);
-        UpdateWindow(hwnd);
+    SetWindowLongPtr(hScreenFlashOverlay, GWLP_USERDATA, (LONG_PTR)(isGreen ? hBrushGreen : hBrushRed));
+    InvalidateRect(hScreenFlashOverlay, NULL, TRUE);
 
-        // Wait for the duration of the flash
-        std::this_thread::sleep_for(std::chrono::milliseconds(durationMs));
+    s_flashStartTime  = GetTickCount();
+    s_flashDurationMs = (durationMs > 0) ? durationMs : 800;
 
-        DestroyWindow(hwnd);
-        UnregisterClassA("ScreenFlashOverlay", hInstance);
-    }).detach();
+    SetLayeredWindowAttributes(hScreenFlashOverlay, 0, FLASH_PEAK_ALPHA, LWA_ALPHA);
+    ShowWindow(hScreenFlashOverlay, SW_SHOWNOACTIVATE);
+    UpdateWindow(hScreenFlashOverlay);
+
+    SetTimer(hScreenFlashOverlay, IDT_SCREEN_FLASH_TIMER, 20, FlashTimerProc);
 }
 
 #define ID_ALERT_KEEP_BTN   5401

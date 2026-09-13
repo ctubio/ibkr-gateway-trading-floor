@@ -1,6 +1,6 @@
 #pragma once
 
-NOTIFYICONDATAW nid = { 0 };
+static NOTIFYICONDATAW nid = { 0 };
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 #define COINS_CLR_GREEN       RGB( 18, 220,  18)
@@ -222,7 +222,7 @@ HICON CreateGrayIcon(HICON hOriginal) {
     GetObject(ii.hbmColor, sizeof(bm), &bm);
 
     HBITMAP hbmGray = CreateCompatibleBitmap(hdcScreen, bm.bmWidth, bm.bmHeight);
-    SelectObject(hdcMem, hbmGray);
+    HGDIOBJ hbmOld = SelectObject(hdcMem, hbmGray);
 
     DrawIconEx(hdcMem, 0, 0, hOriginal, bm.bmWidth, bm.bmHeight, 0, NULL, DI_NORMAL);
 
@@ -253,6 +253,7 @@ HICON CreateGrayIcon(HICON hOriginal) {
 
     DeleteObject(ii.hbmColor);
     DeleteObject(ii.hbmMask);
+    SelectObject(hdcMem, hbmOld);
     DeleteObject(hbmGray);
     DeleteDC(hdcMem);
     ReleaseDC(NULL, hdcScreen);

@@ -93,6 +93,7 @@ static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
 static const char* ALERTS_EDITOR_CLASS_NAME      = "AlertEditor" GATEWAY_NAME;
 static const char* ALERT_NOTIFY_CLASS_NAME       = "AlertNotification" GATEWAY_NAME;
 static const char* LOCK_CLASS_NAME               = "Lock" GATEWAY_NAME;
+static const char* SCREEN_FLASH_OVERLAY_CLASS_NAME = "ScreenFlashOverlay" GATEWAY_NAME;
 static const char* NEWS_CACHE_SUBKEY             = "News" GATEWAY_NAME;
 
 class TradingAPI {
