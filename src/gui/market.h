@@ -2288,8 +2288,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_ALERTS_CHANGED: {
         int conId = (int)lParam;
-        if (!conId || conId != state->conId) break;
-        if (state && !state->symbol.empty()) {
+        if (!state || !conId || conId != state->conId) break;
+        if (!state->symbol.empty()) {
             std::string alertUp, alertDown;
             state->hasAlert = Settings_Alerts_Load(state->symbol, state->conId, alertUp, alertDown);
             state->marketHdrDirty = true;

@@ -1476,7 +1476,12 @@ static void HandleHttpClient(SOCKET client) {
                 if (clPos != std::string::npos) {
                     size_t valStart = buf.find_first_not_of(" \t", clPos + 15);
                     size_t valEnd   = buf.find('\r', valStart);
-                    int contentLen  = std::stoi(buf.substr(valStart, valEnd - valStart));
+                    int contentLen = 0;
+                    try {
+                        contentLen = std::stoi(buf.substr(valStart, valEnd - valStart));
+                    } catch (...) {
+                        contentLen = 0;
+                    }
                     size_t hdEnd    = buf.find("\r\n\r\n") + 4;
                     // Keep reading until we have the full body
                     while ((int)(buf.size() - hdEnd) < contentLen) {

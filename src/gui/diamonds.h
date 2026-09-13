@@ -368,7 +368,6 @@ static void Diamonds_CleanupStaleTabAssignments() {
             bool isLive = liveConIds.count(it->first) != 0;
             bool hasAlert = false;
             if (!isLive) {
-                auto cacheIt = diamondDataCache.find(it->first);
                 hasAlert = diamondsAlertCache.find(it->first) != diamondsAlertCache.end();
             }
             if (!isLive && !hasAlert) { it = diamondsSymbolColors.erase(it); changedColors = true; }
