@@ -368,10 +368,10 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                 (300 / 3), 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_EDIT_BTN, cs->hInstance, NULL);
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
             
-            HWND hRemove = CreateWindowA("BUTTON", "Remove",
+            HWND hDelete = CreateWindowA("BUTTON", "Delete",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
                 (300 / 3) * 2, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
-            SendMessage(hRemove, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            SendMessage(hDelete, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
             break;
         }
@@ -422,7 +422,7 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                 SendMessage(hWnd, WM_COMMAND, ID_ALERT_EDIT_BTN, 0);
                 return 0;
             }
-            if (wParam == 'R' || wParam == 'r') {
+            if (wParam == 'D' || wParam == 'd') {
                 SendMessage(hWnd, WM_COMMAND, ID_ALERT_DELETE_BTN, 0);
                 return 0;
             }
