@@ -272,7 +272,7 @@ static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
 
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
         0, 0, leftW, bodyH, hParent, (HMENU)(intptr_t)id, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
@@ -294,14 +294,16 @@ static inline int TimeToSeconds(const std::string& timeStr) {
     return 0;
 }
 
-static void TimeSales_InsertTick(HWND hList, std::deque<TimeSalesRow>& rows,
-                                 const std::string& time, COLORREF color,
-                                 std::string priceStr, std::string sizeStr,
-                                 int timeSec, int maxRows) {
-    rows.push_front({time, std::move(priceStr), std::move(sizeStr), color, timeSec});
-    if ((int)rows.size() > maxRows)
-        rows.pop_back();
-    ListView_SetItemCountEx(hList, (int)rows.size(), LVSICF_NOINVALIDATEALL);
+
+static void TimeSales_InsertTick(HWND hList, const std::string& time, COLORREF color, std::string priceStr, std::string sizeStr, int timeSec) {
+    LVITEMA lvi = {};
+    lvi.mask = LVIF_TEXT | LVIF_PARAM;
+    lvi.iItem = 0;
+    lvi.pszText = (LPSTR)priceStr.c_str();
+    lvi.lParam = (static_cast<LPARAM>(static_cast<uint32_t>(timeSec)) << 32) | static_cast<uint32_t>(color);
+    ListView_InsertItem(hList, &lvi);
+    ListView_SetItemText(hList, 0, 1, (LPSTR)sizeStr.c_str());
+    ListView_SetItemText(hList, 0, 2, (LPSTR)time.c_str());
 }
 
 static void Market_TrimTimeSalesLists(TsState* state) {
@@ -309,16 +311,17 @@ static void Market_TrimTimeSalesLists(TsState* state) {
 
     int limitLong  = state->orderBarVisible ? (state->isOvernight ? 21 : 19) : 24;
     int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
-    auto trim = [&](HWND hList, std::deque<TimeSalesRow>& rows, int maxRows) {
-        while ((int)rows.size() > maxRows)
-            rows.pop_back();
-        if (hList)
-            ListView_SetItemCountEx(hList, (int)rows.size(), LVSICF_NOINVALIDATEALL);
+    auto trim = [&](HWND hList, int maxRows) {
+        if (!hList) return;
+        int count = ListView_GetItemCount(hList);
+        if (count <= maxRows) return;
+        for (int row = count - 1; row >= maxRows; --row)
+            ListView_DeleteItem(hList, row);
     };
 
-    trim(state->hTsList,      state->tsRows,      limitLong);
-    trim(state->hTsListF100,  state->tsRowsF100,  limitShort);
-    trim(state->hTsListF1000, state->tsRowsF1000, limitShort);
+    trim(state->hTsList,      limitLong);
+    trim(state->hTsListF100,  limitShort);
+    trim(state->hTsListF1000, limitShort);
 }
 
 static const std::deque<TimeSalesRow>* TimeSales_RowsForList(const TsState* state, HWND hList) {
@@ -2191,9 +2194,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             state->lastTimeSec   = TimeToSeconds(tick->time);
             std::string priceStr = FormatFixed(tick->price, 2);
             std::string sizeStr  = FormatFixed(tick->size, 0);
-            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      state->tsRows,      tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec, 24);
-            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  state->tsRowsF100,  tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec, 11);
-            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, state->tsRowsF1000, tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec, 11);
+            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec );
+            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
+            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
             Market_TrimTimeSalesLists(state);
 
             // ── Volume rate / print-frequency rate: feed the rolling tick history ──
@@ -2259,24 +2262,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
-        if (hdr->code == LVN_GETDISPINFO &&
-            (hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0001 ||
-             hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0100 ||
-             hdr->idFrom == ID_MARKET_TIMESALES_LIST_F1000)) {
-            NMLVDISPINFO* displayInfo = (NMLVDISPINFO*)lParam;
-            const auto* rows = TimeSales_RowsForList(state, hdr->hwndFrom);
-            if (!rows || displayInfo->item.iItem < 0 || displayInfo->item.iItem >= (int)rows->size())
-                return 0;
-            const TimeSalesRow& row = (*rows)[displayInfo->item.iItem];
-            if (displayInfo->item.mask & LVIF_TEXT) {
-                const std::string* text = nullptr;
-                if (displayInfo->item.iSubItem == 0) text = &row.price;
-                else if (displayInfo->item.iSubItem == 1) text = &row.size;
-                else if (displayInfo->item.iSubItem == 2) text = &row.time;
-                if (text) displayInfo->item.pszText = (LPSTR)text->c_str();
-            }
-            return 0;
-        }
         if (hdr->code != NM_CUSTOMDRAW) break;
 
         if (hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0001 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0100 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F1000) {
@@ -2288,11 +2273,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     if (darkMode)
                         cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                    const auto* rows = TimeSales_RowsForList(state, hdr->hwndFrom);
-                    const TimeSalesRow* row = rows && cd->nmcd.dwItemSpec < rows->size()
-                        ? &(*rows)[cd->nmcd.dwItemSpec] : nullptr;
-                    COLORREF rowColor = row ? row->color : 0;
-                    int tickTimeSec = row ? row->timeSec : 0;
+                    LPARAM itemParam = cd->nmcd.lItemlParam;
+                    COLORREF rowColor = static_cast<COLORREF>(itemParam & 0xFFFFFFFF);
+                    int tickTimeSec = static_cast<int>(itemParam >> 32);
                     if (state && cd->iSubItem == 0) {
                         int diff = state->lastTimeSec - tickTimeSec;
                         if (diff < 0) diff += 86400;
