@@ -204,7 +204,7 @@ static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 struct ExecCol { const char* header; int width; int fmt; };
 static const ExecCol execCols[] = {
     { "Side",    0, LVCFMT_CENTER },
-    { "Quote", 118, LVCFMT_CENTER },
+    { "Quote", 112, LVCFMT_CENTER },
 };
 static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 
