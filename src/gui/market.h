@@ -211,7 +211,7 @@ static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
         0, 0, L2_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_L2_LIST, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
@@ -243,7 +243,7 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
 static HWND Market_CreateExecList(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
         0, 0, EXEC_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_EXEC_LIST, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
