@@ -412,6 +412,23 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
             }
             break;
         }
+
+        case WM_KEYDOWN: {
+            if (wParam == 'K' || wParam == 'k') {
+                SendMessage(hWnd, WM_COMMAND, ID_ALERT_KEEP_BTN, 0);
+                return 0;
+            }
+            if (wParam == 'E' || wParam == 'e') {
+                SendMessage(hWnd, WM_COMMAND, ID_ALERT_EDIT_BTN, 0);
+                return 0;
+            }
+            if (wParam == 'R' || wParam == 'r') {
+                SendMessage(hWnd, WM_COMMAND, ID_ALERT_DELETE_BTN, 0);
+                return 0;
+            }
+            break;
+        }
+
         case WM_DESTROY: {
             AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
             if (data) delete data;
