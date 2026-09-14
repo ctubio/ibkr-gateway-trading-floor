@@ -15,6 +15,8 @@
 #define ID_ALERTS_DOWN_EDIT  5302
 #define ID_ALERT_EDIT_BTN    5303
 
+#define WM_ALERT_SHOW_EDITOR 5310
+
 struct AlertsEditState {
     std::string symbol;   // symbol currently loaded into the popup
     int conId = 0;        // conId currently loaded into the popup
@@ -179,6 +181,12 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 return 0;
             }
             break;
+        }
+
+        case WM_ALERT_SHOW_EDITOR: {
+            ShowWindow(hWnd, SW_SHOW);
+            SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            SetFocus(GetDlgItem(hWnd, ID_ALERTS_UP_EDIT));
         }
 
         case WM_DESTROY:
@@ -373,8 +381,14 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                 (300 / 3) * 2, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
             SendMessage(hDelete, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
+            HWND hAlertEditor = FindWindowA(ALERTS_EDITOR_CLASS_NAME, NULL);
+            if (hAlertEditor && IsWindow(hAlertEditor)) {
+                PostMessage(hAlertEditor, WM_ALERT_SHOW_EDITOR, 0,  0);
+            }
+
             break;
         }
+
         case WM_CTLCOLORSTATIC: {
             int id = GetDlgCtrlID((HWND)lParam);
             if (id == ID_ALERT_SYMBOL) {
@@ -388,6 +402,7 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
             }
             break;
         }
+
         case WM_COMMAND: {
             int wmId = LOWORD(wParam);
             if (wmId == ID_ALERT_KEEP_BTN || wmId == ID_ALERT_DELETE_BTN || wmId == ID_ALERT_EDIT_BTN) {
