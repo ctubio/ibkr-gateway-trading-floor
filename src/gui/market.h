@@ -2262,6 +2262,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
+        
+        if (hdr->code == NM_DBLCLK) {
+            if (state)
+                Settings_Market_SetOpenedLast(std::string(MARKET_CLASS_NAME) + "_" + state->symbol);
+        }
+
         if (hdr->code != NM_CUSTOMDRAW) break;
 
         if (hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0001 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F0100 || hdr->idFrom == ID_MARKET_TIMESALES_LIST_F1000) {
