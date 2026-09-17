@@ -641,7 +641,11 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.textCols[DCOL_DIV_DATE] = t.dividendDate;
     row.sortValues[DCOL_DIV_DATE] = t.dividendDateSortable;
 
-    if (t.last > 0.0 && t.annualDividends > 0.0) setCol(DCOL_DIV_YIELD, t.dividendYield(), 2, true);
+    if (t.last > 0.0 && t.annualDividends > 0.0) {
+        double pct = t.dividendYield();
+        row.sortValues[DCOL_DIV_YIELD] = pct;
+        row.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
+    }
     else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, 2, true);
     else setNA(DCOL_DIV_YIELD);
     Diamonds_ApplyCachedDividends(row, conId, t);
