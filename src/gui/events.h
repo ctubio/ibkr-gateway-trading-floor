@@ -1,5 +1,5 @@
 #pragma once
-static const int windowEventsWidth = 290;
+static const int windowEventsWidth = 260;
 void StartEvents() { StartGenericWindow(EVENTS_CLASS_NAME, "Events", L"TWSAPIClientTradingFloor.Events", windowEventsWidth, 420); }
 
 #define ID_EVENTS_LIST          8001
@@ -11,8 +11,8 @@ enum EventColIdx { ECOL_SIDE = 0, ECOL_SYMBOL, ECOL_QUOTE, ECOL_STATUS };
 
 struct EventCol { const char* header; int width; int fmt; };
 static const EventCol eventCols[] = {
-    { "Symbol",        80,  LVCFMT_CENTER},
-    { "Event",        185,  LVCFMT_LEFT },
+    { "Time",          70,  LVCFMT_CENTER},
+    { "Event",        170,  LVCFMT_LEFT  },
 };
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
