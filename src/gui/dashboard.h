@@ -1282,6 +1282,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 FlashScreen(data->isUp, 1000);
                 StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
                 PlaySound_Async(209);
+                Events_AddAlertEvent(data->conId, data->symbol, data->price, data->isUp);   // ← new
             }
             return 0;
         }
