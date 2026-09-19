@@ -1,5 +1,5 @@
 #pragma once
-static const int windowEventsWidth = 250;
+static const int windowEventsWidth = 290;
 void StartEvents() { StartGenericWindow(EVENTS_CLASS_NAME, "Events", L"TWSAPIClientTradingFloor.Events", windowEventsWidth, 420); }
 
 #define ID_EVENTS_LIST          8001
@@ -56,7 +56,7 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 WS_EX_CLIENTEDGE, "SysListView32", "",
                 lvStyle,
                 0, 0, 760, 420,
-                hWnd, (HMENU)ID_ORDERS_LIST, hInst, NULL);
+                hWnd, (HMENU)ID_EVENTS_LIST, hInst, NULL);
 
             SendMessage(hList, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
             SendMessage(ListView_GetHeader(hList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
