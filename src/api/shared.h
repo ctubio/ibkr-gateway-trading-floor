@@ -343,6 +343,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     } else {
         DWORD dwExStyle = WS_EX_APPWINDOW;
         if (strcmp(className, ORDERS_CLASS_NAME)    == 0
+         || strcmp(className, EVENTS_CLASS_NAME)  == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
         ) {
             dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;

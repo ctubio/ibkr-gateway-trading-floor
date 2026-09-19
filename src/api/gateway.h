@@ -81,19 +81,20 @@
                                                 // execDetailsEnd), so each window's inline editable-orders
                                                 // panel (market.h) can resync via api().getOrdersSorted().
 
-static const char* DASHBOARD_CLASS_NAME          = "Dashboard" GATEWAY_NAME;
-static const char* DIAMONDS_CLASS_NAME           = "Diamonds" GATEWAY_NAME;
-static const char* ORDERS_CLASS_NAME             = "Orders" GATEWAY_NAME;
-static const char* MARKET_CLASS_NAME             = "Market" GATEWAY_NAME;
-static const char* MARKET_SEARCH_CLASS_NAME      = "Market_SearchSymbol" GATEWAY_NAME;
-static const char* SETTINGS_CLASS_NAME           = "Settings" GATEWAY_NAME;
-static const char* DEBUGLOG_CLASS_NAME           = "DebugLog" GATEWAY_NAME;
-static const char* DASHBOARD_EXCHANGE_CLASS_NAME = "Exchange" GATEWAY_NAME;
-static const char* ALERTS_EDITOR_CLASS_NAME      = "AlertEditor" GATEWAY_NAME;
-static const char* ALERT_NOTIFY_CLASS_NAME       = "AlertNotification" GATEWAY_NAME;
-static const char* LOCK_CLASS_NAME               = "Lock" GATEWAY_NAME;
+static const char* DASHBOARD_CLASS_NAME            = "Dashboard" GATEWAY_NAME;
+static const char* DIAMONDS_CLASS_NAME             = "Diamonds" GATEWAY_NAME;
+static const char* ORDERS_CLASS_NAME               = "Orders" GATEWAY_NAME;
+static const char* EVENTS_CLASS_NAME               = "Events" GATEWAY_NAME;
+static const char* MARKET_CLASS_NAME               = "Market" GATEWAY_NAME;
+static const char* MARKET_SEARCH_CLASS_NAME        = "Market_SearchSymbol" GATEWAY_NAME;
+static const char* SETTINGS_CLASS_NAME             = "Settings" GATEWAY_NAME;
+static const char* DEBUGLOG_CLASS_NAME             = "DebugLog" GATEWAY_NAME;
+static const char* DASHBOARD_EXCHANGE_CLASS_NAME   = "Exchange" GATEWAY_NAME;
+static const char* ALERTS_EDITOR_CLASS_NAME        = "AlertEditor" GATEWAY_NAME;
+static const char* ALERT_NOTIFY_CLASS_NAME         = "AlertNotification" GATEWAY_NAME;
+static const char* LOCK_CLASS_NAME                 = "Lock" GATEWAY_NAME;
 static const char* SCREEN_FLASH_OVERLAY_CLASS_NAME = "ScreenFlashOverlay" GATEWAY_NAME;
-static const char* NEWS_CACHE_SUBKEY             = "News" GATEWAY_NAME;
+static const char* NEWS_CACHE_SUBKEY               = "News" GATEWAY_NAME;
 
 class TradingAPI {
 public:

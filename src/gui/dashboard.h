@@ -18,11 +18,12 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_MB_EXCHANGE   1008
 #define ID_MB_ORDERS     1009
 #define ID_M_ORDERS      1010
-#define ID_M_DIAMONDS    1011
-#define ID_M_SETTINGS    1012
-#define ID_M_MARKET      1015
-#define ID_M_DEBUGLOG    1016
-#define ID_MB_LINKS      1017
+#define ID_M_EVENTS      1011
+#define ID_M_DIAMONDS    1012
+#define ID_M_SETTINGS    1013
+#define ID_M_MARKET      1014
+#define ID_M_DEBUGLOG    1015
+#define ID_MB_EVENTS     1016
 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
@@ -339,16 +340,16 @@ static void Dashboard_ApplyFocusLayout(HWND hWnd, bool active) {
     dashboardState.fullDetails = active;
 }
 
-#define ID_COIN_NETLIQ   5100
-#define ID_COIN_BIGPNL   5101
-#define ID_COIN_PCT      5102
-#define ID_COIN_SPEAKER  5103
-#define ID_COIN_LOCK     5104
-#define TIMER_COINS_SPEAKER  0xC015   // WM_TIMER id
+#define ID_COIN_NETLIQ          1900
+#define ID_COIN_BIGPNL          1901
+#define ID_COIN_PCT             1902
+#define ID_COIN_SPEAKER         1903
+#define ID_COIN_LOCK            1904
+#define ID_DASHFX_ACTION_COMBO  1905
+#define ID_DASHFX_AMOUNT_EDIT   1906
+#define TIMER_COINS_SPEAKER     1920   // WM_TIMER id
 
 // ─── Exchange Currency popup (DASHBOARD_EXCHANGE_CLASS_NAME) ───────────────────
-#define ID_DASHFX_ACTION_COMBO  5201
-#define ID_DASHFX_AMOUNT_EDIT   5202
 
 // ─── TTS helpers ──────────────────────────────────────────────────────────────
 // Speech goes through the shared SharedTtsEngine (shared.h). The dashboard just
@@ -1146,11 +1147,12 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int yBtn = y3 + box3H + 10; // yBtn = 326
             int steps = 1;
             int stepz = 0;
-            addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
             addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
-            addButtons(hWnd, hInst, "Exchange",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  106);
+            addButtons(hWnd, hInst, "Events",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EVENTS,    109);
+            addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
+            
             addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    105);
-            addButtons(hWnd, hInst, "Links",   9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_LINKS,    109);
+            addButtons(hWnd, hInst, "Exchange",  9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  106);
 
             addButtons(hWnd, hInst, "Settings", 18 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  107);
 
@@ -1284,6 +1286,32 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             return 0;
         }
 
+        case WM_RBUTTONUP: {
+            if (lockHotkeys) break;
+
+            POINT pt;
+            GetCursorPos(&pt);
+
+            HMENU hMenu = CreatePopupMenu();
+            for (int i = 0; i < LINKS_COUNT; ++i) {
+                if (strcmp(quickLinks[i].label, "Paper") == 0 || strcmp(quickLinks[i].label, "GitHub") == 0)
+                    AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+                AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
+            }
+
+            SetForegroundWindow(hWnd);
+            int cmd = TrackPopupMenu(hMenu,
+                TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
+                pt.x, pt.y, 0, hWnd, NULL);
+            DestroyMenu(hMenu);
+
+            if (cmd >= ID_M_LINKS_BASE && cmd < ID_M_LINKS_BASE + LINKS_COUNT) {
+                ShellExecuteA(NULL, "open", quickLinks[cmd - ID_M_LINKS_BASE].url, NULL, NULL, SW_SHOWNORMAL);
+            }
+
+            break;
+        }
+
         case WM_TRAYICON: {
             WORD trayEvent = LOWORD(lParam);
             if (trayEvent == WM_LBUTTONUP) {
@@ -1322,6 +1350,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     int hasSubmenus = 0;
                     if (hWnd && IsWindowVisible(hWnd)) { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? L"[ ★ ] Dashboard" : L"[  ] Dashboard"); }
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds"); }
+                    if (FindWindowA(EVENTS_CLASS_NAME, NULL))    { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_EVENTS,    IsWindowAlwaysOnTop(EVENTS_CLASS_NAME)    ? L"[ ★ ] Events"    : L"[  ] Events"); }
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders"); }
 
                     struct OpenMarketItem { HWND hWnd; std::string symbol; };
@@ -1363,6 +1392,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_DASHBOARD:
                         case ID_M_DIAMONDS:
                         case ID_M_ORDERS:
+                        case ID_M_EVENTS:
                         case ID_M_SETTINGS:
                         case ID_M_DEBUGLOG:
                             SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
@@ -1482,28 +1512,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_EXCHANGE:
                     StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
-                case ID_MB_LINKS: {
-                    HWND hBtn = GetDlgItem(hWnd, ID_MB_LINKS);
-                    RECT rc; GetWindowRect(hBtn, &rc);
-
-                    HMENU hMenu = CreatePopupMenu();
-                    for (int i = 0; i < LINKS_COUNT; ++i) {
-                        if (strcmp(quickLinks[i].label, "Paper") == 0 || strcmp(quickLinks[i].label, "GitHub") == 0)
-                            AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
-                        AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
-                    }
-
-                    SetForegroundWindow(hWnd);
-                    int cmd = TrackPopupMenu(hMenu,
-                        TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY,
-                        rc.left, rc.bottom, 0, hWnd, NULL);
-                    DestroyMenu(hMenu);
-
-                    if (cmd >= ID_M_LINKS_BASE && cmd < ID_M_LINKS_BASE + LINKS_COUNT) {
-                        ShellExecuteA(NULL, "open", quickLinks[cmd - ID_M_LINKS_BASE].url, NULL, NULL, SW_SHOWNORMAL);
-                    }
+                case ID_MB_EVENTS:
+                    StartEvents();
                     break;
-                }
                 case ID_MB_MARKET:
                     StartMarket();
                     break;
@@ -1527,6 +1538,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_M_ORDERS:
                     ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
+                    break;
+                case ID_M_EVENTS:
+                    ToggleWindowAlwaysOnTop(EVENTS_CLASS_NAME);
                     break;
                 
                 default:

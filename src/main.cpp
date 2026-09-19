@@ -11,6 +11,7 @@
 #include "gui/market.h"
 #include "gui/diamonds.h"
 #include "gui/orders.h"
+#include "gui/events.h"
 #include "gui/dashboard.h"
 
 class RegisterWindowRAII {
@@ -23,6 +24,7 @@ public:
         RegisterWindowClass(hInst_, WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true);
         RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true);
         RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,               103);
+        RegisterWindowClass(hInst_, WndProcEvents,             EVENTS_CLASS_NAME,               109);
         RegisterWindowClass(hInst_, WndProcDiamonds,           DIAMONDS_CLASS_NAME,             104);
         RegisterWindowClass(hInst_, WndProcMarket,             MARKET_CLASS_NAME,               105);
         RegisterWindowClass(hInst_, WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,        105, true);
@@ -44,7 +46,7 @@ public:
 
         StartDashboard(hInst_);
 
-        Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartDebugLog);
+        Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartEvents, StartDebugLog);
     }
     bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
@@ -54,6 +56,7 @@ public:
         UnregisterClass(ALERTS_EDITOR_CLASS_NAME, hInst_);
         UnregisterClass(ALERT_NOTIFY_CLASS_NAME, hInst_);
         UnregisterClass(ORDERS_CLASS_NAME, hInst_);
+        UnregisterClass(EVENTS_CLASS_NAME, hInst_);
         UnregisterClass(DIAMONDS_CLASS_NAME, hInst_);
         UnregisterClass(MARKET_CLASS_NAME, hInst_);
         UnregisterClass(MARKET_SEARCH_CLASS_NAME, hInst_);

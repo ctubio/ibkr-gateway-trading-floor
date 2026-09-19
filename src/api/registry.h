@@ -1264,6 +1264,7 @@ void Session_RestoreWindows(
     const std::function<void()>& StartSettings,
     const std::function<void(const std::string&, int)>& StartMarket,
     const std::function<void()>& StartOrders,
+    const std::function<void()>& StartEvents,
     const std::function<void()>& StartDebugLog
 ) {
     INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_WIN95_CLASSES | ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_USEREX_CLASSES };
@@ -1291,6 +1292,9 @@ void Session_RestoreWindows(
         }
         else if (cls == ORDERS_CLASS_NAME)    { 
             StartOrders(); 
+        }
+        else if (cls == EVENTS_CLASS_NAME)    { 
+            StartEvents(); 
         }
         else if (cls == DEBUGLOG_CLASS_NAME)  { 
             StartDebugLog(); 
