@@ -128,7 +128,7 @@ static LRESULT CALLBACK AlertEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM
             char buf[32] = {};
             GetWindowTextA(hCtrl, buf, sizeof(buf));
             double val  = atof(buf);
-            double step = ((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01;
+            double step = 1.0;
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
             std::string s = std::format("{:.0f}", val);
