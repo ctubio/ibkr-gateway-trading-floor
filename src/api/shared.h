@@ -335,12 +335,12 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
     
     LoadWinPosition(allowInstancesBySymbol ? windowKey.c_str() : className, x, y, w, h);
 
+    HWND hWndParent = NULL;
     DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
     if (hInst) { // dashboard window
         hWnd = CreateWindow(className, title, dwStyle, x, y, w, h, NULL, NULL, hInst, lpParam);
         UpdateWindow(hWnd);
     } else {
-        HWND hWndParent = NULL;
         DWORD dwExStyle = WS_EX_APPWINDOW;
         if (strcmp(className, ORDERS_CLASS_NAME)    == 0
          || strcmp(className, DIAMONDS_CLASS_NAME)  == 0
@@ -356,8 +356,8 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
         }
         if (strcmp(className, ALERT_NOTIFY_CLASS_NAME) == 0) {
-            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
-            dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
+            dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_APPWINDOW;
+            dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU;
         }
         if (strcmp(className, ALERTS_EDITOR_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
@@ -373,7 +373,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }
 
-    if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) != 0 && strcmp(className, ALERTS_EDITOR_CLASS_NAME) != 0)
+    if (!hWndParent)
        SetWindowTaskbarId(hWnd, taskbarId);
         
     return hWnd;
