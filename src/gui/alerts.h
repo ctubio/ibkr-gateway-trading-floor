@@ -61,6 +61,8 @@ static void AlertEditor_Populate(HWND hWnd, const std::string& symbol, int conId
     CenterEditText(hDown);
 
     if (hUp) {
+        SetForegroundWindow(hWnd);
+        SetActiveWindow(hWnd);
         SetFocus(hUp);
         int len = GetWindowTextLengthA(hUp);
         SendMessageA(hUp, EM_SETSEL, 0, len);
