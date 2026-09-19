@@ -10,8 +10,8 @@ enum EventColIdx { ECOL_TIME = 0, ECOL_TEXT };
 // ── Column definitions ────────────────────────────────────────────────────────
 struct EventCol { const char* header; int width; int fmt; };
 static const EventCol eventCols[] = {
-    { "Time",   70, LVCFMT_CENTER },
-    { "Event", 170, LVCFMT_LEFT   },
+    { "Time",   65, LVCFMT_CENTER },
+    { "Event", 175, LVCFMT_LEFT   },
 };
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
@@ -64,7 +64,7 @@ static void Events_AddEvent(const std::string& text, COLORREF color = 0, int con
 }
 
 static void Events_AddAlertEvent(int conId, const std::string& symbol, double price, bool isUp) {
-    std::string text = symbol + ": " + (isUp ? "UP" : "DOWN") + " at " + FormatFixed(price, 2);
+    std::string text = (isUp ? "▲ " : "▼ ") + symbol + " at " + FormatFixed(price, 2);
     Events_AddEvent(text, isUp ? COINS_CLR_GREEN : COINS_CLR_RED, conId, symbol);
 }
 
@@ -78,8 +78,8 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             DWORD lvStyle = WS_CHILD | WS_VISIBLE | WS_BORDER
                         | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_OWNERDATA;
-            HWND hList = CreateWindowExA(
-                WS_EX_CLIENTEDGE, "SysListView32", "",
+            HWND hList = CreateWindowExW(
+                WS_EX_CLIENTEDGE, L"SysListView32", L"",
                 lvStyle,
                 0, 0, 760, 420,
                 hWnd, (HMENU)ID_EVENTS_LIST, hInst, NULL);
@@ -90,13 +90,17 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
-            LVCOLUMNA lvc = {};
+            LVCOLUMNW lvc = {};
             lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
             for (int i = 0; i < EVENT_COL_COUNT; ++i) {
                 lvc.cx      = eventCols[i].width;
-                lvc.pszText = (LPSTR)eventCols[i].header;
+                //MultiByteToWideChar(CP_UTF8, 0, eventCols[i].header, -1, lvc.pszText, lvc.cchTextMax);
+                wchar_t wHeader[64];
+                MultiByteToWideChar(CP_UTF8, 0, eventCols[i].header, -1, wHeader, 64);
+                lvc.pszText = wHeader;
+
                 lvc.fmt     = eventCols[i].fmt;
-                ListView_InsertColumn(hList, i, &lvc);
+                SendMessageW(hList, LVM_INSERTCOLUMNW, i, (LPARAM)&lvc);
             }
 
             api().addApiUpdateWindow(hWnd);
@@ -125,11 +129,12 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         case WM_API_UPDATE: {
-            // Events are a historical log, independent of connection state —
-            // just make sure a freshly opened window is in sync.
             Events_Repopulate(hWnd);
             break;
         }
+        
+        case WM_NOTIFYFORMAT:
+            return NFR_UNICODE;
 
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
@@ -145,13 +150,13 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 }
             }
 
-            if (hdr->code == LVN_GETDISPINFO) {
-                NMLVDISPINFO* pdi = (NMLVDISPINFO*)lParam;
+            if (hdr->code == LVN_GETDISPINFOW) {
+                NMLVDISPINFOW* pdi = (NMLVDISPINFOW*)lParam;
                 if (pdi->item.iItem < 0 || pdi->item.iItem >= (int)eventsList.size()) return 0;
                 const EventEntry& ev = eventsList[pdi->item.iItem];
                 if (pdi->item.mask & LVIF_TEXT) {
                     const std::string& s = (pdi->item.iSubItem == ECOL_TIME) ? ev.time : ev.text;
-                    pdi->item.pszText = (LPSTR)s.c_str();
+                    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, pdi->item.pszText, pdi->item.cchTextMax);
                 }
                 return 0;
             }
