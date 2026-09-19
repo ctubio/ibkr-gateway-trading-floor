@@ -45,10 +45,10 @@ static void Alerts_NotifyChanged(int conId) {
 // from whatever is currently saved in the registry (empty if none), and
 // focuses/selects the Alert Up field. Safe to call on an already-open popup
 // (single-instance window) to repoint it at a different symbol.
-static void AlertEditor_Populate(HWND hWnd, const std::string& symbol, int conId) {
+static void AlertEditor_Populate(HWND hWnd, const std::string& symbol, int conId, double price) {
     alertsEditState.symbol = symbol;
     alertsEditState.conId  = conId;
-    SetWindowTextA(hWnd, (symbol + ": Edit Alerts").c_str());
+    SetWindowTextA(hWnd, std::format("{} at {:.2f}", symbol, price).c_str());
 
     std::string upStr, downStr;
     Settings_Alerts_Load(symbol, conId, upStr, downStr);
@@ -131,7 +131,7 @@ static LRESULT CALLBACK AlertEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM
             double step = ((GetKeyState(VK_SHIFT) & 0x8000) != 0) ? 1.0 : 0.01;
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-            std::string s = std::format("{:.2f}", val);
+            std::string s = std::format("{:.0f}", val);
             SetWindowTextA(hCtrl, s.c_str());
             int len = GetWindowTextLengthA(hCtrl);
             SendMessageA(hCtrl, EM_SETSEL, len, len);
@@ -143,7 +143,7 @@ static LRESULT CALLBACK AlertEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM
     return DefSubclassProc(hCtrl, msg, wParam, lParam);
 }
 
-LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK WndProcAlertsEditor(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
@@ -169,7 +169,7 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SetWindowSubclass(hDown, AlertEditor_KeySubclassProc, 2, 0);
 
             SendMessage(hUp,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-            SendMessage(hDown,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
+            SendMessage(hDown, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
             break;
         }
 
@@ -192,9 +192,9 @@ LRESULT CALLBACK WndProcAlerts(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 // Opens (or refocuses) the Alerts editor popup for `symbol` and `conId`. Single-instance:
 // if already open (e.g. for a different symbol), it's repointed at `symbol`
 // instead of a second window being created.
-void StartAlertEditor(const std::string& symbol, int conId) {
+void StartAlertEditor(const std::string& symbol, int conId, double price) {
     HWND hWnd = StartGenericWindow(ALERTS_EDITOR_CLASS_NAME, "Edit Alerts", L"TWSAPIClientTradingFloor.Alerts", 245, 135);
-    if (hWnd) AlertEditor_Populate(hWnd, symbol, conId);
+    if (hWnd) AlertEditor_Populate(hWnd, symbol, conId, price);
 }
 
 #define IDT_SCREEN_FLASH_TIMER 5450
@@ -335,6 +335,7 @@ struct AlertPopupData {
     std::string title;
     std::string msg;
     std::string symbol;
+    double price;
     int conId;
     bool isUp;
 };
@@ -408,7 +409,7 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                 if (wmId == ID_ALERT_EDIT_BTN) {
                     AlertPopupData* data = (AlertPopupData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
                     if (data) {
-                        StartAlertEditor(data->symbol, data->conId);
+                        StartAlertEditor(data->symbol, data->conId, data->price);
                     }
                 }
                 DestroyWindow(hWnd);

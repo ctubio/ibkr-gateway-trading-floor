@@ -2425,7 +2425,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if (PtInRect(&state->lastPriceRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
-                    StartAlertEditor(state->symbol, state->conId);
+                    StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
                 } else if (PtInRect(&state->locateRect, pt)) {
                     Market_Minimize(hWnd, state);
                 }

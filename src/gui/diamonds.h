@@ -696,7 +696,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             std::string title = row.symbol + ": Alert UP!";
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
-                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, conId, true};
+                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, t.last, conId, true};
                 PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
             }
         }
@@ -711,7 +711,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             std::string title = row.symbol + ": Alert DOWN!";
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
-                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, conId, false};
+                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, t.last, conId, false};
                 PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
             }
         }
@@ -1259,7 +1259,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             }).detach();
                         }
                     } else if (cmd == 302) {
-                        StartAlertEditor(sym, conId);
+                        TradingAPI::L1Book quickInfo;
+                        if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
+                            StartAlertEditor(sym, conId, quickInfo.last);
+                        }
                     }
                 }
             }

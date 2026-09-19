@@ -926,8 +926,6 @@ LRESULT CALLBACK WndProcLock(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
-// Opens (or refocuses) the Lock popup. Single-instance, same pattern as
-// StartAlertEditor().
 void StartLock() {
     lockState.success = false;
 

@@ -20,7 +20,7 @@ public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
         RegisterWindowClass(hInst_, WndProcDashboard,          DASHBOARD_CLASS_NAME,            101);
         RegisterWindowClass(hInst_, WndProcExchange,           DASHBOARD_EXCHANGE_CLASS_NAME,   106, true);
-        RegisterWindowClass(hInst_, WndProcAlerts,             ALERTS_EDITOR_CLASS_NAME,        102, true);
+        RegisterWindowClass(hInst_, WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true);
         RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true);
         RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,               103);
         RegisterWindowClass(hInst_, WndProcDiamonds,           DIAMONDS_CLASS_NAME,             104);
