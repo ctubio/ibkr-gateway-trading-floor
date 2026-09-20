@@ -36,26 +36,6 @@ static void SyncDarkModeFromWindows() {
 
 static NOTIFYICONDATAW nid = { 0 };
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
-#define COINS_CLR_GREEN       RGB( 18, 220,  18)
-#define COINS_CLR_GREEN_DARK  RGB(92, 214, 92)
-#define COINS_CLR_GREEN_DARK2 RGB(32, 150, 32)
-#define COINS_CLR_RED         RGB(220,  55,  55)
-#define COINS_CLR_RED_DARK    RGB(217, 95, 95)
-#define COINS_CLR_RED_DARK2   RGB(148, 33, 33)
-#define COINS_CLR_WHITE       RGB(220, 220, 220)
-#define COINS_CLR_BLACK       RGB(30,  30,  30)
-#define COINS_CLR_GRAY        RGB(150, 150, 150)
-#define COINS_CLR_BLUE        RGB(80, 160, 255)
-#define COINS_CLR_PURPLE      RGB(185, 105, 225)
-#define COINS_CLR_CYAN        RGB(0, 255, 255)
-#define COINS_CLR_PINK        RGB(225, 105, 211)
-#define COINS_CLR_ORANGE      RGB(255, 165, 0)
-#define COINS_CLR_YELLOW      RGB(201, 183, 41)
-// Dark background fills for order-side colored input boxes
-#define COINS_BG_DARK_GREEN RGB( 34, 82, 50)
-#define COINS_BG_DARK_RED   RGB(102, 43, 43)
-
 // glyph: E767 = Volume on (Segoe MDL2 Assets)
 static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
 // glyph: E708 = QuietHours on (Segoe MDL2 Assets)

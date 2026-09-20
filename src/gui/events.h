@@ -63,11 +63,6 @@ static void Events_AddEvent(const std::string& text, COLORREF color = 0, int con
     if (hWnd && IsWindow(hWnd)) Events_Repopulate(hWnd);
 }
 
-static void Events_AddAlertEvent(int conId, const std::string& symbol, double price, bool isUp) {
-    std::string text = (isUp ? "▲ " : "▼ ") + symbol + " at " + FormatFixed(price, 2);
-    Events_AddEvent(text, isUp ? COINS_CLR_GREEN : COINS_CLR_RED, conId, symbol);
-}
-
 // ── Window procedure ──────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {

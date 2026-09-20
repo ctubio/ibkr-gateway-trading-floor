@@ -20,3 +20,4 @@
 207 RCDATA "res/wav/order_filled.wav"
 208 RCDATA "res/wav/confirm_blotter_submit.wav"
 209 RCDATA "res/wav/error.wav"
+210 RCDATA "res/wav/note.wav"

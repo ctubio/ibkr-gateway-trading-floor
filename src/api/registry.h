@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor" GATEWAY_DASH GATEWAY_NAME;
+constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 
 // Dark mode colors
 #define DM_BG        RGB(22,  22,  31)   // Slightly darker, flatter background
@@ -1198,17 +1198,6 @@ struct TtsVoiceEntry {
     std::wstring tokenId;   // SAPI token registry path (used as key)
     std::wstring display;   // Friendly name shown in the combo
 };
-
-// Custom message broadcast to all top-level windows when the user picks a new
-// TTS voice in Settings, so open Market and Dashboard windows hot-swap immediately.
-// wParam = 0, lParam = 0.
-#define WM_TTS_VOICE_CHANGED (WM_APP + 301)
-
-// Broadcast to every top-level window whenever an alert is saved/cleared in
-// the Alerts editor popup, so the Market window (flag icon color) and the
-// Diamonds window (Alert Up/Down columns + Quarantine membership for
-// alert-only symbols) refresh themselves from the registry.
-#define WM_ALERTS_CHANGED (WM_APP + 302)
 
 // Enumerate ALL voices from both classic SAPI and OneCore registries.
 // Duplicates (same tokenId) are suppressed so voices that appear in both

@@ -47,54 +47,61 @@
 #include <exception>
 #include <condition_variable>
 
-#ifdef GATEWAY_NAME
-    #define GATEWAY_SPACE " "
-    #define GATEWAY_DASH  "-"
-    #define GATEWAY_SIM
-#else
-    #define GATEWAY_NAME  ""
-    #define GATEWAY_SPACE ""
-    #define GATEWAY_DASH  ""
-#endif
+#define WM_API_UPDATE           (WM_USER +  2)
+#define WM_SYMBOL_RESULTS       (WM_USER +  3)
+#define WM_API_LOG              (WM_USER +  4)
+#define WM_ACCOUNT_SUMMARY      (WM_USER +  5)
+#define WM_DIAMONDS_UPDATE      (WM_USER +  6)
+#define WM_MARKET_TICK          (WM_USER +  7)
+#define WM_MARKET_L1            (WM_USER +  8)
+#define WM_MARKET_L2            (WM_USER +  9)
+#define WM_PNL_SINGLE           (WM_USER + 10)
+#define WM_API_EXECUTION        (WM_USER + 11)
+#define WM_FX_RATE_UPDATE       (WM_USER + 12)
+#define WM_API_UNSENT_ORDER     (WM_USER + 13)
+#define WM_OPEN_ORDERS_WINDOW   (WM_USER + 14)
+#define WM_SHOW_ALERT           (WM_USER + 15)
+#define WM_ADD_EVENT            (WM_USER + 16)
+#define WM_MARKET_ORDERS_UPDATE (WM_USER + 17)
+#define WM_TTS_VOICE_CHANGED    (WM_USER + 18)
+#define WM_ALERTS_CHANGED       (WM_USER + 19)
+#define WM_TRAYICON             (WM_USER + 20)
 
-#define WM_API_UPDATE       (WM_USER +  2)
-#define WM_SYMBOL_RESULTS   (WM_USER +  3)
-#define WM_API_LOG          (WM_USER +  4)
-#define WM_ACCOUNT_SUMMARY  (WM_USER +  5)
-#define WM_DIAMONDS_UPDATE  (WM_USER +  7)
-#define WM_MARKET_TICK      (WM_USER +  8)
-#define WM_MARKET_L1        (WM_USER +  9)
-#define WM_MARKET_L2        (WM_USER + 10)   // Level 2 depth delta — lParam = Level2Update*
-#define WM_PNL_SINGLE       (WM_USER + 11)   // Per-position PnL update — posted by pnlSingle() to the subscribed window. wParam = conId (int), lParam = heap-allocated PnlSinglePayload* (caller must delete).
-#define WM_API_EXECUTION    (WM_USER + 12)
-#define WM_FX_RATE_UPDATE   (WM_USER + 13)   // Posted to the DASHBOARD_EXCHANGE_CLASS_NAME popup whenever the EUR.USD FX rate ticks. No lParam — call getFxRate() to read the latest bid/ask/last.
-#define WM_API_UNSENT_ORDER (WM_USER + 14)   // Posted to the Orders window for an untransmitted (transmit=false)
-                                              // order. lParam = heap-allocated TradingAPI::OrderInfo* — handler
-                                              // owns it and must delete it. Purely cosmetic: never written to
-                                              // ordersMap, so it's naturally cleared on the next Orders_Repopulate().
-#define WM_OPEN_ORDERS_WINDOW (WM_USER + 15) // Posted from background thread (e.g. HTTP server) to the
-                                              // Dashboard window to request opening the Orders window on the UI thread.
-#define WM_SHOW_ALERT (WM_USER + 16)
-#define WM_MARKET_ORDERS_UPDATE (WM_USER + 17) // Broadcast to every open Market window whenever any
-                                                // order's status/fields may have changed (openOrder,
-                                                // openOrderEnd, orderStatus, completedOrdersEnd,
-                                                // execDetailsEnd), so each window's inline editable-orders
-                                                // panel (market.h) can resync via api().getOrdersSorted().
 
-static const char* DASHBOARD_CLASS_NAME            = "Dashboard" GATEWAY_NAME;
-static const char* DIAMONDS_CLASS_NAME             = "Diamonds" GATEWAY_NAME;
-static const char* ORDERS_CLASS_NAME               = "Orders" GATEWAY_NAME;
-static const char* EVENTS_CLASS_NAME               = "Events" GATEWAY_NAME;
-static const char* MARKET_CLASS_NAME               = "Market" GATEWAY_NAME;
-static const char* MARKET_SEARCH_CLASS_NAME        = "Market_SearchSymbol" GATEWAY_NAME;
-static const char* SETTINGS_CLASS_NAME             = "Settings" GATEWAY_NAME;
-static const char* DEBUGLOG_CLASS_NAME             = "DebugLog" GATEWAY_NAME;
-static const char* DASHBOARD_EXCHANGE_CLASS_NAME   = "Exchange" GATEWAY_NAME;
-static const char* ALERTS_EDITOR_CLASS_NAME        = "AlertEditor" GATEWAY_NAME;
-static const char* ALERT_NOTIFY_CLASS_NAME         = "AlertNotification" GATEWAY_NAME;
-static const char* LOCK_CLASS_NAME                 = "Lock" GATEWAY_NAME;
-static const char* SCREEN_FLASH_OVERLAY_CLASS_NAME = "ScreenFlashOverlay" GATEWAY_NAME;
-static const char* NEWS_CACHE_SUBKEY               = "News" GATEWAY_NAME;
+// ─── Colors ───────────────────────────────────────────────────────────────────
+#define COINS_CLR_GREEN       RGB( 18, 220,  18)
+#define COINS_CLR_GREEN_DARK  RGB(92, 214, 92)
+#define COINS_CLR_GREEN_DARK2 RGB(32, 150, 32)
+#define COINS_CLR_RED         RGB(220,  55,  55)
+#define COINS_CLR_RED_DARK    RGB(217, 95, 95)
+#define COINS_CLR_RED_DARK2   RGB(148, 33, 33)
+#define COINS_CLR_WHITE       RGB(220, 220, 220)
+#define COINS_CLR_BLACK       RGB(30,  30,  30)
+#define COINS_CLR_GRAY        RGB(150, 150, 150)
+#define COINS_CLR_BLUE        RGB(80, 160, 255)
+#define COINS_CLR_PURPLE      RGB(185, 105, 225)
+#define COINS_CLR_CYAN        RGB(0, 255, 255)
+#define COINS_CLR_PINK        RGB(225, 105, 211)
+#define COINS_CLR_ORANGE      RGB(255, 165, 0)
+#define COINS_CLR_YELLOW      RGB(201, 183, 41)
+// Dark background fills for order-side colored input boxes
+#define COINS_BG_DARK_GREEN RGB( 34, 82, 50)
+#define COINS_BG_DARK_RED   RGB(102, 43, 43)
+
+static const char* DASHBOARD_CLASS_NAME            = "Dashboard";
+static const char* DIAMONDS_CLASS_NAME             = "Diamonds";
+static const char* ORDERS_CLASS_NAME               = "Orders";
+static const char* EVENTS_CLASS_NAME               = "Events";
+static const char* MARKET_CLASS_NAME               = "Market";
+static const char* MARKET_SEARCH_CLASS_NAME        = "Market_SearchSymbol";
+static const char* SETTINGS_CLASS_NAME             = "Settings";
+static const char* DEBUGLOG_CLASS_NAME             = "DebugLog";
+static const char* DASHBOARD_EXCHANGE_CLASS_NAME   = "Exchange";
+static const char* ALERTS_EDITOR_CLASS_NAME        = "AlertEditor";
+static const char* ALERT_NOTIFY_CLASS_NAME         = "AlertNotification";
+static const char* LOCK_CLASS_NAME                 = "Lock";
+static const char* SCREEN_FLASH_OVERLAY_CLASS_NAME = "ScreenFlashOverlay";
+static const char* NEWS_CACHE_SUBKEY               = "News";
 
 class TradingAPI {
 public:
@@ -252,7 +259,13 @@ public:
         int side = 0;         // 0 = ask, 1 = bid
         Level2Entry entry;
     };
-
+    
+    struct EventData {
+        std::string text;
+        COLORREF    color = 0;   // 0 = default theme text color
+        int         conId = 0;   // 0 = no associated symbol (double-click no-ops)
+        std::string symbol;
+    };
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     TradingAPI();

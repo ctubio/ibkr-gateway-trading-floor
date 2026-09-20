@@ -3,13 +3,7 @@
 static const int windowDashboardWidth  = 250;
 static const int windowDashboardHeight = 382;
 
-void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor" GATEWAY_SPACE GATEWAY_NAME, L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
-
-#define WM_TRAYICON (WM_APP + 101)
-
-#define TIMER_WATCHDOG               1
-#define TIMER_WATCHDOG_DELAYED_START 2
-#define TIMER_MARKET_CLOCK           3 // Live US market-session clock (1s tick)
+void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor", L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
 
 #define ID_M_DASHBOARD   1001
 #define ID_MB_DIAMONDS   1003
@@ -34,6 +28,10 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_M_MARKET_MAX   100
 
 #define ID_M_LINKS_BASE  1700   // one command ID per quick link below
+
+#define TIMER_WATCHDOG               1800
+#define TIMER_WATCHDOG_DELAYED_START 1801
+#define TIMER_MARKET_CLOCK           1802
 
 struct QuickLink { const char* label; const char* url; };
 static const QuickLink quickLinks[] = {
@@ -137,7 +135,7 @@ static void Dashboard_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
 }
 
 void MutexGatewayInstance() {
-    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
+    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
 
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
@@ -160,7 +158,7 @@ void MutexGatewayInstance() {
         
         if (hMutex) CloseHandle(hMutex);
         
-        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025" GATEWAY_NAME);
+        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1021));
     }
@@ -452,7 +450,7 @@ void BindTrayIcon(HWND hWnd) {
 }
 
 void UpdateTrayIcon(HWND hWnd) {
-    std::string tooltip = std::string("Trading Floor" GATEWAY_SPACE GATEWAY_NAME) + ": ";
+    std::string tooltip = std::string("Trading Floor") + ": ";
     bool connected = false;
 
     if (!api().isConnected()) {
@@ -1281,8 +1279,17 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (data) {
                 FlashScreen(data->isUp, 1000);
                 StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
-                Events_AddAlertEvent(data->conId, data->symbol, data->price, data->isUp);
+                Events_AddEvent((data->isUp ? "▲ " : "▼ ") + data->symbol + " at " + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
                 PlaySound_Async(209);
+            }
+            return 0;
+        }
+
+        case WM_ADD_EVENT: {
+            TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
+            if (data) {
+                Events_AddEvent(data->text, data->color, data->conId, data->symbol);
+                PlaySound_Async(210);
             }
             return 0;
         }
