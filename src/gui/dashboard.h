@@ -31,7 +31,6 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 
 #define TIMER_WATCHDOG               1800
 #define TIMER_WATCHDOG_DELAYED_START 1801
-#define TIMER_MARKET_CLOCK           1802
 
 struct QuickLink { const char* label; const char* url; };
 static const QuickLink quickLinks[] = {
@@ -46,8 +45,6 @@ static const QuickLink quickLinks[] = {
     { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
 static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]));
-
-static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 // ─── Dashboard State ──────────────────────────────────────────────────────────
 // Encapsulates all dashboard-specific HWNDs and state variables
@@ -260,11 +257,11 @@ static void UpdateMarketClock(HWND hWnd) {
         }
     }
 
-    if (dashboardState.fullDetails) { 
-        std::string day_str = day_names[wd.c_encoding()];
-        std::string time_str = std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count()) + " " + day_str;
-        SetWindowTextA(hWnd, time_str.c_str());
-    } else SetWindowTextA(hWnd, phase.c_str());
+    SetWindowTextA(hWnd, phase.c_str());
+    
+    std::string day_str = day_names[wd.c_encoding()];
+    std::string time_str = std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count()) + " " + day_str;
+    Event_SetTitle(time_str.c_str());
 
     // Calculate time left
     int secs_left = target_secs - total_secs;
@@ -1189,7 +1186,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (api().isMarketDataConnected() && api().isTradingConnected()) {
                 Coins_UpdateLabels(hWnd);
             }
-            UpdateMarketClock(hWnd);
             break;
         }
 

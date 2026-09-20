@@ -1,8 +1,14 @@
 #pragma once
-static const int windowEventsWidth = 260;
+
+static const int windowEventsWidth = 270;
+
 void StartEvents() { StartGenericWindow(EVENTS_CLASS_NAME, "Events", L"TWSAPIClientTradingFloor.Events", windowEventsWidth, 420); }
 
 #define ID_EVENTS_LIST          8001
+
+#define TIMER_MARKET_CLOCK      8500
+
+static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 // Column indices, matching eventCols[] below.
 enum EventColIdx { ECOL_TIME = 0, ECOL_TEXT };
@@ -11,7 +17,7 @@ enum EventColIdx { ECOL_TIME = 0, ECOL_TEXT };
 struct EventCol { const char* header; int width; int fmt; };
 static const EventCol eventCols[] = {
     { "Time",  65, LVCFMT_CENTER },
-    { "Note", 175, LVCFMT_LEFT   },
+    { "Note", 185, LVCFMT_LEFT   },
 };
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
@@ -30,6 +36,8 @@ struct EventEntry {
 
 static const size_t EVENTS_MAX = 21;
 static std::deque<EventEntry> eventsList;
+
+static HWND hWndEvents = NULL;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,13 +67,17 @@ static void Events_AddEvent(const std::string& text, COLORREF color, int conId, 
     eventsList.push_front(EventEntry{ std::string(buf), text, color, conId, symbol });
     while (eventsList.size() > EVENTS_MAX) eventsList.pop_back();
 
-    HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
-    if (hWnd && IsWindow(hWnd)) {
+    if (hWndEvents && IsWindow(hWndEvents)) {
         if (sound) PlaySound_Async(210);
-        Events_Repopulate(hWnd);
+        Events_Repopulate(hWndEvents);
     }
 }
 
+static void Event_SetTitle(const std::string& title) {
+    if (hWndEvents && IsWindow(hWndEvents)) {
+       SetWindowTextA(hWndEvents, title.c_str());
+    }
+}
 // ── Window procedure ──────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -101,8 +113,14 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SendMessageW(hList, LVM_INSERTCOLUMNW, i, (LPARAM)&lvc);
             }
 
+            hWndEvents = hWnd;
             api().addApiUpdateWindow(hWnd);
             Events_Repopulate(hWnd);
+            
+            HWND hWndDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+            if (hWndDashboard && IsWindow(hWndDashboard)) {
+                SendMessage(hWndDashboard, WM_TIMER, TIMER_MARKET_CLOCK, 0);
+            }
             break;
         }
 
@@ -199,6 +217,7 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
+            hWndEvents = NULL;
             break;
     }
 
