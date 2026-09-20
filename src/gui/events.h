@@ -29,15 +29,13 @@ static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]
 struct EventEntry {
     std::string time;
     std::string text;
-    COLORREF    color = 0;   // 0 = default theme text color
+    COLORREF    color = COINS_CLR_GRAY;
     int         conId = 0;   // 0 = no associated symbol (double-click no-ops)
     std::string symbol;
 };
 
 static const size_t EVENTS_MAX = 21;
 static std::deque<EventEntry> eventsList;
-
-static HWND hWndEvents = NULL;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,16 +64,18 @@ static void Events_AddEvent(const std::string& text, COLORREF color, int conId, 
 
     eventsList.push_front(EventEntry{ std::string(buf), text, color, conId, symbol });
     while (eventsList.size() > EVENTS_MAX) eventsList.pop_back();
-
-    if (hWndEvents && IsWindow(hWndEvents)) {
+    
+    HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
+    if (hWnd && IsWindow(hWnd)) {
         if (sound) PlaySound_Async(210);
-        Events_Repopulate(hWndEvents);
+        Events_Repopulate(hWnd);
     }
 }
 
 static void Event_SetTitle(const std::string& title) {
-    if (hWndEvents && IsWindow(hWndEvents)) {
-       SetWindowTextA(hWndEvents, title.c_str());
+    HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
+    if (hWnd && IsWindow(hWnd)) {
+       SetWindowTextA(hWnd, title.c_str());
     }
 }
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -113,7 +113,6 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SendMessageW(hList, LVM_INSERTCOLUMNW, i, (LPARAM)&lvc);
             }
 
-            hWndEvents = hWnd;
             api().addApiUpdateWindow(hWnd);
             Events_Repopulate(hWnd);
             
@@ -136,7 +135,7 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             mmi->ptMaxSize.y = workArea.bottom - workArea.top;
             mmi->ptMaxPosition.x = workArea.left - workArea.left + ((mmi->ptMaxSize.x - mmi->ptMaxTrackSize.x)/2);
             mmi->ptMaxPosition.y = workArea.top - workArea.top;
-            return DefWindowProc(hWnd, WM_GETMINMAXINFO, wParam, lParam);
+            return 0;
         }
 
         case WM_SIZE: {
@@ -217,7 +216,6 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
         case WM_DESTROY:
             api().removeApiUpdateWindow(hWnd);
-            hWndEvents = NULL;
             break;
     }
 

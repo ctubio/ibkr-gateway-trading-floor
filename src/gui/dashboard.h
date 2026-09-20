@@ -135,7 +135,7 @@ void MutexGatewayInstance() {
     HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
 
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        HWND existingWnd = FindWindow(DASHBOARD_CLASS_NAME, NULL);
+        HWND existingWnd = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
         if (existingWnd) {
             DWORD processId;
             GetWindowThreadProcessId(existingWnd, &processId);
