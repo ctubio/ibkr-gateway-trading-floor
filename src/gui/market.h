@@ -1622,7 +1622,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "", Market_Fmt(L1.high),      highColor  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
         { "", (L1.last > 0 && L1.vwap > 0) ? " " + Market_Fmt(L1.last - L1.vwap) : " --",    vwapColor, LOCATE_GLYPH  },
-        { "", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE },  // was: formatVolume(L1.volume)
+        { "", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE },
     };
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
@@ -2028,7 +2028,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.bidSize   > 0.0) state->l1Info.bidSize   = fresh.bidSize;
             if (fresh.askSize   > 0.0) state->l1Info.askSize   = fresh.askSize;
             if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
-            if (fresh.volume    > 0.0) state->l1Info.volume    = fresh.volume;
             state->marketHdrDirty = true;
         }
         break;

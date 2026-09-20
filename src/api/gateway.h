@@ -191,7 +191,6 @@ public:
         double high      = 0.0;
         double low       = 0.0;
         double vwap      = 0.0;  // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
-        long long volume     = 0;
 
         // ── Size ticks (tickSize) ────────────────────────────────────────────
         double bidSize   = 0.0;
