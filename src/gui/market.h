@@ -3,6 +3,8 @@
 static const int windowMarketWidth  = 545;
 static const int windowMarketHeight = 545;
 
+#define MAX_MARKET_WINDOWS 3
+
 void StartMarketSearch() {
     HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
@@ -46,7 +48,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
         if (hFlaggedWnd && IsWindow(hFlaggedWnd)) {
             // Flagged window is still open -- only steal its slot once
             // we're already at capacity.
-            if ((int)marketStates.size() >= 4) {
+            if ((int)marketStates.size() >= MAX_MARKET_WINDOWS) {
                 WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
                 GetWindowPlacement(hFlaggedWnd, &wp);
                 SaveWinPositionRaw(key,

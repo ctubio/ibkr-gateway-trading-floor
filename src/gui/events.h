@@ -10,8 +10,8 @@ enum EventColIdx { ECOL_TIME = 0, ECOL_TEXT };
 // ── Column definitions ────────────────────────────────────────────────────────
 struct EventCol { const char* header; int width; int fmt; };
 static const EventCol eventCols[] = {
-    { "Time",   65, LVCFMT_CENTER },
-    { "Event", 175, LVCFMT_LEFT   },
+    { "Time",     65, LVCFMT_CENTER },
+    { "Message", 175, LVCFMT_LEFT   },
 };
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
