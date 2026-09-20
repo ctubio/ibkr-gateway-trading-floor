@@ -207,8 +207,20 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
-    bool showDiv   = (diamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
-    bool showWeeks = (diamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+    bool isMaximized = false;
+
+    WINDOWPLACEMENT wp;
+    wp.length = sizeof(WINDOWPLACEMENT);
+    if (GetWindowPlacement(hWnd, &wp)) {
+        isMaximized = wp.showCmd == SW_SHOWMAXIMIZED;
+    }
+
+    bool showDiv   = false;
+    bool showWeeks = false;
+    if (isMaximized) {
+        showDiv   = (diamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
+        showWeeks = (diamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+    }
 
     for (int i = DCOL_DIV_YIELD; i <= DCOL_ANNUAL_DIV; ++i) {
         ListView_SetColumnWidth(hList, i, showDiv ? diamondCols[i].width : 0);
@@ -233,17 +245,12 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
 
     RECT windowRect;
     GetWindowRect(hWnd, &windowRect);
-
-    WINDOWPLACEMENT wp;
-    wp.length = sizeof(WINDOWPLACEMENT);
-
     int left = windowRect.left;
-    if (GetWindowPlacement(hWnd, &wp)) {
-        if (wp.showCmd == SW_SHOWMAXIMIZED) {    
-            RECT workArea;
-            SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
-            left = workArea.left - workArea.left + ((workArea.right - workArea.left - windowDiamondsWidth - extraWidth)/2); // relative to monitor, or workArea.left
-        }
+
+    if (isMaximized) {    
+        RECT workArea;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+        left = workArea.left - workArea.left + ((workArea.right - workArea.left - windowDiamondsWidth - extraWidth)/2); // relative to monitor, or workArea.left
     }
 
     MoveWindow(hWnd, left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
@@ -924,8 +931,21 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_GETMINMAXINFO: {
-        bool showDiv   = (diamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
-        bool showWeeks = (diamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+        bool isMaximized = false;
+
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(WINDOWPLACEMENT);
+        if (GetWindowPlacement(hWnd, &wp)) {
+            isMaximized = wp.showCmd == SW_SHOWMAXIMIZED;
+        }
+
+        bool showDiv   = false;
+        bool showWeeks = false;
+        if (isMaximized) {
+            showDiv   = (diamondsCheckedTabs & (1u << 1)) != 0;   // Dividends
+            showWeeks = (diamondsCheckedTabs & (1u << 2)) != 0;   // Quarantine
+        }
+
         int extraWidth = 0;
         if (showDiv) {
             extraWidth += diamondCols[DCOL_DIV_YIELD].width   + diamondCols[DCOL_DIV_DATE].width +
@@ -952,6 +972,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_SIZE: {
+        Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Layout(hWnd);
         break;
     }
