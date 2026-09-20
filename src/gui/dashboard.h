@@ -1278,9 +1278,13 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             AlertPopupData* data = (AlertPopupData*)lParam;
             if (data) {
                 FlashScreen(data->isUp, 1000);
-                StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
-                Events_AddEvent((data->isUp ? "▲ " : "▼ ") + data->symbol + " at " + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
-                PlaySound_Async(209);
+                HWND hwnd = StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
+                if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
+                    delete data;
+                } else {
+                    Events_AddEvent((data->isUp ? "▲ " : "▼ ") + data->symbol + " at " + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
+                    PlaySound_Async(209);
+                }
             }
             return 0;
         }
@@ -1290,6 +1294,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (data) {
                 Events_AddEvent(data->text, data->color, data->conId, data->symbol);
                 PlaySound_Async(210);
+                delete data;
             }
             return 0;
         }
