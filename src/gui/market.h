@@ -1249,7 +1249,6 @@ static std::string Market_FmtQty(double v) {
 // the conflated L1 feed can fold several prints into one update and hides the
 // print-frequency signal entirely.
 struct VolRateResult {
-    bool   ready     = false;
     double volRatio  = 0.0;   // recent shares/sec  ÷ baseline shares/sec
     double vol5min   = 0.0;   // total shares traded in the trailing window currently held in
                                // volHistory. volHistory is pruned elsewhere (WM_MARKET_TICK) to
@@ -1290,7 +1289,6 @@ static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now)
     double recentVolRate    = recentVol    / recentSec;
     double baselineVolRate  = baselineVol  / baselineSec;
 
-    r.ready     = true;
     r.volRatio  = (baselineVolRate  > 0.0001) ? (recentVolRate  / baselineVolRate)  : (recentVolRate  > 0.0 ? 9.9 : 0.0);
     return r;
 }
@@ -1622,7 +1620,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "", Market_Fmt(L1.high),      highColor  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
         { "", (L1.last > 0 && L1.vwap > 0) ? " " + Market_Fmt(L1.last - L1.vwap) : " --",    vwapColor, LOCATE_GLYPH  },
-        { "", formatVolume((long long)volRates.vol5min), volRates.ready ? rateColor(volRates.volRatio)  : COINS_CLR_BLUE },
+        { "", formatVolume((long long)volRates.vol5min), rateColor(volRates.volRatio) },
     };
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
