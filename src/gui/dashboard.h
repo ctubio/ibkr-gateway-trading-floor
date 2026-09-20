@@ -1281,10 +1281,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 HWND hwnd = StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
                 if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
                     delete data;
-                } else {
-                    Events_AddEvent((data->isUp ? "▲ " : "▼ ") + data->symbol + " at " + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
-                    PlaySound_Async(209);
                 }
+                Events_AddEvent((data->isUp ? "▲ " : "▼ ") + data->symbol + " at " + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
+                PlaySound_Async(209);
             }
             return 0;
         }
@@ -1292,8 +1291,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_ADD_EVENT: {
             TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
             if (data) {
-                Events_AddEvent(data->text, data->color, data->conId, data->symbol);
-                PlaySound_Async(210);
+                Events_AddEvent(data->text, data->color, data->conId, data->symbol, true);
                 delete data;
             }
             return 0;

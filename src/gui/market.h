@@ -3,7 +3,7 @@
 static const int windowMarketWidth  = 545;
 static const int windowMarketHeight = 545;
 
-#define MAX_MARKET_WINDOWS 3
+static const size_t MAX_MARKET_WINDOWS = 3;
 
 void StartMarketSearch() {
     HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",

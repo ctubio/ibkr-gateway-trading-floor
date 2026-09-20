@@ -10,8 +10,8 @@ enum EventColIdx { ECOL_TIME = 0, ECOL_TEXT };
 // ── Column definitions ────────────────────────────────────────────────────────
 struct EventCol { const char* header; int width; int fmt; };
 static const EventCol eventCols[] = {
-    { "Time",     65, LVCFMT_CENTER },
-    { "Message", 175, LVCFMT_LEFT   },
+    { "Time",  65, LVCFMT_CENTER },
+    { "Note", 175, LVCFMT_LEFT   },
 };
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
@@ -49,7 +49,7 @@ static void Events_Repopulate(HWND hWnd) {
     InvalidateRect(hList, NULL, FALSE);
 }
 
-static void Events_AddEvent(const std::string& text, COLORREF color = 0, int conId = 0, const std::string& symbol = "") {
+static void Events_AddEvent(const std::string& text, COLORREF color, int conId, const std::string& symbol, bool sound = false) {
     time_t now = time(0);
     struct tm ltm = {};
     localtime_s(&ltm, &now);
@@ -60,7 +60,10 @@ static void Events_AddEvent(const std::string& text, COLORREF color = 0, int con
     while (eventsList.size() > EVENTS_MAX) eventsList.pop_back();
 
     HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
-    if (hWnd && IsWindow(hWnd)) Events_Repopulate(hWnd);
+    if (hWnd && IsWindow(hWnd)) {
+        if (sound) PlaySound_Async(210);
+        Events_Repopulate(hWnd);
+    }
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
