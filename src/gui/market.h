@@ -1344,11 +1344,15 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
         ListView_InsertItem(hList, &lvi);
         std::string quoteStr;
         if (o.trailStopPrice > 0.0)
-            quoteStr += std::format("{:.2f} | {:.2f}", o.trailStopPrice, o.price);//quoteStr += std::format("{:.0f} @ {:.2f} | {:.2f}", o.totalQty, o.trailStopPrice, o.price);
+            quoteStr = std::format("{:.2f} | {:.2f}", o.trailStopPrice, o.price);//quoteStr += std::format("{:.0f} @ {:.2f} | {:.2f}", o.totalQty, o.trailStopPrice, o.price);
         else if (o.price > 0)
             quoteStr = std::format("{:.2f}", o.price);//quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.price);
         else
             quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
+
+        if (o.status != "Submitted" && o.orderType == "LMT") {
+            quoteStr +=  "?";
+        }
 
         ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
 
@@ -1419,11 +1423,13 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
     state->openOrdersSummary.reserve(matched.size());
     for (auto& o : matched) {
         MarketOpenOrderSummary sum;
-        sum.orderId = o.orderId;
-        sum.action  = o.action;
-        sum.totalQty= o.totalQty;
-        sum.price   = o.price;
-        sum.trailStopPrice   = o.trailStopPrice;
+        sum.orderId        = o.orderId;
+        sum.action         = o.action;
+        sum.totalQty       = o.totalQty;
+        sum.price          = o.price;
+        sum.trailStopPrice = o.trailStopPrice;
+        sum.status         = o.status;
+        sum.orderType      = o.orderType;
         state->openOrdersSummary.push_back(sum);
     }
     Market_RefreshExec(hWnd, state);

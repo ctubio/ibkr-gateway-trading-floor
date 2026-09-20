@@ -84,7 +84,9 @@ struct MarketOrderRow {
 // MarketOrderRow it has no edit controls.
 struct MarketOpenOrderSummary {
     int orderId = 0;
-    std::string action;   // "BUY" or "SELL"
+    std::string action;
+    std::string status;   // "BUY" or "SELL"
+    std::string orderType;
     double totalQty   = 0.0;
     double price = 0.0;
     double trailStopPrice = 0.0;

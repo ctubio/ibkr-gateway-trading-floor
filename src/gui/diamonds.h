@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-static const int windowDiamondsWidth = 970;
+static const int windowDiamondsWidth = 1020;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
@@ -72,6 +72,7 @@ enum DiamondColIdx {
     DCOL_LAST,
     DCOL_BIDASK,
     DCOL_SIZE,
+    DCOL_VOLRATE,
     DCOL_VWAP,
     DCOL_CHG5MIN,
     DCOL_DAILYPNL,
@@ -150,6 +151,7 @@ struct DiamondRowCache {
     double upAlert = 0.0;  // for DCOL_ALERT multi-line display
     double downAlert = 0.0;  // for DCOL_ALERT multi-line display
     std::string unrealizedPnLPctStr = "";
+    double volRatio = 0.0; // used to color DCOL_VOLRATE
 };
 
 // Data storage: Fast O(1) lookup by conId for live data streams
@@ -179,6 +181,7 @@ static const DiamondCol diamondCols[] = {
     { "Last",              90, LVCFMT_RIGHT },
     { "Price",             65, LVCFMT_RIGHT },
     { "Size",              50, LVCFMT_RIGHT },
+    { "Vol",               50, LVCFMT_RIGHT },
     { "VWAP",              70, LVCFMT_RIGHT },
     { "5m",                70, LVCFMT_RIGHT },
     { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
@@ -683,6 +686,15 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     double mktVal = shares * (t.last > 0 ? t.last : t.prevClose);
     row.pctNetLiq = FormatFixed((NetLiquidation > 0.0 && mktVal != 0.0) ? (mktVal / NetLiquidation * 100.0) : 0.0, 2) + "%";
     setCol(DCOL_MKTVAL, mktVal, 2, true);
+
+    if (t.rtVolRatio5min > 0.0 || t.rtVolSum5min > 0.0) {
+        row.volRatio = t.rtVolRatio5min;
+        row.sortValues[DCOL_VOLRATE] = t.rtVolSum5min;
+        row.textCols[DCOL_VOLRATE]   = formatVolume((long long)t.rtVolSum5min);
+    } else {
+        row.volRatio = 0.0;
+        setNA(DCOL_VOLRATE, "0");
+    }
 
     if (t.last <= 0.0) {
         setNA(DCOL_LAST); setNA(DCOL_CHGPCT);
@@ -1334,6 +1346,19 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
                             else if (diff < 0.0) cd->clrText = COINS_CLR_RED;
                             else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        }
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        SelectObject(cd->nmcd.hdc, hFont14pt.get());
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_VOLRATE) {
+                        if (cacheRow.textCols[DCOL_VOLRATE] != DIAMONDS_NO_DATA && !cacheRow.textCols[DCOL_VOLRATE].empty()) {
+                            double ratio = cacheRow.volRatio;
+                            if      (ratio >= 3.0) cd->clrText = COINS_CLR_PINK;
+                            else if (ratio >= 1.5) cd->clrText = COINS_CLR_PURPLE;
+                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        } else {
+                            cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
                         }
                         if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());

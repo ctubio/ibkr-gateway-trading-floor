@@ -240,6 +240,17 @@ public:
             if (range <= 0 || last <= 0) return 0.0;
             return (last - low13) / range * 100.0;
         }
+
+        // ── RT_VOLUME-derived recent-activity metric (generic tick 233) ─────────────
+        // A coarser, conflated-arrival cousin of the tick-by-tick-derived ratio
+        // Market_ComputeVolRates() computes locally in market.h — NOT the same
+        // numbers (RT_VOLUME batches multiple prints into one update), but same
+        // idea: recent 15s share-rate vs. a trailing ~5min baseline rate. This is
+        // the only volume signal available for every portfolio position, not just
+        // symbols with an open Market window. Populated by
+        // TradingAPI::Impl::UpdateVolRate() in ibkr.cpp.
+        double rtVolSum5min   = 0.0;  // approx. shares traded in the trailing ~5 minutes
+        double rtVolRatio5min = 0.0;  // recent-vs-baseline share-rate ratio
     };
 
     // ── Level 2 depth entry (one row per side) ────────────────────────────────
