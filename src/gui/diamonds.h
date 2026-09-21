@@ -72,9 +72,9 @@ enum DiamondColIdx {
     DCOL_LAST,
     DCOL_BIDASK,
     DCOL_SIZE,
-    DCOL_VOLRATE,
     DCOL_VWAP,
     DCOL_CHG5MIN,
+    DCOL_VOLRATE,
     DCOL_DAILYPNL,
     DCOL_CHGPCT,
     DCOL_CHG13WEEK,
@@ -181,9 +181,9 @@ static const DiamondCol diamondCols[] = {
     { "Last",              90, LVCFMT_RIGHT },
     { "Price",             65, LVCFMT_RIGHT },
     { "Size",              50, LVCFMT_RIGHT },
-    { "Vol",               60, LVCFMT_RIGHT },
     { "VWAP",              70, LVCFMT_RIGHT },
     { "5m",                70, LVCFMT_RIGHT },
+    { "Vol",               60, LVCFMT_RIGHT },
     { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
     { "Change %",          95, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "13w",              115, LVCFMT_RIGHT },
