@@ -1287,7 +1287,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_ADD_EVENT: {
             TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
             if (data) {
-                Events_AddEvent(data->text, data->color, data->conId, data->symbol, true);
+                Events_AddEvent(data->text, data->color, data->conId, data->symbol, data->color != COINS_CLR_BLUE);
                 delete data;
             }
             return 0;
