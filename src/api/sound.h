@@ -24,9 +24,10 @@ struct SoundQueue {
         }
     }
 
-    void enqueue(int resourceId) {
+    void enqueue(int resourceId, bool addQueue) {
         {
             std::lock_guard<std::mutex> lock(mutex);
+            if (!addQueue && !queue.empty()) return;
             queue.push(resourceId);
         }
         cv.notify_one();
@@ -65,11 +66,11 @@ private:
     }
 };
 
-void PlaySound_Async(int resourceId) {
+void PlaySound_Async(int resourceId, bool addQueue = true) {
     if (!playSounds) return;
 
     static SoundQueue soundQueue;
-    soundQueue.enqueue(resourceId);
+    soundQueue.enqueue(resourceId, addQueue);
 }
 
 // ── Shared TTS Engine ─────────────────────────────────────────────────────

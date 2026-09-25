@@ -65,7 +65,7 @@ static void Events_AddEvent(const std::string& text, COLORREF color, bool bold, 
     
     HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
     if (hWnd && IsWindow(hWnd)) {
-        if (sound) PlaySound_Async(210);
+        if (sound) PlaySound_Async(210, false);
         Events_Repopulate(hWnd);
     }
 }
