@@ -1278,7 +1278,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
                     delete data;
                 }
-                Events_AddEvent((data->isUp ? "▲ " : "▼ ") + data->symbol + " at " + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
+                Events_AddEvent(data->symbol + (data->isUp ? " ▲ " : " ▼ ") + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
                 PlaySound_Async(209);
             }
             return 0;
