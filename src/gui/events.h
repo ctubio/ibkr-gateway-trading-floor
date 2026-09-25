@@ -11,13 +11,14 @@ void StartEvents() { StartGenericWindow(EVENTS_CLASS_NAME, "Events", L"TWSAPICli
 static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 // Column indices, matching eventCols[] below.
-enum EventColIdx { ECOL_TIME = 0, ECOL_TEXT };
+enum EventColIdx { ECOL_TIME = 0, ECOL_SYMBOL, ECOL_PRICE };
 
 // ── Column definitions ────────────────────────────────────────────────────────
 struct EventCol { const char* header; int width; int fmt; };
 static const EventCol eventCols[] = {
-    { "Time",  65, LVCFMT_CENTER },
-    { "Note", 165, LVCFMT_LEFT   },
+    { "Time",   70, LVCFMT_CENTER },
+    { "Symbol", 80, LVCFMT_CENTER },
+    { "Price",  80, LVCFMT_RIGHT  },
 };
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
@@ -28,10 +29,7 @@ static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]
 // Backs the Events window's virtual (LVS_OWNERDATA) list.
 struct EventEntry {
     std::string time;
-    std::string text;
-    COLORREF    color = COINS_CLR_GRAY;
-    int         conId = 0;   // 0 = no associated symbol (double-click no-ops)
-    std::string symbol;
+    TradingAPI::EventData event;
 };
 
 static const size_t EVENTS_MAX = 21;
@@ -55,14 +53,14 @@ static void Events_Repopulate(HWND hWnd) {
     InvalidateRect(hList, NULL, FALSE);
 }
 
-static void Events_AddEvent(const std::string& text, COLORREF color, int conId, const std::string& symbol, bool sound = false) {
+static void Events_AddEvent(const std::string& text, COLORREF color, bool bold, int conId, const std::string& symbol, bool sound = false) {
     time_t now = time(0);
     struct tm ltm = {};
     localtime_s(&ltm, &now);
     char buf[16];
     snprintf(buf, sizeof(buf), "%02d:%02d:%02d", ltm.tm_hour, ltm.tm_min, ltm.tm_sec);
 
-    eventsList.push_front(EventEntry{ std::string(buf), text, color, conId, symbol });
+    eventsList.push_front(EventEntry{ std::string(buf), text, color, bold, conId, symbol });
     while (eventsList.size() > EVENTS_MAX) eventsList.pop_back();
     
     HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
@@ -86,11 +84,9 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
-            DWORD lvStyle = WS_CHILD | WS_VISIBLE | WS_BORDER
-                        | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_OWNERDATA;
-            HWND hList = CreateWindowExW(
-                WS_EX_CLIENTEDGE, L"SysListView32", L"",
-                lvStyle,
+            HWND hList = CreateWindowExA(
+                WS_EX_CLIENTEDGE, "SysListView32", "",
+                WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_OWNERDATA,
                 0, 0, 760, 420,
                 hWnd, (HMENU)ID_EVENTS_LIST, hInst, NULL);
 
@@ -100,17 +96,19 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
-            LVCOLUMNW lvc = {};
+            LVCOLUMN lvc = {};
             lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_FMT;
             for (int i = 0; i < EVENT_COL_COUNT; ++i) {
                 lvc.cx      = eventCols[i].width;
-                //MultiByteToWideChar(CP_UTF8, 0, eventCols[i].header, -1, lvc.pszText, lvc.cchTextMax);
-                wchar_t wHeader[64];
-                MultiByteToWideChar(CP_UTF8, 0, eventCols[i].header, -1, wHeader, 64);
-                lvc.pszText = wHeader;
-
+                lvc.pszText = (LPSTR)eventCols[i].header;
                 lvc.fmt     = eventCols[i].fmt;
-                SendMessageW(hList, LVM_INSERTCOLUMNW, i, (LPARAM)&lvc);
+                ListView_InsertColumn(hList, i, &lvc);
+                if (i == 0) {
+                    LVCOLUMN lvcUpdate = { 0 };
+                    lvcUpdate.mask = LVCF_FMT;
+                    lvcUpdate.fmt  = eventCols[i].fmt;
+                    ListView_SetColumn(hList, i, &lvcUpdate);
+                }
             }
 
             api().addApiUpdateWindow(hWnd);
@@ -147,9 +145,6 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             Events_Repopulate(hWnd);
             break;
         }
-        
-        case WM_NOTIFYFORMAT:
-            return NFR_UNICODE;
 
         case WM_NOTIFY: {
             NMHDR* hdr = (NMHDR*)lParam;
@@ -160,18 +155,23 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 if ((nmlv->uChanged & LVIF_STATE) && (nmlv->uNewState & LVIS_SELECTED) &&
                     nmlv->iItem >= 0 && nmlv->iItem < (int)eventsList.size()) {
                     const EventEntry& ev = eventsList[nmlv->iItem];
-                    api().updateDisplayGroup(ev.conId);
+                    api().updateDisplayGroup(ev.event.conId);
                     ListView_SetItemState(hdr->hwndFrom, nmlv->iItem, 0, LVIS_SELECTED);
                 }
             }
 
-            if (hdr->code == LVN_GETDISPINFOW) {
-                NMLVDISPINFOW* pdi = (NMLVDISPINFOW*)lParam;
+            if (hdr->code == LVN_GETDISPINFO) {
+                NMLVDISPINFO* pdi = (NMLVDISPINFO*)lParam;
                 if (pdi->item.iItem < 0 || pdi->item.iItem >= (int)eventsList.size()) return 0;
                 const EventEntry& ev = eventsList[pdi->item.iItem];
                 if (pdi->item.mask & LVIF_TEXT) {
-                    const std::string& s = (pdi->item.iSubItem == ECOL_TIME) ? ev.time : ev.text;
-                    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, pdi->item.pszText, pdi->item.cchTextMax);
+                    if (pdi->item.iSubItem == ECOL_TIME) {
+                        pdi->item.pszText = (LPSTR)ev.time.c_str();
+                    } else if (pdi->item.iSubItem == ECOL_PRICE) {
+                        pdi->item.pszText = (LPSTR)ev.event.text.c_str();
+                    } else if (pdi->item.iSubItem == ECOL_SYMBOL) {
+                        pdi->item.pszText = (LPSTR)ev.event.symbol.c_str();
+                    }
                 }
                 return 0;
             }
@@ -182,8 +182,8 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     int row = act->iItem;
                     if (row >= 0 && row < (int)eventsList.size()) {
                         const EventEntry& ev = eventsList[row];
-                        if (ev.conId > 0 && !ev.symbol.empty())
-                            StartMarket(ev.symbol, ev.conId);
+                        if (ev.event.conId > 0 && !ev.event.symbol.empty())
+                            StartMarket(ev.event.symbol, ev.event.conId);
                     }
                 }
             }
@@ -204,9 +204,19 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             cd->clrText   = LM_TEXT;
                         }
                         size_t idx = (size_t)cd->nmcd.dwItemSpec;
-                        if (idx < eventsList.size() && eventsList[idx].color != 0)
-                            cd->clrText = eventsList[idx].color;
-                        return CDRF_DODEFAULT;
+                        if (idx < eventsList.size() && eventsList[idx].event.color != 0)
+                            cd->clrText = eventsList[idx].event.color;
+                        return CDRF_NOTIFYSUBITEMDRAW;
+                    }
+                    case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
+                        if (cd->iSubItem == ECOL_SYMBOL) {
+                            size_t idx = (size_t)cd->nmcd.dwItemSpec;
+                            if (idx < eventsList.size() && eventsList[idx].event.bold) {
+                                SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
+                                return CDRF_NEWFONT;
+                            }
+                        }
+                        break;
                     }
                 }
                 break;

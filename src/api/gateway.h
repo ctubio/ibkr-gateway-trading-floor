@@ -273,6 +273,7 @@ public:
     struct EventData {
         std::string text;
         COLORREF    color = 0;   // 0 = default theme text color
+        bool        bold  = false;
         int         conId = 0;   // 0 = no associated symbol (double-click no-ops)
         std::string symbol;
     };

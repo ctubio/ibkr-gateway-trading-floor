@@ -1278,7 +1278,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
                     delete data;
                 }
-                Events_AddEvent(data->symbol + (data->isUp ? " ▲ " : " ▼ ") + FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, data->conId, data->symbol);
+                Events_AddEvent(FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, true, data->conId, data->symbol);
                 PlaySound_Async(209);
             }
             return 0;
@@ -1287,7 +1287,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_ADD_EVENT: {
             TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
             if (data) {
-                Events_AddEvent(data->text, data->color, data->conId, data->symbol, data->color != COINS_CLR_BLUE);
+                Events_AddEvent(data->text, data->color, data->bold, data->conId, data->symbol, data->color != COINS_CLR_BLUE);
                 delete data;
             }
             return 0;
