@@ -161,11 +161,11 @@ std::string AskGatewayPath(HWND hWnd) {
     return "";
 }
 
-struct EnsureOnceFlag {
+/*struct EnsureOnceFlag {
     bool& flag;
     EnsureOnceFlag(bool& f) : flag(f) { flag = true; }
     ~EnsureOnceFlag() { flag = false; }
-};
+};*/
 
 bool alreadyEnsureGatewayRunning = false;
 
@@ -179,7 +179,7 @@ bool EnsureGatewayRunning(HWND hWnd) {
     if (PIDProcessRunning("ibgateway.exe") > 0 || PIDProcessRunning("tws.exe") > 0 || (!installRoot.empty() && IsAnyProcessRunningUnder(installRoot)))
         return true;
 
-    EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
+    alreadyEnsureGatewayRunning = true; //EnsureOnceFlag guard(alreadyEnsureGatewayRunning);
     if (pathGateway.empty() || GetFileAttributesA(pathGateway.c_str()) == INVALID_FILE_ATTRIBUTES) {
         MessageBoxA(hWnd, "TWS or IB Gateway not found.\nPlease locate tws.exe or ibgateway.exe.", "TWS or IB Gateway Not Found", MB_OK | MB_ICONINFORMATION);
         pathGateway = AskGatewayPath(hWnd);
