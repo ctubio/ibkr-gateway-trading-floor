@@ -85,6 +85,7 @@ enum DiamondColIdx {
     DCOL_DIV_DATE,
     DCOL_DIV_AMT,
     DCOL_ANNUAL_DIV,
+    DCOL_EXCHANGE,
     DCOL_COUNT
 };
 
@@ -194,6 +195,7 @@ static const DiamondCol diamondCols[] = {
     { "Date",             125, LVCFMT_RIGHT },
     { "Amount",            85, LVCFMT_RIGHT },
     { "Annual",            85, LVCFMT_RIGHT },
+    { "Exchange",          90, LVCFMT_CENTER },
     // {"fix_tag":7290,"name":"P/E excluding extraordinary items","description":"This ratio is calculated by dividing the current Price by the sum of the Diluted Earnings Per Share from continuing operations BEFORE Extraordinary Items and Accounting Changes over the last four interim periods.","groups":["G15"],"id":"PE"}
     // {"fix_tag":7281,"name":"Category","description":"Displays a more detailed level of description within the industry under which the underlying company can be categorized.","groups":["G-3"],"id":"CATEGORY"}
     // {"fix_tag":7289,"name":"Market capitalization","description":"This value is calculated by multiplying the current Price by the current number of Shares Outstanding.","groups":["G15"],"id":"MKT_CAP"}
@@ -232,6 +234,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
     ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
+    ListView_SetColumnWidth(hList, DCOL_EXCHANGE, showWeeks ? diamondCols[DCOL_EXCHANGE].width : 0);
 
     // Sum the extra width needed for each currently-visible group.
     int extraWidth = 0;
@@ -242,7 +245,8 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     if (showWeeks) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                       diamondCols[DCOL_CHG52WEEK].width + 
-                      diamondCols[DCOL_AVGPRICE].width;
+                      diamondCols[DCOL_AVGPRICE].width + 
+                      diamondCols[DCOL_EXCHANGE].width;
     }
     if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
 
@@ -496,8 +500,8 @@ static void Diamonds_ApplySort(HWND hList) {
     std::sort(diamondDisplayOrder.begin(), diamondDisplayOrder.end(), [](int aConId, int bConId) {
         const auto& a = diamondDataCache.at(aConId);
         const auto& b = diamondDataCache.at(bConId);
-        if (diamondsSortCol == DCOL_SYMBOL) {
-            int cmp = _stricmp(a.textCols[DCOL_SYMBOL].c_str(), b.textCols[DCOL_SYMBOL].c_str());
+        if (diamondsSortCol == DCOL_SYMBOL || diamondsSortCol == DCOL_EXCHANGE) {
+            int cmp = _stricmp(a.textCols[diamondsSortCol].c_str(), b.textCols[diamondsSortCol].c_str());
             return diamondsSortAsc ? (cmp > 0) : (cmp < 0);
         } else {
             double v1 = a.sortValues[diamondsSortCol];
@@ -528,6 +532,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     
     TradingAPI::PnlSinglePayload pnlSingle;
     double avgCost = 0.0;
+    std::string exchange;
     {
         std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
         auto& pm = api().getPortfolioMap();
@@ -535,6 +540,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
         if (it != pm.end()) {
             pnlSingle = it->second.pnlSingle;
             avgCost = it->second.avgCost;
+            exchange = it->second.exchange;
         }
     }
 
@@ -553,6 +559,9 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
         double costBasis = avgCost * std::fabs(shares);
         double pct = (costBasis > 0.0) ? pnlSingle.unrealizedPnL / costBasis * 100.0 : 0;
         row.unrealizedPnLPctStr = std::format("{:.2f}%", pct);
+
+        
+        row.textCols[DCOL_EXCHANGE] = exchange;
 
         diamondsDirty = true;
     }
@@ -966,7 +975,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (showWeeks) {
             extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                         diamondCols[DCOL_CHG52WEEK].width + 
-                        diamondCols[DCOL_AVGPRICE].width;
+                        diamondCols[DCOL_AVGPRICE].width + diamondCols[DCOL_EXCHANGE].width;
         }
         if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
         MINMAXINFO* mmi = (MINMAXINFO*)lParam;
@@ -1338,6 +1347,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             cd->clrText = diamondColorPalette[cit->second].rgb;
                             if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         }
+                        return CDRF_NEWFONT;
+                    }
+                    if (cd->iSubItem == DCOL_EXCHANGE) {
+                        SelectObject(cd->nmcd.hdc, hFont12ptbold.get());
+                        cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_VWAP) {

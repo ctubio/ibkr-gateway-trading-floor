@@ -1638,7 +1638,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
 
-    std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice) + (state->exchange.empty() ? "" : " on " + state->exchange);
+    std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice) /*+ (state->exchange.empty() ? "" : " on " + state->exchange)*/;
     if (state->titlebar != titlebar) {
         state->titlebar = titlebar;
         SetWindowTextA(hWnd, state->titlebar.c_str());
