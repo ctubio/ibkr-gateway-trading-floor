@@ -172,7 +172,7 @@ bool alreadyEnsureGatewayRunning = false;
 bool ensureGatewayLoggedInOnce = false;
 
 bool EnsureGatewayRunning(HWND hWnd) {
-    if (alreadyEnsureGatewayRunning || !autoGateway) return false;
+    if (alreadyEnsureGatewayRunning || !autoGateway) return alreadyEnsureGatewayRunning/*false*/;
 
     std::string installRoot = pathGateway.empty() ? "" : std::filesystem::path(pathGateway).parent_path().string();
 
