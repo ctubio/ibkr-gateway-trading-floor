@@ -110,6 +110,7 @@ struct TsState {
     std::string symbol;
     int conId = 0;
     std::string titlebar;
+    std::string exchange;
 
     // ── Level 1 quote ─────────────────────────────
     TradingAPI::L1Book l1Info;

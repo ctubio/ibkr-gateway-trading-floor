@@ -30,7 +30,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
     }
 
     if (alreadyOpen) {
-        StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, NULL);
+        StartGenericWindow(MARKET_CLASS_NAME, (symbol + " -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, NULL);
         return;
     }
 
@@ -66,7 +66,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
     }
 
     TradingAPI::MarketInitData* data = new TradingAPI::MarketInitData{symbol, conId, key};
-    HWND hWnd = StartGenericWindow(MARKET_CLASS_NAME, (symbol + ": -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
+    HWND hWnd = StartGenericWindow(MARKET_CLASS_NAME, (symbol + " -- @ --").c_str(), L"TWSAPIClientTradingFloor.Market", windowMarketWidth, windowMarketHeight, NULL, key, data);
     if (!hWnd || (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA) != data) {
         delete data;
     }
@@ -1638,7 +1638,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
 
-    std::string titlebar = state->symbol + ": " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice);
+    std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice) + (state->exchange.empty() ? "" : " on " + state->exchange);
     if (state->titlebar != titlebar) {
         state->titlebar = titlebar;
         SetWindowTextA(hWnd, state->titlebar.c_str());
@@ -2046,6 +2046,88 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
+    case WM_MARKET_TICK: {
+        auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
+        if (state) {
+            tick->side = darkMode ? DM_TEXT : LM_TEXT;
+            if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0 && tick->price != state->l1Info.last) {
+                if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
+                else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
+                else if (tick->price <  state->l1Info.bid)  tick->side = COINS_CLR_RED_DARK;
+                else if (tick->price >  state->l1Info.ask)  tick->side = COINS_CLR_GREEN_DARK;
+                else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
+                else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
+            }
+            state->lastTimeSec   = TimeToSeconds(tick->time);
+            std::string priceStr = FormatFixed(tick->price, 2);
+            std::string sizeStr  = FormatFixed(tick->size, 0);
+            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec );
+            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
+            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
+            Market_TrimTimeSalesLists(state);
+
+            // ── Volume rate / print-frequency rate: feed the rolling tick history ──
+            // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
+            // here with its arrival time so Market_ComputeVolRates can derive a
+            // recent-vs-baseline ratio for both share volume and trade frequency.
+            // Running sums are maintained incrementally to avoid O(n) iteration on paint.
+            ULONGLONG tickNow = GetTickCount64();
+            if (state->volHistory.empty())
+                state->volTrackingStart = tickNow;
+
+            // Add new tick and update total + recent sums (a brand-new tick is
+            // always "recent" by definition).
+            state->volHistory.push_back({ tickNow, tick->size });
+            state->volSumTotal  += tick->size;
+            state->volSumRecent += tick->size;
+
+            ULONGLONG baselineCutoff = tickNow - VOL_RATE_BASELINE_MS;
+            ULONGLONG recentCutoff   = tickNow - VOL_RATE_RECENT_MS;
+
+            // Advance the recent -> baseline boundary incrementally.
+            // volHistory is time-ordered, so entries only ever move from
+            // recent into baseline, never back — no need to rescan the deque.
+            while (state->volRecentBoundaryIdx < state->volHistory.size() &&
+                   state->volHistory[state->volRecentBoundaryIdx].time < recentCutoff) {
+                double sz = state->volHistory[state->volRecentBoundaryIdx].size;
+                state->volSumRecent   -= sz;
+                state->volSumBaseline += sz;
+                ++state->volRecentBoundaryIdx;
+            }
+
+            // Prune old ticks off the front (baseline window expiry).
+            while (!state->volHistory.empty() && state->volHistory.front().time < baselineCutoff) {
+                double oldSize = state->volHistory.front().size;
+                state->volSumTotal -= oldSize;
+                state->volSumBaseline -= oldSize; // anything old enough to prune is always in baseline by now
+                state->volHistory.pop_front();
+                if (state->volRecentBoundaryIdx > 0) --state->volRecentBoundaryIdx;
+            }
+
+            state->marketHdrDirty = true;
+        }
+        delete tick;
+        break;
+    }
+
+    case WM_PNL_SINGLE: {
+        int conId = (int)lParam;
+        if (!conId || !state || state->conId != conId) break;
+        std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
+        auto& pm = api().getPortfolioMap();
+        auto it = pm.find(state->conId);
+        if (it != pm.end()) {
+            state->position      = it->second.shares;
+            state->avgPrice      = it->second.avgCost;
+            state->exchange      = it->second.exchange;
+            state->dailyPnL      = it->second.pnlSingle.dailyPnL;
+            state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
+        }
+
+        state->marketHdrDirty = true;
+        break;
+    }
+
     case WM_COMMAND: {
         if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == STN_CLICKED && state) {
             Market_ToggleOVN(hWnd, state);
@@ -2183,88 +2265,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         break;
     }
-
-    case WM_MARKET_TICK: {
-        auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
-        if (state) {
-            tick->side = darkMode ? DM_TEXT : LM_TEXT;
-            if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0 && tick->price != state->l1Info.last) {
-                if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
-                else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
-                else if (tick->price <  state->l1Info.bid)  tick->side = COINS_CLR_RED_DARK;
-                else if (tick->price >  state->l1Info.ask)  tick->side = COINS_CLR_GREEN_DARK;
-                else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
-                else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
-            }
-            state->lastTimeSec   = TimeToSeconds(tick->time);
-            std::string priceStr = FormatFixed(tick->price, 2);
-            std::string sizeStr  = FormatFixed(tick->size, 0);
-            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec );
-            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
-            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, tick->time, tick->side, priceStr, sizeStr, state->lastTimeSec);
-            Market_TrimTimeSalesLists(state);
-
-            // ── Volume rate / print-frequency rate: feed the rolling tick history ──
-            // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
-            // here with its arrival time so Market_ComputeVolRates can derive a
-            // recent-vs-baseline ratio for both share volume and trade frequency.
-            // Running sums are maintained incrementally to avoid O(n) iteration on paint.
-            ULONGLONG tickNow = GetTickCount64();
-            if (state->volHistory.empty())
-                state->volTrackingStart = tickNow;
-
-            // Add new tick and update total + recent sums (a brand-new tick is
-            // always "recent" by definition).
-            state->volHistory.push_back({ tickNow, tick->size });
-            state->volSumTotal  += tick->size;
-            state->volSumRecent += tick->size;
-
-            ULONGLONG baselineCutoff = tickNow - VOL_RATE_BASELINE_MS;
-            ULONGLONG recentCutoff   = tickNow - VOL_RATE_RECENT_MS;
-
-            // Advance the recent -> baseline boundary incrementally.
-            // volHistory is time-ordered, so entries only ever move from
-            // recent into baseline, never back — no need to rescan the deque.
-            while (state->volRecentBoundaryIdx < state->volHistory.size() &&
-                   state->volHistory[state->volRecentBoundaryIdx].time < recentCutoff) {
-                double sz = state->volHistory[state->volRecentBoundaryIdx].size;
-                state->volSumRecent   -= sz;
-                state->volSumBaseline += sz;
-                ++state->volRecentBoundaryIdx;
-            }
-
-            // Prune old ticks off the front (baseline window expiry).
-            while (!state->volHistory.empty() && state->volHistory.front().time < baselineCutoff) {
-                double oldSize = state->volHistory.front().size;
-                state->volSumTotal -= oldSize;
-                state->volSumBaseline -= oldSize; // anything old enough to prune is always in baseline by now
-                state->volHistory.pop_front();
-                if (state->volRecentBoundaryIdx > 0) --state->volRecentBoundaryIdx;
-            }
-
-            state->marketHdrDirty = true;
-        }
-        delete tick;
-        break;
-    }
-
-    case WM_PNL_SINGLE: {
-        int conId = (int)lParam;
-        if (!conId || !state || state->conId != conId) break;
-        std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
-        auto& pm = api().getPortfolioMap();
-        auto it = pm.find(state->conId);
-        if (it != pm.end()) {
-            state->position      = it->second.shares;
-            state->avgPrice      = it->second.avgCost;
-            state->dailyPnL      = it->second.pnlSingle.dailyPnL;
-            state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
-        }
-
-        state->marketHdrDirty = true;
-        break;
-    }
-
+    
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
         
