@@ -334,17 +334,8 @@ static const std::deque<TimeSalesRow>* TimeSales_RowsForList(const TsState* stat
     return nullptr;
 }
 
-// Re-asserts the hint label(s) belonging to a given order-bar edit on top of
-// it. Called after anything that can change that edit's text selection —
-// mouse click/drag/double-click, keyboard navigation, focus change — none of
-// which necessarily route through a WM_PAINT we could otherwise intercept,
-// since EDIT draws its selection highlight directly via GetDC.
-static void Market_RedrawHintsFor(HWND hEdit) {
-    HWND hMarket = GetParent(hEdit);
-    auto it = marketStates.find(hMarket);
-    if (it == marketStates.end() || !it->second) return;
-    TsState* state = it->second;
-
+static void Market_RedrawHintsFor(TsState* state, HWND hEdit) {
+    if (!state) return;
     auto redraw = [](HWND h) {
         if (!h || !IsWindowVisible(h)) return;
         InvalidateRect(h, NULL, TRUE);
@@ -363,6 +354,13 @@ static void Market_RedrawHintsFor(HWND hEdit) {
         redraw(state->hRRLabel);
         redraw(state->hOptProfitTarget);
     }
+}
+
+// Kept for any other caller that only has the HWND — one lookup, as before.
+static void Market_RedrawHintsFor(HWND hEdit) {
+    HWND hMarket = GetParent(hEdit);
+    auto it = marketStates.find(hMarket);
+    Market_RedrawHintsFor((it != marketStates.end()) ? it->second : nullptr, hEdit);
 }
 
 // ── Right block geometry (shared by paint and layout) ────────────────────────
@@ -787,11 +785,14 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             return 0;
     }
 
-    if (msg == WM_KEYDOWN) {
-        HWND hMarket = GetParent(hWnd);
-        auto it = marketStates.find(hMarket);
-        TsState* st = (it != marketStates.end()) ? it->second : nullptr;
+    // Resolved once per message now — previously re-hashed inside every
+    // Market_RedrawHintsFor(hWnd) call below (VK_TAB, VK_UP/DOWN, catch-all),
+    // on top of the lookup WM_KEYDOWN already did for itself.
+    HWND hMarket = GetParent(hWnd);
+    auto mIt = marketStates.find(hMarket);
+    TsState* st = (mIt != marketStates.end()) ? mIt->second : nullptr;
 
+    if (msg == WM_KEYDOWN) {
         if (wParam == VK_ESCAPE) {
             if (st) {
                 api().cancelOrders(st->conId);
@@ -816,7 +817,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
                     SendMessageA(hNext, EM_SETSEL, len, len);
                 }
             }
-            Market_RedrawHintsFor(hWnd);
+            Market_RedrawHintsFor(st, hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
             return 0;
         }
@@ -911,7 +912,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
             int len = GetWindowTextLengthA(hWnd);
             SendMessageA(hWnd, EM_SETSEL, len, len);
             if (st) Market_UpdateOrderRiskLabel(st);
-            Market_RedrawHintsFor(hWnd);
+            Market_RedrawHintsFor(st, hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
             return 0;
         }
@@ -941,7 +942,7 @@ static LRESULT CALLBACK OrderBar_EditSubclassProc(
     // GetDC for all of these, without necessarily going through WM_PAINT, so
     // we re-assert the hint label(s) on top right after every one of them.
     LRESULT res = DefSubclassProc(hWnd, msg, wParam, lParam);
-    Market_RedrawHintsFor(hWnd);
+    Market_RedrawHintsFor(st, hWnd);
     return res;
 }
 
@@ -965,10 +966,12 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
             return 0;
     }
 
+    // consolidate: look up once, right after the early-return branches
+    HWND hMarket = GetParent(hEdit);
+    auto mIt = marketStates.find(hMarket);
+    TsState* st = (mIt != marketStates.end()) ? mIt->second : nullptr;
+
     if (msg == WM_KEYDOWN) {
-        HWND hMarket = GetParent(hEdit);
-        auto it = marketStates.find(hMarket);
-        TsState* st = (it != marketStates.end()) ? it->second : nullptr;
         MarketOrderRow* row = nullptr;
         if (st) {
             for (auto& r : st->orderRows) {
@@ -1046,18 +1049,13 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
     // Re-assert this row's hint labels on top after anything that could've
     // changed the edit's selection/focus (mouse click/drag, etc.) — same fix
     // as Market_RedrawHintsFor() for the order-bar edits.
-    {
-        HWND hMarket = GetParent(hEdit);
-        auto it = marketStates.find(hMarket);
-        TsState* st = (it != marketStates.end()) ? it->second : nullptr;
-        if (st) {
-            for (auto& r : st->orderRows) {
-                if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) {
-                    auto redraw = [](HWND h) { if (h && IsWindowVisible(h)) { InvalidateRect(h, NULL, TRUE); UpdateWindow(h); } };
-                    redraw(r.hTotalLabel);
-                    redraw(r.hQtyTifLabel);
-                    break;
-                }
+    if (st) {
+        for (auto& r : st->orderRows) {
+            if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) {
+                auto redraw = [](HWND h) { if (h && IsWindowVisible(h)) { InvalidateRect(h, NULL, TRUE); UpdateWindow(h); } };
+                redraw(r.hTotalLabel);
+                redraw(r.hQtyTifLabel);
+                break;
             }
         }
     }

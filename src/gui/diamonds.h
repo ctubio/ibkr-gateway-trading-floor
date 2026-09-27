@@ -720,7 +720,8 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     }
 
     setCol(DCOL_LAST, t.last, 2, true);
-    diamondsSparklines[conId].AddPrice(t.last);    
+    auto& spark = diamondsSparklines[conId]; // single lookup, reused below
+    spark.AddPrice(t.last);    
 
     // Alert Up Trigger (Alert High is equal to or lower than Last)
     if (row.upAlert > 0.0 && t.last >= row.upAlert) {
@@ -763,7 +764,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // for this symbol (same "appears once ready" behavior as those dots).
     {
         double price5MinAgo = 0.0;
-        if (diamondsSparklines[conId].GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
+        if (spark.GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
             setCol(DCOL_CHG5MIN, t.last - price5MinAgo, 2, true);
         } else {
             setNA(DCOL_CHG5MIN);
