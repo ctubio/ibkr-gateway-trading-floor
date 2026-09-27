@@ -1073,8 +1073,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Defer to the throttled paint timer -- see note in Diamonds_UpdatePnLCols.
             diamondsDirty = true;
         }
-        Diamonds_UpdatePnLCols(hWnd, conId);
-        
         // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single market tick!
         // This stops the rows from continuously jumping up and down (which the user perceived as flickering).
         // Sorting will now only happen when the user clicks a column header, or when repopulated.
