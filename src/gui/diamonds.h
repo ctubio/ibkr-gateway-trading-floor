@@ -103,6 +103,7 @@ struct DiamondsWeeklyCloseCache {
     double closeAgo13Week = 0.0;
     double closeAgo26Week = 0.0;
     double closeAgo52Week = 0.0;
+    ULONGLONG lastAttemptMs = 0;   // PERF: throttle re-locking portfolioMutex
 };
 static std::unordered_map<int, DiamondsWeeklyCloseCache> diamondsWeeklyCloseCache;
 
@@ -111,16 +112,22 @@ static DiamondsWeeklyCloseCache Diamonds_GetWeeklyCloseCache(int conId) {
     if (cached.closeAgo13Week > 0.0 && cached.closeAgo26Week > 0.0 && cached.closeAgo52Week > 0.0)
         return cached;
 
+    // PERF: called from Diamonds_UpdateMarketCols() on every WM_MARKET_L1 tick.
+    // Without this throttle, a symbol whose weekly closes never fully populate
+    // (e.g. recent IPO, <364 days of history) re-locks portfolioMutex — which
+    // the API thread also writes on every position()/pnlSingle() callback —
+    // on every single tick, forever. Retry at most once 7 seconds instead.
+    ULONGLONG now = GetTickCount64();
+    if (now - cached.lastAttemptMs < 7000) return cached;
+    cached.lastAttemptMs = now;
+
     std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
     auto& portfolio = api().getPortfolioMap();
     auto it = portfolio.find(conId);
     if (it != portfolio.end()) {
-        if (it->second.closeAgo13Week > 0.0)
-            cached.closeAgo13Week = it->second.closeAgo13Week;
-        if (it->second.closeAgo26Week > 0.0)
-            cached.closeAgo26Week = it->second.closeAgo26Week;
-        if (it->second.closeAgo52Week > 0.0)
-            cached.closeAgo52Week = it->second.closeAgo52Week;
+        if (it->second.closeAgo13Week > 0.0) cached.closeAgo13Week = it->second.closeAgo13Week;
+        if (it->second.closeAgo26Week > 0.0) cached.closeAgo26Week = it->second.closeAgo26Week;
+        if (it->second.closeAgo52Week > 0.0) cached.closeAgo52Week = it->second.closeAgo52Week;
     }
     return cached;
 }
