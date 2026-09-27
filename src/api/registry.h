@@ -44,7 +44,8 @@ static HPEN hBorderPen = NULL;
 
 static HWND hDebugEdit = NULL;
 
-static std::deque<std::string> debugBuffer; // stores messages when window is closed
+static std::mutex debugBufferMutex;                 // guards debugBuffer below
+static std::deque<std::string> debugBuffer;          // stores messages when window is closed
 
 void LogDebug(const std::string& msg) {
     time_t now = time(0);
@@ -54,18 +55,28 @@ void LogDebug(const std::string& msg) {
     if (!timestamp.empty()) timestamp.pop_back();
 
     std::string fullMsg = "[" + timestamp + "] " + msg + "\r\n";
-    debugBuffer.push_back(fullMsg);
-    if (debugBuffer.size() > 50) {
-        debugBuffer.pop_front();
+
+    {
+        std::lock_guard<std::mutex> lock(debugBufferMutex);
+        debugBuffer.push_back(fullMsg);
+        if (debugBuffer.size() > 50) {
+            debugBuffer.pop_front();
+        }
     }
 
-    if (hDebugEdit && IsWindow(hDebugEdit)) {
-        // Append to edit control
-        int len = GetWindowTextLength(hDebugEdit);
-        SendMessage(hDebugEdit, EM_SETSEL, len, len);
-        SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)fullMsg.c_str());
-        // Auto-scroll to bottom
-        SendMessage(hDebugEdit, EM_SCROLLCARET, 0, 0);
+    // LogDebug can be called from any thread — most visibly the HTTP
+    // server's connection thread in server.h, which logs once per request.
+    // hDebugEdit is created/destroyed only on the UI thread, inside
+    // WndProcDebugLog's WM_CREATE/WM_DESTROY, so reading or SendMessage-ing
+    // it directly from here would race with that. FindWindowA is safe to
+    // call from any thread; PostMessage hands the actual append off to
+    // whichever thread owns the window, so only that thread ever touches
+    // hDebugEdit.
+    HWND hWnd = FindWindowA(DEBUGLOG_CLASS_NAME, NULL);
+    if (hWnd && IsWindow(hWnd)) {
+        auto* pMsg = new std::string(fullMsg);
+        if (!PostMessageA(hWnd, WM_DEBUG_LOG_APPEND, 0, (LPARAM)pMsg))
+            delete pMsg;
     }
 }
 

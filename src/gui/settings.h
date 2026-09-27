@@ -39,8 +39,17 @@ static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 // ─── Debug Log ────────────────────────────────────────────────────────────────
 void FlushDebugBuffer() {
     if (!hDebugEdit || !IsWindow(hDebugEdit)) return;
+
+    // Copy out under lock — debugBuffer can be mutated concurrently by
+    // LogDebug() from other threads (see registry.h).
+    std::vector<std::string> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(debugBufferMutex);
+        snapshot.assign(debugBuffer.begin(), debugBuffer.end());
+    }
+
     SendMessageA(hDebugEdit, WM_SETTEXT, 0, (LPARAM)""); // clear first
-    for (const auto& msg : debugBuffer) {
+    for (const auto& msg : snapshot) {
         int len = GetWindowTextLength(hDebugEdit);
         SendMessage(hDebugEdit, EM_SETSEL, len, len);
         SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)msg.c_str());
@@ -71,6 +80,22 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 int w = LOWORD(lParam);
                 int h = HIWORD(lParam);
                 SetWindowPos(hDebugEdit, NULL, 0, 0, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            break;
+        }
+        // ── Cross-thread append (see LogDebug in registry.h) ───────────────────
+        // Runs on this window's own (UI) thread, so it's the only code path
+        // that's allowed to touch hDebugEdit directly.
+        case WM_DEBUG_LOG_APPEND: {
+            std::string* pMsg = (std::string*)lParam;
+            if (pMsg) {
+                if (hDebugEdit && IsWindow(hDebugEdit)) {
+                    int len = GetWindowTextLength(hDebugEdit);
+                    SendMessage(hDebugEdit, EM_SETSEL, len, len);
+                    SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)pMsg->c_str());
+                    SendMessage(hDebugEdit, EM_SCROLLCARET, 0, 0);
+                }
+                delete pMsg;
             }
             break;
         }

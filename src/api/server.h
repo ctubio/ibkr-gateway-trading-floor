@@ -215,13 +215,26 @@ static std::string HandleGetBalance() {
 
 // GET /portfolio  →  JSON array of all positions
 static std::string HandleGetPositions() {
-    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-    const auto& map = api().getPortfolioMap();
+    // Copy the snapshot out under a short lock, then release before doing any
+    // string formatting or calling PositionToJson() — which itself acquires
+    // watchlistMutex via getMarketData(). Previously portfolioMutex was held
+    // for the whole loop, nesting watchlistMutex inside it and blocking the
+    // API thread's pnlSingle()/position() callbacks (which also need
+    // portfolioMutex) for the entire JSON build, not just the map copy.
+    std::vector<TradingAPI::PositionInfo> positions;
+    {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        const auto& map = api().getPortfolioMap();
+        positions.reserve(map.size());
+        for (const auto& [conId, pos] : map) {
+            //if (pos.isWatchOnly) continue;
+            positions.push_back(pos);
+        }
+    }
 
     std::string body = "[";
     bool first = true;
-    for (const auto& [conId, pos] : map) {
-        //if (pos.isWatchOnly) continue;
+    for (const auto& pos : positions) {
         if (!first) body += ",";
         body += PositionToJson(pos);
         first = false;
@@ -235,17 +248,26 @@ static std::string HandleGetPositionBySymbol(const std::string& symbol) {
     std::string upper = symbol;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
 
-    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-    const auto& map = api().getPortfolioMap();
-
-    for (const auto& [conId, pos] : map) {
-        std::string posSymbol = pos.symbol;
-        std::transform(posSymbol.begin(), posSymbol.end(), posSymbol.begin(), ::toupper);
-        if (posSymbol == upper) {
-            return PositionToJson(pos);
+    // Same pattern as HandleGetPositions(): find and copy the one matching
+    // position under portfolioMutex, then release it before ever touching
+    // watchlistMutex (inside PositionToJson -> getMarketData) or formatting.
+    TradingAPI::PositionInfo match;
+    bool found = false;
+    {
+        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
+        const auto& map = api().getPortfolioMap();
+        for (const auto& [conId, pos] : map) {
+            std::string posSymbol = pos.symbol;
+            std::transform(posSymbol.begin(), posSymbol.end(), posSymbol.begin(), ::toupper);
+            if (posSymbol == upper) {
+                match = pos;
+                found = true;
+                break;
+            }
         }
     }
-    return "";
+    if (!found) return "";
+    return PositionToJson(match);
 }
 
 // ── News fetch helpers (mirrors fetch_news.py logic) ─────────────────────────
