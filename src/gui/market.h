@@ -108,8 +108,7 @@ static const int ORDER_BAR_H = 84;
 // represents this symbol's normal pace. A ratio >> 1 means recent activity is
 // running hot relative to how this symbol has been trading over the last few
 // minutes — the day-trading "sudden volume increase" signal.
-static const ULONGLONG VOL_RATE_RECENT_MS   = 15000ULL;    // 15s recent window
-static const ULONGLONG VOL_RATE_BASELINE_MS = 300000ULL;   // 5 min baseline window (includes recent slice until pruned)
+// Window sizes are now defined in RollingRateTracker (rate_tracker.h).
 
 static const int MARKET_ORDER_ROW_H = 44;   // per-row height, matches Orders.h's EDIT_PANEL_H
 
@@ -1245,16 +1244,13 @@ static std::string Market_FmtQty(double v) {
 // window (the trailing history minus the recent slice) to catch a sudden
 // increase in either total share volume or trade frequency — the day-trading
 // "something is happening right now" signal. Both ratios are derived from the
-// same tick-by-tick history (state->volHistory), never from RTVolume, since
+// same tick-by-tick history (state->volRate), never from RTVolume, since
 // the conflated L1 feed can fold several prints into one update and hides the
 // print-frequency signal entirely.
 struct VolRateResult {
     double volRatio  = 0.0;   // recent shares/sec  ÷ baseline shares/sec
-    double vol5min   = 0.0;   // total shares traded in the trailing window currently held in
-                               // volHistory. volHistory is pruned elsewhere (WM_MARKET_TICK) to
-                               // only ever contain entries within VOL_RATE_BASELINE_MS (~5 min),
-                               // so this sum IS the trailing 5-minute volume — no new tracking
-                               // needed. Computed unconditionally (unlike volRatio
+    double vol5min   = 0.0;   // total shares traded in the trailing baseline window (5 min)
+                               // from volRate. Computed unconditionally (unlike volRatio
                                // below): a partial sum during the first 5 min after a clear is
                                // still a meaningful number, not a misleading ratio off a thin
                                // denominator.
@@ -1262,34 +1258,8 @@ struct VolRateResult {
 
 static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now) {
     VolRateResult r;
-    if (state->volHistory.empty()) return r;
-
-    // Use pre-maintained running sums — O(1) instead of O(n) per paint
-    r.vol5min = state->volSumTotal;
-
-    // Not enough history yet to trust a baseline — avoid a misleadingly huge
-    // ratio off a thin denominator (mirrors Sparkline::GetPriceAgo's approach
-    // of simply not showing a reading until there's enough history for it).
-    // Gated on trackingStart (set once when the first tick after a clear
-    // arrives), NOT on hist.front().time: the front is continuously pruned
-    // back to just inside VOL_RATE_BASELINE_MS as new ticks land, so checking
-    // "is the oldest entry >= BASELINE_MS old" flip-flops forever right at
-    // that boundary — true between prints, false the instant the next print
-    // evicts the stale entry. trackingStart only moves on an explicit clear,
-    // so once ready flips true it stays true.
-    if (state->volTrackingStart == 0 || now < state->volTrackingStart || now - state->volTrackingStart < VOL_RATE_BASELINE_MS)
-        return r;
-
-    double recentVol   = state->volSumRecent;
-    double baselineVol = state->volSumBaseline;
-
-    double recentSec   = VOL_RATE_RECENT_MS / 1000.0;
-    double baselineSec = (VOL_RATE_BASELINE_MS - VOL_RATE_RECENT_MS) / 1000.0;
-
-    double recentVolRate    = recentVol    / recentSec;
-    double baselineVolRate  = baselineVol  / baselineSec;
-
-    r.volRatio  = (baselineVolRate  > 0.0001) ? (recentVolRate  / baselineVolRate)  : (recentVolRate  > 0.0 ? 9.9 : 0.0);
+    r.vol5min  = state->volRate.total();
+    r.volRatio = state->volRate.ratio(now);
     return r;
 }
 
@@ -2068,39 +2038,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
             // here with its arrival time so Market_ComputeVolRates can derive a
             // recent-vs-baseline ratio for both share volume and trade frequency.
-            // Running sums are maintained incrementally to avoid O(n) iteration on paint.
-            ULONGLONG tickNow = GetTickCount64();
-            if (state->volHistory.empty())
-                state->volTrackingStart = tickNow;
-
-            // Add new tick and update total + recent sums (a brand-new tick is
-            // always "recent" by definition).
-            state->volHistory.push_back({ tickNow, tick->size });
-            state->volSumTotal  += tick->size;
-            state->volSumRecent += tick->size;
-
-            ULONGLONG baselineCutoff = tickNow - VOL_RATE_BASELINE_MS;
-            ULONGLONG recentCutoff   = tickNow - VOL_RATE_RECENT_MS;
-
-            // Advance the recent -> baseline boundary incrementally.
-            // volHistory is time-ordered, so entries only ever move from
-            // recent into baseline, never back — no need to rescan the deque.
-            while (state->volRecentBoundaryIdx < state->volHistory.size() &&
-                   state->volHistory[state->volRecentBoundaryIdx].time < recentCutoff) {
-                double sz = state->volHistory[state->volRecentBoundaryIdx].size;
-                state->volSumRecent   -= sz;
-                state->volSumBaseline += sz;
-                ++state->volRecentBoundaryIdx;
-            }
-
-            // Prune old ticks off the front (baseline window expiry).
-            while (!state->volHistory.empty() && state->volHistory.front().time < baselineCutoff) {
-                double oldSize = state->volHistory.front().size;
-                state->volSumTotal -= oldSize;
-                state->volSumBaseline -= oldSize; // anything old enough to prune is always in baseline by now
-                state->volHistory.pop_front();
-                if (state->volRecentBoundaryIdx > 0) --state->volRecentBoundaryIdx;
-            }
+            state->volRate.add(GetTickCount64(), tick->size);
 
             state->marketHdrDirty = true;
         }
@@ -2386,12 +2324,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 state->openOrdersSummary.clear();
                 Market_Layout(hWnd, state);
                 state->l1Info = TradingAPI::L1Book{};
-                state->volHistory.clear();   // stale on disconnect — avoid a phantom ratio off a frozen history
-                state->volTrackingStart = 0; // re-arm the warm-up gate so ready doesn't latch true off pre-disconnect data
-                state->volSumTotal = 0.0;
-                state->volSumRecent = 0.0;
-                state->volSumBaseline = 0.0;
-                state->volRecentBoundaryIdx = 0;
+                state->volRate.clear();      // stale on disconnect — avoid a phantom ratio off a frozen history
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }

@@ -47,6 +47,8 @@
 #include <exception>
 #include <condition_variable>
 
+#include "rate_tracker.h"
+
 #define WM_API_UPDATE           (WM_USER +  2)
 #define WM_SYMBOL_RESULTS       (WM_USER +  3)
 #define WM_API_LOG              (WM_USER +  4)
@@ -249,7 +251,8 @@ public:
         // idea: recent 15s share-rate vs. a trailing ~5min baseline rate. This is
         // the only volume signal available for every portfolio position, not just
         // symbols with an open Market window. Populated by
-        // TradingAPI::Impl::UpdateVolRate() in ibkr.cpp.
+        // TradingAPI::Impl::UpdateVolRate() in ibkr.cpp. Both built on
+        // RollingRateTracker (shared with tick-by-tick Market window tracking).
         double rtVolSum5min   = 0.0;  // approx. shares traded in the trailing ~5 minutes
         double rtVolRatio5min = 0.0;  // recent-vs-baseline share-rate ratio
     };

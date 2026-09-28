@@ -131,21 +131,8 @@ struct TsState {
     double unrealizedPnL = 0.0;
 
     // ── Volume / print-frequency tracking (tick-by-tick) ─────────────────────
-    // Rolling history of every trade print received via WM_MARKET_TICK, kept
-    // just long enough (VOL_RATE_BASELINE_MS) to derive a recent-vs-baseline
-    // rate ratio. Same "small rolling vector, pruned lazily" pattern as
-    // Sparkline::priceHistory — sampled at paint time, not recomputed per tick.
-    struct VolTick { ULONGLONG time; double size; };
-    std::deque<VolTick> volHistory;
-    ULONGLONG volTrackingStart = 0;   // time tracking began (since last clear); NOT touched by
-                                       // pruning, so the vol-rate "ready" gate below can't flicker
-
-    // ── Incremental volume sums (updated on tick arrival / prune, read on paint) ──
-    // Avoids iterating the full deque on every WM_PAINT.
-    double volSumTotal   = 0.0;  // sum of all ticks in volHistory (trailing 5 min)
-    double volSumRecent  = 0.0;  // sum of ticks in the most recent 15 s window
-    double volSumBaseline = 0.0; // volSumTotal - volSumRecent (the older 4 min 45 s)
-    size_t volRecentBoundaryIdx = 0; // index into volHistory of the first entry still "recent"
+    // Fed from WM_MARKET_TICK; read at paint time via Market_ComputeVolRates().
+    RollingRateTracker volRate;
 
     // ── TTS state ─────────────────────────────────────────────────────────────
     // Speech goes through the shared SharedTtsEngine (shared.h) now — this
