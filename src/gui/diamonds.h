@@ -765,7 +765,10 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     {
         double price5MinAgo = 0.0;
         if (spark.GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
-            setCol(DCOL_CHG5MIN, t.last - price5MinAgo, 2, true);
+            double priceDiff5min = t.last - price5MinAgo;
+            //setCol(DCOL_CHG5MIN, priceDiff5min, 2, true);
+            row.textCols[DCOL_CHG5MIN] = FormatFixed(priceDiff5min, 2, false);
+            row.sortValues[DCOL_CHG5MIN] = row.textCols[DCOL_CHG5MIN] == "0.00" ? BOTTOM_SORT_VALUE : priceDiff5min;
         } else {
             setNA(DCOL_CHG5MIN);
         }
