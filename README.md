@@ -8,7 +8,7 @@ A lightweight Windows tray application that connects to the Interactive Brokers 
 
 ## 🚀 Quick Start
 
-### Pre-Flight Checklist
+### Requirements
 Before launching the application, ensure the following:
 - [ ] **TWS or IB Gateway** is installed and running.
 - [ ] **API Access** is enabled in TWS/Gateway settings (`Allow connections from localhost loopback interface`).
@@ -56,7 +56,7 @@ Real-time order tracking with an emphasis on speed and accuracy.
 Deep-dive analysis of held positions with advanced grouping.
 *   **Performance**: Daily P&L, Unrealized P&L, and unrealized % change with high-contrast color-coding.
 *   **Dividends**: Track yield %, next dividend date, annual amounts, and market value.
-*   **Custom Tabs**: Three filterable tabs — *Growth*, *Dividends*, and *Quarantine* (checkboxes at bottom).
+*   **Custom Tabs**: Three filterable tabs. *Growth*, *Dividends*, and *Quarantine* (checkboxes at bottom).
 *   **Symbol Colors**: Assign one of six colors (Red, Green, Blue, Purple, Gold, Brown) per position for visual categorization.
 *   **Deferred Sort**: Header-click to sort by any column; zero-flicker re-sorting via timer.
 
@@ -64,7 +64,7 @@ Deep-dive analysis of held positions with advanced grouping.
 The core data engine for active trading. Supports infinite concurrent instances.
 *   **Level 1 Data**: Real-time streaming quotes (Last, Bid, Ask, High, Low, Volume).
 *   **Level 2 Depth**: Real-time bid/ask ladder in the left panel with price and size columns.
-*   **Time & Sales**: Three real-time tick-by-tick streams — All, ≥100 shares, ≥1000 shares — with dynamic vertical/horizontal splitters to customize your view per symbol.
+*   **Time & Sales**: Three real-time tick-by-tick streams. All, ≥100 shares, ≥1000 shares, with dynamic vertical/horizontal splitters to customize your view per symbol.
 *   **Quick Order Bar**: Press `Left Ctrl` or `Right Ctrl` to reveal the rapid order entry bar (pre-filled with best bid/ask). Includes Stop-Loss and Take-Profit price fields for bracket orders.
 *   **Audio Alerts**: Independent per-window TTS for price announcements.
 
@@ -79,7 +79,7 @@ The core data engine for active trading. Supports infinite concurrent instances.
 ### 💰 Global
 | Key | Action |
 | :--- | :--- |
-| `Scroll Lock` | Toggle **hotlock** — freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The dashboard shows a small lock icon while hotlock is active. |
+| `Scroll Lock` | Toggle **hotlock**: freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The dashboard shows a small lock icon while hotlock is active. |
 
 ### 🏦 Market
 | Key | Action |
@@ -105,10 +105,10 @@ The core data engine for active trading. Supports infinite concurrent instances.
 Right-click a position to open a context menu:
 | Action |
 | :--- |
-| **Quick BUY 1** — placeholder BUY order for 1 share at the last price |
-| **Quick SELL 1** — placeholder SELL order for 1 share at 2× the last price |
-| **Move to Growth / Dividends / Quarantine** — reassign the group |
-| **Set Color** — pick one of six colors (Red, Green, Blue, Purple, Gold, Brown) or None |
+| **Quick BUY 1**: placeholder BUY order for 1 share at the last price |
+| **Quick SELL 1**: placeholder SELL order for 1 share at 2× the last price |
+| **Move to Growth / Dividends / Quarantine**: reassign the group |
+| **Set Color**: pick one of six colors (Red, Green, Blue, Purple, Gold, Brown) or None |
 
 ---
 

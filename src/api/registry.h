@@ -64,7 +64,7 @@ void LogDebug(const std::string& msg) {
         }
     }
 
-    // LogDebug can be called from any thread — most visibly the HTTP
+    // LogDebug can be called from any thread, most visibly the HTTP
     // server's connection thread in server.h, which logs once per request.
     // hDebugEdit is created/destroyed only on the UI thread, inside
     // WndProcDebugLog's WM_CREATE/WM_DESTROY, so reading or SendMessage-ing
@@ -152,8 +152,8 @@ void RegDelete(const char* subPath, const char* valueName) {
 
 // ── Dividend cache (per-position, registry) ───────────────────────────────
 // Caches the last known values from the low-frequency IB_DIVIDENDS (tick 456)
-// fetch — annualDividends, dividendAmount, dividendDate, dividendDateSortable
-// — keyed by SYMBOL_CONID (matching the pattern the Alerts subkey uses), under
+// fetch, annualDividends, dividendAmount, dividendDate, dividendDateSortable
+//, keyed by SYMBOL_CONID (matching the pattern the Alerts subkey uses), under
 // a dedicated "Dividends" subkey. This lets Diamonds show the dividend columns
 // immediately at window creation even when there's no live market data
 // connection at all (e.g. weekends). Populated by TradingAPI::Impl's one-shot
@@ -198,7 +198,7 @@ bool Settings_Dividends_Load(const std::string& symbol, int conId, double& annua
 // Stored under a dedicated "Alerts" subkey, one REG_SZ value per direction:
 //   SYMBOL_CONID_UP, SYMBOL_CONID_DOWN
 // A missing value means no alert is set for that direction. Values are saved
-// as-typed (no parsing/validation, no live-price comparison yet — that's a
+// as-typed (no parsing/validation, no live-price comparison yet, that's a
 // later feature).
 
 struct AlertEntry {
@@ -567,7 +567,7 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
                 case CDDS_POSTPAINT: {
                     // The header runs one more internal "finishing" pass after all columns
                     // are drawn, and repaints the strip with no column in it (to the right
-                    // of the last header) using its native background — after our PREPAINT
+                    // of the last header) using its native background, after our PREPAINT
                     // fill, so it wins and shows as a light/white strip. Re-fill just that
                     // strip here, last, so nothing overrides it again.
                     int colCount = Header_GetItemCount(hdr->hwndFrom);
@@ -821,7 +821,7 @@ void ToggleMarketAlwaysOnTop(HWND hWnd, const std::string& symbol) {
 }
 
 // Set Always On Top state for a Market window using its HWND directly.
-// Called at restore time — avoids a FindWindowA-by-title race where the window
+// Called at restore time, avoids a FindWindowA-by-title race where the window
 // title may not yet be set when StartMarket() returns.
 void SetMarketAlwaysOnTop(HWND hWnd, bool onTop) {
     if (!hWnd) return;
@@ -1044,7 +1044,7 @@ void Settings_Market_CleanupOldWindows() {
         if (!name.starts_with(prefix)) continue; // not a per-symbol Market_* key
 
         long openedDays;
-        if (!Market_ReadOpenDateDays(name, openedDays)) continue; // no date stamped — leave alone
+        if (!Market_ReadOpenDateDays(name, openedDays)) continue; // no date stamped, leave alone
 
         auto today = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
         long todayDays = (long)today.time_since_epoch().count();

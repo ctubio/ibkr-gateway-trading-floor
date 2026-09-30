@@ -73,14 +73,14 @@ struct MarketOrderRow {
     bool   partialFill   = false;
     double originalQty   = 0.0;
     double trailStopPrice = 0.0;
-    std::string action;      // "BUY" or "SELL" — drives price-edit background + hint colors
+    std::string action;      // "BUY" or "SELL", drives price-edit background + hint colors
     std::string orderType;
     std::string tif;
 };
 
 // Lightweight snapshot of one currently-open (editable) order for this
 // window's conId, used only to render the bold "open orders" rows at the
-// top of hExecList (see Market_RefreshExec). Read-only — unlike
+// top of hExecList (see Market_RefreshExec). Read-only, unlike
 // MarketOrderRow it has no edit controls.
 struct MarketOpenOrderSummary {
     int orderId = 0;
@@ -135,7 +135,7 @@ struct TsState {
     RollingRateTracker volRate;
 
     // ── TTS state ─────────────────────────────────────────────────────────────
-    // Speech goes through the shared SharedTtsEngine (shared.h) now — this
+    // Speech goes through the shared SharedTtsEngine (shared.h) now, this
     // window just tracks whether it currently holds a reference to it.
     bool      ttsOn        = false;
     bool      minimized    = false;
@@ -153,7 +153,7 @@ struct TsState {
     RECT locateRect    = { 0, 0, 0, 0 };
 
     // ── Alerts ────────────────────────────────────────────────────────────────
-    bool hasAlert = false;   // true if this symbol has an Alert Up/Down set — colors the flag icon yellow
+    bool hasAlert = false;   // true if this symbol has an Alert Up/Down set, colors the flag icon yellow
 
     int lastTimeSec = 0;
 
@@ -165,7 +165,7 @@ struct TsState {
     HWND  hOrderQty         = NULL;
     HWND  hTotalLabel       = NULL; // right of hOrderLabel: Notional value only
      // Hint overlays: transparent 12pt labels painted on top of the price/qty/
-     // stop/profit inputs, corner-anchored. Input itself stays untouched —
+     // stop/profit inputs, corner-anchored. Input itself stays untouched,
      // still centered / fully editable underneath.
     HWND  hProfitLossPercentLabel        = NULL; // bottom-left of hOrderPrice: lossPct% \n lossDollars R
     HWND  hProfitLossValueLabel      = NULL; // bottom-right of hOrderPrice: profitPct% \n profitDollars P
@@ -471,7 +471,7 @@ static ScopedFont hFont16ptbold(16, true);
 static ScopedFont hFont21ptbold(21, true);
 
 // Suppresses WM_ERASEBKGND on list views so custom-draw repaints stay flicker-free.
-// (Previously also handled Ctrl+MouseWheel zoom — that feature has been removed;
+// (Previously also handled Ctrl+MouseWheel zoom, that feature has been removed;
 // this proc now only keeps the zero-flicker background-erase suppression.)
 LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (uMsg == WM_ERASEBKGND) {

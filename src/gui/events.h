@@ -23,7 +23,7 @@ static const EventCol eventCols[] = {
 static const int EVENT_COL_COUNT = (int)(sizeof(eventCols) / sizeof(eventCols[0]));
 
 // ── Event log storage ─────────────────────────────────────────────────────────
-// In-memory only (not persisted). Newest event at index 0 — same "insert at
+// In-memory only (not persisted). Newest event at index 0, same "insert at
 // top" convention as the Time & Sales lists in market.h. Capped at
 // EVENTS_MAX entries; once full, the oldest entry is dropped to make room.
 // Backs the Events window's virtual (LVS_OWNERDATA) list.

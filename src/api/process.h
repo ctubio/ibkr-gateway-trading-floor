@@ -19,7 +19,7 @@ DWORD PIDProcessRunning(const char* processName) {
 }
 
 // Returns the full image path of a running process, or empty on failure
-// (e.g. no permission to query it — fine here, since anything we can't
+// (e.g. no permission to query it, fine here, since anything we can't
 // query isn't something IBKR spawned under the install folder anyway).
 static std::string GetProcessFullPath(DWORD pid) {
     HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
@@ -35,7 +35,7 @@ static std::string GetProcessFullPath(DWORD pid) {
 
 // Returns true if any currently running process's image lives under rootDir
 // (case-insensitive prefix match). Catches TWS/IB Gateway's self-update
-// helper process(es) regardless of what IBKR names them for a given build —
+// helper process(es) regardless of what IBKR names them for a given build,
 // PIDProcessRunning() alone only matches the fixed names we already know.
 static bool IsAnyProcessRunningUnder(const std::string& rootDir) {
     if (rootDir.empty()) return false;

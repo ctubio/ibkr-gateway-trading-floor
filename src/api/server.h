@@ -216,7 +216,7 @@ static std::string HandleGetBalance() {
 // GET /portfolio  →  JSON array of all positions
 static std::string HandleGetPositions() {
     // Copy the snapshot out under a short lock, then release before doing any
-    // string formatting or calling PositionToJson() — which itself acquires
+    // string formatting or calling PositionToJson(), which itself acquires
     // watchlistMutex via getMarketData(). Previously portfolioMutex was held
     // for the whole loop, nesting watchlistMutex inside it and blocking the
     // API thread's pnlSingle()/position() callbacks (which also need
@@ -471,7 +471,7 @@ static bool HtmlClassHasToken(const std::string& classAttr, const std::string& t
 }
 
 // Strips tags from an HTML fragment, decodes entities, and joins the
-// remaining non-empty trimmed text runs with `sep` — mirrors
+// remaining non-empty trimmed text runs with `sep`, mirrors
 // element.get_text(sep, strip=True) closely enough for cell-text parsing.
 static std::string HtmlStripTagsToPlainText(const std::string& fragment, const std::string& sep) {
     std::string out;
@@ -547,7 +547,7 @@ static std::string HtmlFindElementBodyIf(const std::string& html, const std::str
                 depth++;
             }
         }
-        return html.substr(contentStart); // unterminated — take the rest of the document
+        return html.substr(contentStart); // unterminated, take the rest of the document
     }
     return "";
 }
@@ -622,7 +622,7 @@ static std::string HtmlFormatMarketCells(const std::string& html) {
         std::vector<std::string> words;
         std::string w;
         while (iss >> w) words.push_back(w);
-        if (words.size() < 2) continue; // matches Python's "continue" — cell left untouched
+        if (words.size() < 2) continue; // matches Python's "continue", cell left untouched
 
         int splitIdx = -1;
         for (int i = 0; i < (int)words.size(); ++i) {
@@ -663,7 +663,7 @@ static const char* const kNewsSectionHeaders[] = {
 
 // Walks the (already cell-formatted) article HTML, skipping tags/comments and
 // the contents of <script>/<style>, joining each non-empty stripped text run
-// with "\n" — mirroring get_text("\n", strip=True). A blank line is inserted
+// with "\n", mirroring get_text("\n", strip=True). A blank line is inserted
 // immediately before any run containing one of kNewsSectionHeaders, and before
 // the start of any <div class="sector-theme"> / <div class="story-card">,
 // mirroring the MARKER insertion + text.replace(MARKER, "\n\n") in the Python.
@@ -748,7 +748,7 @@ static std::string News_RemoveClickToWatch(const std::string& text) {
 // neighbours by a literal ";" line wherever the page shows "A; B; C" between
 // links (e.g. "AP" / ";" / "WSJ" / ";" / "Barron's"). That lone-";" line
 // never occurs in ordinary prose, so rather than whitelisting every outlet
-// name (the previous approach — it broke the moment an un-listed source, e.g.
+// name (the previous approach, it broke the moment an un-listed source, e.g.
 // "AP", "MarketBeat", "TradingView premarket screen", "NYSE trading
 // calendar", showed up and leaked straight through, along with everything
 // after it), detect and drop the whole contiguous NAME/";"/NAME/";"/... run,
@@ -868,7 +868,7 @@ static std::string News_RemoveAttributionFooters(const std::string& text) {
 // ── Site-chrome trimming (nav / title / byline / footer boilerplate) ────────
 // beehiiv's post template can (and, as of ~Aug 13 2026, did) change so the
 // "content" div located by HtmlLocateArticleBody() ends up wrapping more than
-// just the article — the top nav, Login/Subscribe bar, breadcrumbs, post
+// just the article, the top nav, Login/Subscribe bar, breadcrumbs, post
 // title + author byline + share icons, and any sponsor block preceding it,
 // plus the "TraderTV Live Morning Research Note" sign-off, logo, copyright,
 // and policy/beehiiv links trailing it. Chasing the exact CSS class after
@@ -927,7 +927,7 @@ static std::string News_CleanWhitespace(const std::string& text) {
 // from the date at all, so we now fetch the homepage listing and match each
 // post's <time datetime="YYYY-MM-DDTHH:MM:SS.sssZ"> against the date we're
 // looking for to recover its real URL. The article body pipeline below
-// (News_FetchContent) is unchanged — only how we find the URL differs.
+// (News_FetchContent) is unchanged, only how we find the URL differs.
 
 // Fetches https://tradertv-live.beehiiv.com/ and returns the raw HTML, or ""
 // on any network failure.
@@ -1119,14 +1119,14 @@ static std::string HandleGetNews(int numDays) {
         std::string content = News_LoadCache(dateKey);
         if (content.empty()) {
             // Resolve the real article URL from the homepage listing (see
-            // News_BuildUrl) — it's no longer a predictable date-based slug.
+            // News_BuildUrl), it's no longer a predictable date-based slug.
             std::string url = News_BuildUrl(st.wYear, st.wMonth, st.wDay);
             if (!url.empty()) {
                 LogDebug("Fetching news: " + url);
                 content = News_FetchContent(url);
             }
             if (content.empty()) {
-                // Page not found for this date — skip it
+                // Page not found for this date, skip it
                 if (numDays != 1) body += "\n" + std::string(60, '=') + "\n  ";
                 body += "News not yet published for " + News_FormatHeader(st) + ", please try again after 14:00";
                 if (numDays != 1) body += ".\n";
@@ -1136,7 +1136,7 @@ static std::string HandleGetNews(int numDays) {
             }
             // Guard against permanently caching a fetch that still carries
     // site chrome the trim markers didn't catch (e.g. yet another
-    // template change) — better to re-fetch next call than freeze
+    // template change), better to re-fetch next call than freeze
     // bad content in the registry for up to 7 days.
     bool looksClean = content.find("Powered by beehiiv") == std::string::npos &&
                       content.find("TraderTV Live Morning Research Note") == std::string::npos;
@@ -1583,7 +1583,7 @@ static bool HttpServer_Start() {
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_port        = htons(HTTP_SERVER_PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY); // 0.0.0.0 — all interfaces (LAN accessible)
+    addr.sin_addr.s_addr = htonl(INADDR_ANY); // 0.0.0.0, all interfaces (LAN accessible)
 
     if (bind(httpListenSocket,
              reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {

@@ -73,7 +73,7 @@ struct DiamondRowCache {
     double sortValues[DCOL_COUNT] = {0.0};  // Raw doubles for fast sorting
     std::string textCols[DCOL_COUNT];       // Pre-formatted strings for instant UI painting
 
-    // Day high/low — used only to color DCOL_LAST based on where `last` sits
+    // Day high/low, used only to color DCOL_LAST based on where `last` sits
     // within today's range (see WM_NOTIFY / NM_CUSTOMDRAW).
     double dayHigh = 0.0;
     double dayLow = 0.0;
@@ -106,7 +106,7 @@ struct DiamondsWeeklyCloseCache {
     ULONGLONG lastAttemptMs = 0;   // PERF: throttle re-locking portfolioMutex
 };
 
-// Registry dividend cache — read once per symbol, with negative-result throttling.
+// Registry dividend cache, read once per symbol, with negative-result throttling.
 struct DiamondsDividendCache {
     bool loaded = false;            // true once a registry value was successfully read
     double annual = 0.0, amount = 0.0, dateSortable = 0.0;
@@ -365,7 +365,7 @@ static void Diamonds_LoadSymbolColors() {
 // Drops diamondsState.tabMap entries for conIds that are no longer a held
 // position, then persists the pruned map. Also drops diamondsState.symbolColors
 // entries, but only when the symbol is neither a current position NOR has an
-// alert set — a symbol with an alert is allowed to keep a color override
+// alert set, a symbol with an alert is allowed to keep a color override
 // even while not held.
 static void Diamonds_CleanupStaleTabAssignments() {
     std::unordered_set<int> liveConIds;
@@ -403,7 +403,7 @@ static void Diamonds_CleanupStaleTabAssignments() {
 // registry.h) for conIds that are no longer a held position. That subkey is a
 // pure fetch-once-per-session cache keyed by SYMBOL_CONID with nothing else
 // pruning it, so closed-out positions would otherwise accumulate there forever
-// — same rationale as Diamonds_CleanupStaleTabAssignments() above, just aimed
+//, same rationale as Diamonds_CleanupStaleTabAssignments() above, just aimed
 // at a different registry subkey (Dividends instead of Tab_*/SymbolColors).
 static void Diamonds_CleanupStaleDividends() {
     std::unordered_set<int> liveConIds;
@@ -416,7 +416,7 @@ static void Diamonds_CleanupStaleDividends() {
     HKEY hKey;
     std::string fullPath = std::format("{}\\Dividends", APP_REG_ROOT);
     if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_QUERY_VALUE | KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
-        return; // no Dividends subkey yet — nothing to clean
+        return; // no Dividends subkey yet, nothing to clean
 
     std::vector<std::string> toDelete;
     char valueName[128];
@@ -428,11 +428,11 @@ static void Diamonds_CleanupStaleDividends() {
 
         std::string name(valueName);
         size_t underscore = name.rfind('_');
-        if (underscore == std::string::npos || underscore == name.size() - 1) continue; // not SYMBOL_CONID shaped — leave alone
+        if (underscore == std::string::npos || underscore == name.size() - 1) continue; // not SYMBOL_CONID shaped, leave alone
 
         int conId = 0;
         try { conId = std::stoi(name.substr(underscore + 1)); }
-        catch (...) { continue; } // trailing part isn't a conId — leave it alone
+        catch (...) { continue; } // trailing part isn't a conId, leave it alone
 
         if (!liveConIds.count(conId))
             toDelete.push_back(name);
@@ -559,7 +559,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
         row.sortValues[DCOL_UNREALIZED_PL] = pnlSingle.unrealizedPnL;
         row.textCols[DCOL_UNREALIZED_PL] = std::format("{:+.2f}", pnlSingle.unrealizedPnL);
 
-        // Recompute the % column — derived from unrealizedPnL / cost basis,
+        // Recompute the % column, derived from unrealizedPnL / cost basis,
         // NOT from last price, so it stays valid even when last == 0
         // (market closed / no quote yet) and matches IBKR's own PnL figure
         // rather than a reconstruction from price.
@@ -578,7 +578,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
 // Dividend data changes rarely and is now fetched once per position via a
 // low-frequency one-shot request instead of the always-open L1 subscription
 // (see queueDividendFetch/HandleDividendTick in ibkr.cpp). That means it can
-// be genuinely unavailable for a while — most visibly over weekends, when
+// be genuinely unavailable for a while, most visibly over weekends, when
 // there's no live market data connection for the one-shot fetch to ever
 // complete. Falls back to the last value cached in the registry whenever the
 // live fields are still at their empty/zero defaults. Any later live update
@@ -623,7 +623,7 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
 
 static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // Ensure a cache row exists even if this tick arrived before
-    // Diamonds_Repopulate had a chance to create one for it — e.g. right after
+    // Diamonds_Repopulate had a chance to create one for it, e.g. right after
     // the window is closed and reopened, a WM_MARKET_L1 posted just before the
     // repopulate finishes used to hit this function while the cache was still
     // empty/rebuilding and the early-return below silently dropped the tick
@@ -759,7 +759,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     double vwapDiff = (t.vwap > 0.0 && t.last > 0.0) ? t.last - t.vwap : 0.0;
     setCol(DCOL_VWAP, vwapDiff, 2, true);
 
-    // 5-minute price change, in dollars — Last vs. the price ~5 minutes ago,
+    // 5-minute price change, in dollars, Last vs. the price ~5 minutes ago,
     // sampled from the same long-lived history the sparkline's reference dots
     // use. Shows "--" until at least 5 minutes of history has accumulated
     // for this symbol (same "appears once ready" behavior as those dots).
@@ -824,7 +824,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
     // ── Alert-only symbols: have an Alert Up/Down set but aren't a current
     // held position. Shown only under the Quarantine tab (forced there regardless
     // of diamondsState.tabMap, since there's no held position to assign a group
-    // to) — see the NM_RCLICK handler below for the disabled "Move to *".
+    // to), see the NM_RCLICK handler below for the disabled "Move to *".
     if ((diamondsState.checkedTabs >> DTAB_QUARENTINE) & 1) {
         for (auto const& cacheEntry : diamondsState.alertCache) {
             const auto& alert = cacheEntry.second;
@@ -844,13 +844,13 @@ static void Diamonds_Repopulate(HWND hWnd) {
     // Build/refresh the cache rows.
     // Rule: only write the fields we own here (identity, position, avgCost, market
     // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL
-    // — those are owned by WM_PNL_SINGLE and must survive a repopulate so they
+    //, those are owned by WM_PNL_SINGLE and must survive a repopulate so they
     // remain visible when the window is closed and reopened.
     for (const auto& pos : rows) {
         bool isHeldPosition = (portfolioConIds.count(pos.conId) > 0);
 
         // operator[] creates a default row only when the conId is new.
-        // For existing rows it returns the current entry — PnL fields are preserved.
+        // For existing rows it returns the current entry, PnL fields are preserved.
         auto& cacheRow = diamondsState.dataCache[pos.conId];
         cacheRow.conId  = pos.conId;
         cacheRow.symbol = pos.symbol;
@@ -865,7 +865,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
         Diamonds_UpdateAlertCols(pos.conId);
 
-        // Pre-fill market data if already cached — this also seeds the estimated
+        // Pre-fill market data if already cached, this also seeds the estimated
         // PnL columns for the first open (before WM_PNL_SINGLE arrives).
         // This runs for both held positions AND watch-only (quarantine) symbols.
         TradingAPI::L1Book tickInfo;
@@ -1088,7 +1088,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     // ── Live per-position PnL update (reqPnLSingle stream) ───────────────────
     // Posted by Impl::pnlSingle() on the API thread via PostMessage.
     //   wParam = conId (fast row-lookup key, no pointer deref needed)
-    //   lParam = heap-allocated TradingAPI::PnlSinglePayload* — we own it, must delete.
+    //   lParam = heap-allocated TradingAPI::PnlSinglePayload*, we own it, must delete.
     case WM_PNL_SINGLE: {
         int conId = (int)lParam;
         if (!conId) break;
@@ -1223,7 +1223,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // ── Color submenu ─────────────────────────────────────────────
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
                     
-                    // "None" option — grayed when no color is currently assigned.
+                    // "None" option, grayed when no color is currently assigned.
                     AppendMenuA(hMenu, MF_STRING | (currentColor == DIAMONDS_COLOR_NONE ? MF_GRAYED : 0),
                                 200 + DIAMONDS_COLOR_COUNT, "Set Color: None");
 
@@ -1255,7 +1255,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         // Color assignment.
                         int pickedIdx = cmd - 200;
                         if (pickedIdx == DIAMONDS_COLOR_COUNT) {
-                            // "None" — remove override.
+                            // "None", remove override.
                             diamondsState.symbolColors.erase(conId);
                         } else {
                             diamondsState.symbolColors[conId] = pickedIdx;
@@ -1390,12 +1390,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
-                    // Only colour P&L / change columns — and only when the
+                    // Only colour P&L / change columns, and only when the
                     // cell holds a real numeric value (not the "--" sentinel).
                     if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
                         double val = cacheRow.sortValues[cd->iSubItem];
                         if (val == BOTTOM_SORT_VALUE) val = 0.0;
-                        // Guard: skip colouring the "--" sentinel — atof("--") == 0
+                        // Guard: skip colouring the "--" sentinel, atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
                         // explicit avoids any locale-specific atof surprises.
                         if      (val > 0.0) cd->clrText = COINS_CLR_GREEN;
@@ -1590,7 +1590,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 diamondsState.dirty = false;
             }
         }
-        break;  // was missing — without this, every timer tick fell through into WM_DESTROY,
+        break;  // was missing, without this, every timer tick fell through into WM_DESTROY,
                 // killing timers, clearing the cache, and calling removeApiUpdateWindow.
     }
 

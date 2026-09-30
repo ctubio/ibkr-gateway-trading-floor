@@ -14,14 +14,14 @@ static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
 // per-row Diamonds chart) are the same chart at two sizes: a gradient price
 // line plus five "N minutes ago" reference dots whose color/size scale with
 // % change. This base holds everything that used to be duplicated between
-// them — point storage, history pruning, the price/time scaling math, dot
+// them, point storage, history pruning, the price/time scaling math, dot
 // styling, and the line+dots paint routine. Each derived class supplies only
 // its own palette/sizing constants and its own Draw() geometry (a Market
 // window computes area from a fixed W/H against a client rect; a Diamonds
 // cell computes it from a shrinking ListView subitem rect with margins).
-// Nothing here is virtual — neither class is ever used through a base
+// Nothing here is virtual, neither class is ever used through a base
 // pointer, and this is a hot path (~30 FPS per open Market window, plus
-// once per visible Diamonds row) — so every difference between the two is
+// once per visible Diamonds row), so every difference between the two is
 // just a parameter passed into DrawLineAndDots()/PrepareGradient(), not a
 // runtime dispatch.
 class SparklineEngine {
@@ -36,7 +36,7 @@ protected:
     // Graphics is tied to the paint HDC, and the gradient coordinates are in
     // that HDC's screen space, so refresh the resources when the row/area
     // moves. `endpointColor`/`endpointPad` reproduce each derived class's
-    // original two-color constructor arguments verbatim — functionally inert
+    // original two-color constructor arguments verbatim, functionally inert
     // once SetInterpolationColors() takes over the blend, but kept exactly
     // as each class originally had them rather than assumed irrelevant.
     mutable std::unique_ptr<Gdiplus::LinearGradientBrush> gradientBrush;
@@ -61,7 +61,7 @@ protected:
         }
     }
 
-    // Equivalent to a d3 linear scale. Pure function — static, no shared state.
+    // Equivalent to a d3 linear scale. Pure function, static, no shared state.
     static float MapScale(double value, double minDomain, double maxDomain, float minRange, float maxRange) {
         if (maxDomain == minDomain) return minRange + (maxRange - minRange) / 2.0f;
         return minRange + (float)((value - minDomain) / (maxDomain - minDomain)) * (maxRange - minRange);
@@ -69,7 +69,7 @@ protected:
 
     // Maps a % price change into a color (gray -> saturated green/red) and a
     // radius (small -> large), both scaled by magnitude. Identical in both
-    // original classes — no per-class parameters needed here at all.
+    // original classes, no per-class parameters needed here at all.
     static void GetDotStyle(double pctChange, float minR, float maxR,
                              Gdiplus::Color& outColor, float& outRadius) {
         const double maxPct = 0.5; // % change at which color/size reach full intensity
@@ -99,13 +99,13 @@ protected:
     // `strict` (only ever passed false, by MiniSparkline::GetPriceMinutesAgo,
     // for the 5-minute column) skips the "do we have enough history yet" gate
     // so that one caller can get a best-effort answer immediately instead of
-    // waiting for the full window to fill — Sparkline never needed that path
+    // waiting for the full window to fill, Sparkline never needed that path
     // and so never passes strict=false, exactly reproducing its old
     // strict-only behavior.
     //
     // PERF: priceHistory is appended in strictly non-decreasing time order
     // (every AddPrice() call timestamps with GetTickCount64()), so instead of
-    // scanning every entry to find the closest one (O(n) — and this runs once
+    // scanning every entry to find the closest one (O(n), and this runs once
     // per reference dot per Draw() call, plus, for MiniSparkline specifically,
     // once per raw L1 tick via GetPriceMinutesAgo() on the unthrottled
     // tick-ingest path), binary-search for the insertion point and only
@@ -123,7 +123,7 @@ protected:
 
         size_t bestIdx;
         if (it == priceHistory.end()) {
-            // target is at/after the newest sample — nothing after it to compare
+            // target is at/after the newest sample, nothing after it to compare
             bestIdx = priceHistory.size() - 1;
         } else if (it == priceHistory.begin()) {
             // target is at/before the oldest sample
@@ -143,10 +143,10 @@ protected:
     // Shared line + reference-dot rendering. `originX/originY` is the drawing
     // origin each derived Draw() computes for itself (a client-rect corner for
     // Sparkline, a margin-adjusted cell corner for MiniSparkline); everything
-    // else that differed between the two originals — dot-reserved strip
+    // else that differed between the two originals, dot-reserved strip
     // width, dot radius range, the "flat price" epsilon nudged into min/max
     // price when every point in `data` shares one price, and the gradient
-    // palette/endpoint — is passed in explicitly rather than assumed.
+    // palette/endpoint, is passed in explicitly rather than assumed.
     void DrawLineAndDots(HDC hdc, float originX, float originY, float W, float H,
                           float dotAreaWidth, float minRadius, float maxRadius,
                           double flatPriceEpsilon,
@@ -157,7 +157,7 @@ protected:
         Gdiplus::Graphics graphics(hdc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
 
-        // Reserve a small strip on the right for the reference dots — the
+        // Reserve a small strip on the right for the reference dots, the
         // line itself stops a bit short of the full width.
         float lineW = (W - dotAreaWidth > 4.0f) ? (W - dotAreaWidth) : W;
 

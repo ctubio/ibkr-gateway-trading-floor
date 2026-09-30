@@ -9,7 +9,7 @@
 //
 // Values are stored in the registry under a dedicated "Alerts" subkey (see
 // Settings_Alerts_* in registry.h), keyed by SYMBOL_CONID_UP / SYMBOL_CONID_DOWN.
-// Nothing here checks live prices or fires notifications yet — that's a later step.
+// Nothing here checks live prices or fires notifications yet, that's a later step.
 
 #define ID_ALERTS_UP_EDIT    5301
 #define ID_ALERTS_DOWN_EDIT  5302

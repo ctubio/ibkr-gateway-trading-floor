@@ -94,7 +94,7 @@ struct DashboardState {
     HWND hCoin_EUR = NULL;
     HWND hCoin_USD = NULL;
     
-    // TTS state — speech goes through the shared SharedTtsEngine (shared.h)
+    // TTS state, speech goes through the shared SharedTtsEngine (shared.h)
     // now; this just tracks whether the dashboard holds a reference to it.
     bool coinsTtsOn = false;
 
@@ -817,8 +817,8 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // ─── Lock keyword popup ───────────────────────────────────────────────────
 //
 // Single-instance popup (same pattern as ALERTS_EDITOR_CLASS_NAME) used to gate
-// unlocking the dashboard hotkeys. Locking never needs the keyword — only
-// unlocking does — so this window is only ever opened on the "unlock" path,
+// unlocking the dashboard hotkeys. Locking never needs the keyword, only
+// unlocking does, so this window is only ever opened on the "unlock" path,
 // either from WndProcDashboard's Scroll Lock handler or, at startup, from
 // PromptLockAtStartup() before the rest of the app is even created.
 
@@ -861,7 +861,7 @@ static void Lock_TrySubmit(HWND hWnd) {
             PostMessage(hDashboard, WM_ACTIVATE, WA_ACTIVE, 0);
         ToggleTWS(SW_SHOW);
     }
-    // Startup mode: nothing to reverse yet — just report success to
+    // Startup mode: nothing to reverse yet, just report success to
     // PromptLockAtStartup() via lockState.success and close.
 
     DestroyWindow(hWnd);
@@ -935,8 +935,8 @@ void StartLock() {
     }
 }
 
-// Blocks by running its own message loop — WinMain hasn't started the real
-// one yet, and nothing else exists at this point, so this is safe — until
+// Blocks by running its own message loop, WinMain hasn't started the real
+// one yet, and nothing else exists at this point, so this is safe, until
 // the Lock popup is dismissed. Returns true iff the correct keyword was
 // entered; false on ESC/close, meaning the caller should abort startup.
 static bool PromptLockAtStartup() {
@@ -1263,7 +1263,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             break;
 
         case WM_TTS_VOICE_CHANGED: {
-            // The shared engine holds one voice for every window now — just
+            // The shared engine holds one voice for every window now, just
             // re-apply the (now-changed) saved voice token to it in place.
             SharedTts().ReapplySavedVoice();
             if (dashboardState.coinsTtsOn) Coins_SpeakDailyPnL(); // speak immediately with the new voice

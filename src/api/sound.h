@@ -83,7 +83,7 @@ class SharedTtsEngine {
 
 public:
     // Acquires a reference, lazily creating the engine on the first caller.
-    // Returns false if SAPI couldn't be initialized — caller should treat
+    // Returns false if SAPI couldn't be initialized, caller should treat
     // its own "TTS on" toggle as failed and not hold a reference.
     bool Acquire() {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -122,7 +122,7 @@ public:
     }
 
     // Re-applies the (just-changed) saved voice token in place. No-op if
-    // nobody currently holds a reference — the next Acquire() will pick up
+    // nobody currently holds a reference, the next Acquire() will pick up
     // the new token anyway via TTS_ApplySavedVoice.
     void ReapplySavedVoice() {
         std::lock_guard<std::mutex> lk(mutex_);

@@ -35,7 +35,7 @@ static OrdersEditState s_editState;
 
 // Cosmetic-only cache of Unsent placeholder rows, keyed by orderId, so the
 // inline panel can be repopulated when one is clicked (they're absent from
-// api()'s ordersMap). Cleared on every Orders_Repopulate() — the same event
+// api()'s ordersMap). Cleared on every Orders_Repopulate(), the same event
 // that wipes the phantom row from the ListView.
 static std::unordered_map<int, TradingAPI::OrderInfo> unsentOrders;
 
@@ -221,7 +221,7 @@ static void Orders_HideInlinePanel(HWND hWnd) {
 // placeholder rows in place. Only rows whose orderId is NOT in unsentOrders
 // get deleted/rebuilt; Unsent rows are left untouched unless a real order
 // with the same orderId has since appeared (meaning it was transmitted for
-// real — the placeholder is stale and gets dropped).
+// real, the placeholder is stale and gets dropped).
 static void Orders_Repopulate(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
     if (!hList) return;
@@ -230,7 +230,7 @@ static void Orders_Repopulate(HWND hWnd) {
     auto orders = api().getOrdersSorted();
 
     // A placeholder whose orderId now has a real ordersMap entry has been
-    // superseded (the user resubmitted it via the inline panel) — drop it so
+    // superseded (the user resubmitted it via the inline panel), drop it so
     // its row gets removed in the sweep below instead of lingering as a dupe.
     for (const auto& o : orders) unsentOrders.erase(o.orderId);
 
@@ -299,7 +299,7 @@ static void Orders_Repopulate(HWND hWnd) {
 
 // Moves the ListView selection up or down by one row (clamped to the ends).
 // If nothing is currently selected, selects the first row regardless of dir.
-// Does NOT move keyboard focus — safe to call while an edit field has focus.
+// Does NOT move keyboard focus, safe to call while an edit field has focus.
 static void Orders_MoveSelection(HWND hWnd, int dir) {
     HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
     if (!hList) return;
@@ -352,7 +352,7 @@ static void Orders_MoveSelection(HWND hWnd, int dir) {
 
 // Subclass for the orders ListView: intercepts Ctrl+Up/Ctrl+Down so they move
 // the selection by one row instead of the default multi-select behavior
-// (which — since this list isn't LVS_SINGLESEL — would otherwise just move
+// (which, since this list isn't LVS_SINGLESEL, would otherwise just move
 // the dotted focus rectangle without changing the selection). Everything
 // else (plain arrows, Home/End, mouse, etc.) is passed straight through.
 static LRESULT CALLBACK OrdersList_SubclassProc(HWND hWnd, UINT message, WPARAM wParam,
@@ -381,7 +381,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
         if (wParam == VK_ESCAPE) {
             if (s_editState.panelVisible && s_editState.orderId != 0) {
                 HWND hParent = GetParent(hWnd);
-                // Unsent placeholder never reached TWS — nothing to cancel there.
+                // Unsent placeholder never reached TWS, nothing to cancel there.
                 HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                 if (s_editState.isUnsent) {
                     int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
@@ -414,7 +414,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 }
                 if (qty > 0) {
                     if (s_editState.isUnsent) {
-                        // Placeholder was never transmitted — place it for real now.
+                        // Placeholder was never transmitted, place it for real now.
                         bool stopValid = s_editState.fullStopPrice <= 0.0 || price <= 0.0 ||
                             (s_editState.action == "BUY"  ? s_editState.fullStopPrice < price
                                                         : s_editState.fullStopPrice > price);
@@ -493,7 +493,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             return 0;
         }
     }
-        // Plain hover (no button held) can't change the selection — skip it so
+        // Plain hover (no button held) can't change the selection, skip it so
     // we don't force a repaint on every hover pixel (mirrors market.h).
     if (message == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
         return DefSubclassProc(hWnd, message, wParam, lParam);
@@ -504,7 +504,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
     // GetDC (not necessarily through WM_PAINT), so mouse drag-select can
     // paint it over the transparent hTotalLabel hint sitting on top. Re-assert
     // the hint after every message that could've changed the selection or
-    // focus — same fix as Market_RedrawHintsFor() in market.h.
+    // focus, same fix as Market_RedrawHintsFor() in market.h.
     if (uIdSubclass == 2) { // Qty edit
         auto redraw = [](HWND h) {
             if (!h || !IsWindowVisible(h)) return;
@@ -710,7 +710,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 NMLVKEYDOWN* kd = (NMLVKEYDOWN*)lParam;
                 if (kd->wVKey == VK_ESCAPE) {
                     if (s_editState.panelVisible && s_editState.orderId != 0) {
-                        // Unsent placeholder never reached TWS — nothing to cancel there.
+                        // Unsent placeholder never reached TWS, nothing to cancel there.
                         HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
                         if (s_editState.isUnsent) {
                             int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);

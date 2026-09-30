@@ -117,7 +117,7 @@ public:
 
     struct OrderInfo {
         int         orderId   = 0;
-        int         conId     = 0;      // TWS contract ID — populated from openOrder
+        int         conId     = 0;      // TWS contract ID, populated from openOrder
         std::string symbol;
         std::string exchange;
         std::string action;
@@ -141,7 +141,7 @@ public:
     // ── Per-position live PnL payload ─────────────────────────────────────────
     // Heap-allocated by pnlSingle(); posted via WM_PNL_SINGLE.
     //   wParam = conId (int cast)
-    //   lParam = PnlSinglePayload*  — the UI handler owns it and must delete it.
+    //   lParam = PnlSinglePayload* , the UI handler owns it and must delete it.
     // Only fields whose value != UNSET_DOUBLE are valid; check the has_* guards.
     struct PnlSinglePayload {
         int    conId          = 0;
@@ -160,7 +160,7 @@ public:
 
         // True for a placeholder created by TradingAPI::watchSymbol() for an
         // alert-only symbol that is NOT a currently held broker position.
-        // position() always sets this false — including when promoting an
+        // position() always sets this false, including when promoting an
         // existing watch-only entry into a real one the moment a position opens.
         bool isWatchOnly = false;
 
@@ -169,7 +169,7 @@ public:
         double closeAgo52Week = 0.0;
     };
 
-    // lParam of WM_MARKET_TICK — handler owns and must delete.
+    // lParam of WM_MARKET_TICK, handler owns and must delete.
     struct TsTickEntry {
         COLORREF    side;
         double      price    = 0.0;
@@ -188,13 +188,13 @@ public:
 
         // ── Price ticks (tickPrice) ──────────────────────────────────────────
         double last      = 0.0;
-        double prevClose = 0.0;  // CLOSE tick — used to compute change
+        double prevClose = 0.0;  // CLOSE tick, used to compute change
         double open      = 0.0;  // OPEN tick (field 14)
         double bid       = 0.0;
         double ask       = 0.0;
         double high      = 0.0;
         double low       = 0.0;
-        double vwap      = 0.0;  // VWAP tick (field 236, generic tick "258") — populated during regular trading hours only
+        double vwap      = 0.0;  // VWAP tick (field 236, generic tick "258"), populated during regular trading hours only
 
         // ── Size ticks (tickSize) ────────────────────────────────────────────
         double bidSize   = 0.0;
@@ -247,7 +247,7 @@ public:
 
         // ── RT_VOLUME-derived recent-activity metric (generic tick 233) ─────────────
         // A coarser, conflated-arrival cousin of the tick-by-tick-derived ratio
-        // Market_ComputeVolRates() computes locally in market.h — NOT the same
+        // Market_ComputeVolRates() computes locally in market.h, NOT the same
         // numbers (RT_VOLUME batches multiple prints into one update), but same
         // idea: recent 15s share-rate vs. a trailing ~5min baseline rate. This is
         // the only volume signal available for every portfolio position, not just
@@ -341,10 +341,10 @@ public:
     // ── Watch-only symbols (Diamonds "Quarantine" alert-only rows) ───────────
     // Ensures L1 market data + weekly-range (13/26/52-week) + dividend data
     // flow for `conId`/`symbol` even when it isn't (yet) a held portfolio
-    // position — e.g. a symbol with only an Alert Up/Down price set. Safe to
+    // position, e.g. a symbol with only an Alert Up/Down price set. Safe to
     // call repeatedly (idempotent), and safe to call for a conId that already
     // IS a held position (no-ops on top of the existing subscription).
-    // Deliberately skips PnLSingle/L2/tick-by-tick — those stay Market-window-only.
+    // Deliberately skips PnLSingle/L2/tick-by-tick, those stay Market-window-only.
     void watchSymbol(int conId, const std::string& symbol);
 
     // ── Level 1 (market window) ────────────────────────────────
@@ -359,7 +359,7 @@ public:
 
     // ── FX / Currency Conversion (Dashboard "Exchange Currency" popup) ───────────
     // Subscribes streaming market data for the EUR.USD spot FX contract on
-    // IDEALPRO and routes ticks to hWnd via WM_FX_RATE_UPDATE (no lParam —
+    // IDEALPRO and routes ticks to hWnd via WM_FX_RATE_UPDATE (no lParam,
     // call getFxRate() to read the latest bid/ask/last).
     void reqFxRate(HWND hWnd);
     // Cancels the market data subscription started by reqFxRate() for this window.
@@ -382,7 +382,7 @@ public:
 
     // ── Historical Data (on-demand) ──────────────────────────────────────────
         // Fetches ~1 year of daily bars for `symbol` (must be a current portfolio
-        // position — conId is looked up from getPortfolioMap()). Blocks the
+        // position, conId is looked up from getPortfolioMap()). Blocks the
         // calling thread (safe from an HTTP handler thread, NOT the UI thread)
         // until the async TWS response completes or timeoutMs elapses. Returns
         // formatted rows "Date,Open,High,Low,Close,Wap,Volume,TradesCount", one

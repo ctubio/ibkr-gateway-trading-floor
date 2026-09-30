@@ -40,7 +40,7 @@ static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 void FlushDebugBuffer() {
     if (!hDebugEdit || !IsWindow(hDebugEdit)) return;
 
-    // Copy out under lock — debugBuffer can be mutated concurrently by
+    // Copy out under lock, debugBuffer can be mutated concurrently by
     // LogDebug() from other threads (see registry.h).
     std::vector<std::string> snapshot;
     {
@@ -191,7 +191,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 }
             }
 
-            // Client ID — passed as the second parameter to api().connect().
+            // Client ID, passed as the second parameter to api().connect().
             CreateWindowA("STATIC", "Client ID:",
                 WS_CHILD | WS_VISIBLE,
                 m + gm, y + 218, 72, 20,
@@ -202,7 +202,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 hWnd, (HMENU)ID_SETTINGS_CLIENT_ID, hInst, NULL);
             SetWindowTextA(hClientIdEdit, std::format("{}", clientIdGateway).c_str());
 
-            // Group ID — TWS "linked window" group color id, used for
+            // Group ID, TWS "linked window" group color id, used for
             // subscribeToGroupEvents()/updateDisplayGroup().
             CreateWindowA("STATIC", "Group ID:",
                 WS_CHILD | WS_VISIBLE,
