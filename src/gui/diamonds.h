@@ -505,9 +505,17 @@ static void DrawTwoLineCell(HDC hdc, const RECT& cellRect,
 static void Diamonds_ApplySort(HWND hList) {
     if (diamondsState.displayOrder.empty()) return;
 
-    std::sort(diamondsState.displayOrder.begin(), diamondsState.displayOrder.end(), [](int aConId, int bConId) {
-        const auto& a = diamondsState.dataCache.at(aConId);
-        const auto& b = diamondsState.dataCache.at(bConId);
+    // Resolve pointers once to avoid O(n log n) hash lookups in the comparator.
+    // Pointers stay valid because nothing inserts into dataCache during the sort.
+    std::vector<std::pair<const DiamondRowCache*, int>> tmp;
+    tmp.reserve(diamondsState.displayOrder.size());
+    for (int id : diamondsState.displayOrder) {
+        tmp.push_back({ &diamondsState.dataCache.at(id), id });
+    }
+
+    std::sort(tmp.begin(), tmp.end(), [](const auto& x, const auto& y) {
+        const auto& a = *x.first;
+        const auto& b = *y.first;
         if (diamondsState.sortCol == DCOL_SYMBOL || diamondsState.sortCol == DCOL_EXCHANGE) {
             int cmp = _stricmp(a.textCols[diamondsState.sortCol].c_str(), b.textCols[diamondsState.sortCol].c_str());
             return diamondsState.sortAsc ? (cmp > 0) : (cmp < 0);
@@ -522,6 +530,10 @@ static void Diamonds_ApplySort(HWND hList) {
             }
         }
     });
+
+    for (size_t i = 0; i < tmp.size(); ++i) {
+        diamondsState.displayOrder[i] = tmp[i].second;
+    }
 
     // ZERO-FLICKER FIX: Delegate to the paint timer instead of invalidating instantly
     diamondsState.dirty = true;

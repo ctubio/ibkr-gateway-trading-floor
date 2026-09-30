@@ -51,6 +51,12 @@ static const wchar_t LOCATE_GLYPH[] = L"\uEC43";
 // ─── Lock hotkeys ──────────────────────────────────────────────────
 static bool lockHotkeys = false;
 
+// ── Debounced window-position save ───────────────────────────────────────────
+// WM_MOVE/WM_SIZE fire continuously during drag/resize; coalesce into a single
+// registry write after movement stops. WM_DESTROY saves immediately.
+#define TIMER_SAVE_WINPOS        0xF0A1
+#define SAVE_WINPOS_DEBOUNCE_MS  400
+
 // Force the MinGW linker to keep riched20.dll when compiling with -static
 extern "C" __declspec(dllimport) long __stdcall CreateTextServices(void*, void*, void*);
 static const void* force_riched20_link = (void*)CreateTextServices;
@@ -722,11 +728,22 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             
         case WM_SIZE:
         case WM_MOVE:
-            SaveWinPosition(hWnd);
+            // Re-arming with the same ID resets the countdown, so only the
+            // final position after the drag/resize settles gets written.
+            SetTimer(hWnd, TIMER_SAVE_WINPOS, SAVE_WINPOS_DEBOUNCE_MS, NULL);
+            return DefWindowProc(hWnd, message, wParam, lParam);
+
+        case WM_TIMER:
+            if (wParam == TIMER_SAVE_WINPOS) {
+                KillTimer(hWnd, TIMER_SAVE_WINPOS);
+                SaveWinPosition(hWnd);
+                return 0;
+            }
             return DefWindowProc(hWnd, message, wParam, lParam);
 
         case WM_DESTROY: {
-           std::string className = SaveWinPosition(hWnd);
+            KillTimer(hWnd, TIMER_SAVE_WINPOS);
+            std::string className = SaveWinPosition(hWnd);
 
             if (className != DASHBOARD_CLASS_NAME) {
                 Session_RemoveWindow(hWnd);
