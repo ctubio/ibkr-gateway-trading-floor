@@ -475,7 +475,27 @@ static ScopedFont hFont21ptbold(21, true);
 // this proc now only keeps the zero-flicker background-erase suppression.)
 LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (uMsg == WM_ERASEBKGND) {
-        return 1; // Zero-flicker: suppress background erase entirely
+        // Don't erase the whole client area (that's what flickers), but DO paint
+        // the empty region below the last item, otherwise scrolling leaves stale
+        // pixels (a ghost duplicate row) there.
+        HDC hdc = (HDC)wParam;
+        RECT rc;
+        GetClientRect(hList, &rc);
+
+        int count = ListView_GetItemCount(hList);
+        if (count > 0) {
+            RECT ri = {};
+            ri.left = LVIR_BOUNDS;
+            if (ListView_GetItemRect(hList, count - 1, &ri, LVIR_BOUNDS))
+                rc.top = std::max(rc.top, ri.bottom);
+        }
+
+        if (rc.top < rc.bottom) {
+            HBRUSH hBr = CreateSolidBrush(ListView_GetBkColor(hList));
+            FillRect(hdc, &rc, hBr);
+            DeleteObject(hBr);
+        }
+        return 1;
     }
     return DefSubclassProc(hList, uMsg, wParam, lParam);
 }

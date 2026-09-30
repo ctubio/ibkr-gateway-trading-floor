@@ -1118,6 +1118,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         NMHDR* hdr = (NMHDR*)lParam;
         if (hdr->idFrom != ID_DIAMONDS_RESULTS_LIST) break;
 
+        // Scroll finished (comctl32 v6): repaint so the exposed strip below the
+        // last row is redrawn instead of keeping blitted stale pixels.
+        if (hdr->code == LVN_ENDSCROLL) {
+            InvalidateRect(hdr->hwndFrom, NULL, TRUE);
+            return 0;
+        }
+
         // ── Row selected: push symbol to TWS-linked windows/apps ─────────────
         if (hdr->code == LVN_ITEMCHANGED) {
             NMLISTVIEW* nmlv = (NMLISTVIEW*)lParam;
