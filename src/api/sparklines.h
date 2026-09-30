@@ -156,9 +156,11 @@ protected:
 
         Gdiplus::Graphics graphics(hdc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        // Everything below is in cell-local coordinates; the transform places it.
+        // The gradient brush lives in this same space, so its cache key no longer
+        // depends on where the row happens to be on screen.
+        graphics.TranslateTransform(originX, originY);
 
-        // Reserve a small strip on the right for the reference dots, the
-        // line itself stops a bit short of the full width.
         float lineW = (W - dotAreaWidth > 4.0f) ? (W - dotAreaWidth) : W;
 
         ULONGLONG minTime = data.front().date;
@@ -169,32 +171,32 @@ protected:
             if (p.price < minPrice) minPrice = p.price;
             if (p.price > maxPrice) maxPrice = p.price;
         }
-        // Prevent division by zero if all prices/times are identical.
         if (minTime == maxTime) maxTime++;
         if (minPrice == maxPrice) { minPrice -= flatPriceEpsilon; maxPrice += flatPriceEpsilon; }
 
-        std::vector<Gdiplus::PointF> points(data.size());
-        for (size_t i = 0; i < data.size(); ++i) {
+        // AddPrice() caps `data` at 21 entries, so no heap allocation is needed.
+        constexpr size_t kMaxPoints = 21;
+        Gdiplus::PointF points[kMaxPoints];
+        const size_t n = std::min(data.size(), kMaxPoints);
+        for (size_t i = 0; i < n; ++i) {
             float x = MapScale((double)data[i].date, (double)minTime, (double)maxTime, 0, lineW);
-            float y = MapScale(data[i].price, minPrice, maxPrice, H, 1); // Y inverted (0=top)
-            points[i] = Gdiplus::PointF(originX + x, originY + y);
+            float y = MapScale(data[i].price, minPrice, maxPrice, H, 1);
+            points[i] = Gdiplus::PointF(x, y);
         }
 
-        PrepareGradient(H, originY, paletteColors, paletteStops, paletteCount, endpointColor, endpointPad);
-        graphics.DrawLines(gradientPen.get(), points.data(), (INT)points.size());
+        // originY is now always 0: rebuilt only if H changes.
+        PrepareGradient(H, 0.0f, paletteColors, paletteStops, paletteCount, endpointColor, endpointPad);
+        graphics.DrawLines(gradientPen.get(), points, (INT)n);
 
-        // Draw the 5 reference dots (10/20/30/40/50 min ago), top to bottom.
-        // Both color saturation and dot size scale with the magnitude of %
-        // change.
         ULONGLONG now = GetTickCount64();
         double lastPrice = data.back().price;
         static const int minutesAgo[5] = { 10, 20, 30, 40, 50 };
-        float dotX = originX + W - maxRadius - 1.0f;
+        float dotX = W - maxRadius - 1.0f;
 
         for (int i = 0; i < 5; ++i) {
             double histPrice;
-            if (!GetPriceAgo(now, minutesAgo[i], histPrice)) continue; // not enough history yet
-            float dotY = originY + H * ((i + 0.5f) / 5.0f);
+            if (!GetPriceAgo(now, minutesAgo[i], histPrice)) continue;
+            float dotY = H * ((i + 0.5f) / 5.0f);
 
             double pctChange = (histPrice != 0.0) ? ((lastPrice - histPrice) / histPrice * 100.0) : 0.0;
 
@@ -202,10 +204,8 @@ protected:
             float dotRadius;
             GetDotStyle(pctChange, minRadius, maxRadius, dotColor, dotRadius);
 
-            if (!dotBrush)
-                dotBrush = std::make_unique<Gdiplus::SolidBrush>(dotColor);
-            else
-                dotBrush->SetColor(dotColor);
+            if (!dotBrush) dotBrush = std::make_unique<Gdiplus::SolidBrush>(dotColor);
+            else           dotBrush->SetColor(dotColor);
             graphics.FillEllipse(dotBrush.get(), dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
         }
     }
