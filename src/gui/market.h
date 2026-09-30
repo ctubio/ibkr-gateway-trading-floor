@@ -759,192 +759,122 @@ static void Market_HandleCtrlOrderBar(HWND hWnd, TsState* state, bool isRight) {
         }
     }
 }
+// ── Shared edit-field subclass (order bar + editable order rows) ─────────────
+// One subclass proc serves every price/qty-style edit in a Market window:
+//   - the 4 order-entry-bar edits (Price / Stop / Profit / Qty)
+//   - the Price / Qty edits of each editable-order row
+// uIdSubclass selects the field kind (step size / decimals):
+enum MarketEditKind : UINT_PTR {
+    MEDIT_PRICE = 1,   // step 0.01 (Shift: 1.0), 2 decimals   (Price, Stop, Profit)
+    MEDIT_QTY   = 2    // step 1    (Shift: 10),  signed by side
+};
 
-// Subclass for the order-bar price and qty edit controls.
-// uIdSubclass == 1 → price (step 0.01, 2 dec)
-// uIdSubclass == 2 → qty   (step 1,    0 dec)
-static LRESULT CALLBACK OrderBar_EditSubclassProc(
-    HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam,
-    UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
-{
-    if (msg == WM_GETDLGCODE)
-        return DefSubclassProc(hWnd, msg, wParam, lParam)
-               | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
-
-    if (msg == WM_CHAR) {
-        if (wParam == VK_ESCAPE || wParam == VK_TAB || wParam == VK_RETURN)
-            return 0;
-    }
-
-    // Resolved once per message now — previously re-hashed inside every
-    // Market_RedrawHintsFor(hWnd) call below (VK_TAB, VK_UP/DOWN, catch-all),
-    // on top of the lookup WM_KEYDOWN already did for itself.
-    HWND hMarket = GetParent(hWnd);
-    auto mIt = marketStates.find(hMarket);
-    TsState* st = (mIt != marketStates.end()) ? mIt->second : nullptr;
-
-    if (msg == WM_KEYDOWN) {
-        if (wParam == VK_ESCAPE) {
-            if (st) {
-                api().cancelOrders(st->conId);
-            }
-            return 0;
-        }
-        if (wParam == VK_TAB) {
-            if (st) {
-                std::vector<HWND> order = Market_BuildTabOrder(st);
-                HWND hNext = nullptr;
-
-                for (size_t i = 0; i < order.size(); ++i) {
-                    if (hWnd == order[i]) {
-                        hNext = order[(i + 1) % order.size()];
-                        break;
-                    }
-                }
-
-                if (hNext) {
-                    SetFocus(hNext);
-                    int len = GetWindowTextLengthA(hNext);
-                    SendMessageA(hNext, EM_SETSEL, len, len);
-                }
-            }
-            Market_RedrawHintsFor(st, hWnd);
-            InvalidateRect(hWnd, NULL, TRUE);
-            return 0;
-        }
-        if (wParam == VK_RETURN) {
-            if (st && st->l1Info.last > 0.0) {
-                char pBuf[32] = {}, qBuf[32] = {}, psBuf[32] = {}, ppBuf[32] = {};
-                GetWindowTextA(st->hOrderPrice,       pBuf, sizeof(pBuf));
-                GetWindowTextA(st->hOrderQty,         qBuf, sizeof(qBuf));
-                GetWindowTextA(st->hOrderStopPrice,   psBuf, sizeof(psBuf));
-                GetWindowTextA(st->hOrderProfitPrice, ppBuf, sizeof(ppBuf));
-                double price = std::atof(pBuf);
-                double qty = std::abs(std::atof(qBuf));
-                double stopPrice = std::atof(psBuf);
-                double profitPrice = std::atof(ppBuf);
-                if ((price > 0 || stopPrice > 0) && qty > 0) {
-                    if (stopPrice < 0.1) stopPrice = 0.0;
-                    if (profitPrice < 0.1) profitPrice = 0.0;
-                    double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
-                    if (price > 0 && stopPrice > 0) stopPrice = st->orderSide == "BUY" ? price - stopPrice : price + stopPrice;
-                    if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
-                    if (price > 0) {
-                        if (st->orderSide == "BUY") {
-                            if (price > st->l1Info.last + safetyGateway) {
-                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safetyGateway).c_str(), "Invalid Entry Price", MB_ICONERROR);
-                                return 0;
-                            }
-                            if (stopPrice > 0 && stopPrice >= price) {
-                                MessageBoxA(hMarket, "Stop price must be below the entry price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
-                                return 0;
-                            }
-                            if (profitPrice > 0 && profitPrice <= price) {
-                                MessageBoxA(hMarket, "Profit price must be above the entry price for a BUY order.", "Invalid Profit Price", MB_ICONERROR);
-                                return 0;
-                            }
-                        }
-                        if (st->orderSide == "SELL") {
-                            if (price < st->l1Info.last - safetyGateway) {
-                                MessageBoxA(hMarket, std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safetyGateway).c_str(), "Invalid Entry Price", MB_ICONERROR);
-                                return 0;
-                            }
-                            if (stopPrice > 0 && stopPrice <= price) {
-                                MessageBoxA(hMarket, "Stop price must be above the entry price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
-                                return 0;
-                            }
-                            if (profitPrice > 0 && profitPrice >= price) {
-                                MessageBoxA(hMarket, "Profit price must be below the entry price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
-                                return 0;
-                            }
-                        }
-                    } else {
-                        if (st->orderSide == "SELL") {
-                            if (stopPrice > 0 && stopPrice <= st->l1Info.last) {
-                                MessageBoxA(hMarket, "Stop price must be above the last price for a SELL order.", "Invalid Stop Price", MB_ICONERROR);
-                                return 0;
-                            }
-                            if (profitPrice > 0 && profitPrice >= st->l1Info.last) {
-                                MessageBoxA(hMarket, "Profit price must be below the last price for a SELL order.", "Invalid Profit Price", MB_ICONERROR);
-                                return 0;
-                            }
-                        } else if (st->orderSide == "BUY") {
-                            if (stopPrice > 0 && stopPrice >= st->l1Info.last) {
-                                MessageBoxA(hMarket, "Stop price must be below the last price for a BUY order.", "Invalid Stop Price", MB_ICONERROR);
-                                return 0;
-                            }
-                            if (profitPrice > 0 && profitPrice <= st->l1Info.last) {
-                                MessageBoxA(hMarket, "Profit price must be above the last price for a BUY order.", "Invalid Profit Price", MB_ICONERROR);
-                                return 0;
-                            }
-                        }
-                    }
-                    api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
-                }
-                Market_Layout_HideBar(hMarket, st);
-            }
-            return 0;
-        }
-        if (wParam == VK_UP || wParam == VK_DOWN) {
-            char buf[32] = {};
-            GetWindowTextA(hWnd, buf, sizeof(buf));
-            double val  = atof(buf);
-            if (uIdSubclass == 2) val = std::abs(val);
-            double step = 0.0;
-            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
-                step = uIdSubclass == 1 ? 1.0 : 10.0;
-            } else {
-                step = uIdSubclass == 1 ? 0.01 : 1.0;
-            }
-            val += (wParam == VK_UP) ? step : -step;
-            if (val < 0.0) val = 0.0;
-            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:+}", val * (st->orderSide == "BUY" ? 1 : -1));
-            SetWindowTextA(hWnd, s.c_str());
-            int len = GetWindowTextLengthA(hWnd);
-            SendMessageA(hWnd, EM_SETSEL, len, len);
-            if (st) Market_UpdateOrderRiskLabel(st);
-            Market_RedrawHintsFor(st, hWnd);
-            InvalidateRect(hWnd, NULL, TRUE);
-            return 0;
-        }
-
-        if (wParam == VK_CONTROL) {
-            if (st) {
-                bool isRight = (lParam & (1 << 24)) != 0;
-                Market_HandleCtrlOrderBar(hMarket, st, isRight);
-            }
-        }
-        // Any other key (Left/Right/Home/End/Shift+Arrow, etc.) falls
-        // through to the catch-all below, since those move/extend the
-        // selection too and need the same hint redraw.
-    }
-
-    // Plain hover (no button held) can't change the selection — skip it so
-    // we don't force a repaint on every hover pixel.
-    if (msg == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
-        return DefSubclassProc(hWnd, msg, wParam, lParam);
-
-    if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hWnd, OrderBar_EditSubclassProc, uIdSubclass);
-
-    // Catch-all: typed characters, selection-moving keys not swallowed
-    // above, and — the key fix — mouse click / drag-select / double-click /
-    // focus change. EDIT draws its blue selection highlight directly via
-    // GetDC for all of these, without necessarily going through WM_PAINT, so
-    // we re-assert the hint label(s) on top right after every one of them.
-    LRESULT res = DefSubclassProc(hWnd, msg, wParam, lParam);
-    Market_RedrawHintsFor(st, hWnd);
-    return res;
+// Returns the order row owning `hEdit`, or nullptr if it's an order-bar edit.
+static MarketOrderRow* Market_FindOrderRow(TsState* st, HWND hEdit) {
+    if (!st) return nullptr;
+    for (auto& r : st->orderRows)
+        if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) return &r;
+    return nullptr;
 }
 
-// Subclass for one editable-order row's Price/Qty edits.
-//   uIdSubclass == 1 → price (step 0.01, 2 dec)
-//   uIdSubclass == 2 → qty   (step 1,    0 dec)
-// ENTER modifies the order in place; ESC cancels every order for this symbol
-// (same as the window's own ESC handler); TAB cycles through
-// Market_BuildTabOrder(); UP/DOWN step the value like every other price/qty
-// edit in this app.
-static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
+// Re-asserts the transparent hint labels on top of an edit after anything that
+// could have changed its selection/focus (EDIT draws its selection highlight
+// via GetDC, not necessarily through WM_PAINT).
+static void Market_RedrawEditHints(TsState* st, MarketOrderRow* row, HWND hEdit) {
+    if (!st) return;
+    if (row) {
+        auto redraw = [](HWND h) { if (h && IsWindowVisible(h)) { InvalidateRect(h, NULL, TRUE); UpdateWindow(h); } };
+        redraw(row->hTotalLabel);
+        redraw(row->hQtyTifLabel);
+    } else {
+        Market_RedrawHintsFor(st, hEdit);
+    }
+}
+
+// ENTER on an order-bar field: validate, submit a new order, hide the bar.
+static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
+    if (!st || st->l1Info.last <= 0.0) return;
+
+    char pBuf[32] = {}, qBuf[32] = {}, psBuf[32] = {}, ppBuf[32] = {};
+    GetWindowTextA(st->hOrderPrice,       pBuf,  sizeof(pBuf));
+    GetWindowTextA(st->hOrderQty,         qBuf,  sizeof(qBuf));
+    GetWindowTextA(st->hOrderStopPrice,   psBuf, sizeof(psBuf));
+    GetWindowTextA(st->hOrderProfitPrice, ppBuf, sizeof(ppBuf));
+    double price       = std::atof(pBuf);
+    double qty         = std::abs(std::atof(qBuf));
+    double stopPrice   = std::atof(psBuf);
+    double profitPrice = std::atof(ppBuf);
+
+    if ((price > 0 || stopPrice > 0) && qty > 0) {
+        if (stopPrice < 0.1)   stopPrice = 0.0;
+        if (profitPrice < 0.1) profitPrice = 0.0;
+        double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
+        if (price > 0 && stopPrice > 0)   stopPrice   = st->orderSide == "BUY" ? price - stopPrice   : price + stopPrice;
+        if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
+
+        auto fail = [&](const std::string& msg, const char* title) {
+            MessageBoxA(hMarket, msg.c_str(), title, MB_ICONERROR);
+        };
+
+        if (price > 0) {
+            if (st->orderSide == "BUY") {
+                if (price > st->l1Info.last + safetyGateway) {
+                    fail(std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safetyGateway), "Invalid Entry Price"); return;
+                }
+                if (stopPrice > 0 && stopPrice >= price) {
+                    fail("Stop price must be below the entry price for a BUY order.", "Invalid Stop Price"); return;
+                }
+                if (profitPrice > 0 && profitPrice <= price) {
+                    fail("Profit price must be above the entry price for a BUY order.", "Invalid Profit Price"); return;
+                }
+            } else if (st->orderSide == "SELL") {
+                if (price < st->l1Info.last - safetyGateway) {
+                    fail(std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safetyGateway), "Invalid Entry Price"); return;
+                }
+                if (stopPrice > 0 && stopPrice <= price) {
+                    fail("Stop price must be above the entry price for a SELL order.", "Invalid Stop Price"); return;
+                }
+                if (profitPrice > 0 && profitPrice >= price) {
+                    fail("Profit price must be below the entry price for a SELL order.", "Invalid Profit Price"); return;
+                }
+            }
+        } else {
+            if (st->orderSide == "SELL") {
+                if (stopPrice > 0 && stopPrice <= st->l1Info.last) {
+                    fail("Stop price must be above the last price for a SELL order.", "Invalid Stop Price"); return;
+                }
+                if (profitPrice > 0 && profitPrice >= st->l1Info.last) {
+                    fail("Profit price must be below the last price for a SELL order.", "Invalid Profit Price"); return;
+                }
+            } else if (st->orderSide == "BUY") {
+                if (stopPrice > 0 && stopPrice >= st->l1Info.last) {
+                    fail("Stop price must be below the last price for a BUY order.", "Invalid Stop Price"); return;
+                }
+                if (profitPrice > 0 && profitPrice <= st->l1Info.last) {
+                    fail("Profit price must be above the last price for a BUY order.", "Invalid Profit Price"); return;
+                }
+            }
+        }
+        api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
+    }
+    Market_Layout_HideBar(hMarket, st);
+}
+
+// ENTER on an editable-order row: modify that order in place.
+static void Market_SubmitOrderRow(MarketOrderRow& row) {
+    char pBuf[32] = {}, qBuf[32] = {};
+    GetWindowTextA(row.hPriceEdit, pBuf, sizeof(pBuf));
+    double price = atof(pBuf);
+    double qty   = row.originalQty;
+    if (!row.partialFill) {
+        GetWindowTextA(row.hQtyEdit, qBuf, sizeof(qBuf));
+        qty = std::abs(atof(qBuf));
+    }
+    if (price > 0.0 && qty > 0.0)
+        api().modifyOrder(row.orderId, price, qty);
+}
+
+static LRESULT CALLBACK Market_EditSubclassProc(
     HWND hEdit, UINT msg, WPARAM wParam, LPARAM lParam,
     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
 {
@@ -957,98 +887,98 @@ static LRESULT CALLBACK MarketOrderRow_EditSubclassProc(
             return 0;
     }
 
-    // consolidate: look up once, right after the early-return branches
+    // Resolved once per message. row == nullptr  → order-bar edit,
+    //                            row != nullptr  → editable-order-row edit.
     HWND hMarket = GetParent(hEdit);
     auto mIt = marketStates.find(hMarket);
     TsState* st = (mIt != marketStates.end()) ? mIt->second : nullptr;
+    MarketOrderRow* row = Market_FindOrderRow(st, hEdit);
 
-    if (msg == WM_KEYDOWN) {
-        MarketOrderRow* row = nullptr;
-        if (st) {
-            for (auto& r : st->orderRows) {
-                if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) { row = &r; break; }
-            }
-        }
-
+    if (msg == WM_KEYDOWN && st) {
+        // ── ESC: cancel every order for this symbol ──────────────────────────
         if (wParam == VK_ESCAPE) {
-            if (st) api().cancelOrders(st->conId);
+            api().cancelOrders(st->conId);
             return 0;
         }
-        if (row && wParam == VK_RETURN) {
-            char pBuf[32] = {}, qBuf[32] = {};
-            GetWindowTextA(row->hPriceEdit, pBuf, sizeof(pBuf));
-            double price = atof(pBuf);
-            double qty   = row->originalQty;
-            if (!row->partialFill) {
-                GetWindowTextA(row->hQtyEdit, qBuf, sizeof(qBuf));
-                qty = std::abs(atof(qBuf));
-            }
-            if (price > 0.0 && qty > 0.0)
-                api().modifyOrder(row->orderId, price, qty);
-            return 0;
-        }
-        if (st && wParam == VK_TAB) {
+
+        // ── TAB: cycle through the combined rows + bar sequence ──────────────
+        if (wParam == VK_TAB) {
             std::vector<HWND> order = Market_BuildTabOrder(st);
-            HWND hNext = nullptr;
             for (size_t i = 0; i < order.size(); ++i) {
-                if (order[i] == hEdit) { hNext = order[(i + 1) % order.size()]; break; }
+                if (order[i] == hEdit) {
+                    HWND hNext = order[(i + 1) % order.size()];
+                    if (hNext) {
+                        SetFocus(hNext);
+                        int len = GetWindowTextLengthA(hNext);
+                        SendMessageA(hNext, EM_SETSEL, len, len);
+                    }
+                    break;
+                }
             }
-            if (hNext) {
-                SetFocus(hNext);
-                int len = GetWindowTextLengthA(hNext);
-                SendMessageA(hNext, EM_SETSEL, len, len);
-            }
-            return 0;
-        }
-        if (row && (wParam == VK_UP || wParam == VK_DOWN)) {
-            char buf[32] = {};
-            GetWindowTextA(hEdit, buf, sizeof(buf));
-            double val = atof(buf);
-            if (uIdSubclass == 2) val = std::abs(val);
-            double step;
-            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) step = (uIdSubclass == 1) ? 1.0 : 10.0;
-            else                                       step = (uIdSubclass == 1) ? 0.01 : 1.0;
-            val += (wParam == VK_UP) ? step : -step;
-            if (val < 0.0) val = 0.0;
-            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val)
-                                                : std::format("{:+}", val * (row->action == "BUY" ? 1 : -1));
-            SetWindowTextA(hEdit, s.c_str());
-            int len = GetWindowTextLengthA(hEdit);
-            SendMessageA(hEdit, EM_SETSEL, len, len);
-            Market_UpdateOrderRowTotalLabel(*row);
+            Market_RedrawEditHints(st, row, hEdit);
             InvalidateRect(hEdit, NULL, TRUE);
             return 0;
         }
-        if (wParam == VK_CONTROL) {
-            if (st) {
-                bool isRight = (lParam & (1 << 24)) != 0;
-                Market_HandleCtrlOrderBar(hMarket, st, isRight);
-            }
+
+        // ── ENTER: the only place the two kinds really differ ────────────────
+        if (wParam == VK_RETURN) {
+            if (row) Market_SubmitOrderRow(*row);
+            else     Market_SubmitOrderBar(hMarket, st);
+            return 0;
         }
+
+        // ── UP / DOWN: step the value ────────────────────────────────────────
+        if (wParam == VK_UP || wParam == VK_DOWN) {
+            const bool isPrice = (uIdSubclass == MEDIT_PRICE);
+            const std::string& action = row ? row->action : st->orderSide;
+
+            char buf[32] = {};
+            GetWindowTextA(hEdit, buf, sizeof(buf));
+            double val = atof(buf);
+            if (!isPrice) val = std::abs(val);
+
+            bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            double step = isPrice ? (shift ? 1.0 : 0.01) : (shift ? 10.0 : 1.0);
+            val += (wParam == VK_UP) ? step : -step;
+            if (val < 0.0) val = 0.0;
+
+            std::string s = isPrice ? std::format("{:.2f}", val)
+                                    : std::format("{:+}", val * (action == "BUY" ? 1 : -1));
+            SetWindowTextA(hEdit, s.c_str());
+            int len = GetWindowTextLengthA(hEdit);
+            SendMessageA(hEdit, EM_SETSEL, len, len);
+
+            if (row) Market_UpdateOrderRowTotalLabel(*row);
+            else     Market_UpdateOrderRiskLabel(st);
+            Market_RedrawEditHints(st, row, hEdit);
+            InvalidateRect(hEdit, NULL, TRUE);
+            return 0;
+        }
+
+        // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
+        if (wParam == VK_CONTROL) {
+            bool isRight = (lParam & (1 << 24)) != 0;
+            Market_HandleCtrlOrderBar(hMarket, st, isRight);
+        }
+        // Other keys (Left/Right/Home/End/...) fall to the catch-all below.
     }
 
-    // Plain hover (no button held) can't change the selection — skip it so
-    // we don't force a repaint on every hover pixel (mirrors market.h/orders.h).
+    // Plain hover (no button held) can't change the selection — skip it so we
+    // don't force a repaint on every hover pixel.
     if (msg == WM_MOUSEMOVE && !(wParam & MK_LBUTTON))
         return DefSubclassProc(hEdit, msg, wParam, lParam);
 
     if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hEdit, MarketOrderRow_EditSubclassProc, uIdSubclass);
+        RemoveWindowSubclass(hEdit, Market_EditSubclassProc, uIdSubclass);
 
     LRESULT res = DefSubclassProc(hEdit, msg, wParam, lParam);
 
-    // Re-assert this row's hint labels on top after anything that could've
-    // changed the edit's selection/focus (mouse click/drag, etc.) — same fix
-    // as Market_RedrawHintsFor() for the order-bar edits.
-    if (st) {
-        for (auto& r : st->orderRows) {
-            if (r.hPriceEdit == hEdit || r.hQtyEdit == hEdit) {
-                auto redraw = [](HWND h) { if (h && IsWindowVisible(h)) { InvalidateRect(h, NULL, TRUE); UpdateWindow(h); } };
-                redraw(r.hTotalLabel);
-                redraw(r.hQtyTifLabel);
-                break;
-            }
-        }
+    // Catch-all: typed chars, selection keys, mouse click/drag/dblclick, focus.
+    // Re-look-up the row since the default handler may have run arbitrary code.
+    if (msg != WM_NCDESTROY) {
+        auto it2 = marketStates.find(hMarket);
+        TsState* st2 = (it2 != marketStates.end()) ? it2->second : nullptr;
+        Market_RedrawEditHints(st2, Market_FindOrderRow(st2, hEdit), hEdit);
     }
     return res;
 }
@@ -1088,8 +1018,8 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
     SendMessage(row.hTotalLabel,   WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
     SendMessage(row.hQtyTifLabel,  WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
 
-    SetWindowSubclass(row.hPriceEdit, MarketOrderRow_EditSubclassProc, 1, 0);
-    SetWindowSubclass(row.hQtyEdit,   MarketOrderRow_EditSubclassProc, 2, 0);
+    SetWindowSubclass(row.hPriceEdit, Market_EditSubclassProc, MEDIT_PRICE, 0);
+    SetWindowSubclass(row.hQtyEdit,   Market_EditSubclassProc, MEDIT_QTY,   0);
 
     std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
     SetWindowTextA(row.hPriceEdit, priceStr.c_str());
@@ -1871,22 +1801,22 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hOrderPrice = CreateWindowA("EDIT", "0.00",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-        SetWindowSubclass(state->hOrderPrice, OrderBar_EditSubclassProc, 1, 0);
+        SetWindowSubclass(state->hOrderPrice,       Market_EditSubclassProc, MEDIT_PRICE, 0);
 
         state->hOrderQty = CreateWindowA("EDIT", "1",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE | ES_NUMBER,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-        SetWindowSubclass(state->hOrderQty, OrderBar_EditSubclassProc, 2, 0);
+        SetWindowSubclass(state->hOrderQty,         Market_EditSubclassProc, MEDIT_QTY,   0);
 
         state->hOrderStopPrice = CreateWindowA("EDIT", "0.00",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-        SetWindowSubclass(state->hOrderStopPrice, OrderBar_EditSubclassProc, 1, 0);
+        SetWindowSubclass(state->hOrderStopPrice,   Market_EditSubclassProc, MEDIT_PRICE, 0);
 
         state->hOrderProfitPrice = CreateWindowA("EDIT", "0.00",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
             0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-        SetWindowSubclass(state->hOrderProfitPrice, OrderBar_EditSubclassProc, 1, 0);
+        SetWindowSubclass(state->hOrderProfitPrice, Market_EditSubclassProc, MEDIT_PRICE, 0);
 
         // ── Hint overlay labels ─────────────────────────────────────────────
         // Created AFTER the edits above, so they sit on top in z-order.

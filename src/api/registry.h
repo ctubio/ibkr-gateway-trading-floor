@@ -93,16 +93,31 @@ void RegSetString(const char* subPath, const char* valueName, const std::string&
 std::string RegGetString(const char* subPath, const char* valueName, const std::string& defaultValue = "") {
     HKEY hKey;
     std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subPath);
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        char buf[2048] = {};
-        DWORD size = sizeof(buf);
-        if (RegQueryValueExA(hKey, valueName, NULL, NULL, (LPBYTE)buf, &size) == ERROR_SUCCESS) {
-            RegCloseKey(hKey);
-            return std::string(buf);
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return defaultValue;
+
+    std::string result = defaultValue;
+
+    DWORD type = 0;
+    DWORD size = 0;
+    if (RegQueryValueExA(hKey, valueName, NULL, &type, NULL, &size) == ERROR_SUCCESS &&
+        (type == REG_SZ || type == REG_EXPAND_SZ) && size > 0) {
+        std::vector<char> buf;
+        LSTATUS status = ERROR_MORE_DATA;
+        for (int attempt = 0; attempt < 3 && status == ERROR_MORE_DATA; ++attempt) {
+            buf.assign((size_t)size + 1, '\0');
+            DWORD readSize = size;
+            status = RegQueryValueExA(hKey, valueName, NULL, &type, (LPBYTE)buf.data(), &readSize);
+            if (status == ERROR_MORE_DATA) size = readSize; // value grew, retry with new size
+            else if (status == ERROR_SUCCESS) buf[readSize] = '\0'; // safe: buf is size+1 long
         }
-        RegCloseKey(hKey);
+
+        if (status == ERROR_SUCCESS)
+            result.assign(buf.data()); // stops at the first NUL
     }
-    return defaultValue;
+
+    RegCloseKey(hKey);
+    return result;
 }
 
 void RegSetDword(const char* subPath, const char* valueName, DWORD value) {
