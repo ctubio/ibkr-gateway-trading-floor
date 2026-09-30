@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <chrono>
 #include <ctime>
+#include <cstddef>
 #include <cmath>
 #include <random>
 #include <regex>
@@ -47,7 +48,7 @@
 #include <exception>
 #include <condition_variable>
 
-#include "rate_tracker.h"
+#include "volume.h"
 
 #define WM_API_UPDATE           (WM_USER +  2)
 #define WM_SYMBOL_RESULTS       (WM_USER +  3)

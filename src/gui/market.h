@@ -102,14 +102,6 @@ static const int EXEC_W   = 126;  // Initial height-independent width for hExecL
 static const int L2_W     = 135;  // Fixed width of the Level 2 / Executions column (far left)
 static const int ORDER_BAR_H = 84;
 
-// ── Volume / print-frequency rate windows ─────────────────────────────────────
-// "Recent" is the short trailing window whose rate we compare against
-// "Baseline", the longer trailing window (excluding the recent slice) that
-// represents this symbol's normal pace. A ratio >> 1 means recent activity is
-// running hot relative to how this symbol has been trading over the last few
-// minutes — the day-trading "sudden volume increase" signal.
-// Window sizes are now defined in RollingRateTracker (rate_tracker.h).
-
 static const int MARKET_ORDER_ROW_H = 44;   // per-row height, matches Orders.h's EDIT_PANEL_H
 
 // Recomputes hTotalLabel (price × qty notional) for one editable-order row.

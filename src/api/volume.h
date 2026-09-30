@@ -1,6 +1,4 @@
 #pragma once
-#include <deque>
-#include <cstddef>
 
 // Rolling "recent vs. baseline" rate tracker.
 //
