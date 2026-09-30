@@ -106,6 +106,14 @@ struct DiamondsWeeklyCloseCache {
     ULONGLONG lastAttemptMs = 0;   // PERF: throttle re-locking portfolioMutex
 };
 
+// Registry dividend cache — read once per symbol, with negative-result throttling.
+struct DiamondsDividendCache {
+    bool loaded = false;            // true once a registry value was successfully read
+    double annual = 0.0, amount = 0.0, dateSortable = 0.0;
+    std::string date;
+    ULONGLONG lastAttemptMs = 0;    // throttles retries for symbols with no cached entry
+};
+
 struct DiamondsState {
     // Ephemeral storage for triggered alerts to prevent spamming
     std::unordered_set<int> firedAlertsUp;
@@ -126,6 +134,7 @@ struct DiamondsState {
     // Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
     std::unordered_map<int, MiniSparkline> sparklines;
     std::unordered_map<int, DiamondsWeeklyCloseCache> weeklyCloseCache;
+    std::unordered_map<int, DiamondsDividendCache>    dividendCache;   // NEW
     // Data storage: Fast O(1) lookup by conId for live data streams
     std::unordered_map<int, DiamondRowCache> dataCache;
     // The list view sends one row-level custom-draw notification before that
@@ -578,30 +587,32 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
     bool haveLiveDividendData = (tickInfo.annualDividends != 0.0) || (tickInfo.dividendAmount != 0.0) || !tickInfo.dividendDate.empty();
     if (haveLiveDividendData) return;
 
-    bool haveCachedDividendData = (cacheRow.sortValues[DCOL_ANNUAL_DIV] != 0.0) || (cacheRow.sortValues[DCOL_DIV_AMT] != 0.0) || !cacheRow.textCols[DCOL_DIV_DATE].empty();
-    if (haveCachedDividendData) return;
+    auto& dc = diamondsState.dividendCache[conId];
+    if (!dc.loaded) {
+        // Only touch the registry on a miss, and at most once per 30s per symbol.
+        ULONGLONG now = GetTickCount64();
+        if (dc.lastAttemptMs != 0 && now - dc.lastAttemptMs < 30000) return;
+        dc.lastAttemptMs = now;
+        if (!Settings_Dividends_Load(cacheRow.symbol, conId, dc.annual, dc.amount, dc.date, dc.dateSortable))
+            return;
+        dc.loaded = true;
+    }
 
-    double cachedAnnual = 0.0, cachedAmount = 0.0, cachedDateSortable = 0.0;
-    std::string cachedDate;
-    if (!Settings_Dividends_Load(cacheRow.symbol, conId, cachedAnnual, cachedAmount, cachedDate, cachedDateSortable)) return;
+    cacheRow.sortValues[DCOL_DIV_AMT] = dc.amount;
+    cacheRow.textCols[DCOL_DIV_AMT]   = std::format("{:.3f}", dc.amount);
 
-    cacheRow.sortValues[DCOL_DIV_AMT] = cachedAmount;
-    cacheRow.textCols[DCOL_DIV_AMT]   = std::format("{:.3f}", cachedAmount);
+    cacheRow.sortValues[DCOL_ANNUAL_DIV] = dc.annual;
+    cacheRow.textCols[DCOL_ANNUAL_DIV]   = std::format("{:.3f}", dc.annual);
 
-    cacheRow.sortValues[DCOL_ANNUAL_DIV] = cachedAnnual;
-    cacheRow.textCols[DCOL_ANNUAL_DIV]   = std::format("{:.3f}", cachedAnnual);
+    cacheRow.sortValues[DCOL_DIV_DATE] = dc.dateSortable;
+    cacheRow.textCols[DCOL_DIV_DATE]   = dc.date;
 
-    cacheRow.sortValues[DCOL_DIV_DATE] = cachedDateSortable;
-    cacheRow.textCols[DCOL_DIV_DATE]   = cachedDate;
-
-    // Yield needs a current price — fall back to the last known price (last,
-    // else prevClose) so it still shows something with only stale price data.
     double priceForYield = tickInfo.last > 0.0 ? tickInfo.last : tickInfo.prevClose;
-    if (priceForYield > 0.0 && cachedAnnual > 0.0) {
-        double pct = cachedAnnual / priceForYield * 100.0;
+    if (priceForYield > 0.0 && dc.annual > 0.0) {
+        double pct = dc.annual / priceForYield * 100.0;
         cacheRow.sortValues[DCOL_DIV_YIELD] = pct;
         cacheRow.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
-    } else if (cachedAnnual == 0.0) {
+    } else if (dc.annual == 0.0) {
         cacheRow.sortValues[DCOL_DIV_YIELD] = 0.0;
         cacheRow.textCols[DCOL_DIV_YIELD]   = "0.00%";
     } else {
@@ -712,8 +723,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     }
 
     setCol(DCOL_LAST, t.last, 2, true);
-    auto& spark = diamondsState.sparklines[conId]; // single lookup, reused below
-    spark.AddPrice(t.last);    
 
     // Alert Up Trigger (Alert High is equal to or lower than Last)
     if (row.upAlert > 0.0 && t.last >= row.upAlert) {
@@ -756,6 +765,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // for this symbol (same "appears once ready" behavior as those dots).
     {
         double price5MinAgo = 0.0;
+        auto& spark = diamondsState.sparklines[conId];
         if (spark.GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
             double priceDiff5min = t.last - price5MinAgo;
             //setCol(DCOL_CHG5MIN, priceDiff5min, 2, true);
@@ -1063,18 +1073,18 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId) break;
-        TradingAPI::L1Book info;
-        if (api().getMarketData(conId, info)) {
-            Diamonds_UpdateMarketCols(conId, info);
-            // Defer to the throttled paint timer -- see note in Diamonds_UpdatePnLCols.
+        TradingAPI::L1Book fresh;
+        if (api().getMarketData(conId, fresh)) {
+            Diamonds_UpdateMarketCols(conId, fresh);
+            if (fresh.last > 0.0) {
+                diamondsState.sparklines[conId].AddPrice(fresh.last);
+            }
             diamondsState.dirty = true;
         }
-        // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single market tick!
-        // This stops the rows from continuously jumping up and down (which the user perceived as flickering).
-        // Sorting will now only happen when the user clicks a column header, or when repopulated.
         
         break;
     }
+    
     // ── Live per-position PnL update (reqPnLSingle stream) ───────────────────
     // Posted by Impl::pnlSingle() on the API thread via PostMessage.
     //   wParam = conId (fast row-lookup key, no pointer deref needed)
@@ -1590,6 +1600,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         api().removeApiUpdateWindow(hWnd);
         diamondsState.dataCache.clear();
         diamondsState.sparklines.clear();
+        diamondsState.dividendCache.clear();   // NEW
         if (diamondsState.rowHeightImageList) {
             ImageList_Destroy(diamondsState.rowHeightImageList);
             diamondsState.rowHeightImageList = NULL;
