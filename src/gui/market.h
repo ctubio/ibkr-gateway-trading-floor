@@ -83,7 +83,8 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
 #define ID_MARKET_EXEC_LIST            6011   // Executions SysListView32 (far left panel)
 
 #define TIMER_MARKET_SPEAKER    6020  // WM_TIMER id for per-market TTS (21s)
-#define TIMER_MARKET_PAINT      6021  // WM_TIMER id for throttled header repaint (30-60 FPS)
+// 6021 is in use by TIMER_SAVE_WINPOS
+#define TIMER_MARKET_PAINT      6022  // WM_TIMER id for throttled header repaint (30-60 FPS)
 #define MARKET_PAINT_TIMER_MS   33      // ~30 FPS
 
 // ── Layout constants ─────────────────────────────────────────────────────────

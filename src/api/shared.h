@@ -54,7 +54,7 @@ static bool lockHotkeys = false;
 // ── Debounced window-position save ───────────────────────────────────────────
 // WM_MOVE/WM_SIZE fire continuously during drag/resize; coalesce into a single
 // registry write after movement stops. WM_DESTROY saves immediately.
-#define TIMER_SAVE_WINPOS        0xF0A1
+#define TIMER_SAVE_WINPOS        6021
 #define SAVE_WINPOS_DEBOUNCE_MS  400
 
 // Force the MinGW linker to keep riched20.dll when compiling with -static

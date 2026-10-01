@@ -4,9 +4,10 @@ static const int windowDiamondsWidth = 1030;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST 7001
-#define ID_DIAMONDS_CHK_0        7002   // "Growth"
-#define ID_DIAMONDS_CHK_1        7003   // "Dividends"
-#define ID_DIAMONDS_CHK_2        7004   // "Quarantine"
+#define ID_VIEW_SELECTIONS_BTN   7002
+#define ID_DIAMONDS_CHK_0        7010   // "Growth"
+#define ID_DIAMONDS_CHK_1        7011   // "Dividends"
+#define ID_DIAMONDS_CHK_2        7012   // "Quarantine"
 #define DIAMONDS_CHK_STRIP_H     32     // height of the checkbox bar at the bottom
 
 // ── Filter / tab constants ────────────────────────────────────────────────────
@@ -34,7 +35,9 @@ static const DiamondsColorDef diamondColorPalette[DIAMONDS_COLOR_COUNT] = {
 
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
-#define TIMER_DIAMONDS_SORT      7010
+#define TIMER_DIAMONDS_VIEW      7010
+#define DIAMONDS_VIEW_TIMER_MS   10000
+#define TIMER_DIAMONDS_SORT      7011
 #define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 7 seconds (or sooner if user clicks a column header)
 
 
@@ -145,6 +148,7 @@ struct DiamondsState {
     // Paint Limiter
     bool dirty = false;
     HIMAGELIST rowHeightImageList = NULL;
+    bool viewSelectionEnabled = false;
 };
 
 static DiamondsState diamondsState;
@@ -465,6 +469,7 @@ static void Diamonds_Layout(HWND hWnd) {
         SetWindowPos(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), NULL, x + (i * 20), y, chkW[i], 20, SWP_NOZORDER | SWP_NOACTIVATE);
         x += chkW[i];
     }
+    SetWindowPos(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_BTN), NULL, 5, y, 40, 22, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
@@ -473,6 +478,7 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
     int sw = show ? SW_SHOW : SW_HIDE;
     for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i)
         ShowWindow(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), sw);
+    ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_BTN), sw);
     Diamonds_Layout(hWnd);
 }
 
@@ -940,6 +946,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             ListView_InsertColumn(hList, i, &lvc);
         }
 
+        HWND hView = CreateWindowA("BUTTON", "View",
+            WS_CHILD | BS_PUSHBUTTON | BS_OWNERDRAW,
+            0, 0, 40, 22, hWnd, (HMENU)ID_VIEW_SELECTIONS_BTN, hInst, NULL);
+        SendMessage(hView, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
         // Create the three filter checkboxes (hidden until window is focused).
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
             HWND hChk = CreateWindowA("BUTTON", diamondTabNames[i],
@@ -1041,6 +1052,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         break;
     }
 
+    case WM_KEYDOWN: {
+        if (wParam == 'V' || wParam == 'v') {
+            SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_BTN, 0);
+            return 0;
+        }
+    }
+
     case WM_COMMAND: {
         WORD id = LOWORD(wParam);
         if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2 && HIWORD(wParam) == BN_CLICKED) {
@@ -1057,7 +1075,17 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             Diamonds_UpdateDivColumnsVisibility(hWnd);
             Diamonds_Repopulate(hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
-            //UpdateWindow(hWnd);
+        }
+        if (id == ID_VIEW_SELECTIONS_BTN) {
+            diamondsState.viewSelectionEnabled = !diamondsState.viewSelectionEnabled;
+            if (diamondsState.viewSelectionEnabled) {
+                SetTimer(hWnd, TIMER_DIAMONDS_VIEW, DIAMONDS_VIEW_TIMER_MS, NULL);
+                SetWindowText(GetDlgItem(hWnd, id), "Stop");
+            }
+            else {
+                KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
+                SetWindowText(GetDlgItem(hWnd, id), "View");
+            }
         }
         break;
     }
@@ -1584,6 +1612,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_TIMER: {
+        if (wParam == TIMER_DIAMONDS_VIEW) {
+            // call api().updateDisplayGroup(conId); on the next item of diamondsState.displayOrder
+        }
         if (wParam == TIMER_DIAMONDS_SORT) {
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
@@ -1615,6 +1646,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_DESTROY:
         KillTimer(hWnd, TIMER_DIAMONDS_SORT);
+        KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
         api().removeApiUpdateWindow(hWnd);
         diamondsState.dataCache.clear();
