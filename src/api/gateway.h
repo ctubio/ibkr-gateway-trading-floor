@@ -70,6 +70,7 @@
 #define WM_ALERTS_CHANGED       (WM_USER + 19)
 #define WM_TRAYICON             (WM_USER + 20)
 #define WM_DEBUG_LOG_APPEND     (WM_USER + 21)
+#define WM_ACTIVATE_ORDER_ROW   (WM_USER + 22)
 
 
 // ─── Colors ───────────────────────────────────────────────────────────────────

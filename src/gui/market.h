@@ -160,7 +160,7 @@ static LRESULT CALLBACK Market_ListForwardCtrlProc(
     HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
 {
-    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE || wParam == VK_TAB))
+    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE || wParam == VK_TAB || wParam == 'x' || wParam == 'X'))
         SendMessage(GetParent(hList), WM_KEYDOWN, wParam, lParam);
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hList, Market_ListForwardCtrlProc, uIdSubclass);
@@ -719,7 +719,7 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     Market_UpdateOrderRiskLabel(state);
 
     Market_Layout(hWnd, state);
-    Market_Focus_OrderRow(state);
+    PostMessage(hWnd, WM_ACTIVATE_ORDER_ROW, 0, 0);
 }
 
 void Market_Layout_HideBar(HWND hWnd, TsState* state) {
@@ -739,7 +739,7 @@ void Market_Layout_HideBar(HWND hWnd, TsState* state) {
     state->orderBarVisible = false;
     Market_TrimTimeSalesLists(state);
     Market_Layout(hWnd, state);
-    Market_Focus_OrderRow(state);
+    PostMessage(hWnd, WM_ACTIVATE_ORDER_ROW, 0, 0);
 }
 
 // Helper: handles Ctrl+Left/Right to toggle BUY/SELL order bar.
@@ -885,7 +885,13 @@ static LRESULT CALLBACK Market_EditSubclassProc(
 
     if (msg == WM_CHAR) {
         if (wParam == VK_ESCAPE || wParam == VK_TAB || wParam == VK_RETURN)
-            return 0;
+            return 0;// Block anything that is NOT a number, dot, plus, minus, or backspace
+
+        if (!(wParam >= '0' && wParam <= '9') && 
+            wParam != '.' && wParam != '+' && wParam != '-' && 
+            wParam != VK_BACK) {
+            return 0; 
+        }
     }
 
     // Resolved once per message. row == nullptr  → order-bar edit,
@@ -897,8 +903,9 @@ static LRESULT CALLBACK Market_EditSubclassProc(
 
     if (msg == WM_KEYDOWN && st) {
         // ── ESC: cancel every order for this symbol ──────────────────────────
-        if (wParam == VK_ESCAPE) {
-            api().cancelOrders(st->conId);
+        // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
+        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'x' || wParam == 'X') {
+            SendMessage(hMarket, WM_KEYDOWN, wParam, lParam);
             return 0;
         }
 
@@ -956,11 +963,6 @@ static LRESULT CALLBACK Market_EditSubclassProc(
             return 0;
         }
 
-        // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
-        if (wParam == VK_CONTROL) {
-            bool isRight = (lParam & (1 << 24)) != 0;
-            Market_HandleCtrlOrderBar(hMarket, st, isRight);
-        }
         // Other keys (Left/Right/Home/End/...) fall to the catch-all below.
     }
 
@@ -1888,13 +1890,24 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_ACTIVATE:
         if (state && LOWORD(wParam) != WA_INACTIVE && state->conId != 0) {
             api().updateDisplayGroup(state->conId);
+            PostMessage(hWnd, WM_ACTIVATE_ORDER_ROW, 0, 0);
         }
         break;
 
+    case WM_ACTIVATE_ORDER_ROW:
+        if (state && state->conId != 0) {
+            Market_Focus_OrderRow(state);
+        }
+        break;
+            
     case WM_KEYDOWN: {
         if (lockHotkeys || !state || state->minimized) break;
+        if (wParam == 'X' || wParam == 'x') {
+            //MessageBoxA(NULL, "X pressed", "Alert", MB_ICONERROR | MB_OK);
+            return 0;
+        }
         if (wParam == VK_TAB) {
-            Market_Focus_OrderRow(state);
+            PostMessage(hWnd, WM_ACTIVATE_ORDER_ROW, 0, 0);
             return 0;
         }
         if (wParam == VK_ESCAPE) {
