@@ -36,7 +36,7 @@ static const DiamondsColorDef diamondColorPalette[DIAMONDS_COLOR_COUNT] = {
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
 #define TIMER_DIAMONDS_VIEW      7010
-#define DIAMONDS_VIEW_TIMER_MS   10000
+#define DIAMONDS_VIEW_TIMER_MS   6000
 #define TIMER_DIAMONDS_SORT      7011
 #define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 7 seconds (or sooner if user clicks a column header)
 
@@ -1080,12 +1080,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             diamondsState.viewSelectionEnabled = !diamondsState.viewSelectionEnabled;
             if (diamondsState.viewSelectionEnabled) {
                 SetTimer(hWnd, TIMER_DIAMONDS_VIEW, DIAMONDS_VIEW_TIMER_MS, NULL);
-                SetWindowText(GetDlgItem(hWnd, id), "Stop");
+                SendMessage(hWnd, WM_TIMER, TIMER_DIAMONDS_VIEW, 0);
             }
             else {
                 KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
-                SetWindowText(GetDlgItem(hWnd, id), "View");
             }
+            SetWindowText(GetDlgItem(hWnd, id), diamondsState.viewSelectionEnabled ? "Stop" : "View");
         }
         break;
     }
@@ -1613,7 +1613,31 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_TIMER: {
         if (wParam == TIMER_DIAMONDS_VIEW) {
-            // call api().updateDisplayGroup(conId); on the next item of diamondsState.displayOrder
+            // Persist the last viewed ID across timer ticks
+            static int lastViewedConId = 0;
+            
+            if (!diamondsState.displayOrder.empty()) {
+                size_t nextIdx = 0;
+                
+                // Locate the last viewed item's current position to handle sorting/sizing changes gracefully
+                auto it = std::find(diamondsState.displayOrder.begin(), diamondsState.displayOrder.end(), lastViewedConId);
+                if (it != diamondsState.displayOrder.end()) {
+                    nextIdx = (std::distance(diamondsState.displayOrder.begin(), it) + 1) % diamondsState.displayOrder.size();
+                }
+
+                int conId = diamondsState.displayOrder[nextIdx];
+                lastViewedConId = conId;
+                
+                api().updateDisplayGroup(conId);
+
+                // Update the visual selection in the ListView to reflect the rotation
+                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+                if (hList) {
+                    ListView_SetItemState(hList, -1, 0, LVIS_SELECTED); // Clear previous selection
+                    ListView_SetItemState(hList, nextIdx, LVIS_SELECTED, LVIS_SELECTED); // Select new
+                    ListView_EnsureVisible(hList, nextIdx, FALSE); // Scroll into view if necessary
+                }
+            }
         }
         if (wParam == TIMER_DIAMONDS_SORT) {
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
@@ -1640,8 +1664,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 diamondsState.dirty = false;
             }
         }
-        break;  // was missing, without this, every timer tick fell through into WM_DESTROY,
-                // killing timers, clearing the cache, and calling removeApiUpdateWindow.
+        break;
     }
 
     case WM_DESTROY:
