@@ -527,6 +527,27 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
 
 static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
                                                  UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
+    if (darkMode) {
+        switch (msg) {
+            case WM_ERASEBKGND:
+                return 1;
+
+            case WM_SETFOCUS:
+            case WM_KILLFOCUS:
+            case WM_ENABLE:
+            case WM_SETTEXT:
+            case WM_UPDATEUISTATE:
+            case WM_THEMECHANGED: {
+                LONG_PTR style = GetWindowLongPtr(hCtrl, GWL_STYLE);
+                SetWindowLongPtr(hCtrl, GWL_STYLE, style & ~WS_VISIBLE);
+                LRESULT r = DefSubclassProc(hCtrl, msg, wParam, lParam);
+                SetWindowLongPtr(hCtrl, GWL_STYLE, style);
+                InvalidateRect(hCtrl, NULL, TRUE);
+                return r;
+            }
+        }
+    }
+
     if (msg == WM_PAINT && darkMode) {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hCtrl, &ps);

@@ -967,7 +967,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 1: Net Liq & PnL ──────────────────────────────────────────
             int y1 = 8;
             int box1H = 94;
-            dashboardState.hCoinBox1 = CreateWindowA("BUTTON", "Today:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            dashboardState.hCoinBox1 = CreateWindowA("BUTTON", "Today:", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | BS_GROUPBOX,
                 m, y1, boxW, box1H, hWnd, NULL, hInst, NULL);
             SetWindowSubclass(dashboardState.hCoinBox1, DarkGroupBoxSubclassProc, 1, 0);
             SendMessage(dashboardState.hCoinBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -1031,7 +1031,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 2: Positions & Margin ─────────────────────────────────────
             int y2 = y1 + box1H + 9; // y2 = 114
             int box2H = 124;
-            dashboardState.hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            dashboardState.hCoinBox2 = CreateWindowA("BUTTON", "Positions:", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | BS_GROUPBOX,
                 m, y2, boxW, box2H, hWnd, NULL, hInst, NULL);
             SetWindowSubclass(dashboardState.hCoinBox2, DarkGroupBoxSubclassProc, 2, 0);
             SendMessage(dashboardState.hCoinBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
@@ -1105,7 +1105,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             // ─── Box 3: Cash ───────────────────────────────────────────────────
             int y3 = y2 + box2H + 9; // y3 = 250
             int box3H = 64;
-            dashboardState.hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+            dashboardState.hCoinBox3 = CreateWindowA("BUTTON", "Cash:", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | BS_GROUPBOX,
                 m, y3, boxW, box3H, hWnd, NULL, hInst, NULL);
             SetWindowSubclass(dashboardState.hCoinBox3, DarkGroupBoxSubclassProc, 3, 0);
             SendMessage(dashboardState.hCoinBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
