@@ -160,7 +160,7 @@ static LRESULT CALLBACK Market_ListForwardCtrlProc(
     HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
     UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
 {
-    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE || wParam == VK_TAB || wParam == 'x' || wParam == 'X'))
+    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE || wParam == VK_TAB || wParam == 'x' || wParam == 'X' || wParam == 'e' || wParam == 'E'))
         SendMessage(GetParent(hList), WM_KEYDOWN, wParam, lParam);
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hList, Market_ListForwardCtrlProc, uIdSubclass);
@@ -909,7 +909,7 @@ static LRESULT CALLBACK Market_EditSubclassProc(
     if (msg == WM_KEYDOWN && st) {
         // ── ESC: cancel every order for this symbol ──────────────────────────
         // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
-        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'x' || wParam == 'X') {
+        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'x' || wParam == 'X' || wParam == 'e' || wParam == 'E') {
             SendMessage(hMarket, WM_KEYDOWN, wParam, lParam);
             return 0;
         }
@@ -1909,6 +1909,12 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (lockHotkeys || !state || state->minimized) break;
         if (wParam == 'X' || wParam == 'x') {
             //MessageBoxA(NULL, "X pressed", "Alert", MB_ICONERROR | MB_OK);
+            return 0;
+        }
+        if (wParam == 'E' || wParam == 'e') {
+            HWND hAlert = FindWindowA(ALERT_NOTIFY_CLASS_NAME, NULL);
+            if (hAlert && IsWindow(hAlert))
+                PostMessage(hAlert, WM_COMMAND, ID_ALERT_EDIT_BTN, 0);
             return 0;
         }
         if (wParam == VK_TAB) {
