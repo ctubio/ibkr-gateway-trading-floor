@@ -751,7 +751,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             std::string title = row.symbol + ": Alert UP!";
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
-                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, t.last, conId, true};
+                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, true};
                 PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
             }
         }
@@ -766,7 +766,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             std::string title = row.symbol + ": Alert DOWN!";
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
-                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, t.last, conId, false};
+                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, false};
                 PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
             }
         }

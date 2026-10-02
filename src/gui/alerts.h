@@ -13,7 +13,29 @@
 
 #define ID_ALERTS_UP_EDIT    5301
 #define ID_ALERTS_DOWN_EDIT  5302
-#define ID_ALERT_EDIT_BTN    5303
+
+#define ID_ALERT_EDIT_BTN   5301
+#define ID_ALERT_KEEP_BTN   5402
+#define ID_ALERT_DELETE_BTN 5403
+#define ID_ALERT_SYMBOL     5404
+
+#define IDT_SCREEN_FLASH_TIMER 5450
+
+static const BYTE FLASH_PEAK_ALPHA = 69;
+
+static HWND  hScreenFlashOverlay = NULL;
+static DWORD s_flashStartTime      = 0;
+static int   s_flashDurationMs     = 800;
+
+struct AlertPopupData {
+    std::string title;
+    std::string msg;
+    std::string symbol;
+    double shares;
+    double price;
+    int conId;
+    bool isUp;
+};
 
 struct AlertsEditState {
     std::string symbol;   // symbol currently loaded into the popup
@@ -199,13 +221,6 @@ void StartAlertEditor(const std::string& symbol, int conId, double price) {
     if (hWnd) AlertEditor_Populate(hWnd, symbol, conId, price);
 }
 
-#define IDT_SCREEN_FLASH_TIMER 5450
-static const BYTE FLASH_PEAK_ALPHA = 69;
-
-static HWND  hScreenFlashOverlay = NULL;
-static DWORD s_flashStartTime      = 0;
-static int   s_flashDurationMs     = 800;
-
 // SetTimer callback to adjust opacity and hide the pre-created fullscreen overlay window
 static VOID CALLBACK FlashTimerProc(HWND hwnd, UINT /*uMsg*/, UINT_PTR idEvent, DWORD dwTime) {
     if (idEvent != IDT_SCREEN_FLASH_TIMER) return;
@@ -329,19 +344,6 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
     SetTimer(hScreenFlashOverlay, IDT_SCREEN_FLASH_TIMER, 20, FlashTimerProc);
 }
 
-#define ID_ALERT_KEEP_BTN   5401
-#define ID_ALERT_DELETE_BTN 5402
-#define ID_ALERT_SYMBOL     5403
-
-struct AlertPopupData {
-    std::string title;
-    std::string msg;
-    std::string symbol;
-    double price;
-    int conId;
-    bool isUp;
-};
-
 LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
@@ -352,12 +354,17 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
             // Message text
             HWND hSymbol = CreateWindowA("STATIC", data->symbol.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                10, 20, 140, 40, hWnd, (HMENU)ID_ALERT_SYMBOL, cs->hInstance, NULL);
+                10, 20, 120, 40, hWnd, (HMENU)ID_ALERT_SYMBOL, cs->hInstance, NULL);
             SendMessage(hSymbol, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
+
+            HWND hShares = CreateWindowA("STATIC", std::format("{:.0f} @ ", data->shares).c_str(),
+                WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                130, 29, 40, 40, hWnd, NULL, cs->hInstance, NULL);
+            SendMessage(hShares, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
             
             HWND hMsg = CreateWindowA("STATIC", data->msg.c_str(),
-                WS_CHILD | WS_VISIBLE | SS_CENTER,
-                150, 20, 140, 40, hWnd, NULL, cs->hInstance, NULL);
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                170, 20, 120, 40, hWnd, NULL, cs->hInstance, NULL);
             SendMessage(hMsg, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
             
             // Buttons

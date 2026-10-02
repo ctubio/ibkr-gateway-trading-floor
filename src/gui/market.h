@@ -579,6 +579,10 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (SetWindowTextAIfChanged(state->hTotalLabel, notionalText))
         InvalidateRect(state->hOrderQty, NULL, TRUE);
 
+    std::string labelStr = std::format("{}{} = {:.0f}", state->isOvernight ? "O" : "", state->orderSide, state->position + (state->orderSide == "BUY" ? qty : qty * -1));
+    if (SetWindowTextAIfChanged(state->hOrderLabel, labelStr))
+        InvalidateRect(state->hOrderLabel, NULL, TRUE);
+
     if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
 
     // Loss @ stop distance, bottom-left of Price input
@@ -685,9 +689,6 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     state->orderSide = side;
     state->orderBarVisible = true;
     Market_TrimTimeSalesLists(state);
-    std::string labelStr = state->isOvernight ? std::format("OVN {}", side) : side;
-    SetWindowTextA(state->hOrderLabel, labelStr.c_str());
-    InvalidateRect(state->hOrderLabel, NULL, TRUE);
 
     // Pre-fill price from current last / bid / ask
     double suggestedPrice = 0.0;
@@ -698,6 +699,10 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
     int qty = qtyGateway * (side == "BUY" ? 1 : -1);
     SetWindowTextA(state->hOrderQty, std::format("{:+}", qty).c_str());
+    
+    std::string labelStr = std::format("{}{} = {:.0f}", state->isOvernight ? "O" : "", side, state->position + qty);
+    SetWindowTextA(state->hOrderLabel, labelStr.c_str());
+    InvalidateRect(state->hOrderLabel, NULL, TRUE);
 
     ShowWindow(state->hOrderLabel, SW_SHOW);
     ShowWindow(state->hTotalLabel, SW_SHOW);
