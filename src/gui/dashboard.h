@@ -40,7 +40,7 @@ static const QuickLink quickLinks[] = {
     { "List",   "https://stockanalysis.com/list/"              },
     { "Map",    "https://finviz.com/map.ashx?t=sec"            },
     { "Data",   "https://www.benzinga.com/quote"               },
-    { "Paper",  "http://192.168.1.105:2025/paper"              },
+    { "Month",  "http://192.168.1.105:2025/ibkr"               },
     { "Chat",   "http://192.168.1.105:2025/chat"               },
     { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
@@ -1301,7 +1301,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             HMENU hMenu = CreatePopupMenu();
             for (int i = 0; i < LINKS_COUNT; ++i) {
-                if (strcmp(quickLinks[i].label, "Paper") == 0 || strcmp(quickLinks[i].label, "GitHub") == 0)
+                if (strcmp(quickLinks[i].label, "Month") == 0 || strcmp(quickLinks[i].label, "GitHub") == 0)
                     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
                 AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
             }
