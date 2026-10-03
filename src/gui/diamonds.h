@@ -1106,8 +1106,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 diamondsState.viewSelectionEnabled = 0;
                 SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Top");
                 SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Any");
-                ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), SW_SHOW);
-                ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), SW_SHOW);
                 KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
             }
         }
