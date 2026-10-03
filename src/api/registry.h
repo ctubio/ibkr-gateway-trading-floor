@@ -74,9 +74,7 @@ void LogDebug(const std::string& msg) {
     // hDebugEdit.
     HWND hWnd = FindWindowA(DEBUGLOG_CLASS_NAME, NULL);
     if (hWnd && IsWindow(hWnd)) {
-        auto* pMsg = new std::string(fullMsg);
-        if (!PostMessageA(hWnd, WM_DEBUG_LOG_APPEND, 0, (LPARAM)pMsg))
-            delete pMsg;
+        PostMessageA(hWnd, WM_DEBUG_LOG_APPEND, 0, 0);
     }
 }
 
