@@ -3,12 +3,15 @@
 static const int windowDiamondsWidth = 1030;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
-#define ID_DIAMONDS_RESULTS_LIST 7001
-#define ID_VIEW_SELECTIONS_BTN   7002
-#define ID_DIAMONDS_CHK_0        7010   // "Growth"
-#define ID_DIAMONDS_CHK_1        7011   // "Dividends"
-#define ID_DIAMONDS_CHK_2        7012   // "Quarantine"
-#define DIAMONDS_CHK_STRIP_H     32     // height of the checkbox bar at the bottom
+#define ID_DIAMONDS_RESULTS_LIST    7001
+#define ID_VIEW_SELECTIONS_ANY_BTN  7002
+#define ID_VIEW_SELECTIONS_TOP_BTN  7003
+
+#define ID_DIAMONDS_CHK_0           7010   // "Growth"
+#define ID_DIAMONDS_CHK_1           7011   // "Dividends"
+#define ID_DIAMONDS_CHK_2           7012   // "Quarantine"
+
+#define DIAMONDS_CHK_STRIP_H        32     // height of the checkbox bar at the bottom
 
 // ── Filter / tab constants ────────────────────────────────────────────────────
 #define DTAB_ALL              0
@@ -148,7 +151,7 @@ struct DiamondsState {
     // Paint Limiter
     bool dirty = false;
     HIMAGELIST rowHeightImageList = NULL;
-    bool viewSelectionEnabled = false;
+    int viewSelectionEnabled = 0;
 };
 
 static DiamondsState diamondsState;
@@ -469,7 +472,8 @@ static void Diamonds_Layout(HWND hWnd) {
         SetWindowPos(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), NULL, x + (i * 20), y, chkW[i], 20, SWP_NOZORDER | SWP_NOACTIVATE);
         x += chkW[i];
     }
-    SetWindowPos(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_BTN), NULL, 5, y, 40, 22, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), NULL, 5, y, 40, 22, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), NULL, 5 + 40 + 5, y, 40, 22, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
@@ -478,7 +482,8 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
     int sw = show ? SW_SHOW : SW_HIDE;
     for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i)
         ShowWindow(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), sw);
-    ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_BTN), sw);
+    ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), sw);
+    ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), sw);
     Diamonds_Layout(hWnd);
 }
 
@@ -946,10 +951,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             ListView_InsertColumn(hList, i, &lvc);
         }
 
-        HWND hView = CreateWindowA("BUTTON", "View",
+        HWND hViewTop = CreateWindowA("BUTTON", "Top",
             WS_CHILD | BS_PUSHBUTTON | BS_OWNERDRAW,
-            0, 0, 40, 22, hWnd, (HMENU)ID_VIEW_SELECTIONS_BTN, hInst, NULL);
-        SendMessage(hView, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            0, 0, 40, 22, hWnd, (HMENU)ID_VIEW_SELECTIONS_TOP_BTN, hInst, NULL);
+        SendMessage(hViewTop, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+        HWND hViewAny = CreateWindowA("BUTTON", "Any",
+            WS_CHILD | BS_PUSHBUTTON | BS_OWNERDRAW,
+            0, 0, 40, 22, hWnd, (HMENU)ID_VIEW_SELECTIONS_ANY_BTN, hInst, NULL);
+        SendMessage(hViewAny, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
         // Create the three filter checkboxes (hidden until window is focused).
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
@@ -1053,8 +1063,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_KEYDOWN: {
-        if (wParam == 'V' || wParam == 'v') {
-            SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_BTN, 0);
+        if (wParam == 'A' || wParam == 'a') {
+            SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_ANY_BTN, 0);
+            return 0;
+        }
+        if (wParam == 'T' || wParam == 't') {
+            SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_TOP_BTN, 0);
             return 0;
         }
     }
@@ -1076,16 +1090,26 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             Diamonds_Repopulate(hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
         }
-        if (id == ID_VIEW_SELECTIONS_BTN) {
-            diamondsState.viewSelectionEnabled = !diamondsState.viewSelectionEnabled;
-            if (diamondsState.viewSelectionEnabled) {
+        if (id == ID_VIEW_SELECTIONS_ANY_BTN || id == ID_VIEW_SELECTIONS_TOP_BTN) {
+            if (diamondsState.viewSelectionEnabled != id) {
+                diamondsState.viewSelectionEnabled = id;
+                if (id == ID_VIEW_SELECTIONS_TOP_BTN) {
+                    SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Stop");
+                    SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Any");
+                } else if (id == ID_VIEW_SELECTIONS_ANY_BTN) {
+                    SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Stop");
+                    SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Top");
+                }
                 SetTimer(hWnd, TIMER_DIAMONDS_VIEW, DIAMONDS_VIEW_TIMER_MS, NULL);
                 SendMessage(hWnd, WM_TIMER, TIMER_DIAMONDS_VIEW, 0);
-            }
-            else {
+            } else {
+                diamondsState.viewSelectionEnabled = 0;
+                SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Top");
+                SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Any");
+                ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), SW_SHOW);
+                ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), SW_SHOW);
                 KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
             }
-            SetWindowText(GetDlgItem(hWnd, id), diamondsState.viewSelectionEnabled ? "Stop" : "View");
         }
         break;
     }
@@ -1618,24 +1642,28 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             
             if (!diamondsState.displayOrder.empty()) {
                 size_t nextIdx = 0;
-                
-                // Locate the last viewed item's current position to handle sorting/sizing changes gracefully
-                auto it = std::find(diamondsState.displayOrder.begin(), diamondsState.displayOrder.end(), lastViewedConId);
-                if (it != diamondsState.displayOrder.end()) {
-                    nextIdx = (std::distance(diamondsState.displayOrder.begin(), it) + 1) % diamondsState.displayOrder.size();
+                if (diamondsState.viewSelectionEnabled == ID_VIEW_SELECTIONS_ANY_BTN) {
+                    // Locate the last viewed item's current position to handle sorting/sizing changes gracefully
+                    auto it = std::find(diamondsState.displayOrder.begin(), diamondsState.displayOrder.end(), lastViewedConId);
+                    if (it != diamondsState.displayOrder.end()) {
+                        nextIdx = (std::distance(diamondsState.displayOrder.begin(), it) + 1) % diamondsState.displayOrder.size();
+                    }
                 }
 
                 int conId = diamondsState.displayOrder[nextIdx];
-                lastViewedConId = conId;
-                
-                api().updateDisplayGroup(conId);
 
-                // Update the visual selection in the ListView to reflect the rotation
-                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                if (hList) {
-                    ListView_SetItemState(hList, -1, 0, LVIS_SELECTED); // Clear previous selection
-                    ListView_SetItemState(hList, nextIdx, LVIS_SELECTED, LVIS_SELECTED); // Select new
-                    ListView_EnsureVisible(hList, nextIdx, FALSE); // Scroll into view if necessary
+                if (lastViewedConId != conId) {
+                    lastViewedConId = conId;
+                    
+                    api().updateDisplayGroup(conId);
+
+                    // Update the visual selection in the ListView to reflect the rotation
+                    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+                    if (hList) {
+                        ListView_SetItemState(hList, -1, 0, LVIS_SELECTED); // Clear previous selection
+                        ListView_SetItemState(hList, nextIdx, LVIS_SELECTED, LVIS_SELECTED); // Select new
+                        ListView_EnsureVisible(hList, nextIdx, FALSE); // Scroll into view if necessary
+                    }
                 }
             }
         }
