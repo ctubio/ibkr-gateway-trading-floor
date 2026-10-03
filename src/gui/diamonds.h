@@ -13,6 +13,17 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 
 #define DIAMONDS_CHK_STRIP_H        32     // height of the checkbox bar at the bottom
 
+
+// ── Deferred sort (prevents flicker on every tick) ────────────────────────────
+#define TIMER_DIAMONDS_VIEW      7110
+#define DIAMONDS_VIEW_TIMER_MS   6000
+
+#define TIMER_DIAMONDS_SORT      7111
+#define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 7 seconds (or sooner if user clicks a column header)
+
+#define TIMER_DIAMONDS_PAINT     7112
+#define DIAMONDS_PAINT_TIMER_MS  60     // ~16 FPS (Butter smooth, zero flicker)
+
 // ── Filter / tab constants ────────────────────────────────────────────────────
 #define DTAB_ALL              0
 #define DTAB_GROWTH           1
@@ -36,12 +47,6 @@ static const DiamondsColorDef diamondColorPalette[DIAMONDS_COLOR_COUNT] = {
     { RGB(163, 104,  14), "Set Color: Brown"  },
 };
 
-
-// ── Deferred sort (prevents flicker on every tick) ────────────────────────────
-#define TIMER_DIAMONDS_VIEW      7010
-#define DIAMONDS_VIEW_TIMER_MS   6000
-#define TIMER_DIAMONDS_SORT      7011
-#define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 7 seconds (or sooner if user clicks a column header)
 
 
 // ── Column indices (keep in sync with diamondCols[]) ─────────────────────────
@@ -181,9 +186,6 @@ static DiamondsWeeklyCloseCache Diamonds_GetWeeklyCloseCache(int conId) {
     }
     return cached;
 }
-
-#define TIMER_DIAMONDS_PAINT 7011
-#define DIAMONDS_PAINT_TIMER_MS  60     // ~16 FPS (Butter smooth, zero flicker)
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -1071,6 +1073,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_TOP_BTN, 0);
             return 0;
         }
+        break;
     }
 
     case WM_COMMAND: {
