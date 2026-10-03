@@ -156,17 +156,6 @@ static std::vector<HWND> Market_BuildTabOrder(TsState* state) {
     return order;
 }
 
-static LRESULT CALLBACK Market_ListForwardCtrlProc(
-    HWND hList, UINT msg, WPARAM wParam, LPARAM lParam,
-    UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
-{
-    if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_ESCAPE || wParam == VK_TAB || wParam == 'x' || wParam == 'X' || wParam == 'e' || wParam == 'E'))
-        SendMessage(GetParent(hList), WM_KEYDOWN, wParam, lParam);
-    if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hList, Market_ListForwardCtrlProc, uIdSubclass);
-    return DefSubclassProc(hList, msg, wParam, lParam);
-}
-
 static void UpdateMarketRegistry() {
     std::vector<std::string> sessions;
     for (const auto& pair : marketStates) {
@@ -1760,11 +1749,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hTsList      = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0001, hInst);
         state->hTsListF100  = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F0100, hInst);
         state->hTsListF1000 = TimeSales_CreateListView(hWnd, ID_MARKET_TIMESALES_LIST_F1000, hInst);
-        SetWindowSubclass(state->hTsList,      Market_ListForwardCtrlProc, 10, 0);
-        SetWindowSubclass(state->hTsListF100,  Market_ListForwardCtrlProc, 11, 0);
-        SetWindowSubclass(state->hTsListF1000, Market_ListForwardCtrlProc, 12, 0);
-        SetWindowSubclass(state->hL2List,      Market_ListForwardCtrlProc, 13, 0);
-        SetWindowSubclass(state->hExecList,    Market_ListForwardCtrlProc, 14, 0);
+        SetWindowSubclass(state->hTsList,      ListViewForwardKey_SubclassProc, 10, 0);
+        SetWindowSubclass(state->hTsListF100,  ListViewForwardKey_SubclassProc, 11, 0);
+        SetWindowSubclass(state->hTsListF1000, ListViewForwardKey_SubclassProc, 12, 0);
+        SetWindowSubclass(state->hL2List,      ListViewForwardKey_SubclassProc, 13, 0);
+        SetWindowSubclass(state->hExecList,    ListViewForwardKey_SubclassProc, 14, 0);
 
         SendMessage(state->hTsList,      WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);

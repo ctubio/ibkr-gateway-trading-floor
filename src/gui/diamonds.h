@@ -941,6 +941,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         SendMessage(hList, WM_SETFONT, (WPARAM)hFont16pt.get(), TRUE);
         SendMessage(ListView_GetHeader(hList), WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SetWindowSubclass(hList, ListViewNoFlickerProc, 0, 0);
+        SetWindowSubclass(hList, ListViewForwardKey_SubclassProc, 1, 0);
 
         ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 

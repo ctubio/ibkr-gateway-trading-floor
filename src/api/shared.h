@@ -505,6 +505,22 @@ LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPA
     return DefSubclassProc(hList, uMsg, wParam, lParam);
 }
 
+static LRESULT CALLBACK ListViewForwardKey_SubclassProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (uMsg == WM_KEYDOWN) {
+        HWND hParent = GetParent(hList);
+        // Forward to parent. If the parent handles the key (returns 0), we consume it here.
+        if (hParent && SendMessage(hParent, WM_KEYDOWN, wParam, lParam) == 0) {
+            return 0; 
+        }
+    }
+    
+    if (uMsg == WM_NCDESTROY) {
+        RemoveWindowSubclass(hList, ListViewForwardKey_SubclassProc, uIdSubclass);
+    }
+    
+    return DefSubclassProc(hList, uMsg, wParam, lParam);
+}
+
 std::unordered_map<std::string, HICON> offlineIcons;
 std::unordered_map<std::string, HICON> onlineIcons;
 
