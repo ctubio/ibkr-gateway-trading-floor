@@ -1652,16 +1652,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 if (lastViewedConId != conId) {
                     lastViewedConId = conId;
-                    
                     api().updateDisplayGroup(conId);
-
-                    // Update the visual selection in the ListView to reflect the rotation
-                    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                    if (hList) {
-                        ListView_SetItemState(hList, -1, 0, LVIS_SELECTED); // Clear previous selection
-                        ListView_SetItemState(hList, nextIdx, LVIS_SELECTED, LVIS_SELECTED); // Select new
-                        ListView_EnsureVisible(hList, nextIdx, FALSE); // Scroll into view if necessary
-                    }
                 }
             }
         }
