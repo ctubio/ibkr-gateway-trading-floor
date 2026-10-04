@@ -349,7 +349,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
     }
 
-    if (!hWndParent)
+    if (hWnd && !hWndParent)
        SetWindowTaskbarId(hWnd, taskbarId);
         
     return hWnd;

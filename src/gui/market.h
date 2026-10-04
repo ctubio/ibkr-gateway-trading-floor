@@ -1147,41 +1147,6 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     return 0;
 }
 
-// ── Formatting helpers ────────────────────────────────────────────────────────
-static std::string Market_Fmt(double v, int dec = 2) {
-    if (v == 0.0) return "--";
-    return FormatFixed(v, dec);
-}
-static std::string Market_FmtQty(double v) {
-    if (v == 0.0) return "--";
-    if (v == (long long)v) return FormatFixed(v, 0);
-    return FormatFixed(v, 2);
-}
-
-// ── Volume rate / print-frequency rate ────────────────────────────────────────
-// Compares a short "recent" window of trade prints against a longer "baseline"
-// window (the trailing history minus the recent slice) to catch a sudden
-// increase in either total share volume or trade frequency, the day-trading
-// "something is happening right now" signal. Both ratios are derived from the
-// same tick-by-tick history (state->volRate), never from RTVolume, since
-// the conflated L1 feed can fold several prints into one update and hides the
-// print-frequency signal entirely.
-struct VolRateResult {
-    double volRatio  = 0.0;   // recent shares/sec  ÷ baseline shares/sec
-    double vol5min   = 0.0;   // total shares traded in the trailing baseline window (5 min)
-                               // from volRate. Computed unconditionally (unlike volRatio
-                               // below): a partial sum during the first 5 min after a clear is
-                               // still a meaningful number, not a misleading ratio off a thin
-                               // denominator.
-};
-
-static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now) {
-    VolRateResult r;
-    r.vol5min  = state->volRate.total();
-    r.volRatio = state->volRate.ratio(now);
-    return r;
-}
-
 // ── L2 list refresh ───────────────────────────────────────────────────────────
 // Renders asks (red) on top, bids (blue) below in a single Price/Size list.
 // lParam: 1 = ask row, 2 = bid row  (used by NM_CUSTOMDRAW for colouring).
@@ -1897,7 +1862,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_KEYDOWN: {
         if (lockHotkeys || !state || state->minimized) break;
         if (wParam == 'X' || wParam == 'x') {
-            //MessageBoxA(NULL, "X pressed", "Alert", MB_ICONERROR | MB_OK);
+            Market_RequestDecision(hWnd, state);
             return 0;
         }
         if (wParam == 'E' || wParam == 'e') {

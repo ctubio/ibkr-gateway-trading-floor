@@ -991,9 +991,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND tab = GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i);
             SendMessage(tab, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
         }
-        Diamonds_UpdateDivColumnsVisibility(hWnd);
-
+        
         api().addApiUpdateWindow(hWnd);
+
+        Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Repopulate(hWnd);
 
         SetTimer(hWnd, TIMER_DIAMONDS_SORT, DIAMONDS_SORT_TIMER_MS, NULL);
