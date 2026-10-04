@@ -150,7 +150,7 @@ struct TsState {
 
     // ── Splitter state ────────────────────────────────────────────────────────
     float splitY     = 0.5f;   // right column: hTsListF100 (top) / hTsListF1000 (bottom)
-    float splitYExec = 0.6f;   // far-left column: hL2List (top) / hExecList (bottom)
+    float splitYExec = 0.5f;   // far-left column: hL2List (top) / hExecList (bottom)
     int dragMode = 0;          // 0 = none, 1 = right column splitter, 2 = L2/Exec splitter
 
     // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─

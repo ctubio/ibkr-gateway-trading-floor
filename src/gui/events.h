@@ -86,7 +86,7 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             HWND hList = CreateWindowExA(
                 WS_EX_CLIENTEDGE, "SysListView32", "",
-                WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_OWNERDATA,
+                WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOCOLUMNHEADER | LVS_OWNERDATA,
                 0, 0, 760, 420,
                 hWnd, (HMENU)ID_EVENTS_LIST, hInst, NULL);
 

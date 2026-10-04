@@ -1,7 +1,7 @@
 #pragma once
 
 static const int windowMarketWidth  = 545;
-static const int windowMarketHeight = 545;
+static const int windowMarketHeight = 540;
 
 static const size_t MAX_MARKET_WINDOWS = 3;
 
@@ -194,7 +194,7 @@ static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOCOLUMNHEADER | LVS_NOSCROLL,
         0, 0, L2_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_L2_LIST, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
@@ -226,7 +226,7 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
 static HWND Market_CreateExecList(HWND hParent, HINSTANCE hInst) {
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOCOLUMNHEADER,
         0, 0, EXEC_W, 100, hParent, (HMENU)(intptr_t)ID_MARKET_EXEC_LIST, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
@@ -255,7 +255,7 @@ static HWND TimeSales_CreateListView(HWND hParent, int id, HINSTANCE hInst) {
 
     HWND hList = CreateWindowExA(
         WS_EX_CLIENTEDGE, "SysListView32", "",
-        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOSCROLL,
+        WS_CHILD | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_NOCOLUMNHEADER | LVS_NOSCROLL,
         0, 0, leftW, bodyH, hParent, (HMENU)(intptr_t)id, hInst, NULL);
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNA lvc = {};
@@ -292,8 +292,10 @@ static void TimeSales_InsertTick(HWND hList, const std::string& time, COLORREF c
 static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
-    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 21 : 19) : 24;
-    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
+    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 22 : 20) : 25;
+    int limitShort = state->orderBarVisible ? (state->isOvernight ? 10 :  9) : 12;
+    //int limitLong  = state->orderBarVisible ? (state->isOvernight ? 21 : 19) : 24;
+    //int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
@@ -898,7 +900,7 @@ static LRESULT CALLBACK Market_EditSubclassProc(
     if (msg == WM_KEYDOWN && st) {
         // ── ESC: cancel every order for this symbol ──────────────────────────
         // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
-        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'x' || wParam == 'X' || wParam == 'e' || wParam == 'E') {
+        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'x' || wParam == 'X' || wParam == 'e' || wParam == 'E' || wParam == 'a' || wParam == 'A') {
             SendMessage(hMarket, WM_KEYDOWN, wParam, lParam);
             return 0;
         }
@@ -1869,6 +1871,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             HWND hAlert = FindWindowA(ALERT_NOTIFY_CLASS_NAME, NULL);
             if (hAlert && IsWindow(hAlert))
                 PostMessage(hAlert, WM_COMMAND, ID_ALERT_EDIT_BTN, 0);
+            return 0;
+        }
+        if (wParam == 'A' || wParam == 'a') {
+            StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
             return 0;
         }
         if (wParam == VK_TAB) {
