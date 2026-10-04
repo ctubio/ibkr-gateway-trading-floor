@@ -42,6 +42,7 @@ static const QuickLink quickLinks[] = {
     { "Data",   "https://www.benzinga.com/quote"               },
     { "Month",  "http://192.168.1.105:2025/ibkr"               },
     { "Chat",   "http://192.168.1.105:2025/chat"               },
+    { "Portal", "https://www.interactivebrokers.ie/portal/"    },
     { "GitHub", "https://github.com/ctubio/ibkr-gateway-trading-floor" },
 };
 static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]));
@@ -1301,7 +1302,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
             HMENU hMenu = CreatePopupMenu();
             for (int i = 0; i < LINKS_COUNT; ++i) {
-                if (strcmp(quickLinks[i].label, "Month") == 0 || strcmp(quickLinks[i].label, "GitHub") == 0)
+                if (strcmp(quickLinks[i].label, "Month") == 0 || strcmp(quickLinks[i].label, "Portal") == 0)
                     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
                 AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
             }
