@@ -1606,12 +1606,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         SetRectEmpty(&state->lastPriceRect);
     }
 
-    // ── Bottom separator ──────────────────────────────────────────────────────
+    /* ── Bottom separator ──────────────────────────────────────────────────────
     SelectObject(hdc, hFont11ptbold.get());
     HPEN hOldPen = (HPEN)SelectObject(hdc, darkMode ? hBorderPen : hBorderPenLight);
     MoveToEx(hdc, 0, HEADER_H - 1, NULL);
     LineTo(hdc, rc.right, HEADER_H - 1);
-    SelectObject(hdc, hOldPen);
+    SelectObject(hdc, hOldPen);*/
 
     // Blit the composed header to the window in a single operation
     BitBlt(hdcOrig, 0, 0, rc.right, HEADER_H, hdc, 0, 0, SRCCOPY);

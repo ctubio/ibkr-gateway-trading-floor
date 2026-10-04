@@ -244,6 +244,7 @@ void InitDarkBrushes() {
     hGrayBrush      = CreateSolidBrush(RGB(45, 45, 45));
     hLightBrushBg   = GetSysColorBrush(COLOR_WINDOW);
     hLightBrushBg2  = CreateSolidBrush(RGB(245,245,245));
+    hBorderBrush    = CreateSolidBrush(DM_BORDER);
     
     hBorderPenLight = CreatePen(PS_SOLID, 1, RGB(200,200,200));
     hBorderPen      = CreatePen(PS_SOLID, 1, DM_BORDER);

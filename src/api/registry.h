@@ -38,6 +38,7 @@ static HBRUSH hBrushRed = NULL;       // bright red background for SELL-side pri
 static HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and other UI elements
 static HBRUSH hLightBrushBg = NULL;
 static HBRUSH hLightBrushBg2 = NULL;
+static HBRUSH hBorderBrush = NULL;
 
 static HPEN hBorderPenLight = NULL;
 static HPEN hBorderPen = NULL;
@@ -590,26 +591,31 @@ LRESULT CALLBACK ListViewSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM
 
         if (!darkMode) return res;
 
-        // Now overdraw just the border with our dark colour.
-        // GetWindowDC covers the full window rect including NC area.
         HDC hdc = GetWindowDC(hWnd);
         if (hdc) {
             RECT rcWin;
             GetWindowRect(hWnd, &rcWin);
-            // Convert to window-relative coordinates (top-left = 0,0)
-            OffsetRect(&rcWin, -rcWin.left, -rcWin.top);
 
-            // WS_EX_CLIENTEDGE draws a 2-pixel sunken border; overdraw it.
-            HPEN hOld  = (HPEN)SelectObject(hdc, hBorderPen);
-            HBRUSH hBr = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+            // Border thickness = distance from the window's top-left to the client origin.
+            // Scrollbars only live on the right/bottom, so left/top offsets are pure border.
+            POINT ptClient = { 0, 0 };
+            ClientToScreen(hWnd, &ptClient);
+            int bx = ptClient.x - rcWin.left;
+            int by = ptClient.y - rcWin.top;
 
-            // Outer edge
-            Rectangle(hdc, rcWin.left, rcWin.top, rcWin.right, rcWin.bottom);
-            // Inner edge (WS_EX_CLIENTEDGE is 2px wide)
-            Rectangle(hdc, rcWin.left + 1, rcWin.top + 1, rcWin.right - 1, rcWin.bottom - 1);
+            int w = rcWin.right - rcWin.left;
+            int h = rcWin.bottom - rcWin.top;
 
-            SelectObject(hdc, hOld);
-            SelectObject(hdc, hBr);
+            if (bx > 0 || by > 0) {
+                RECT top    = { 0,      0,      w,      by     };
+                RECT bottom = { 0,      h - by, w,      h      };
+                RECT left   = { 0,      by,     bx,     h - by };
+                RECT right  = { w - bx, by,     w,      h - by };
+                FillRect(hdc, &top,    hBorderBrush); // hDarkBrush2
+                FillRect(hdc, &bottom, hBorderBrush);
+                FillRect(hdc, &left,   hBorderBrush);
+                FillRect(hdc, &right,  hBorderBrush);
+            }
             ReleaseDC(hWnd, hdc);
         }
         return res;
