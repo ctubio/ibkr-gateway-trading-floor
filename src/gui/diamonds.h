@@ -1067,11 +1067,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_KEYDOWN: {
-        if (wParam == 'A' || wParam == 'a') {
+        if (wParam == 'A') {
             SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_ANY_BTN, 0);
             return 0;
         }
-        if (wParam == 'T' || wParam == 't') {
+        if (wParam == 'T') {
             SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_TOP_BTN, 0);
             return 0;
         }

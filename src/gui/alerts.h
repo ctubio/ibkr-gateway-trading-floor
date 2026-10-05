@@ -213,6 +213,7 @@ LRESULT CALLBACK WndProcAlertsEditor(HWND hWnd, UINT message, WPARAM wParam, LPA
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
+
 // Opens (or refocuses) the Alerts editor popup for `symbol` and `conId`. Single-instance:
 // if already open (e.g. for a different symbol), it's repointed at `symbol`
 // instead of a second window being created.
@@ -427,15 +428,15 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
         }
 
         case WM_KEYDOWN: {
-            if (wParam == 'K' || wParam == 'k') {
+            if (wParam == 'K') {
                 SendMessage(hWnd, WM_COMMAND, ID_ALERT_KEEP_BTN, 0);
                 return 0;
             }
-            if (wParam == 'E' || wParam == 'e') {
+            if (wParam == 'E') {
                 SendMessage(hWnd, WM_COMMAND, ID_ALERT_EDIT_BTN, 0);
                 return 0;
             }
-            if (wParam == 'D' || wParam == 'd') {
+            if (wParam == 'D') {
                 SendMessage(hWnd, WM_COMMAND, ID_ALERT_DELETE_BTN, 0);
                 return 0;
             }
@@ -450,4 +451,3 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
-

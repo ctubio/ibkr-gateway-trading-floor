@@ -900,7 +900,7 @@ static LRESULT CALLBACK Market_EditSubclassProc(
     if (msg == WM_KEYDOWN && st) {
         // ── ESC: cancel every order for this symbol ──────────────────────────
         // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
-        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'x' || wParam == 'X' || wParam == 'e' || wParam == 'E' || wParam == 'a' || wParam == 'A') {
+        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'X' || wParam == 'E' || wParam == 'A') {
             SendMessage(hMarket, WM_KEYDOWN, wParam, lParam);
             return 0;
         }
@@ -1812,10 +1812,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
         SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
-        // Restore splitters + filter
+        // Restore filter
         if (!state->symbol.empty()) {
-            Settings_LoadMarketSplitter(state->symbol, state->splitY);
-            Settings_LoadMarketSplitterExec(state->symbol, state->splitYExec);
             std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
             if (Settings_Overnight_Load(windowKey.c_str(), 0)) {
                 state->isOvernight = false;
@@ -1863,17 +1861,17 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             
     case WM_KEYDOWN: {
         if (lockHotkeys || !state || state->minimized) break;
-        if (wParam == 'X' || wParam == 'x') {
+        if (wParam == 'X') {
             Market_RequestDecision(hWnd, state);
             return 0;
         }
-        if (wParam == 'E' || wParam == 'e') {
+        if (wParam == 'E') {
             HWND hAlert = FindWindowA(ALERT_NOTIFY_CLASS_NAME, NULL);
             if (hAlert && IsWindow(hAlert))
                 PostMessage(hAlert, WM_COMMAND, ID_ALERT_EDIT_BTN, 0);
             return 0;
         }
-        if (wParam == 'A' || wParam == 'a') {
+        if (wParam == 'A') {
             StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
             return 0;
         }
@@ -2298,13 +2296,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_LBUTTONUP: {
         if (state && state->dragMode != 0) {
-            int mode = state->dragMode;
             state->dragMode = 0;
             ReleaseCapture();
-            if (!state->symbol.empty()) {
-                if (mode == 1)      Settings_SaveMarketSplitter(state->symbol, state->splitY);
-                else if (mode == 2) Settings_SaveMarketSplitterExec(state->symbol, state->splitYExec);
-            }
         }
         break;
     }
