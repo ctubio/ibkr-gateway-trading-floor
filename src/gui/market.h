@@ -178,8 +178,8 @@ static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 // ── L2 column definitions (2-column: Price | Size, asks top / bids bottom) ────
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
+    { "Size",  54, LVCFMT_RIGHT  },
     { "Price", 64, LVCFMT_CENTER },
-    { "Size",  54, LVCFMT_CENTER },
 };
 static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 
@@ -1165,8 +1165,8 @@ static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* updat
     } else {
         std::string price = Market_Fmt(update->entry.price);
         std::string size = Market_FmtQty(update->entry.size);
-        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)price.c_str());
-        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)size.c_str());
+        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)size.c_str());
+        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
     }
     ListView_RedrawItems(state->hL2List, row, row);
 }
