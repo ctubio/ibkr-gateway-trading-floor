@@ -1464,7 +1464,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             if (!lockHotkeys && wParam == TRUE) {
                 ToggleTWS(SW_SHOW); 
             }
-            return 0;
+            break;
 
         case WM_CTLCOLORSTATIC: {
             HWND hCtrl = (HWND)lParam;

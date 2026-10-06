@@ -25,6 +25,7 @@
 #include <chrono>
 #include <ctime>
 #include <cstddef>
+#include <cctype>
 #include <cmath>
 #include <random>
 #include <regex>
@@ -382,12 +383,12 @@ public:
     void updateDisplayGroup(int conId, const std::string& exchange = "SMART");
 
     // ── Historical Data (on-demand) ──────────────────────────────────────────
-        // Fetches ~1 year of daily bars for `symbol` (must be a current portfolio
-        // position, conId is looked up from getPortfolioMap()). Blocks the
+        // Fetches historical bars for `symbol` (resolved from the current
+        // portfolio first, then via contract details). Blocks the
         // calling thread (safe from an HTTP handler thread, NOT the UI thread)
         // until the async TWS response completes or timeoutMs elapses. Returns
-        // formatted rows "Date,Open,High,Low,Close,Wap,Volume,TradesCount", one
-        // per daily bar; empty on failure/timeout/symbol-not-a-position.
+        // formatted rows "Date,Open,High,Low,Close,Wap,Volume,TradesCount";
+        // empty on failure, timeout, or unknown symbol.
     std::vector<std::string> getHistoricalDataSync(const std::string& symbol, const std::string& timeframe, int timeoutMs = 15000);
 
 private:

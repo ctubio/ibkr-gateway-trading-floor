@@ -154,15 +154,15 @@ static std::string MakeMethodNotAllowed() {
 
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
 
-// GET /chart/year/{SYMBOL}  →  plain-text CSV of ~1 year of daily bars for a
-// current portfolio position. Blocks this connection's server thread (never
-// the UI thread) until the async TWS response arrives or times out.
+// GET /chart/year/{SYMBOL}  →  plain-text CSV of historical bars. Blocks this
+// connection's server thread (never the UI thread) until the async TWS response
+// arrives or times out.
 static std::string HandleGetHistory(const std::string& symbol, const std::string& timeframe) {
     auto rows = api().getHistoricalDataSync(symbol, timeframe);
     if (rows.empty()) {
         return MakeNotFound(
-            "{\"error\":\"no historical data available (symbol must be a current "
-            "portfolio position, or the request may have timed out)\"}");
+            "{\"error\":\"no historical data available (unknown symbol, or the "
+            "request may have timed out)\"}");
     }
     std::string body = "Date,Open,High,Low,Close,Wap,Volume,TradesCount\n";
     for (const auto& row : rows) { body += row; body += "\n"; }
