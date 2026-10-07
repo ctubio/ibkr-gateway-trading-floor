@@ -1,7 +1,7 @@
 #pragma once
 
 static const int windowMarketWidth  = 540;
-static const int windowMarketHeight = 540;
+static const int windowMarketHeight = 505;
 
 static const size_t MAX_MARKET_WINDOWS = 3;
 
@@ -292,10 +292,8 @@ static void TimeSales_InsertTick(HWND hList, const std::string& time, COLORREF c
 static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
-    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 22 : 20) : 25;
-    int limitShort = state->orderBarVisible ? (state->isOvernight ? 10 :  9) : 12;
-    //int limitLong  = state->orderBarVisible ? (state->isOvernight ? 21 : 19) : 24;
-    //int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
+    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 20 : 18) : 23;
+    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
