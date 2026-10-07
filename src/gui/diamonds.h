@@ -16,7 +16,7 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 
 // ── Deferred sort (prevents flicker on every tick) ────────────────────────────
 #define TIMER_DIAMONDS_VIEW      7110
-#define DIAMONDS_VIEW_TIMER_MS   6000
+#define DIAMONDS_VIEW_TIMER_MS   5000
 
 #define TIMER_DIAMONDS_SORT      7111
 #define DIAMONDS_SORT_TIMER_MS   7000   // re-sort at most every 7 seconds (or sooner if user clicks a column header)
