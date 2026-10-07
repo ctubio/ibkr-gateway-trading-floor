@@ -40,6 +40,7 @@ static const QuickLink quickLinks[] = {
     { "List",   "https://stockanalysis.com/list/"              },
     { "Map",    "https://finviz.com/map.ashx?t=sec"            },
     { "Data",   "https://www.benzinga.com/quote"               },
+    { "Notes",  "https://x.com/tradertvshawn"                  },
     { "Month",  "http://192.168.1.105:2025/ibkr"               },
     { "Chat",   "http://192.168.1.105:2025/chat"               },
     { "Portal", "https://www.interactivebrokers.ie/portal/"    },
