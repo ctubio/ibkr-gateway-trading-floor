@@ -1336,11 +1336,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     std::string sellLabel = sym + (
                         (quickLastPrice > 0.0)
-                            ? std::format(" SELL 1 @ {:.2f}", quickLastPrice * 2.0)
-                            : " SELL 1 @ 2x Price"
+                            ? std::format(" SELL 1 @ {:.2f}", quickLastPrice)
+                            : " SELL 1"
                     );
-                    AppendMenuA(hMenu, MF_STRING | (quickLastPrice <= 0.0 ? MF_GRAYED : 0), 301, sellLabel.c_str());
-                    AppendMenuA(hMenu, MF_STRING | (conId > 0 ? 0 : MF_GRAYED), 300, (sym + " BUY 1 @ 1").c_str());
+                    std::string buyLabel = sym + (
+                        (quickLastPrice > 0.0)
+                            ? std::format(" BUY 1 @ {:.2f}", quickLastPrice)
+                            : " BUY 1"
+                    );
+                    AppendMenuA(hMenu, MF_STRING | ((conId == 0 || quickLastPrice <= 0.0) ? MF_GRAYED : 0), 301, sellLabel.c_str());
+                    AppendMenuA(hMenu, MF_STRING | ((conId == 0 || quickLastPrice <= 0.0) ? MF_GRAYED : 0), 300, buyLabel.c_str());
 
                     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
                     AppendMenuA(hMenu, MF_STRING, 302, "Edit Alerts");

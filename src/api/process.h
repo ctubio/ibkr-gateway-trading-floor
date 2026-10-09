@@ -255,13 +255,15 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
             Sleep(100);
-            SendString(username);
-            Sleep(50);
-            SendKey(VK_TAB);
-            Sleep(50);
-            SendString(password);
-            Sleep(50);
-            SendKey(VK_RETURN);
+            if (GetForegroundWindow() == hwnd) {
+                SendString(username);
+                Sleep(50);
+                SendKey(VK_TAB);
+                Sleep(50);
+                SendString(password);
+                Sleep(50);
+                SendKey(VK_RETURN);
+            }
             break;
         }
     }

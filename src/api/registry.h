@@ -338,8 +338,8 @@ void Settings_Save(const char* key, DWORD value) {
 }
 
 // ─── Decimal helpers (stored as DWORD scaled by 10000, i.e. 4 decimal places) ────
-void Settings_SaveFloat(const char* key, float value) {
-    DWORD scaled = (DWORD)(value * 10000.0f);
+void Settings_SaveFloat(const char* key, double value) {
+    DWORD scaled = (DWORD)std::lround(value * 10000.0);
     RegSetDword(SETTINGS_CLASS_NAME, key, scaled);
 }
 
