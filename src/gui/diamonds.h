@@ -273,7 +273,7 @@ static void Diamonds_UpdateEventTitle(HWND hWnd) {
     InvalidateRect(hWnd, &rc, FALSE);
 }
 
-static void Diamonds_AddTitleEvent(const std::string& symbol, COLORREF color, const std::string& price) {
+static void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORREF color, const std::string& price) {
     diamondsState.diamondsTitleEvents.push_front({ symbol + " " + price, color });
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
 

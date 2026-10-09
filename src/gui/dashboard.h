@@ -1320,7 +1320,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     std::string price = FormatFixed(data->price, 2);
                     COLORREF color = data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK;
                     Events_AddEvent(price, color, true, data->conId, data->symbol);
-                    Diamonds_AddTitleEvent(data->symbol, color, price);
+                    Diamonds_AddTitleEvent(data->symbol, data->conId, color, price);
                     PlaySound_Async(209);
                 }
             }
@@ -1331,7 +1331,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
             if (data) {
                 Events_AddEvent(data->text, data->color, data->bold, data->conId, data->symbol);
-                Diamonds_AddTitleEvent(data->symbol, data->color, data->text);
+                Diamonds_AddTitleEvent(data->symbol, data->conId, data->color, data->text);
                 if (data->color != COINS_CLR_BLUE) PlaySound_Async(210, false);
                 delete data;
             }
