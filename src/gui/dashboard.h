@@ -668,6 +668,17 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (valueLabelMoves) EndDeferWindowPos(valueLabelMoves);
 }
 
+static LRESULT CALLBACK DashboardButton_CursorSubclassProc(HWND hButton, UINT msg, WPARAM wParam, LPARAM lParam,
+                                                            UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
+    if (msg == WM_SETCURSOR && LOWORD(lParam) == HTCLIENT) {
+        SetCursor(LoadCursor(NULL, IDC_HAND));
+        return TRUE;
+    }
+    if (msg == WM_NCDESTROY)
+        RemoveWindowSubclass(hButton, DashboardButton_CursorSubclassProc, uIdSubclass);
+    return DefSubclassProc(hButton, msg, wParam, lParam);
+}
+
 void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HMENU menuId, int iconId) {
 		// Create the button
         HWND hBtn = CreateWindow(
@@ -676,6 +687,7 @@ void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HME
             x, y, 26, 26,
             hWnd, menuId, hInst, NULL
         );
+        SetWindowSubclass(hBtn, DashboardButton_CursorSubclassProc, 1, 0);
         // Store the icon via SetProp so WM_DRAWITEM can retrieve it with GetProp.
         // (BM_GETIMAGE is unreliable without BS_ICON in the style.)
         HICON hIcon = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 24, 24, LR_DEFAULTCOLOR);
