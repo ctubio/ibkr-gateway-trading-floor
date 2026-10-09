@@ -33,6 +33,8 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 
 static const char* diamondTabNames[DIAMONDS_TAB_COUNT] = { "Growth", "Dividends", "Quarantine" };
 
+static const size_t DIAMONDS_TITLE_EVENTS_MAX = 21;
+
 // ── Symbol color palette ──────────────────────────────────────────────────────
 // Index 0-5 = named colors.  No entry in the map (or index -1) = inherit theme.
 #define DIAMONDS_COLOR_COUNT  6
@@ -158,9 +160,37 @@ struct DiamondsState {
     bool dirty = false;
     HIMAGELIST rowHeightImageList = NULL;
     int viewSelectionEnabled = 0;
+    std::deque<std::string> diamondsTitleEvents;
 };
 
 static DiamondsState diamondsState;
+
+
+static void Diamonds_UpdateEventTitle(HWND hWnd) {
+    std::string title = "";
+    for (const auto& event : diamondsState.diamondsTitleEvents)
+        title += " " + event;
+    if (title.empty()) title = "Today, is a beautiful day.";
+    SetWindowTextA(hWnd, title.c_str());
+}
+
+static void Diamonds_AddTitleEvent(const std::string& symbol, COLORREF color, const std::string& price) {
+    char direction;
+    if (color == COINS_CLR_GREEN || color == COINS_CLR_GREEN_DARK || color == COINS_CLR_GREEN_DARK2) {
+        direction = '+';
+    } else if (color == COINS_CLR_RED || color == COINS_CLR_RED_DARK || color == COINS_CLR_RED_DARK2) {
+        direction = '-';
+    } else {
+        direction = ' ';
+    }
+
+    diamondsState.diamondsTitleEvents.push_front(symbol + direction + price);
+    while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
+
+    HWND hWnd = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
+    if (hWnd && IsWindow(hWnd))
+        Diamonds_UpdateEventTitle(hWnd);
+}
 
 static void Diamonds_RefreshAlertCache() {
     diamondsState.alertCache.clear();
@@ -931,15 +961,6 @@ static void Diamonds_Repopulate(HWND hWnd) {
     Diamonds_ApplySort(hList);
 
     Diamonds_UpdateAnyButton(hWnd);
-
-    std::string title = "Diamonds: " + std::to_string(rows.size());
-    int activeTabs = 0;
-    for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
-        if (SendMessage(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), BM_GETCHECK, 0, 0) == BST_CHECKED)
-            title += std::string(activeTabs++ == 0 ? " " : " + ") + diamondTabNames[i];
-    }
-    title += " Positions";
-    SetWindowTextA(hWnd, title.c_str());
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -1023,6 +1044,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Repopulate(hWnd);
+        Diamonds_UpdateEventTitle(hWnd);
 
         SetTimer(hWnd, TIMER_DIAMONDS_SORT, DIAMONDS_SORT_TIMER_MS, NULL);
         break;

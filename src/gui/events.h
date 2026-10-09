@@ -6,10 +6,6 @@ void StartEvents() { StartGenericWindow(EVENTS_CLASS_NAME, "Events", L"TWSAPICli
 
 #define ID_EVENTS_LIST          8001
 
-#define TIMER_MARKET_CLOCK      8500
-
-static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-
 // Column indices, matching eventCols[] below.
 enum EventColIdx { ECOL_TIME = 0, ECOL_SYMBOL, ECOL_PRICE };
 
@@ -53,7 +49,7 @@ static void Events_Repopulate(HWND hWnd) {
     InvalidateRect(hList, NULL, FALSE);
 }
 
-static void Events_AddEvent(const std::string& text, COLORREF color, bool bold, int conId, const std::string& symbol, bool sound = false) {
+static void Events_AddEvent(const std::string& text, COLORREF color, bool bold, int conId, const std::string& symbol) {
     time_t now = time(0);
     struct tm ltm = {};
     localtime_s(&ltm, &now);
@@ -65,17 +61,10 @@ static void Events_AddEvent(const std::string& text, COLORREF color, bool bold, 
     
     HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
     if (hWnd && IsWindow(hWnd)) {
-        if (sound) PlaySound_Async(210, false);
         Events_Repopulate(hWnd);
     }
 }
 
-static void Event_SetTitle(const std::string& title) {
-    HWND hWnd = FindWindowA(EVENTS_CLASS_NAME, NULL);
-    if (hWnd && IsWindow(hWnd)) {
-       SetWindowTextA(hWnd, title.c_str());
-    }
-}
 // ── Window procedure ──────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -113,11 +102,7 @@ LRESULT CALLBACK WndProcEvents(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
             api().addApiUpdateWindow(hWnd);
             Events_Repopulate(hWnd);
-            
-            HWND hWndDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-            if (hWndDashboard && IsWindow(hWndDashboard)) {
-                SendMessage(hWndDashboard, WM_TIMER, TIMER_MARKET_CLOCK, 0);
-            }
+
             break;
         }
 
