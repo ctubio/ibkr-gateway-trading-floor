@@ -10,6 +10,7 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 #define ID_DIAMONDS_CHK_0           7010   // "Growth"
 #define ID_DIAMONDS_CHK_1           7011   // "Dividends"
 #define ID_DIAMONDS_CHK_2           7012   // "Quarantine"
+#define ID_DIAMONDS_ROW_TIMECLOCK   7013
 
 #define DIAMONDS_CHK_STRIP_H        32     // height of the checkbox bar at the bottom
 
@@ -452,6 +453,13 @@ static void Diamonds_CleanupStaleDividends() {
         RegDelete("Dividends", name.c_str());
 }
 
+static void Disamonds_SetTime(const std::string& time_str) {
+    HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
+    if (hDiamonds && IsWindow(hDiamonds)) {
+        SetWindowTextA(GetDlgItem(hDiamonds, ID_DIAMONDS_ROW_TIMECLOCK), time_str.c_str());
+    }
+}
+
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 static void Diamonds_Layout(HWND hWnd) {
@@ -476,6 +484,17 @@ static void Diamonds_Layout(HWND hWnd) {
     }
     SetWindowPos(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), NULL, 5, y, 40, 22, SWP_NOZORDER | SWP_NOACTIVATE);
     SetWindowPos(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), NULL, 5 + 40 + 5, y, 40, 22, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(GetDlgItem(hWnd, ID_DIAMONDS_ROW_TIMECLOCK), NULL, rc.right - 155, y, 150, 20, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+static void Diamonds_UpdateAnyButton(HWND hWnd) {
+    HWND hAny = GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN);
+    if (diamondsState.viewSelectionEnabled == ID_VIEW_SELECTIONS_ANY_BTN) {
+        SetWindowTextA(hAny, "Stop");
+    } else {
+        std::string rowCount = std::to_string(diamondsState.displayOrder.size());
+        SetWindowTextA(hAny, rowCount.c_str());
+    }
 }
 
 static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
@@ -486,6 +505,7 @@ static void Diamonds_ShowCheckboxes(HWND hWnd, bool show) {
         ShowWindow(GetDlgItem(hWnd, ID_DIAMONDS_CHK_0 + i), sw);
     ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), sw);
     ShowWindow(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), sw);
+    ShowWindow(GetDlgItem(hWnd, ID_DIAMONDS_ROW_TIMECLOCK), sw);
     Diamonds_Layout(hWnd);
 }
 
@@ -910,6 +930,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
     InvalidateRect(hList, NULL, FALSE);
     Diamonds_ApplySort(hList);
 
+    Diamonds_UpdateAnyButton(hWnd);
+
     std::string title = "Diamonds: " + std::to_string(rows.size());
     int activeTabs = 0;
     for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
@@ -963,6 +985,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             WS_CHILD | BS_PUSHBUTTON | BS_OWNERDRAW,
             0, 0, 40, 22, hWnd, (HMENU)ID_VIEW_SELECTIONS_ANY_BTN, hInst, NULL);
         SendMessage(hViewAny, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+
+        HWND hTimeClock = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
+            WS_CHILD | SS_RIGHT | SS_NOPREFIX,
+            0, 0, 150, 20, hWnd, (HMENU)ID_DIAMONDS_ROW_TIMECLOCK, hInst, NULL);
+        SendMessage(hTimeClock, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
 
         // Create the three filter checkboxes (hidden until window is focused).
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
@@ -1063,6 +1090,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
             return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
         }
+        if (id == ID_DIAMONDS_ROW_TIMECLOCK) {
+            HDC hdc = (HDC)wParam;
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, darkMode ? DM_TEXT : LM_TEXT);
+            SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
+            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+        }
         break;
     }
 
@@ -1100,17 +1134,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 diamondsState.viewSelectionEnabled = id;
                 if (id == ID_VIEW_SELECTIONS_TOP_BTN) {
                     SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Stop");
-                    SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Any");
                 } else if (id == ID_VIEW_SELECTIONS_ANY_BTN) {
-                    SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Stop");
                     SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Top");
                 }
+                Diamonds_UpdateAnyButton(hWnd);
                 SetTimer(hWnd, TIMER_DIAMONDS_VIEW, DIAMONDS_VIEW_TIMER_MS, NULL);
                 SendMessage(hWnd, WM_TIMER, TIMER_DIAMONDS_VIEW, 0);
             } else {
                 diamondsState.viewSelectionEnabled = 0;
                 SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_TOP_BTN), "Top");
-                SetWindowText(GetDlgItem(hWnd, ID_VIEW_SELECTIONS_ANY_BTN), "Any");
+                Diamonds_UpdateAnyButton(hWnd);
                 KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
             }
         }
@@ -1176,6 +1209,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             diamondsState.dataCache.clear();
             ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
             InvalidateRect(hList, NULL, FALSE);
+            Diamonds_UpdateAnyButton(hWnd);
         }
         break;
     }

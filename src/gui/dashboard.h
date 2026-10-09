@@ -293,6 +293,7 @@ static void UpdateMarketClock(HWND hWnd) {
     std::string day_str = day_names[wd.c_encoding()];
     std::string time_str = std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count()) + " " + day_str;
     Event_SetTitle(time_str.c_str());
+    Disamonds_SetTime(time_str.c_str());    
 
     // Calculate time left
     int secs_left = target_secs - total_secs;
