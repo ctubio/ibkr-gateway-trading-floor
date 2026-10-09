@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iterator>
+
 struct SparkPoint {
     ULONGLONG date; 
     double price;
@@ -95,21 +97,22 @@ protected:
         }
     }
 
-    // Finds the price closest to (now - minutesAgo) in priceHistory.
+    // Finds the price in effect at (now - minutesAgo): because priceHistory
+    // records only changes, this is the last sample at or before the target.
     // `strict` (only ever passed false, by MiniSparkline::GetPriceMinutesAgo,
     // for the 5-minute column) skips the "do we have enough history yet" gate
-    // so that one caller can get a best-effort answer immediately instead of
-    // waiting for the full window to fill, Sparkline never needed that path
-    // and so never passes strict=false, exactly reproducing its old
-    // strict-only behavior.
+    // and, when the target predates the oldest retained sample, falls back to
+    // that oldest sample as a best-effort answer immediately instead of
+    // waiting for the full window to fill. Strict callers return false in
+    // that case.
     //
     // PERF: priceHistory is appended in strictly non-decreasing time order
     // (every AddPrice() call timestamps with GetTickCount64()), so instead of
-    // scanning every entry to find the closest one (O(n), and this runs once
-    // per reference dot per Draw() call, plus, for MiniSparkline specifically,
-    // once per raw L1 tick via GetPriceMinutesAgo() on the unthrottled
-    // tick-ingest path), binary-search for the insertion point and only
-    // compare the two neighbors around it. O(log n) instead of O(n).
+    // scanning every entry to find the last change at or before the target
+    // (O(n), and this runs once per reference dot per Draw() call, plus, for
+    // MiniSparkline specifically, once per raw L1 tick via GetPriceMinutesAgo()
+    // on the unthrottled tick-ingest path), use upper_bound to find that
+    // step-function value in O(log n).
     bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice, bool strict = true) const {
         if (priceHistory.empty()) return false;
 
@@ -118,25 +121,15 @@ protected:
 
         if (strict && (now < minMs || priceHistory.front().date > target)) return false;
 
-        auto it = std::lower_bound(priceHistory.begin(), priceHistory.end(), target,
-            [](const SparkPoint& p, ULONGLONG t) { return p.date < t; });
-
-        size_t bestIdx;
-        if (it == priceHistory.end()) {
-            // target is at/after the newest sample, nothing after it to compare
-            bestIdx = priceHistory.size() - 1;
-        } else if (it == priceHistory.begin()) {
-            // target is at/before the oldest sample
-            bestIdx = 0;
-        } else {
-            size_t idxAfter  = (size_t)(it - priceHistory.begin());
-            size_t idxBefore = idxAfter - 1;
-            ULONGLONG diffAfter  = it->date - target;
-            ULONGLONG diffBefore = target - priceHistory[idxBefore].date;
-            bestIdx = (diffAfter < diffBefore) ? idxAfter : idxBefore;
+        auto it = std::upper_bound(priceHistory.begin(), priceHistory.end(), target,
+            [](ULONGLONG t, const SparkPoint& p) { return t < p.date; });
+        if (it == priceHistory.begin()) {
+            if (strict) return false;
+            outPrice = priceHistory.front().price;
+            return true;
         }
 
-        outPrice = priceHistory[bestIdx].price;
+        outPrice = std::prev(it)->price;
         return true;
     }
 
@@ -239,10 +232,13 @@ public:
             priceHistory.push_back({ now, price });
         }
         const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL; // keep ~65 minutes
+        const ULONGLONG cutoff = (now > maxAge) ? now - maxAge : 0;
+        // Keep the last sample at or before the cutoff: it is the price that
+        // remained in effect at the cutoff time during a long flat stretch.
         // PERF: pop_front() on a deque is O(1); erase(begin()) on a vector
         // would be O(n) per call (shifts every remaining element down), and
         // this loop can run it repeatedly in a single AddPrice().
-        while (!priceHistory.empty() && now > maxAge && priceHistory.front().date < now - maxAge) {
+        while (priceHistory.size() >= 2 && priceHistory[1].date <= cutoff) {
             priceHistory.pop_front();
         }
     }

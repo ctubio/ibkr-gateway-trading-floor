@@ -156,8 +156,13 @@ struct DiamondsState {
     const DiamondRowCache* paintRowCache = nullptr;
     // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
     std::vector<int> displayOrder;
-    // Paint Limiter
+    // Full visible-range redraw (sort order changed).
     bool dirty = false;
+    // Per-row dirty tracking (UI thread only).
+    // dirtyMarket: L1 tick arrived, row cache must be rebuilt from getMarketData().
+    // dirtyRedraw: row's cache is current (or only PnL changed), row just needs repainting.
+    std::unordered_set<int> dirtyMarket;
+    std::unordered_set<int> dirtyRedraw;
     HIMAGELIST rowHeightImageList = NULL;
     int viewSelectionEnabled = 0;
     std::deque<std::string> diamondsTitleEvents;
@@ -182,7 +187,7 @@ static void Diamonds_AddTitleEvent(const std::string& symbol, COLORREF color, co
     else if (color == COINS_CLR_RED || color == COINS_CLR_RED_DARK || color == COINS_CLR_RED_DARK2)
         direction = '-';
     else
-        direction = ' ';
+        direction = '=';
 
     diamondsState.diamondsTitleEvents.push_front(symbol + direction + price);
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
@@ -646,7 +651,7 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
         
         row.textCols[DCOL_EXCHANGE] = exchange;
 
-        diamondsState.dirty = true;
+        diamondsState.dirtyRedraw.insert(conId);
     }
 }
 
@@ -963,6 +968,64 @@ static void Diamonds_Repopulate(HWND hWnd) {
     Diamonds_UpdateAnyButton(hWnd);
 }
 
+// Drains per-row dirty sets. Called from TIMER_DIAMONDS_PAINT only.
+static void Diamonds_FlushDirty(HWND hWnd) {
+    if (diamondsState.dirtyMarket.empty() && diamondsState.dirtyRedraw.empty() && !diamondsState.dirty)
+        return;
+
+    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+    if (!hList) return;
+
+    // 1) Rebuild cache rows for every symbol that ticked (visible or not):
+    //    alert triggers and the sparkline history depend on this running for all of them.
+    if (!diamondsState.dirtyMarket.empty()) {
+        std::unordered_set<int> pending;
+        pending.swap(diamondsState.dirtyMarket);
+        for (int conId : pending) {
+            TradingAPI::L1Book fresh;
+            if (!api().getMarketData(conId, fresh)) continue;
+            Diamonds_UpdateMarketCols(conId, fresh);
+            if (fresh.last > 0.0)
+                diamondsState.sparklines[conId].AddPrice(fresh.last);
+            diamondsState.dirtyRedraw.insert(conId);
+        }
+    }
+
+    const int total = (int)diamondsState.displayOrder.size();
+    if (total == 0) {
+        diamondsState.dirty = false;
+        diamondsState.dirtyRedraw.clear();
+        return;
+    }
+
+    int top    = ListView_GetTopIndex(hList);
+    int bottom = std::min(top + ListView_GetCountPerPage(hList), total - 1);
+    if (top < 0) top = 0;
+
+    // 2) Full visible redraw (sort order changed).
+    if (diamondsState.dirty) {
+        ListView_RedrawItems(hList, top, bottom);
+        diamondsState.dirty = false;
+        diamondsState.dirtyRedraw.clear();
+        return;
+    }
+
+    // 3) Per-row redraw: only visible rows whose conId is dirty, coalescing adjacent rows.
+    if (diamondsState.dirtyRedraw.empty()) return;
+    int runStart = -1;
+    for (int i = top; i <= bottom + 1; ++i) {
+        bool hit = (i <= bottom) && diamondsState.dirtyRedraw.count(diamondsState.displayOrder[i]) != 0;
+        if (hit) {
+            if (runStart < 0) runStart = i;
+        } else if (runStart >= 0) {
+            ListView_RedrawItems(hList, runStart, i - 1);
+            runStart = -1;
+        }
+    }
+    diamondsState.dirtyRedraw.clear();
+    // No UpdateWindow(): let the repaint go through the normal message loop.
+}
+
 // ── Window procedure ──────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -1195,15 +1258,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_MARKET_L1: {
         int conId = (int)lParam;
         if (!conId) break;
-        TradingAPI::L1Book fresh;
-        if (api().getMarketData(conId, fresh)) {
-            Diamonds_UpdateMarketCols(conId, fresh);
-            if (fresh.last > 0.0) {
-                diamondsState.sparklines[conId].AddPrice(fresh.last);
-            }
-            diamondsState.dirty = true;
-        }
-        
+        diamondsState.dirtyMarket.insert(conId);
         break;
     }
     
@@ -1229,6 +1284,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         } else {
             diamondsState.displayOrder.clear();
             diamondsState.dataCache.clear();
+            diamondsState.dirtyMarket.clear();
+            diamondsState.dirtyRedraw.clear();
+            diamondsState.dirty = false;
             ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
             InvalidateRect(hList, NULL, FALSE);
             Diamonds_UpdateAnyButton(hWnd);
@@ -1728,24 +1786,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             InvalidateRect(hList, NULL, FALSE);
         }
         if (wParam == TIMER_DIAMONDS_PAINT) {
-            if (diamondsState.dirty) {
-                HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-                if (hList && !diamondsState.displayOrder.empty()) {
-                    // Get the range of items currently visible to the user
-                    int top = ListView_GetTopIndex(hList);
-                    int count = ListView_GetCountPerPage(hList);
-                    int bottom = top + count;
-                    
-                    // Clamp to actual size
-                    if (bottom >= (int)diamondsState.displayOrder.size()) 
-                        bottom = (int)diamondsState.displayOrder.size() - 1;
-
-                    // Only redraw the specific rows that have changed on screen
-                    ListView_RedrawItems(hList, top, bottom);
-                    UpdateWindow(hList); // Force immediate flush
-                }
-                diamondsState.dirty = false;
-            }
+            Diamonds_FlushDirty(hWnd);
         }
         break;
     }
@@ -1756,6 +1797,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
         api().removeApiUpdateWindow(hWnd);
         diamondsState.dataCache.clear();
+        diamondsState.dirtyMarket.clear();
+        diamondsState.dirtyRedraw.clear();
+        diamondsState.dirty = false;
         diamondsState.sparklines.clear();
         diamondsState.dividendCache.clear();   // NEW
         if (diamondsState.rowHeightImageList) {

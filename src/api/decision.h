@@ -34,7 +34,7 @@ struct VolRateResult {
 
 static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now) {
     VolRateResult r;
-    r.vol5min  = state->volRate.total();
+    r.vol5min  = state->volRate.total(now);
     r.volRatio = state->volRate.ratio(now);
     return r;
 }

@@ -3,13 +3,15 @@
 // Rolling "recent vs. baseline" rate tracker.
 //
 // Records (time, amount) samples and maintains, incrementally (O(1) amortized
-// per add, O(1) per read):
+// per add or read):
 //   - total():   sum of all samples in the trailing baseline window
 //   - ratio(now): recent share-rate / baseline share-rate, where "recent" is
 //                 the trailing recentMs and "baseline" is everything older
 //                 (up to baselineMs). Returns 0 until baselineMs of history
 //                 has been observed since the last clear() (warm-up gate),
 //                 so a thin baseline can't produce a misleadingly huge ratio.
+// Reads prune against their passed-in `now`, so values decay even when no new
+// samples arrive.
 //
 // `now` is always passed in by the caller (GetTickCount64-style ms), so the
 // class has no Win32 dependency and is trivially testable.
@@ -28,12 +30,51 @@ public:
         // trackingStart is set when the first sample arrives after construction
         // or clear(); pruning never resets it, so ready() can't flip-flop at
         // the baseline boundary.
-        if (history_.empty()) trackingStart_ = now;
+        if (!tracking_) {
+            trackingStart_ = now;
+            tracking_ = true;
+        }
 
         history_.push_back({ now, amount });
         sumTotal_  += amount;
         sumRecent_ += amount;
 
+        prune(now);
+    }
+
+    void clear() {
+        history_.clear();
+        sumTotal_ = sumRecent_ = sumBaseline_ = 0.0;
+        boundaryIdx_ = 0;
+        trackingStart_ = 0;
+        tracking_ = false;
+    }
+
+    bool   empty() const { return history_.empty(); }
+    double total(Tick now) const {
+        prune(now);
+        return sumTotal_;
+    }   // trailing-baseline-window sum
+
+    // True once at least baselineMs has elapsed since tracking began.
+    bool ready(Tick now) const {
+        return tracking_ && now >= trackingStart_ && now - trackingStart_ >= baselineMs_;
+    }
+
+    // recent-rate / baseline-rate; 0.0 until ready().
+    double ratio(Tick now) const {
+        prune(now);
+        if (!ready(now)) return 0.0;
+        const double recentSec   = recentMs_ / 1000.0;
+        const double baselineSec = (baselineMs_ - recentMs_) / 1000.0;
+        const double recentRate   = sumRecent_   / recentSec;
+        const double baselineRate = sumBaseline_ / baselineSec;
+        return (baselineRate > 0.0001) ? (recentRate / baselineRate)
+                                       : (recentRate > 0.0 ? 9.9 : 0.0);
+    }
+
+private:
+    void prune(Tick now) const {
         const Tick recentCutoff   = now > recentMs_   ? now - recentMs_   : 0;
         const Tick baselineCutoff = now > baselineMs_ ? now - baselineMs_ : 0;
 
@@ -54,37 +95,11 @@ public:
         }
     }
 
-    void clear() {
-        history_.clear();
-        sumTotal_ = sumRecent_ = sumBaseline_ = 0.0;
-        boundaryIdx_ = 0;
-        trackingStart_ = 0;
-    }
-
-    bool   empty() const { return history_.empty(); }
-    double total() const { return sumTotal_; }   // trailing-baseline-window sum
-
-    // True once at least baselineMs has elapsed since tracking began.
-    bool ready(Tick now) const {
-        return !history_.empty() && now >= trackingStart_ && now - trackingStart_ >= baselineMs_;
-    }
-
-    // recent-rate / baseline-rate; 0.0 until ready().
-    double ratio(Tick now) const {
-        if (!ready(now)) return 0.0;
-        const double recentSec   = recentMs_ / 1000.0;
-        const double baselineSec = (baselineMs_ - recentMs_) / 1000.0;
-        const double recentRate   = sumRecent_   / recentSec;
-        const double baselineRate = sumBaseline_ / baselineSec;
-        return (baselineRate > 0.0001) ? (recentRate / baselineRate)
-                                       : (recentRate > 0.0 ? 9.9 : 0.0);
-    }
-
-private:
     struct Sample { Tick time; double amount; };
     Tick recentMs_, baselineMs_;
-    std::deque<Sample> history_;
-    double sumTotal_ = 0.0, sumRecent_ = 0.0, sumBaseline_ = 0.0;
-    size_t boundaryIdx_ = 0;   // index of first entry still "recent"
+    mutable std::deque<Sample> history_;
+    mutable double sumTotal_ = 0.0, sumRecent_ = 0.0, sumBaseline_ = 0.0;
+    mutable size_t boundaryIdx_ = 0;   // index of first entry still "recent"
     Tick   trackingStart_ = 0;
+    bool   tracking_ = false;
 };

@@ -680,7 +680,7 @@ BOOL CALLBACK EnumChildProcForEdits(HWND hwnd, LPARAM lParam) {
     if (GetClassNameA(hwnd, className, sizeof(className))) {
         if (StrStrIA(className, "EDIT") != NULL) {
             LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-            if ((style & ES_MULTILINE) == ES_MULTILINE) {
+            if ((style & ES_MULTILINE) == ES_MULTILINE && (style & WS_VSCROLL)) {
                 bool dark = (bool)lParam;
                 ApplyDarkModeToRichEdits(hwnd, dark);
             }
