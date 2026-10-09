@@ -25,6 +25,9 @@ void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWS
 #define TIMER_DIAMONDS_PAINT     7112
 #define DIAMONDS_PAINT_TIMER_MS  60     // ~16 FPS (Butter smooth, zero flicker)
 
+#define TIMER_DIAMONDS_CAPTION   7113
+#define DIAMONDS_CAPTION_TIMER_MS 60   // lets DWM publish updated caption-button bounds
+
 // ── Filter / tab constants ────────────────────────────────────────────────────
 #define DTAB_ALL              0
 #define DTAB_GROWTH           1
@@ -288,6 +291,14 @@ static int Diamonds_TitleHitTest(POINT clientPt) {
     return 0;
 }
 
+// Repaint the custom caption so it is clipped against the current caption-button bounds.
+static void Diamonds_InvalidateCaption(HWND hWnd) {
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    rc.bottom = Diamonds_CaptionH(hWnd);
+    InvalidateRect(hWnd, &rc, TRUE);
+}
+
 static void Diamonds_UpdateEventTitle(HWND hWnd) {
     // Keep a plain-text title for the taskbar / Alt-Tab; the colored one is painted by us.
     std::string title;
@@ -297,11 +308,7 @@ static void Diamonds_UpdateEventTitle(HWND hWnd) {
     }
     if (title.empty()) title = "Today, is a beautiful day.";
     SetWindowTextA(hWnd, title.c_str());
-
-    RECT rc;
-    GetClientRect(hWnd, &rc);
-    rc.bottom = Diamonds_CaptionH(hWnd);
-    InvalidateRect(hWnd, &rc, FALSE);
+    Diamonds_InvalidateCaption(hWnd);
 }
 
 static void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORREF color, const std::string& price) {
@@ -1325,6 +1332,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_UpdateFrameMargins(hWnd);
         Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Layout(hWnd);
+        Diamonds_InvalidateCaption(hWnd);
+        // DWM may still report old caption-button bounds during maximize/restore.
+        SetTimer(hWnd, TIMER_DIAMONDS_CAPTION, DIAMONDS_CAPTION_TIMER_MS, NULL);
         break;
     }
 
@@ -1983,6 +1993,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (wParam == TIMER_DIAMONDS_PAINT) {
             Diamonds_FlushDirty(hWnd);
         }
+        if (wParam == TIMER_DIAMONDS_CAPTION) {
+            KillTimer(hWnd, TIMER_DIAMONDS_CAPTION);
+            Diamonds_InvalidateCaption(hWnd);
+        }
         break;
     }
 
@@ -1990,6 +2004,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         KillTimer(hWnd, TIMER_DIAMONDS_SORT);
         KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
+        KillTimer(hWnd, TIMER_DIAMONDS_CAPTION);
         api().removeApiUpdateWindow(hWnd);
         diamondsState.dataCache.clear();
         diamondsState.dirtyMarket.clear();
