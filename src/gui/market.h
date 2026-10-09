@@ -1023,10 +1023,12 @@ static void TsSearch_SelectAndLaunch(HWND hWnd, int sel) {
         std::string r = tsSearchResults[sel];
         auto dot = r.find('.');
         if (dot != std::string::npos) {
-            int cid = std::stoi(r.substr(0, dot));
-            std::string rest = r.substr(dot + 1);
-            auto d2 = rest.find('.');
-            StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
+            try {
+                int cid = std::stoi(r.substr(0, dot));
+                std::string rest = r.substr(dot + 1);
+                auto d2 = rest.find('.');
+                StartMarket((d2 != std::string::npos) ? rest.substr(0, d2) : rest, cid);
+            } catch (const std::exception&) {}
         }
         DestroyWindow(GetParent(hWnd));
     }

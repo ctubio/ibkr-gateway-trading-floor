@@ -212,7 +212,12 @@ static void UpdateMarketClock(HWND hWnd) {
 
     // Get current time in New York (Eastern Time)
     auto now = std::chrono::system_clock::now();
-    static const std::chrono::time_zone* nyZone = std::chrono::locate_zone("America/New_York");
+    static const std::chrono::time_zone* nyZone = nullptr;
+    try {
+        if (!nyZone) nyZone = std::chrono::locate_zone("America/New_York");
+    } catch (...) {
+        return;
+    }
     std::chrono::zoned_time zt{nyZone, now};
     auto ny_time = zt.get_local_time();
     
