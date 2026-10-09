@@ -72,12 +72,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     SetUnhandledExceptionFilter(WindowsCrashHandler);
 
     try {
-        MutexGatewayInstance();
+        if (!MutexGatewayInstance())
+            return 0;
 
         RegisterWindowRAII registerWindowRAII(hInst);
-        if (!registerWindowRAII.unlocked()) {
+        if (!registerWindowRAII.unlocked())
             return 0;
-        }
 
         HttpServerRAII httpServerRAII;
 

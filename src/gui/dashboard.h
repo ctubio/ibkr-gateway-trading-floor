@@ -133,10 +133,25 @@ static void Dashboard_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
     }
 }
 
-void MutexGatewayInstance() {
-    HANDLE hMutex = CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+// Returns false if another instance exists but can't be accessed (e.g. it runs
+// elevated and we don't), in which case the caller must exit immediately.
+bool MutexGatewayInstance() {
+    static const char* MUTEX_NAME = "Local\\TWSAPIClientTradingFloorMutex_17072025";
 
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+    HANDLE hMutex = CreateMutexA(NULL, TRUE, MUTEX_NAME);
+    DWORD err = GetLastError();
+
+    if (!hMutex && err == ERROR_ACCESS_DENIED) {
+        MessageBoxA(NULL,
+            "Another instance of Trading Floor is already running, but access to it was denied.\n\n"
+            "It is probably running with higher privileges (as Administrator).\n"
+            "Please close it from there, or run both instances with the same privileges.",
+            "Trading Floor: Instance Access Denied",
+            MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND);
+        return false;
+    }
+
+    if (err == ERROR_ALREADY_EXISTS) {
         HWND existingWnd = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
         if (existingWnd) {
             DWORD processId;
@@ -154,13 +169,27 @@ void MutexGatewayInstance() {
                 CloseHandle(hProcess);
             }
         }
-        
+
         if (hMutex) CloseHandle(hMutex);
-        
-        CreateMutex(NULL, TRUE, "Global\\TWSAPIClientTradingFloorMutex_17072025");
+
+        hMutex = CreateMutexA(NULL, TRUE, MUTEX_NAME);
+        if (!hMutex || GetLastError() == ERROR_ALREADY_EXISTS) {
+            // The old instance didn't go away (or someone else grabbed it).
+            if (hMutex) CloseHandle(hMutex);
+            MessageBoxA(NULL,
+                "Another instance of Trading Floor is still running and could not be closed.",
+                "Trading Floor: Instance Still Running",
+                MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND);
+            return false;
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1021));
     }
+
+    // Intentionally keep the handle open for the lifetime of the process;
+    // the mutex disappears automatically when we exit.
+    (void)hMutex;
+    return true;
 }
 
 static int Coins_GetTextWidth(HWND hWnd, HFONT hFont, const char* text) {
@@ -1275,13 +1304,14 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_SHOW_ALERT: {
             AlertPopupData* data = (AlertPopupData*)lParam;
             if (data) {
-                FlashScreen(data->isUp, 1000);
                 HWND hwnd = StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
                 if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
                     delete data;
+                } else {
+                    FlashScreen(data->isUp, 1000);
+                    Events_AddEvent(FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, true, data->conId, data->symbol);
+                    PlaySound_Async(209);
                 }
-                Events_AddEvent(FormatFixed(data->price, 2), data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK, true, data->conId, data->symbol);
-                PlaySound_Async(209);
             }
             return 0;
         }
