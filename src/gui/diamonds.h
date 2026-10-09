@@ -189,7 +189,8 @@ static int Diamonds_FrameY(HWND hWnd) {
 // Height of the area we own at the top of the client rect.
 static int Diamonds_CaptionH(HWND hWnd) {
     UINT dpi = GetDpiForWindow(hWnd);
-    return GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + (IsZoomed(hWnd) ? 0 : Diamonds_FrameY(hWnd));
+    int height = GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + (IsZoomed(hWnd) ? 0 : Diamonds_FrameY(hWnd));
+    return std::max(1, height - MulDiv(4, dpi, 96));
 }
 
 static void Diamonds_UpdateFrameMargins(HWND hWnd) {
@@ -258,12 +259,11 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
             SIZE sz;
             GetTextExtentPoint32W(mem, ws.c_str(), static_cast<int>(ws.size()), &sz);
             if (x + sz.cx > maxX) return false;
-            RECT r = { x, 0, x + sz.cx, capH };
+            RECT r = { x, 6, x + sz.cx, capH - 6 };
             DTTOPTS opts = { sizeof(opts) };
             opts.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
             opts.crText = clr ? clr : themeText;
-            DrawThemeTextEx(theme, mem, 0, 0, ws.c_str(), -1,
-                            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX, &r, &opts);
+            DrawThemeTextEx(theme, mem, 0, 0, ws.c_str(), -1, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX, &r, &opts);
             if (conId > 0) diamondsState.titleHitRects.push_back({ r, conId });
             x += sz.cx + 14;
             return true;
@@ -1154,54 +1154,6 @@ static void Diamonds_FlushDirty(HWND hWnd) {
 
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-
-    // Make the client area cover the caption (keep the side/bottom borders as-is).
-    case WM_NCCALCSIZE:
-        if (wParam) {
-            auto* p = (NCCALCSIZE_PARAMS*)lParam;
-            LONG origTop = p->rgrc[0].top;
-            DefWindowProc(hWnd, message, wParam, lParam);
-            p->rgrc[0].top = origTop + (IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 0);
-            return 0;
-        }
-        break;
-
-    case WM_NCHITTEST: {
-        LRESULT dwm = 0;
-        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
-        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        RECT wr;
-        GetWindowRect(hWnd, &wr);
-        int dy = pt.y - wr.top;
-        if (!IsZoomed(hWnd) && dy >= 0 && dy < Diamonds_FrameY(hWnd) / 2) return HTTOP;
-        POINT cpt = pt;
-        ScreenToClient(hWnd, &cpt);
-        if (Diamonds_TitleHitTest(cpt)) return HTCLIENT;
-        if (dy >= 0 && dy < Diamonds_CaptionH(hWnd)) return HTCAPTION;
-        break;
-    }
-
-    case WM_ERASEBKGND: {
-        HDC hdc = (HDC)wParam;
-        RECT rc;
-        GetClientRect(hWnd, &rc);
-        RECT cap = rc;
-        cap.bottom = Diamonds_CaptionH(hWnd);
-        FillRect(hdc, &cap, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        RECT rest = rc;
-        rest.top = cap.bottom;
-        FillRect(hdc, &rest, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
-        return 1;
-    }
-
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hWnd, &ps);
-        Diamonds_PaintCaption(hWnd, hdc);
-        EndPaint(hWnd, &ps);
-        return 0;
-    }
-
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
@@ -1285,6 +1237,54 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         SetTimer(hWnd, TIMER_DIAMONDS_SORT, DIAMONDS_SORT_TIMER_MS, NULL);
         break;
+    }
+
+
+    // Make the client area cover the caption (keep the side/bottom borders as-is).
+    case WM_NCCALCSIZE:
+        if (wParam) {
+            auto* p = (NCCALCSIZE_PARAMS*)lParam;
+            LONG origTop = p->rgrc[0].top;
+            DefWindowProc(hWnd, message, wParam, lParam);
+            p->rgrc[0].top = origTop + (IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 0);
+            return 0;
+        }
+        break;
+
+    case WM_NCHITTEST: {
+        LRESULT dwm = 0;
+        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        RECT wr;
+        GetWindowRect(hWnd, &wr);
+        int dy = pt.y - wr.top;
+        if (!IsZoomed(hWnd) && dy >= 0 && dy < Diamonds_FrameY(hWnd) / 2) return HTTOP;
+        POINT cpt = pt;
+        ScreenToClient(hWnd, &cpt);
+        if (Diamonds_TitleHitTest(cpt)) return HTCLIENT;
+        if (dy >= 0 && dy < Diamonds_CaptionH(hWnd)) return HTCAPTION;
+        break;
+    }
+
+    case WM_ERASEBKGND: {
+        HDC hdc = (HDC)wParam;
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+        RECT cap = rc;
+        cap.bottom = Diamonds_CaptionH(hWnd);
+        FillRect(hdc, &cap, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        RECT rest = rc;
+        rest.top = cap.bottom;
+        FillRect(hdc, &rest, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
+        return 1;
+    }
+
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        Diamonds_PaintCaption(hWnd, hdc);
+        EndPaint(hWnd, &ps);
+        return 0;
     }
 
     case WM_GETMINMAXINFO: {
