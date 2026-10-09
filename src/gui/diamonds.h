@@ -1100,7 +1100,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     // ── Checkboxes show when active, hide when inactive ───────────────────────
     case WM_ACTIVATE:
         Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
-        return 0;
+        break;
 
     case WM_CTLCOLORSTATIC: {
         HWND hCtrl = (HWND)lParam;

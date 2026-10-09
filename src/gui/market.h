@@ -307,14 +307,6 @@ static void Market_TrimTimeSalesLists(TsState* state) {
     trim(state->hTsListF1000, limitShort);
 }
 
-static const std::deque<TimeSalesRow>* TimeSales_RowsForList(const TsState* state, HWND hList) {
-    if (!state) return nullptr;
-    if (hList == state->hTsList) return &state->tsRows;
-    if (hList == state->hTsListF100) return &state->tsRowsF100;
-    if (hList == state->hTsListF1000) return &state->tsRowsF1000;
-    return nullptr;
-}
-
 static void Market_RedrawHintsFor(TsState* state, HWND hEdit) {
     if (!state) return;
     auto redraw = [](HWND h) {
@@ -2202,12 +2194,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 api().setMarketWindow(hWnd, state->conId, state->symbol);
                 Market_SyncOrderRows(hWnd, state);
             } else {
-                state->tsRows.clear();
-                state->tsRowsF100.clear();
-                state->tsRowsF1000.clear();
-                ListView_SetItemCountEx(state->hTsList, 0, LVSICF_NOINVALIDATEALL);
-                if (state->hTsListF100)  ListView_SetItemCountEx(state->hTsListF100, 0, LVSICF_NOINVALIDATEALL);
-                if (state->hTsListF1000) ListView_SetItemCountEx(state->hTsListF1000, 0, LVSICF_NOINVALIDATEALL);
+                if (state->hTsList)     ListView_DeleteAllItems(state->hTsList);
+                if (state->hTsListF100) ListView_DeleteAllItems(state->hTsListF100);
+                if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
                 if (state->hL2List) {
                     for (int row = 0; row < 12; ++row) {
                         ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
