@@ -24,7 +24,7 @@
 static const BYTE FLASH_PEAK_ALPHA = 69;
 
 static HWND  hScreenFlashOverlay = NULL;
-static DWORD s_flashStartTime      = 0;
+static ULONGLONG s_flashStartTime   = 0;
 static int   s_flashDurationMs     = 800;
 
 struct AlertPopupData {
@@ -223,13 +223,12 @@ void StartAlertEditor(const std::string& symbol, int conId, double price) {
 }
 
 // SetTimer callback to adjust opacity and hide the pre-created fullscreen overlay window
-static VOID CALLBACK FlashTimerProc(HWND hwnd, UINT /*uMsg*/, UINT_PTR idEvent, DWORD dwTime) {
+static VOID CALLBACK FlashTimerProc(HWND hwnd, UINT /*uMsg*/, UINT_PTR idEvent, DWORD /*dwTime*/) {
     if (idEvent != IDT_SCREEN_FLASH_TIMER) return;
 
-    DWORD now = dwTime ? dwTime : GetTickCount();
-    DWORD elapsed = now - s_flashStartTime;
+    ULONGLONG elapsed = GetTickCount64() - s_flashStartTime;
 
-    if (elapsed >= (DWORD)s_flashDurationMs || s_flashDurationMs <= 0) {
+    if (s_flashDurationMs <= 0 || elapsed >= (ULONGLONG)s_flashDurationMs) {
         KillTimer(hwnd, idEvent);
         SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
         ShowWindow(hwnd, SW_HIDE);
@@ -335,7 +334,7 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
     SetWindowLongPtr(hScreenFlashOverlay, GWLP_USERDATA, (LONG_PTR)(isGreen ? hBrushGreen : hBrushRed));
     InvalidateRect(hScreenFlashOverlay, NULL, TRUE);
 
-    s_flashStartTime  = GetTickCount();
+    s_flashStartTime  = GetTickCount64();
     s_flashDurationMs = (durationMs > 0) ? durationMs : 800;
 
     SetLayeredWindowAttributes(hScreenFlashOverlay, 0, FLASH_PEAK_ALPHA, LWA_ALPHA);
