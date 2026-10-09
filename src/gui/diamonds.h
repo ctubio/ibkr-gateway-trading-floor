@@ -131,6 +131,7 @@ struct DiamondsDividendCache {
 struct DiamondsTitleEvent {
     std::string text;
     COLORREF color; // 0 = theme text
+    int conId;
 };
 
 struct DiamondsState {
@@ -171,6 +172,8 @@ struct DiamondsState {
     HIMAGELIST rowHeightImageList = NULL;
     int viewSelectionEnabled = 0;
     std::deque<DiamondsTitleEvent> diamondsTitleEvents;
+    // Client-space bounds of drawn title events and their associated conIds.
+    std::vector<std::pair<RECT, int>> titleHitRects;
 };
 
 static DiamondsState diamondsState;
@@ -192,6 +195,8 @@ static void Diamonds_UpdateFrameMargins(HWND hWnd) {
 }
 
 static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
+    diamondsState.titleHitRects.clear();
+
     RECT rc;
     GetClientRect(hWnd, &rc);
     const int w = rc.right, capH = Diamonds_CaptionH(hWnd);
@@ -200,7 +205,10 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     RECT btn = {};
     DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &btn, sizeof(btn));
     const int maxX = (btn.left > 0 ? btn.left : w - 140) - 8;
-    int x = GetSystemMetrics(SM_CXSMICON) + 16;
+    const int iconW = GetSystemMetrics(SM_CXSMICON);
+    const int iconH = GetSystemMetrics(SM_CYSMICON);
+    const int iconX = 8;
+    int x = iconX + iconW + 8;
 
     BITMAPINFO bi = {};
     bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -224,10 +232,25 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     HGDIOBJ oldBmp = SelectObject(mem, dib);
     HGDIOBJ oldFont = SelectObject(mem, hFont11ptbold.get());
 
+    HICON hIcon = (HICON)SendMessage(hWnd, WM_GETICON, ICON_SMALL, 0);
+    if (!hIcon) hIcon = (HICON)GetClassLongPtr(hWnd, GCLP_HICONSM);
+    if (hIcon) {
+        const int iconY = (capH - iconH) / 2;
+        DrawIconEx(mem, iconX, iconY, hIcon, iconW, iconH, 0, NULL, DI_NORMAL);
+
+        DWORD* px = (DWORD*)bits;
+        for (int yy = std::max(0, iconY); yy < std::min(capH, iconY + iconH); ++yy) {
+            for (int xx = iconX; xx < std::min(w, iconX + iconW); ++xx) {
+                DWORD& p = px[(size_t)yy * w + xx];
+                if ((p >> 24) == 0 && (p & 0x00FFFFFF) != 0) p |= 0xFF000000;
+            }
+        }
+    }
+
     HTHEME theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
     if (theme) {
         const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
-        auto drawSeg = [&](const std::string& s, COLORREF clr) -> bool {
+        auto drawSeg = [&](const std::string& s, COLORREF clr, int conId) -> bool {
             std::wstring ws = StringToWide(s);
             SIZE sz;
             GetTextExtentPoint32W(mem, ws.c_str(), static_cast<int>(ws.size()), &sz);
@@ -238,14 +261,15 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
             opts.crText = clr ? clr : themeText;
             DrawThemeTextEx(theme, mem, 0, 0, ws.c_str(), -1,
                             DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX, &r, &opts);
+            if (conId > 0) diamondsState.titleHitRects.push_back({ r, conId });
             x += sz.cx + 14;
             return true;
         };
         if (diamondsState.diamondsTitleEvents.empty()) {
-            drawSeg("Today, is a beautiful day.", 0);
+            drawSeg("Today, is a beautiful day.", 0, 0);
         } else {
             for (const auto& ev : diamondsState.diamondsTitleEvents)
-                if (!drawSeg(ev.text, ev.color)) break;
+                if (!drawSeg(ev.text, ev.color, ev.conId)) break;
         }
         CloseThemeData(theme);
     }
@@ -255,6 +279,13 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     SelectObject(mem, oldBmp);
     DeleteObject(dib);
     DeleteDC(mem);
+}
+
+// Returns the conId of the title event under a client-space point, or 0.
+static int Diamonds_TitleHitTest(POINT clientPt) {
+    for (const auto& [r, conId] : diamondsState.titleHitRects)
+        if (PtInRect(&r, clientPt)) return conId;
+    return 0;
 }
 
 static void Diamonds_UpdateEventTitle(HWND hWnd) {
@@ -274,7 +305,7 @@ static void Diamonds_UpdateEventTitle(HWND hWnd) {
 }
 
 static void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORREF color, const std::string& price) {
-    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + price, color });
+    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + price, color, conId });
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
 
     HWND hWnd = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
@@ -1136,6 +1167,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         GetWindowRect(hWnd, &wr);
         int dy = pt.y - wr.top;
         if (!IsZoomed(hWnd) && dy >= 0 && dy < Diamonds_FrameY(hWnd) / 2) return HTTOP;
+        POINT cpt = pt;
+        ScreenToClient(hWnd, &cpt);
+        if (Diamonds_TitleHitTest(cpt)) return HTCLIENT;
         if (dy >= 0 && dy < Diamonds_CaptionH(hWnd)) return HTCAPTION;
         break;
     }
@@ -1294,6 +1328,29 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         break;
     }
 
+    case WM_LBUTTONDOWN: {
+        POINT pt = { (short)LOWORD(lParam), (short)HIWORD(lParam) };
+        int conId = Diamonds_TitleHitTest(pt);
+        if (conId > 0) {
+            api().updateDisplayGroup(conId);
+            return 0;
+        }
+        break;
+    }
+
+    case WM_SETCURSOR: {
+        if (LOWORD(lParam) == HTCLIENT) {
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(hWnd, &pt);
+            if (Diamonds_TitleHitTest(pt)) {
+                SetCursor(LoadCursor(NULL, IDC_HAND));
+                return TRUE;
+            }
+        }
+        break;
+    }
+
     // ── Checkboxes show when active, hide when inactive ───────────────────────
     case WM_ACTIVATE:
         Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
@@ -1425,6 +1482,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             InvalidateRect(hList, NULL, FALSE);
             Diamonds_UpdateAnyButton(hWnd);
         }
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+        rc.bottom = Diamonds_CaptionH(hWnd);
+        InvalidateRect(hWnd, &rc, FALSE);
         break;
     }
 
