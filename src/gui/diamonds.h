@@ -189,7 +189,7 @@ static int Diamonds_FrameY(HWND hWnd) {
 // Height of the area we own at the top of the client rect.
 static int Diamonds_CaptionH(HWND hWnd) {
     UINT dpi = GetDpiForWindow(hWnd);
-    int height = GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + (IsZoomed(hWnd) ? 0 : Diamonds_FrameY(hWnd));
+    int height = GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + Diamonds_FrameY(hWnd);
     return std::max(1, height - MulDiv(4, dpi, 96));
 }
 
@@ -1262,7 +1262,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         POINT cpt = pt;
         ScreenToClient(hWnd, &cpt);
         if (Diamonds_TitleHitTest(cpt)) return HTCLIENT;
-        if (dy >= 0 && dy < Diamonds_CaptionH(hWnd)) return HTCAPTION;
+        if (cpt.y >= 0 && cpt.y < Diamonds_CaptionH(hWnd)) return HTCAPTION;
+        break;
+    }
+
+    case WM_NCMOUSEMOVE:
+    case WM_NCLBUTTONDOWN:
+    case WM_NCLBUTTONUP:
+    case WM_NCMOUSELEAVE: {
+        LRESULT dwm = 0;
+        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
         break;
     }
 
