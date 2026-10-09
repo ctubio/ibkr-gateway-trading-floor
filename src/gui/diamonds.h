@@ -165,7 +165,6 @@ struct DiamondsState {
 
 static DiamondsState diamondsState;
 
-
 static void Diamonds_UpdateEventTitle(HWND hWnd) {
     std::string title = "";
     for (const auto& event : diamondsState.diamondsTitleEvents)
@@ -691,7 +690,7 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
         cacheRow.sortValues[DCOL_DIV_YIELD] = 0.0;
         cacheRow.textCols[DCOL_DIV_YIELD]   = "0.00%";
     } else {
-        cacheRow.sortValues[DCOL_DIV_YIELD] = BOTTOM_SORT_VALUE;
+        cacheRow.sortValues[DCOL_DIV_YIELD] = BOTTOM_SORT_VALUE - conId;
         cacheRow.textCols[DCOL_DIV_YIELD]   = DIAMONDS_NO_DATA;
     }
 }
@@ -720,7 +719,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     };
 
     auto setNA = [&](int col, std::string placeHolder = DIAMONDS_NO_DATA) {
-        row.sortValues[col] = BOTTOM_SORT_VALUE; // Pushes NA to bottom on sorts
+        row.sortValues[col] = BOTTOM_SORT_VALUE - row.conId; // Pushes NA to bottom on sorts
         row.textCols[col] = placeHolder;
     };
 
@@ -845,7 +844,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             double priceDiff5min = t.last - price5MinAgo;
             //setCol(DCOL_CHG5MIN, priceDiff5min, 2, true);
             row.textCols[DCOL_CHG5MIN] = FormatFixed(priceDiff5min, 2, false);
-            row.sortValues[DCOL_CHG5MIN] = row.textCols[DCOL_CHG5MIN] == "0.00" ? BOTTOM_SORT_VALUE : priceDiff5min;
+            row.sortValues[DCOL_CHG5MIN] = row.textCols[DCOL_CHG5MIN] == "0.00" ? BOTTOM_SORT_VALUE - row.conId : priceDiff5min;
         } else {
             setNA(DCOL_CHG5MIN);
         }
@@ -1524,7 +1523,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // cell holds a real numeric value (not the "--" sentinel).
                     if (cd->iSubItem == DCOL_CHGPCT || cd->iSubItem == DCOL_DAILYPNL || cd->iSubItem == DCOL_POSITION || cd->iSubItem == DCOL_CHG5MIN || cd->iSubItem == DCOL_CHG13WEEK || cd->iSubItem == DCOL_CHG26WEEK || cd->iSubItem == DCOL_CHG52WEEK) {
                         double val = cacheRow.sortValues[cd->iSubItem];
-                        if (val == BOTTOM_SORT_VALUE) val = 0.0;
+                        if (val < BOTTOM_SORT_VALUE) val = 0.0;
                         // Guard: skip colouring the "--" sentinel, atof("--") == 0
                         // which would leave the cell uncoloured anyway, but being
                         // explicit avoids any locale-specific atof surprises.
