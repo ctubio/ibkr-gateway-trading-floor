@@ -741,7 +741,7 @@ static void DashboardFx_SubmitAndClose(HWND hWnd) {
 static LRESULT CALLBACK DashboardFx_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
                                                      UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
     if (msg == WM_CHAR) {
-        if (wParam == VK_RETURN || wParam == VK_ESCAPE)
+        if (!IsAllowedNumericEditCharacter(wParam))
             return 0;
     }
     if (msg == WM_KEYDOWN) {

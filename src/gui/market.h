@@ -878,14 +878,8 @@ static LRESULT CALLBACK Market_EditSubclassProc(
                | DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTALLKEYS;
 
     if (msg == WM_CHAR) {
-        if (wParam == VK_ESCAPE || wParam == VK_TAB || wParam == VK_RETURN)
-            return 0;// Block anything that is NOT a number, dot, plus, minus, or backspace
-
-        if (!(wParam >= '0' && wParam <= '9') && 
-            wParam != '.' && wParam != '+' && wParam != '-' && 
-            wParam != VK_BACK) {
-            return 0; 
-        }
+        if (!IsAllowedNumericEditCharacter(wParam))
+            return 0;
     }
 
     // Resolved once per message. row == nullptr  → order-bar edit,

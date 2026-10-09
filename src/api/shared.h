@@ -1,5 +1,11 @@
 #pragma once
 
+static bool IsAllowedNumericEditCharacter(WPARAM wParam) {
+    return (wParam >= '0' && wParam <= '9') ||
+           wParam == '.' || wParam == '+' || wParam == '-' ||
+           wParam == VK_BACK;
+}
+
 // Call this on every window after creating it
 void ApplyDarkModeToAllWindows() {
     // Enumerate all top-level windows owned by this process

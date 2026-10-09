@@ -373,7 +373,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
     }
 
     if (message == WM_CHAR) {
-        if (wParam == VK_TAB || wParam == VK_RETURN)
+        if (!IsAllowedNumericEditCharacter(wParam))
             return 0;
     }
 
