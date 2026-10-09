@@ -167,21 +167,22 @@ static DiamondsState diamondsState;
 
 static void Diamonds_UpdateEventTitle(HWND hWnd) {
     std::string title = "";
-    for (const auto& event : diamondsState.diamondsTitleEvents)
-        title += " " + event;
+    for (const auto& event : diamondsState.diamondsTitleEvents) {
+        if (!title.empty()) title += " ";
+        title += event + " ";
+    }
     if (title.empty()) title = "Today, is a beautiful day.";
     SetWindowTextA(hWnd, title.c_str());
 }
 
 static void Diamonds_AddTitleEvent(const std::string& symbol, COLORREF color, const std::string& price) {
     char direction;
-    if (color == COINS_CLR_GREEN || color == COINS_CLR_GREEN_DARK || color == COINS_CLR_GREEN_DARK2) {
+    if (color == COINS_CLR_GREEN || color == COINS_CLR_GREEN_DARK || color == COINS_CLR_GREEN_DARK2)
         direction = '+';
-    } else if (color == COINS_CLR_RED || color == COINS_CLR_RED_DARK || color == COINS_CLR_RED_DARK2) {
+    else if (color == COINS_CLR_RED || color == COINS_CLR_RED_DARK || color == COINS_CLR_RED_DARK2)
         direction = '-';
-    } else {
+    else
         direction = ' ';
-    }
 
     diamondsState.diamondsTitleEvents.push_front(symbol + direction + price);
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
