@@ -128,6 +128,11 @@ struct DiamondsDividendCache {
     ULONGLONG lastAttemptMs = 0;    // throttles retries for symbols with no cached entry
 };
 
+struct DiamondsTitleEvent {
+    std::string text;
+    COLORREF color; // 0 = theme text
+};
+
 struct DiamondsState {
     // Ephemeral storage for triggered alerts to prevent spamming
     std::unordered_set<int> firedAlertsUp;
@@ -165,31 +170,111 @@ struct DiamondsState {
     std::unordered_set<int> dirtyRedraw;
     HIMAGELIST rowHeightImageList = NULL;
     int viewSelectionEnabled = 0;
-    std::deque<std::string> diamondsTitleEvents;
+    std::deque<DiamondsTitleEvent> diamondsTitleEvents;
 };
 
 static DiamondsState diamondsState;
 
+static int Diamonds_FrameY(HWND hWnd) {
+    UINT dpi = GetDpiForWindow(hWnd);
+    return GetSystemMetricsForDpi(SM_CYFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+}
+
+// Height of the area we own at the top of the client rect.
+static int Diamonds_CaptionH(HWND hWnd) {
+    UINT dpi = GetDpiForWindow(hWnd);
+    return GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + (IsZoomed(hWnd) ? 0 : Diamonds_FrameY(hWnd));
+}
+
+static void Diamonds_UpdateFrameMargins(HWND hWnd) {
+    MARGINS m = { 0, 0, Diamonds_CaptionH(hWnd), 0 };
+    DwmExtendFrameIntoClientArea(hWnd, &m);
+}
+
+static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    const int w = rc.right, capH = Diamonds_CaptionH(hWnd);
+    if (w <= 0 || capH <= 0) return;
+
+    RECT btn = {};
+    DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &btn, sizeof(btn));
+    const int maxX = (btn.left > 0 ? btn.left : w - 140) - 8;
+    int x = GetSystemMetrics(SM_CXSMICON) + 16;
+
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -capH;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+
+    HDC mem = CreateCompatibleDC(hdcWin);
+    if (!mem) return;
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(hdcWin, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!dib || !bits) {
+        if (dib) DeleteObject(dib);
+        DeleteDC(mem);
+        return;
+    }
+    std::memset(bits, 0, static_cast<size_t>(w) * capH * 4);
+
+    HGDIOBJ oldBmp = SelectObject(mem, dib);
+    HGDIOBJ oldFont = SelectObject(mem, hFont11ptbold.get());
+
+    HTHEME theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
+    if (theme) {
+        const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
+        auto drawSeg = [&](const std::string& s, COLORREF clr) -> bool {
+            std::wstring ws = StringToWide(s);
+            SIZE sz;
+            GetTextExtentPoint32W(mem, ws.c_str(), static_cast<int>(ws.size()), &sz);
+            if (x + sz.cx > maxX) return false;
+            RECT r = { x, 0, x + sz.cx, capH };
+            DTTOPTS opts = { sizeof(opts) };
+            opts.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
+            opts.crText = clr ? clr : themeText;
+            DrawThemeTextEx(theme, mem, 0, 0, ws.c_str(), -1,
+                            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX, &r, &opts);
+            x += sz.cx + 14;
+            return true;
+        };
+        if (diamondsState.diamondsTitleEvents.empty()) {
+            drawSeg("Today, is a beautiful day.", 0);
+        } else {
+            for (const auto& ev : diamondsState.diamondsTitleEvents)
+                if (!drawSeg(ev.text, ev.color)) break;
+        }
+        CloseThemeData(theme);
+    }
+
+    BitBlt(hdcWin, 0, 0, w, capH, mem, 0, 0, SRCCOPY);
+    SelectObject(mem, oldFont);
+    SelectObject(mem, oldBmp);
+    DeleteObject(dib);
+    DeleteDC(mem);
+}
+
 static void Diamonds_UpdateEventTitle(HWND hWnd) {
-    std::string title = "";
-    for (const auto& event : diamondsState.diamondsTitleEvents) {
-        if (!title.empty()) title += " ";
-        title += event + " ";
+    // Keep a plain-text title for the taskbar / Alt-Tab; the colored one is painted by us.
+    std::string title;
+    for (const auto& ev : diamondsState.diamondsTitleEvents) {
+        if (!title.empty()) title += "  ";
+        title += ev.text;
     }
     if (title.empty()) title = "Today, is a beautiful day.";
     SetWindowTextA(hWnd, title.c_str());
+
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    rc.bottom = Diamonds_CaptionH(hWnd);
+    InvalidateRect(hWnd, &rc, FALSE);
 }
 
 static void Diamonds_AddTitleEvent(const std::string& symbol, COLORREF color, const std::string& price) {
-    char direction;
-    if (color == COINS_CLR_GREEN || color == COINS_CLR_GREEN_DARK || color == COINS_CLR_GREEN_DARK2)
-        direction = '+';
-    else if (color == COINS_CLR_RED || color == COINS_CLR_RED_DARK || color == COINS_CLR_RED_DARK2)
-        direction = '-';
-    else
-        direction = '=';
-
-    diamondsState.diamondsTitleEvents.push_front(symbol + direction + price);
+    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + price, color });
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
 
     HWND hWnd = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
@@ -501,8 +586,9 @@ static void Diamonds_Layout(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
     RECT rc; GetClientRect(hWnd, &rc);
+    const int capH = Diamonds_CaptionH(hWnd);
     int listH = diamondsState.checkboxesVisible ? rc.bottom - DIAMONDS_CHK_STRIP_H : rc.bottom;
-    MoveWindow(hList, 0, 0, rc.right, listH, TRUE);
+    MoveWindow(hList, 0, capH, rc.right, listH - capH, TRUE);
 
     if (!diamondsState.checkboxesVisible) return;
 
@@ -1031,6 +1117,50 @@ static void Diamonds_FlushDirty(HWND hWnd) {
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
 
+    // Make the client area cover the caption (keep the side/bottom borders as-is).
+    case WM_NCCALCSIZE:
+        if (wParam) {
+            auto* p = (NCCALCSIZE_PARAMS*)lParam;
+            LONG origTop = p->rgrc[0].top;
+            DefWindowProc(hWnd, message, wParam, lParam);
+            p->rgrc[0].top = origTop + (IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 0);
+            return 0;
+        }
+        break;
+
+    case WM_NCHITTEST: {
+        LRESULT dwm = 0;
+        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        RECT wr;
+        GetWindowRect(hWnd, &wr);
+        int dy = pt.y - wr.top;
+        if (!IsZoomed(hWnd) && dy >= 0 && dy < Diamonds_FrameY(hWnd) / 2) return HTTOP;
+        if (dy >= 0 && dy < Diamonds_CaptionH(hWnd)) return HTCAPTION;
+        break;
+    }
+
+    case WM_ERASEBKGND: {
+        HDC hdc = (HDC)wParam;
+        RECT rc;
+        GetClientRect(hWnd, &rc);
+        RECT cap = rc;
+        cap.bottom = Diamonds_CaptionH(hWnd);
+        FillRect(hdc, &cap, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        RECT rest = rc;
+        rest.top = cap.bottom;
+        FillRect(hdc, &rest, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
+        return 1;
+    }
+
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        Diamonds_PaintCaption(hWnd, hdc);
+        EndPaint(hWnd, &ps);
+        return 0;
+    }
+
     case WM_CREATE: {
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
@@ -1107,6 +1237,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Repopulate(hWnd);
+        Diamonds_UpdateFrameMargins(hWnd);
+        SetWindowPos(hWnd, NULL, 0, 0, 0, 0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         Diamonds_UpdateEventTitle(hWnd);
 
         SetTimer(hWnd, TIMER_DIAMONDS_SORT, DIAMONDS_SORT_TIMER_MS, NULL);
@@ -1155,6 +1288,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_SIZE: {
+        Diamonds_UpdateFrameMargins(hWnd);
         Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Layout(hWnd);
         break;
