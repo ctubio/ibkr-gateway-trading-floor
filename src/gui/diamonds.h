@@ -135,6 +135,7 @@ struct DiamondsTitleEvent {
     std::string text;
     COLORREF color; // 0 = theme text
     int conId;
+    std::string symbol;
 };
 
 struct DiamondsState {
@@ -316,7 +317,7 @@ static void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORRE
     if (displayPrice.size() >= 3 && displayPrice.compare(displayPrice.size() - 3, 3, ".00") == 0)
         displayPrice.erase(displayPrice.size() - 3);
 
-    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + displayPrice, color, conId });
+    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + displayPrice, color, conId, symbol });
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
 
     HWND hWnd = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
@@ -1356,6 +1357,21 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         int conId = Diamonds_TitleHitTest(pt);
         if (conId > 0) {
             api().updateDisplayGroup(conId);
+            return 0;
+        }
+        break;
+    }
+
+    case WM_LBUTTONDBLCLK: {
+        POINT pt = { (short)LOWORD(lParam), (short)HIWORD(lParam) };
+        int conId = Diamonds_TitleHitTest(pt);
+        if (conId > 0 && !lockHotkeys) {
+            for (const auto& ev : diamondsState.diamondsTitleEvents) {
+                if (ev.conId == conId && !ev.symbol.empty()) {
+                    StartMarket(ev.symbol, conId);
+                    break;
+                }
+            }
             return 0;
         }
         break;

@@ -525,6 +525,7 @@ void RegisterWindowClass(HINSTANCE hInst, WNDPROC WndProc, const char* className
     onlineIcon  = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
     offlineIcon = CreateGrayIcon(onlineIcon);
     WNDCLASS wc = { 0 };
+    wc.style         = strcmp(className, DIAMONDS_CLASS_NAME) == 0 ? CS_DBLCLKS : 0;
     wc.lpfnWndProc   = WndProc;
     wc.lpszClassName = className;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
