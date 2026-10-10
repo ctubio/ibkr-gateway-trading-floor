@@ -12,12 +12,10 @@ void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, 
 #define ID_MB_EXCHANGE   1008
 #define ID_MB_ORDERS     1009
 #define ID_M_ORDERS      1010
-#define ID_M_EVENTS      1011
 #define ID_M_DIAMONDS    1012
 #define ID_M_SETTINGS    1013
 #define ID_M_MARKET      1014
 #define ID_M_DEBUGLOG    1015
-#define ID_MB_EVENTS     1016
 
 #define ID_M_CONNECT    1100
 #define ID_M_DISCONNECT 1101
@@ -1194,8 +1192,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int steps = 1;
             int stepz = 0;
             addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
-            addButtons(hWnd, hInst, "Events",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EVENTS,    109);
-            addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    103);
+            addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    109);
             
             addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    105);
             addButtons(hWnd, hInst, "Exchange",  9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  106);
@@ -1331,7 +1328,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     FlashScreen(data->isUp, 1000);
                     std::string price = FormatFixed(data->price, 2);
                     COLORREF color = data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK;
-                    Events_AddEvent(price, color, true, data->conId, data->symbol);
                     Diamonds_AddTitleEvent(data->symbol, data->conId, color, price);
                     PlaySound_Async(209);
                 }
@@ -1342,7 +1338,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_ADD_EVENT: {
             TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
             if (data) {
-                Events_AddEvent(data->text, data->color, data->bold, data->conId, data->symbol);
                 Diamonds_AddTitleEvent(data->symbol, data->conId, data->color, data->text);
                 if (data->color != COINS_CLR_BLUE) PlaySound_Async(210, false);
                 delete data;
@@ -1414,7 +1409,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     int hasSubmenus = 0;
                     if (hWnd && IsWindowVisible(hWnd)) { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? L"[ ★ ] Dashboard" : L"[  ] Dashboard"); }
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds"); }
-                    if (FindWindowA(EVENTS_CLASS_NAME, NULL))    { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_EVENTS,    IsWindowAlwaysOnTop(EVENTS_CLASS_NAME)    ? L"[ ★ ] Events"    : L"[  ] Events"); }
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders"); }
 
                     struct OpenMarketItem { HWND hWnd; std::string symbol; };
@@ -1456,7 +1450,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                         case ID_M_DASHBOARD:
                         case ID_M_DIAMONDS:
                         case ID_M_ORDERS:
-                        case ID_M_EVENTS:
                         case ID_M_SETTINGS:
                         case ID_M_DEBUGLOG:
                             SendMessage(hWnd, WM_COMMAND, selectedCmd, 0);
@@ -1576,9 +1569,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 case ID_MB_EXCHANGE:
                     StartGenericWindow(DASHBOARD_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
-                case ID_MB_EVENTS:
-                    StartEvents();
-                    break;
                 case ID_MB_MARKET:
                     StartMarket();
                     break;
@@ -1602,9 +1592,6 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                     break;
                 case ID_M_ORDERS:
                     ToggleWindowAlwaysOnTop(ORDERS_CLASS_NAME);
-                    break;
-                case ID_M_EVENTS:
-                    ToggleWindowAlwaysOnTop(EVENTS_CLASS_NAME);
                     break;
                 
                 default:

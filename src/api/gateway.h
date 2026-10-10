@@ -97,7 +97,6 @@
 static const char* DASHBOARD_CLASS_NAME            = "Dashboard";
 static const char* DIAMONDS_CLASS_NAME             = "Diamonds";
 static const char* ORDERS_CLASS_NAME               = "Orders";
-static const char* EVENTS_CLASS_NAME               = "Events";
 static const char* MARKET_CLASS_NAME               = "Market";
 static const char* MARKET_SEARCH_CLASS_NAME        = "Market_SearchSymbol";
 static const char* SETTINGS_CLASS_NAME             = "Settings";
