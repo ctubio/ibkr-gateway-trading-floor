@@ -312,7 +312,11 @@ static void Diamonds_UpdateEventTitle(HWND hWnd) {
 }
 
 static void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORREF color, const std::string& price) {
-    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + price, color, conId });
+    std::string displayPrice = price;
+    if (displayPrice.size() >= 3 && displayPrice.compare(displayPrice.size() - 3, 3, ".00") == 0)
+        displayPrice.erase(displayPrice.size() - 3);
+
+    diamondsState.diamondsTitleEvents.push_front({ symbol + " " + displayPrice, color, conId });
     while (diamondsState.diamondsTitleEvents.size() > DIAMONDS_TITLE_EVENTS_MAX) diamondsState.diamondsTitleEvents.pop_back();
 
     HWND hWnd = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
