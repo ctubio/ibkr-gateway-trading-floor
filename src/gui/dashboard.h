@@ -1191,13 +1191,13 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             int yBtn = y3 + box3H + 10; // yBtn = 326
             int steps = 1;
             int stepz = 0;
-            addButtons(hWnd, hInst, "Diamonds",  (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
-            addButtons(hWnd, hInst, "Orders",    (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    109);
+            addButtons(hWnd, hInst, "Diamonds",  (9 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_DIAMONDS,  104);
+            addButtons(hWnd, hInst, "Orders",    (9 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_ORDERS,    109);
             
-            addButtons(hWnd, hInst, "Market",    9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    105);
-            addButtons(hWnd, hInst, "Exchange",  9 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  106);
+            addButtons(hWnd, hInst, "Market",    10 + 9 + (9 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_MARKET,    105);
+            addButtons(hWnd, hInst, "Exchange",  10 + 9 + (9 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_EXCHANGE,  106);
 
-            addButtons(hWnd, hInst, "Settings", 18 + (7 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  107);
+            addButtons(hWnd, hInst, "Settings", 24 + 18 + (9 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  107);
 
             api().addApiUpdateWindow(hWnd);
 
