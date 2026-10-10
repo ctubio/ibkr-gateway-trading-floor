@@ -139,8 +139,6 @@ struct TsState {
     // window just tracks whether it currently holds a reference to it.
     bool      ttsOn        = false;
     bool      minimized    = false;
-    HWND      hSpeakerBtn  = NULL;
-    HWND      hOVNButton   = NULL;
 
     // ── Splitter state ────────────────────────────────────────────────────────
     float splitY     = 0.5f;   // right column: hTsListF100 (top) / hTsListF1000 (bottom)
@@ -151,6 +149,8 @@ struct TsState {
     RECT lastPriceRect = { 0, 0, 0, 0 };
     RECT flaqRect      = { 0, 0, 0, 0 };
     RECT locateRect    = { 0, 0, 0, 0 };
+    RECT speakerRect   = { 0, 0, 0, 0 };
+    RECT moonRect      = { 0, 0, 0, 0 };
 
     // ── Alerts ────────────────────────────────────────────────────────────────
     bool hasAlert = false;   // true if this symbol has an Alert Up/Down set, colors the flag icon yellow

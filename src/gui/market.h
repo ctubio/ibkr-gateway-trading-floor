@@ -72,14 +72,12 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
     }
 }
 
-#define ID_MARKET_OVERNIGHT            6003
 #define ID_MARKET_TIMESALES_LIST_F0001 6004
 #define ID_MARKET_TIMESALES_LIST_F0100 6005
 #define ID_MARKET_TIMESALES_LIST_F1000 6006
 #define ID_MARKET_SEARCH_INPUT         6007
 #define ID_MARKET_SEARCH_LIST          6008
 #define ID_MARKET_L2_LIST              6009   // Level 2 depth SysListView32 (left panel)
-#define ID_MARKET_SPEAKER              6010   // Speaker icon for TTS
 #define ID_MARKET_EXEC_LIST            6011   // Executions SysListView32 (far left panel)
 
 #define TIMER_MARKET_SPEAKER    6020  // WM_TIMER id for per-market TTS (21s)
@@ -346,7 +344,6 @@ static const int RB_TOTAL   = RB_PRICE_W + RB_SEP_W + RB_SIZE_W;
 static const int RB_MARGIN  = 4;
 
 // Left controls block (speaker + checkbox): fixed width anchored to left edge.
-static const int LC_ICON_W  = 22;   // speaker icon width
 static const int LC_MARGIN  = 4;    // left margin and gap between icon and stats
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -404,22 +401,6 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     const int barH  = (state->orderBarVisible) ? ORDER_BAR_H / (state->isOvernight ? 2 : 1) : 0;
     const int bodyH = rc.bottom - hdrH - barH;
     const int bodyW = rc.right;
-
-    // ── Speaker button: far left, vertically centred in top half of header ───
-    if (state->hSpeakerBtn) {
-        int btnY = (hdrH / 2 - 14) / 2;   // centred in top row
-        SetWindowPos(state->hSpeakerBtn, NULL,
-                     LC_MARGIN, btnY, LC_ICON_W, 22,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    // ── Filter checkbox: far left, centred in bottom half of header ──────────
-    if (state->hOVNButton) {
-        int chkY = hdrH / 2 + (hdrH / 2 - 16) / 2;
-        SetWindowPos(state->hOVNButton, NULL,
-                     LC_MARGIN, chkY - 1, LC_ICON_W, 21,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-    }
 
     const int splitThick = 4;
 
@@ -1328,7 +1309,7 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
 // ── Header paint ──────────────────────────────────────────────────────────────
 //
 // Fixed-position zones (never move with resize):
-//   [LC_MARGIN .. LC_MARGIN+LC_ICON_W] , speaker icon (top half) + checkbox (bottom half)
+//   [LC_MARGIN .. LC_MARGIN] , speaker icon (top half) + checkbox (bottom half)
 //   [rc.right - RB_TOTAL - RB_MARGIN .. rc.right - RB_MARGIN] , Ask/Bid block
 //
 // Stats block starts at STATS_X, two rows:
@@ -1423,7 +1404,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // ── STATS BLOCK: O/C/H/L (row 1) + Pos/Avg (row 2) ──────────────────────
     // Starts right after the left controls (speaker + checkbox).
-    const int STATS_X = LC_MARGIN + LC_ICON_W + LC_MARGIN;
+    const int STATS_X = LC_MARGIN;
 
     SelectObject(hdc, hFont11ptbold.get());
     
@@ -1464,7 +1445,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Row 1: O  C  H  L
     struct StatItem { const char* label; std::string value; COLORREF color; const wchar_t* wIcon = nullptr; };
     StatItem row1[] = {
-        { "", Market_Fmt(L1.prevClose), closeColor  },
+        { "", Market_Fmt(L1.prevClose), closeColor,SPEAKER_GLYPH  },
         { "", Market_Fmt(L1.high),      highColor  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
         { "", (L1.last > 0 && L1.vwap > 0) ? " " + Market_Fmt(L1.last - L1.vwap) : " --",    vwapColor, LOCATE_GLYPH  },
@@ -1473,7 +1454,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
-        { "", Market_Fmt(L1.open),  openColor  },
+        { "", Market_Fmt(L1.open),  openColor, MOON_GLYPH},
         { "", Market_Fmt(L1.low),   lowColor   },
         { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
@@ -1496,6 +1477,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 GetTextExtentPoint32W(hdc, items[i].wIcon, lstrlenW(items[i].wIcon), &iconSz);
                 bool isFlagIcon = (wcscmp(items[i].wIcon, FLAG_GLYPH) == 0);
                 bool isLocateIcon = (wcscmp(items[i].wIcon, LOCATE_GLYPH) == 0);
+                bool isSpeakerIcon = (wcscmp(items[i].wIcon, SPEAKER_GLYPH) == 0);
+                bool isMoonIcon = (wcscmp(items[i].wIcon, MOON_GLYPH) == 0);
                 RECT ir = { cx, y0, cx + iconSz.cx, y1 };
                 if (isFlagIcon) {
                     state->flaqRect = ir;
@@ -1503,11 +1486,20 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 } else if (isLocateIcon) {
                     state->locateRect = ir;
                     SetTextColor(hdc, state->minimized ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : labelColor);
+                } else if (isSpeakerIcon) {
+                    state->speakerRect = ir;
+                    SetTextColor(hdc, state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY);
+                } else if (isMoonIcon) {
+                    state->moonRect = ir;
+                    SetTextColor(hdc, state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY);
                 } else {
                     SetTextColor(hdc, labelColor);
                 }
                 DrawTextW(hdc, items[i].wIcon, -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                 cx += iconSz.cx + 2; // small gap after icon
+                if (isSpeakerIcon || isMoonIcon) {
+                    cx += 2;
+                }
                 SelectObject(hdc, hFont11ptbold);
             }
 
@@ -1653,12 +1645,11 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
         KillTimer(hWnd, TIMER_MARKET_SPEAKER);
         SharedTts().Release();
     }
-    if (state->hSpeakerBtn) InvalidateRect(state->hSpeakerBtn, NULL, TRUE);
+    state->marketHdrDirty = true;
 }
 
 static void Market_ToggleOVN(HWND hWnd, TsState* state) {
     state->isOvernight = !state->isOvernight;
-    if (state->hOVNButton) InvalidateRect(state->hOVNButton, NULL, TRUE);
     
     if (!state->symbol.empty()) {
         std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
@@ -1669,6 +1660,7 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
         OrderBar_Show(hWnd, state, state->orderSide);
     }
     SetFocus(hWnd);
+    state->marketHdrDirty = true;
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -1717,31 +1709,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         ShowWindow(state->hTsList, SW_SHOW);
         ShowWindow(state->hL2List, SW_SHOW);
         ShowWindow(state->hExecList, SW_SHOW);
-
-        // ── Overnight checkbox (far left, below speaker) ─────────────────────────
-        state->hOVNButton = CreateWindowW(L"STATIC", MOON_GLYPH,
-            WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-            0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_OVERNIGHT, hInst, NULL);
-        SendMessage(state->hOVNButton, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
-        {
-            HWND hTip = CreateWindowA(TOOLTIPS_CLASS, NULL,
-                WS_POPUP | TTS_ALWAYSTIP,
-                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                hWnd, NULL, hInst, NULL);
-            TOOLINFOA ti = {};
-            ti.cbSize   = sizeof(ti);
-            ti.uFlags   = TTF_IDISHWND | TTF_SUBCLASS;
-            ti.hwnd     = hWnd;
-            ti.uId      = (UINT_PTR)state->hOVNButton;
-            ti.lpszText = (LPSTR)"OVERNIGHT";
-            SendMessage(hTip, TTM_ADDTOOLA, 0, (LPARAM)&ti);
-        }
-
-        // ── Speaker button (far left, top half) ───────────────────────────────
-        state->hSpeakerBtn = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
-            WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
-            0, 0, 22, 22, hWnd, (HMENU)ID_MARKET_SPEAKER, hInst, NULL);
-        SendMessage(state->hSpeakerBtn, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
 
         // ── Order entry bar (hidden until Ctrl key pressed) ───────────────────
         state->hOrderLabel = CreateWindowA("STATIC", "BUY",
@@ -1956,11 +1923,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_COMMAND: {
-        if (LOWORD(wParam) == ID_MARKET_OVERNIGHT && HIWORD(wParam) == STN_CLICKED && state) {
-            Market_ToggleOVN(hWnd, state);
-        }
-        if (LOWORD(wParam) == ID_MARKET_SPEAKER && HIWORD(wParam) == STN_CLICKED && state)
-            Market_ToggleTTS(hWnd, state);
         // Order-bar edits have no control ID (created with a NULL HMENU), so
         // identify them by HWND (lParam) instead of LOWORD(wParam).
         if (state && HIWORD(wParam) == EN_CHANGE) {
@@ -2031,10 +1993,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 transparent = true;
             } else if (hCtrl == state->hOrderLabel) {
                 clr = state->orderSide == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
-            } else if (hCtrl == state->hSpeakerBtn) {
-                clr = state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY;
-            } else if (hCtrl == state->hOVNButton) {
-                clr = state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
             } else {
                 bool matchedRow = false;
                 for (auto& row : state->orderRows) {
@@ -2221,16 +2179,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_SETCURSOR: {
-        int id = GetDlgCtrlID((HWND)wParam);
-        if (id == ID_MARKET_SPEAKER || id == ID_MARKET_OVERNIGHT) {
-            SetCursor(LoadCursor(NULL, IDC_HAND));
-            return TRUE;
-        }
         if (state && LOWORD(lParam) == HTCLIENT) {
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
             if (hit == 1 || hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
-            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt) || PtInRect(&state->locateRect, pt)) {
+            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt) || PtInRect(&state->locateRect, pt) || PtInRect(&state->speakerRect, pt) || PtInRect(&state->moonRect, pt)) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
             }
@@ -2247,12 +2200,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SetCapture(hWnd);
             } else {
                 POINT pt = { x, y };
-                if (PtInRect(&state->lastPriceRect, pt)) {
+                if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->speakerRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
                     StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
                 } else if (PtInRect(&state->locateRect, pt)) {
                     Market_Minimize(hWnd, state);
+                } else if (PtInRect(&state->moonRect, pt)) {
+                    Market_ToggleOVN(hWnd, state);
                 }
             }
         }
