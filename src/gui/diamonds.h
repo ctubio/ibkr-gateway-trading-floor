@@ -239,8 +239,12 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
 
     HICON hIcon = (HICON)SendMessage(hWnd, WM_GETICON, ICON_SMALL, 0);
     if (!hIcon) hIcon = (HICON)GetClassLongPtr(hWnd, GCLP_HICONSM);
+    // When maximized the top FrameY pixels of the client area are behind the
+    // screen edge.  Shift the icon and text down so they stay visible.
+    const int captionYOfs = IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 0;
+
     if (hIcon) {
-        const int iconY = (capH - iconH) / 2;
+        const int iconY = captionYOfs + (capH - captionYOfs - iconH) / 2;
         DrawIconEx(mem, iconX, iconY, hIcon, iconW, iconH, 0, NULL, DI_NORMAL);
 
         DWORD* px = (DWORD*)bits;
@@ -260,7 +264,7 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
             SIZE sz;
             GetTextExtentPoint32W(mem, ws.c_str(), static_cast<int>(ws.size()), &sz);
             if (x + sz.cx > maxX) return false;
-            RECT r = { x, 6, x + sz.cx, capH - 6 };
+            RECT r = { x, captionYOfs + 6, x + sz.cx, capH - 6 };
             DTTOPTS opts = { sizeof(opts) };
             opts.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
             opts.crText = clr ? clr : themeText;
@@ -1246,12 +1250,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 
     // Make the client area cover the caption (keep the side/bottom borders as-is).
+    // When maximized the window extends off-screen by FrameY; we keep top = origTop
+    // so there is no non-client strip at the top — this eliminates the visible border
+    // and lets DwmDefWindowProc handle the full caption-button area.
     case WM_NCCALCSIZE:
         if (wParam) {
             auto* p = (NCCALCSIZE_PARAMS*)lParam;
             LONG origTop = p->rgrc[0].top;
             DefWindowProc(hWnd, message, wParam, lParam);
-            p->rgrc[0].top = origTop + (IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 0);
+            p->rgrc[0].top = origTop;
             return 0;
         }
         break;
