@@ -77,7 +77,7 @@ The core data engine for active trading. Supports infinite concurrent instances.
 ### 💰 Global
 | Key | Action |
 | :--- | :--- |
-| `Scroll Lock` | Toggle **hotlock**: freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The dashboard shows a small lock icon while hotlock is active. |
+| `Scroll Lock` | Toggle **hotlock**: freezes all trading keys so stray keypresses can't place or cancel orders while you're browsing. The coins shows a small lock icon while hotlock is active. |
 
 ### 🏦 Market
 | Key | Action |

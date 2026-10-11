@@ -96,14 +96,14 @@
 #define COINS_BG_DARK_GREEN RGB( 34, 82, 50)
 #define COINS_BG_DARK_RED   RGB(102, 43, 43)
 
-static const char* DASHBOARD_CLASS_NAME            = "Coins";
+static const char* COINS_CLASS_NAME            = "Coins";
 static const char* DIAMONDS_CLASS_NAME             = "Diamonds";
 static const char* ORDERS_CLASS_NAME               = "Orders";
 static const char* MARKET_CLASS_NAME               = "Market";
 static const char* MARKET_SEARCH_CLASS_NAME        = "Market_SearchSymbol";
 static const char* SETTINGS_CLASS_NAME             = "Settings";
 static const char* DEBUGLOG_CLASS_NAME             = "DebugLog";
-static const char* DASHBOARD_EXCHANGE_CLASS_NAME   = "Exchange";
+static const char* COINS_EXCHANGE_CLASS_NAME   = "Exchange";
 static const char* ALERTS_EDITOR_CLASS_NAME        = "AlertEditor";
 static const char* ALERT_NOTIFY_CLASS_NAME         = "AlertNotification";
 static const char* LOCK_CLASS_NAME                 = "Lock";

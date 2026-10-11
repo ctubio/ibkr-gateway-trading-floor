@@ -3,7 +3,7 @@
 // ─── Alerts editor popup ──────────────────────────────────────────────────
 //
 // A tiny single-instance dialog-style window (same pattern as
-// DASHBOARD_EXCHANGE_CLASS_NAME) for setting/editing a per-symbol "Alert Up"
+// COINS_EXCHANGE_CLASS_NAME) for setting/editing a per-symbol "Alert Up"
 // / "Alert Down" price pair. Opened from the Market window's flag icon and
 // from the Diamonds window's "Edit Alerts" context menu item.
 //

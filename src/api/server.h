@@ -11,7 +11,7 @@
 //    GET  /week               → Plain-text market news for today + 4 previous trading days
 //    POST /trade              → Place an untransmitted limit order via IBKR
 //                               Body: {"symbol":"AAPL","side":"BUY","quantity":10,"price":175.50}
-//                               Also forwards the order to the external dashboard at
+//                               Also forwards the order to the external coins at
 //                               http://192.168.1.105:2025/paper?action=place_trade
 //
 //  The server listens on 0.0.0.0:PORT (default 4011) so it is reachable from
@@ -1193,7 +1193,7 @@ static std::string JsonExtractNumber(const std::string& json, const std::string&
 
 // ── POST /trade handler ───────────────────────────────────────────────────────
 
-// Forward the trade to the external paper-trading dashboard.
+// Forward the trade to the external paper-trading coins.
 // Uses WinInet (already linked for news fetching) so no new dependencies.
 static void ForwardTradeToCoins(const std::string& symbol, const std::string& side, double quantity, double price, double stopPrice, double profitPrice) {
     std::string profitPriceStr;
@@ -1218,7 +1218,7 @@ static void ForwardTradeToCoins(const std::string& symbol, const std::string& si
     request += "\r\n";
     request += payload;
 
-    // Open a raw TCP socket to the dashboard
+    // Open a raw TCP socket to the coins
     SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == INVALID_SOCKET) {
         LogDebug("ForwardTrade: failed to create socket");
@@ -1248,7 +1248,7 @@ static void ForwardTradeToCoins(const std::string& symbol, const std::string& si
     while (recv(sock, rbuf, sizeof(rbuf) - 1, 0) > 0) {}
 
     closesocket(sock);
-    LogDebug("ForwardTrade: forwarded " + side + " " + symbol + " to dashboard: " + payload);
+    LogDebug("ForwardTrade: forwarded " + side + " " + symbol + " to coins: " + payload);
 }
 
 // POST /trade
@@ -1350,12 +1350,12 @@ static std::string HandlePostTrade(const std::string& body) {
         }
     }
 
-    // ── Forward to external dashboard first ───────────────────────────────────
+    // ── Forward to external coins first ───────────────────────────────────
     ForwardTradeToCoins(symbol, side, quantity, price, stopPrice, profitPrice);
 
     // ── Submit the order to IBKR (transmit = false) ───────────────────────────
     std::thread([conId, symbol, side, quantity, price, stopPrice, profitPrice]() {
-        HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
         if (hCoins && IsWindow(hCoins)) {
             PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
         }

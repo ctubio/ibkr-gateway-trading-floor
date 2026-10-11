@@ -12,15 +12,15 @@
 #include "gui/market.h"
 #include "gui/diamonds.h"
 #include "gui/orders.h"
-#include "gui/dashboard.h"
+#include "gui/coins.h"
 
 class RegisterWindowRAII {
     HINSTANCE hInst_;
     bool allowed = true;
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
-        RegisterWindowClass(hInst_, WndProcCoins,              DASHBOARD_CLASS_NAME,            101);
-        RegisterWindowClass(hInst_, WndProcExchange,           DASHBOARD_EXCHANGE_CLASS_NAME,   106, true);
+        RegisterWindowClass(hInst_, WndProcCoins,              COINS_CLASS_NAME,            101);
+        RegisterWindowClass(hInst_, WndProcExchange,           COINS_EXCHANGE_CLASS_NAME,   106, true);
         RegisterWindowClass(hInst_, WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true);
         RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true);
         RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,               109);
@@ -50,8 +50,8 @@ public:
     bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
         DestroyScreenFlashOverlay();
-        UnregisterClass(DASHBOARD_CLASS_NAME, hInst_);
-        UnregisterClass(DASHBOARD_EXCHANGE_CLASS_NAME, hInst_);
+        UnregisterClass(COINS_CLASS_NAME, hInst_);
+        UnregisterClass(COINS_EXCHANGE_CLASS_NAME, hInst_);
         UnregisterClass(ALERTS_EDITOR_CLASS_NAME, hInst_);
         UnregisterClass(ALERT_NOTIFY_CLASS_NAME, hInst_);
         UnregisterClass(ORDERS_CLASS_NAME, hInst_);

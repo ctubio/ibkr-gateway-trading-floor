@@ -309,7 +309,7 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
 
     HWND hWndParent = NULL;
     DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
-    if (hInst) { // dashboard window
+    if (hInst) { // coins window
         hWnd = CreateWindow(className, title, dwStyle, x, y, w, h, NULL, NULL, hInst, lpParam);
         UpdateWindow(hWnd);
     } else {
@@ -335,10 +335,10 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
         }
-        if (strcmp(className, DASHBOARD_EXCHANGE_CLASS_NAME) == 0) {
+        if (strcmp(className, COINS_EXCHANGE_CLASS_NAME) == 0) {
             dwExStyle = WS_EX_DLGMODALFRAME | WS_EX_TOPMOST;
             dwStyle   = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE;
-            hWndParent = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+            hWndParent = FindWindowA(COINS_CLASS_NAME, NULL);
         }
 
         hWnd = CreateWindowExA(dwExStyle, className, title, dwStyle, x, y, w, h, hWndParent, NULL, GetModuleHandle(NULL), lpParam);
@@ -728,7 +728,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             char className[256] = {};
             GetClassNameA(hWnd, className, sizeof(className));
 
-            if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
+            if (strcmp(className, COINS_CLASS_NAME) == 0) {
                 ShowWindow(hWnd, SW_HIDE);
                 ToggleTWS(SW_HIDE);
             }
@@ -756,7 +756,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             KillTimer(hWnd, TIMER_SAVE_WINPOS);
             std::string className = SaveWinPosition(hWnd);
 
-            if (className != DASHBOARD_CLASS_NAME) {
+            if (className != COINS_CLASS_NAME) {
                 Session_RemoveWindow(hWnd);
             }
             if (className == MARKET_CLASS_NAME) {

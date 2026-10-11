@@ -910,7 +910,7 @@ void Session_AddWindow(HWND hWnd, LPARAM lParam) {
             else ToggleWindowAlwaysOnTop(winKey.c_str());                        
         }
 
-        if (strcmp(className, DASHBOARD_CLASS_NAME) != 0) { // Coins is always open on boot, no need to track in registry
+        if (strcmp(className, COINS_CLASS_NAME) != 0) { // Coins is always open on boot, no need to track in registry
             Save_OpenWindows(className);
         }
     }

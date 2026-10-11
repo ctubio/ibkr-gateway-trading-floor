@@ -944,7 +944,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             //std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
             std::string msg = FormatFixed(t.last, 2);
             std::string title = row.symbol + ": Alert UP!";
-            HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+            HWND hMain = FindWindowA(COINS_CLASS_NAME, NULL);
             if (hMain) {
                 AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, true};
                 if (!PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data)) {
@@ -961,7 +961,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             //std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
             std::string msg = FormatFixed(t.last, 2);
             std::string title = row.symbol + ": Alert DOWN!";
-            HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+            HWND hMain = FindWindowA(COINS_CLASS_NAME, NULL);
             if (hMain) {
                 AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, false};
                 if (!PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data)) {
@@ -1713,7 +1713,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                             double buyPrice = quickInfo.last;
                             std::thread([conId, sym, buyPrice]() {
-                                HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                                HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
                                 if (hCoins && IsWindow(hCoins)) {
                                     PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
                                 }
@@ -1735,7 +1735,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                             double sellPrice = quickInfo.last;
                             std::thread([conId, sym, sellPrice]() {
-                                HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                                HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
                                 if (hCoins && IsWindow(hCoins)) {
                                     PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
                                 }
