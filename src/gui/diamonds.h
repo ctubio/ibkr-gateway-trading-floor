@@ -264,7 +264,7 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
             SIZE sz;
             GetTextExtentPoint32W(mem, ws.c_str(), static_cast<int>(ws.size()), &sz);
             if (x + sz.cx > maxX) return false;
-            RECT r = { x, captionYOfs + 6, x + sz.cx, capH - 6 };
+            RECT r = { x, captionYOfs, x + sz.cx, capH };
             DTTOPTS opts = { sizeof(opts) };
             opts.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
             opts.crText = clr ? clr : themeText;
