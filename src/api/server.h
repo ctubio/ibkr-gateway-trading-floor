@@ -1195,7 +1195,7 @@ static std::string JsonExtractNumber(const std::string& json, const std::string&
 
 // Forward the trade to the external paper-trading dashboard.
 // Uses WinInet (already linked for news fetching) so no new dependencies.
-static void ForwardTradeToDashboard(const std::string& symbol, const std::string& side, double quantity, double price, double stopPrice, double profitPrice) {
+static void ForwardTradeToCoins(const std::string& symbol, const std::string& side, double quantity, double price, double stopPrice, double profitPrice) {
     std::string profitPriceStr;
     if (profitPrice > 0.0) {
         profitPriceStr = ",\"profitPrice\":" + std::format("{:.2f}", profitPrice);
@@ -1351,13 +1351,13 @@ static std::string HandlePostTrade(const std::string& body) {
     }
 
     // ── Forward to external dashboard first ───────────────────────────────────
-    ForwardTradeToDashboard(symbol, side, quantity, price, stopPrice, profitPrice);
+    ForwardTradeToCoins(symbol, side, quantity, price, stopPrice, profitPrice);
 
     // ── Submit the order to IBKR (transmit = false) ───────────────────────────
     std::thread([conId, symbol, side, quantity, price, stopPrice, profitPrice]() {
-        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-        if (hDashboard && IsWindow(hDashboard)) {
-            PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+        HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        if (hCoins && IsWindow(hCoins)) {
+            PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
         }
         HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
         int max = 10;

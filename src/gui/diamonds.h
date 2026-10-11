@@ -1713,9 +1713,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                             double buyPrice = quickInfo.last;
                             std::thread([conId, sym, buyPrice]() {
-                                HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-                                if (hDashboard && IsWindow(hDashboard)) {
-                                    PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                                HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                                if (hCoins && IsWindow(hCoins)) {
+                                    PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
                                 }
                                 HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
                                 int max = 10;
@@ -1735,9 +1735,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                             double sellPrice = quickInfo.last;
                             std::thread([conId, sym, sellPrice]() {
-                                HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-                                if (hDashboard && IsWindow(hDashboard)) {
-                                    PostMessageA(hDashboard, WM_OPEN_ORDERS_WINDOW, 0, 0);
+                                HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+                                if (hCoins && IsWindow(hCoins)) {
+                                    PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
                                 }
                                 HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
                                 int max = 10;

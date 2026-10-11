@@ -19,7 +19,7 @@ class RegisterWindowRAII {
     bool allowed = true;
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
-        RegisterWindowClass(hInst_, WndProcDashboard,          DASHBOARD_CLASS_NAME,            101);
+        RegisterWindowClass(hInst_, WndProcCoins,              DASHBOARD_CLASS_NAME,            101);
         RegisterWindowClass(hInst_, WndProcExchange,           DASHBOARD_EXCHANGE_CLASS_NAME,   106, true);
         RegisterWindowClass(hInst_, WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true);
         RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true);
@@ -43,7 +43,7 @@ public:
             }
         }
 
-        StartDashboard(hInst_);
+        StartCoins(hInst_);
 
         Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartDebugLog);
     }

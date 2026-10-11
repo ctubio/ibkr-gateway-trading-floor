@@ -96,7 +96,7 @@
 #define COINS_BG_DARK_GREEN RGB( 34, 82, 50)
 #define COINS_BG_DARK_RED   RGB(102, 43, 43)
 
-static const char* DASHBOARD_CLASS_NAME            = "Dashboard";
+static const char* DASHBOARD_CLASS_NAME            = "Coins";
 static const char* DIAMONDS_CLASS_NAME             = "Diamonds";
 static const char* ORDERS_CLASS_NAME               = "Orders";
 static const char* MARKET_CLASS_NAME               = "Market";
@@ -361,7 +361,7 @@ public:
     void searchSymbols(HWND hWnd, const std::string& pattern);
     std::vector<std::string> getSymbolResults();
 
-    // ── FX / Currency Conversion (Dashboard "Exchange Currency" popup) ───────────
+    // ── FX / Currency Conversion (Coins "Exchange Currency" popup) ───────────
     // Subscribes streaming market data for the EUR.USD spot FX contract on
     // IDEALPRO and routes ticks to hWnd via WM_FX_RATE_UPDATE (no lParam,
     // call getFxRate() to read the latest bid/ask/last).

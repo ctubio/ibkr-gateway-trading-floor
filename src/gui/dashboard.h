@@ -1,9 +1,9 @@
 #pragma once
 
-static const int windowDashboardWidth  = 250;
-static const int windowDashboardHeight = 382;
+static const int windowCoinsWidth  = 250;
+static const int windowCoinsHeight = 382;
 
-void StartDashboard(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor", L"TWSAPIClientTradingFloor.Dashboard", windowDashboardWidth, windowDashboardHeight, hInst); }
+void StartCoins(HINSTANCE hInst) { StartGenericWindow(DASHBOARD_CLASS_NAME, "Trading Floor", L"TWSAPIClientTradingFloor.Coins", windowCoinsWidth, windowCoinsHeight, hInst); }
 
 #define ID_M_DASHBOARD   1001
 #define ID_MB_DIAMONDS   1003
@@ -49,14 +49,14 @@ static const int LINKS_COUNT = (int)(sizeof(quickLinks) / sizeof(quickLinks[0]))
 
 static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
-// ─── Dashboard State ──────────────────────────────────────────────────────────
+// ─── Coins State ──────────────────────────────────────────────────────────
 // Encapsulates all dashboard-specific HWNDs and state variables
 
-struct DashboardState {
+struct CoinsState {
     // Window state
     bool fullDetails = true;
     bool shouldBeConnected = true;
-    std::string currencyDashboard = "--";
+    std::string currencyCoins = "--";
     ITaskbarList3* taskbar = nullptr;
     bool taskbarComInitialized = false;
     TBPFLAG taskbarLastState = TBPF_NOPROGRESS;
@@ -117,9 +117,9 @@ struct DashboardState {
 };
 
 // Global dashboard state instance
-static DashboardState dashboardState;
+static CoinsState dashboardState;
 
-static void Dashboard_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
+static void Coins_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
     if (!dashboardState.taskbar) return;
 
     if (openOrdersCount > 0) {
@@ -312,7 +312,7 @@ static void UpdateMarketClock(HWND hWnd) {
     InvalidateRect(dashboardState.hCoin_Clock, NULL, TRUE);
 }
 
-static void Dashboard_ApplyFocusLayout(HWND hWnd, bool active) {
+static void Coins_ApplyFocusLayout(HWND hWnd, bool active) {
     const int m = 10;
     const int boxW = 226;
     const int y1 = 8;
@@ -367,8 +367,8 @@ static void Dashboard_ApplyFocusLayout(HWND hWnd, bool active) {
 
     RECT windowRect;
     GetWindowRect(hWnd, &windowRect);
-    MoveWindow(hWnd, windowRect.left, windowRect.top, windowDashboardWidth,
-               active ? windowDashboardHeight : windowDashboardHeight - 60 - 38, TRUE);
+    MoveWindow(hWnd, windowRect.left, windowRect.top, windowCoinsWidth,
+               active ? windowCoinsHeight : windowCoinsHeight - 60 - 38, TRUE);
     dashboardState.fullDetails = active;
 }
 
@@ -495,7 +495,7 @@ void UpdateTrayIcon(HWND hWnd) {
             tooltip += "Connecting..";
         } else {
             connected = api().isMarketDataConnected() && api().isTradingConnected();
-            tooltip = acc + " | " + dashboardState.currencyDashboard + " | " + (connected ? "Connected" : "Disconnected");
+            tooltip = acc + " | " + dashboardState.currencyCoins + " | " + (connected ? "Connected" : "Disconnected");
         }
     }
     std::wstring wTooltip(tooltip.begin(), tooltip.end());
@@ -520,25 +520,25 @@ void Coins_UpdateLabels(HWND hWnd) {
     double realized     = api().getRealizedPnL();
     int openOrdersCount = api().getOpenOrdersCount();
 
-    std::string prevCurrency = dashboardState.currencyDashboard;
-    dashboardState.currencyDashboard = "--";
+    std::string prevCurrency = dashboardState.currencyCoins;
+    dashboardState.currencyCoins = "--";
     auto tryParse = [&](const std::string& k) -> double {
         auto it = summary.find(k);
         if (it == summary.end()) return 0.0;
         try { return std::stod(it->second); } catch (...) { return 0.0; }
     };
     if (summary.count("EUR_NetLiquidation")) {
-        dashboardState.currencyDashboard = "EUR"; NetLiquidation = tryParse("EUR_NetLiquidation");
+        dashboardState.currencyCoins = "EUR"; NetLiquidation = tryParse("EUR_NetLiquidation");
     } else if (summary.count("USD_NetLiquidation")) {
-        dashboardState.currencyDashboard = "USD"; NetLiquidation = tryParse("USD_NetLiquidation");
+        dashboardState.currencyCoins = "USD"; NetLiquidation = tryParse("USD_NetLiquidation");
     } else if (summary.count("NetLiquidation")) {
         NetLiquidation = tryParse("NetLiquidation");
         for (auto const& [k, v] : summary)
             if (k.find("_NetLiquidation") != std::string::npos)
-                { dashboardState.currencyDashboard = k.substr(0, k.find('_')); break; }
+                { dashboardState.currencyCoins = k.substr(0, k.find('_')); break; }
     }
 
-    if (dashboardState.currencyDashboard != prevCurrency)
+    if (dashboardState.currencyCoins != prevCurrency)
         UpdateTrayIcon(hWnd);
 
     const int m = 10;
@@ -568,7 +568,7 @@ void Coins_UpdateLabels(HWND hWnd) {
             dashboardState.orderColor = openOrdersCount ? COINS_CLR_YELLOW : COINS_CLR_GRAY;
         }
     }
-    Dashboard_UpdateTaskbarOrders(hWnd, openOrdersCount);
+    Coins_UpdateTaskbarOrders(hWnd, openOrdersCount);
     
     COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (dashboardState.hCoin_BigPnL) {
@@ -638,7 +638,7 @@ void Coins_UpdateLabels(HWND hWnd) {
 
     if (dashboardState.hCoin_Cash) {
         double cash = tryParse("BASE_CashBalance");
-        std::string formattedNum = FormatWithCommas(cash, dashboardState.fullDetails) + " " + dashboardState.currencyDashboard;
+        std::string formattedNum = FormatWithCommas(cash, dashboardState.fullDetails) + " " + dashboardState.currencyCoins;
         if (SetWindowTextAIfChanged(dashboardState.hCoin_Cash, formattedNum)) {
             COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
             dashboardState.cashColor = clr;
@@ -666,14 +666,14 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (valueLabelMoves) EndDeferWindowPos(valueLabelMoves);
 }
 
-static LRESULT CALLBACK DashboardButton_CursorSubclassProc(HWND hButton, UINT msg, WPARAM wParam, LPARAM lParam,
+static LRESULT CALLBACK CoinsButton_CursorSubclassProc(HWND hButton, UINT msg, WPARAM wParam, LPARAM lParam,
                                                             UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
     if (msg == WM_SETCURSOR && LOWORD(lParam) == HTCLIENT) {
         SetCursor(LoadCursor(NULL, IDC_HAND));
         return TRUE;
     }
     if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hButton, DashboardButton_CursorSubclassProc, uIdSubclass);
+        RemoveWindowSubclass(hButton, CoinsButton_CursorSubclassProc, uIdSubclass);
     return DefSubclassProc(hButton, msg, wParam, lParam);
 }
 
@@ -685,7 +685,7 @@ void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HME
             x, y, 26, 26,
             hWnd, menuId, hInst, NULL
         );
-        SetWindowSubclass(hBtn, DashboardButton_CursorSubclassProc, 1, 0);
+        SetWindowSubclass(hBtn, CoinsButton_CursorSubclassProc, 1, 0);
         // Store the icon via SetProp so WM_DRAWITEM can retrieve it with GetProp.
         // (BM_GETIMAGE is unreliable without BS_ICON in the style.)
         HICON hIcon = (HICON)LoadImage(hInst, MAKEINTRESOURCE(iconId), IMAGE_ICON, 24, 24, LR_DEFAULTCOLOR);
@@ -712,7 +712,7 @@ void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HME
 // converting between USD and EUR on IDEALPRO. Opened from the 🗘 icon at the
 // right of the last account-summary row.
 
-static void DashboardFx_UpdateTitle(HWND hWnd) {
+static void CoinsFx_UpdateTitle(HWND hWnd) {
     TradingAPI::L1Book fx;
     api().getFxRate(fx);
 
@@ -756,7 +756,7 @@ static void DashboardFx_UpdateTitle(HWND hWnd) {
 // closes the popup. order.totalQuantity for a CASH/IDEALPRO contract is always
 // denominated in the base currency (EUR), so a BUY (USD->EUR) amount typed in
 // USD is converted to its EUR notional before being sent.
-static void DashboardFx_SubmitAndClose(HWND hWnd) {
+static void CoinsFx_SubmitAndClose(HWND hWnd) {
     HWND hCombo = GetDlgItem(hWnd, ID_DASHFX_ACTION_COMBO);
     HWND hEdit  = GetDlgItem(hWnd, ID_DASHFX_AMOUNT_EDIT);
     int sel = hCombo ? (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0) : 0;
@@ -785,7 +785,7 @@ static void DashboardFx_SubmitAndClose(HWND hWnd) {
 
 // Subclass shared by the action combo and the amount edit: ESC closes without
 // submitting, ENTER submits and closes.
-static LRESULT CALLBACK DashboardFx_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
+static LRESULT CALLBACK CoinsFx_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM wParam, LPARAM lParam,
                                                      UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) {
     if (msg == WM_CHAR) {
         if (!IsAllowedNumericEditCharacter(wParam))
@@ -798,12 +798,12 @@ static LRESULT CALLBACK DashboardFx_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM
             return 0;
         }
         if (wParam == VK_RETURN) {
-            DashboardFx_SubmitAndClose(hParent);
+            CoinsFx_SubmitAndClose(hParent);
             return 0;
         }
     }
     if (msg == WM_NCDESTROY)
-        RemoveWindowSubclass(hCtrl, DashboardFx_KeySubclassProc, uIdSubclass);
+        RemoveWindowSubclass(hCtrl, CoinsFx_KeySubclassProc, uIdSubclass);
     return DefSubclassProc(hCtrl, msg, wParam, lParam);
 }
 
@@ -827,11 +827,11 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
                 218, 10, 90, 24, hWnd, (HMENU)ID_DASHFX_AMOUNT_EDIT, hInst, NULL);
 
-            SetWindowSubclass(hCombo, DashboardFx_KeySubclassProc, 1, 0);
-            SetWindowSubclass(hEdit,  DashboardFx_KeySubclassProc, 2, 0);
+            SetWindowSubclass(hCombo, CoinsFx_KeySubclassProc, 1, 0);
+            SetWindowSubclass(hEdit,  CoinsFx_KeySubclassProc, 2, 0);
 
             api().reqFxRate(hWnd);
-            DashboardFx_UpdateTitle(hWnd);
+            CoinsFx_UpdateTitle(hWnd);
 
             SetFocus(hEdit);
             int len = GetWindowTextLengthA(hEdit);
@@ -840,13 +840,13 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
 
         case WM_FX_RATE_UPDATE:
-            DashboardFx_UpdateTitle(hWnd);
+            CoinsFx_UpdateTitle(hWnd);
             break;
 
         case WM_COMMAND:
             if ((LOWORD(wParam) == ID_DASHFX_ACTION_COMBO && HIWORD(wParam) == CBN_SELCHANGE) ||
                 (LOWORD(wParam) == ID_DASHFX_AMOUNT_EDIT  && HIWORD(wParam) == EN_CHANGE)) {
-                DashboardFx_UpdateTitle(hWnd);
+                CoinsFx_UpdateTitle(hWnd);
             }
             break;
 
@@ -868,7 +868,7 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // Single-instance popup (same pattern as ALERTS_EDITOR_CLASS_NAME) used to gate
 // unlocking the dashboard hotkeys. Locking never needs the keyword, only
 // unlocking does, so this window is only ever opened on the "unlock" path,
-// either from WndProcDashboard's Scroll Lock handler or, at startup, from
+// either from WndProcCoins's Scroll Lock handler or, at startup, from
 // PromptLockAtStartup() before the rest of the app is even created.
 
 #define ID_LOCK_EDIT 5501
@@ -902,12 +902,12 @@ static void Lock_TrySubmit(HWND hWnd) {
 
     if (!lockState.startupMode) {
         // Runtime unlock: reverse exactly what the "lock" branch in
-        // WndProcDashboard's WM_KEYDOWN did.
+        // WndProcCoins's WM_KEYDOWN did.
         lockHotkeys = false;
         ShowWindow(dashboardState.hCoin_Lock, SW_HIDE);
-        HWND hDashboard = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
-        if (hDashboard && IsWindow(hDashboard))
-            PostMessage(hDashboard, WM_ACTIVATE, WA_ACTIVE, 0);
+        HWND hCoins = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
+        if (hCoins && IsWindow(hCoins))
+            PostMessage(hCoins, WM_ACTIVATE, WA_ACTIVE, 0);
         ToggleTWS(SW_SHOW);
     }
     // Startup mode: nothing to reverse yet, just report success to
@@ -1005,7 +1005,7 @@ static bool PromptLockAtStartup() {
     return lockState.success;
 }
 
-LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE:	{
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
@@ -1227,9 +1227,9 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
         case WM_ACTIVATE: {
             if (LOWORD(wParam) != WA_INACTIVE) {
                 if (lockHotkeys) break;
-                Dashboard_ApplyFocusLayout(hWnd, true);
+                Coins_ApplyFocusLayout(hWnd, true);
             } else {
-                Dashboard_ApplyFocusLayout(hWnd, false);
+                Coins_ApplyFocusLayout(hWnd, false);
             }
             if (api().isMarketDataConnected() && api().isTradingConnected()) {
                 Coins_UpdateLabels(hWnd);
@@ -1260,8 +1260,8 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
                 if (dashboardState.hCoin_Cash)        { SetWindowTextA(dashboardState.hCoin_Cash,      "--"); SetWindowPos(dashboardState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(dashboardState.hCoin_Cash, NULL, TRUE); }
                 if (dashboardState.hCoin_EUR)         SetWindowTextA(dashboardState.hCoin_EUR,         "--");
                 if (dashboardState.hCoin_USD)         SetWindowTextA(dashboardState.hCoin_USD,         "--");
-                dashboardState.currencyDashboard = "--";
-                Dashboard_UpdateTaskbarOrders(hWnd, 0);
+                dashboardState.currencyCoins = "--";
+                Coins_UpdateTaskbarOrders(hWnd, 0);
             }
             UpdateTrayIcon(hWnd);
             break;
@@ -1407,7 +1407,7 @@ LRESULT CALLBACK WndProcDashboard(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 
                     // Re-evaluate window states on every loop iteration
                     int hasSubmenus = 0;
-                    if (hWnd && IsWindowVisible(hWnd)) { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? L"[ ★ ] Dashboard" : L"[  ] Dashboard"); }
+                    if (hWnd && IsWindowVisible(hWnd)) { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DASHBOARD, IsWindowAlwaysOnTop(DASHBOARD_CLASS_NAME) ? L"[ ★ ] Coins" : L"[  ] Coins"); }
                     if (FindWindowA(DIAMONDS_CLASS_NAME, NULL))  { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_DIAMONDS,  IsWindowAlwaysOnTop(DIAMONDS_CLASS_NAME)  ? L"[ ★ ] Diamonds"  : L"[  ] Diamonds"); }
                     if (FindWindowA(ORDERS_CLASS_NAME, NULL))    { hasSubmenus++; AppendMenuW(hMenu, MF_STRING, ID_M_ORDERS,    IsWindowAlwaysOnTop(ORDERS_CLASS_NAME)    ? L"[ ★ ] Orders"    : L"[  ] Orders"); }
 

@@ -6,8 +6,6 @@ A lightweight Windows tray application that connects to the Interactive Brokers 
 
 ---
 
-## 🚀 Quick Start
-
 ### Requirements
 Before launching the application, ensure the following:
 - [ ] **TWS or IB Gateway** is installed and running.
@@ -39,7 +37,7 @@ A modern desktop trading companion built on the Interactive Brokers C++ API. It 
 
 ## 🛠 Core Modules
 
-### 💰 Dashboard (The Command Center)
+### 💰 Coins
 The primary tray window combining account metrics with centralized window management.
 *   **Account Summary**: Live Net Liquidation Value, Daily P&L (with clickable TTS speaker icon), and detailed margin metrics (Buying Power, Maintenance Margin, Unrealized/Realized PnL, Dividends, Gross Position, Accrued Cash, EUR/USD Cash).
 *   **Window Launcher**: One-click access to all other modules.
