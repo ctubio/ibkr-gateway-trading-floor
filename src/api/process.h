@@ -382,7 +382,7 @@ LONG WINAPI WindowsCrashHandler(EXCEPTION_POINTERS* exceptionInfo) {
        << "Fault Address: 0x" << exceptionInfo->ExceptionRecord->ExceptionAddress << "\n\n";
 
     // Alert the developer instantly via Windows Pop-up
-    MessageBoxA(NULL, ss.str().c_str(), "Gateway Gateway Fatal Error", MB_ICONERROR | MB_OK);
+    MessageBoxA(NULL, ss.str().c_str(), "Gateway Fatal Error", MB_ICONERROR | MB_OK);
 
     // Tell Windows to close the application cleanly now that we handled it
     return EXCEPTION_EXECUTE_HANDLER; 

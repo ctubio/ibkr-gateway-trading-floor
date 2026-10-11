@@ -637,7 +637,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
 
     if (dashboardState.hCoin_Cash) {
-        double cash = tryParse("CashBalance");
+        double cash = tryParse("BASE_CashBalance");
         std::string formattedNum = FormatWithCommas(cash, dashboardState.fullDetails) + " " + dashboardState.currencyDashboard;
         if (SetWindowTextAIfChanged(dashboardState.hCoin_Cash, formattedNum)) {
             COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));

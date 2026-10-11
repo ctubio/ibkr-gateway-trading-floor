@@ -343,10 +343,10 @@ void Settings_SaveFloat(const char* key, double value) {
     RegSetDword(SETTINGS_CLASS_NAME, key, scaled);
 }
 
-float Settings_LoadFloat(const char* key, float defaultValue = 0.0f) {
+double Settings_LoadFloat(const char* key, double defaultValue = 0.0) {
     DWORD scaled = RegGetDword(SETTINGS_CLASS_NAME, key, 0xFFFFFFFF);
     if (scaled == 0xFFFFFFFF) return defaultValue; // sentinel: never saved → use default
-    return (float)scaled / 10000.0f;
+    return (double)scaled / 10000.0;
 }
 
 void Settings_Delete(const char* key) {

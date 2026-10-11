@@ -34,7 +34,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
         return;
     }
 
-    // ── 4-window "slot" layout ────────────────────────────────────────
+    // ── max window slot layout ────────────────────────────────────────
     std::string flaggedKey = Settings_Market_GetOpenedLastKey();
     if (!flaggedKey.empty()) {
         HWND hFlaggedWnd = NULL;
