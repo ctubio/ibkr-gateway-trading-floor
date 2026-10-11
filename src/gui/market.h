@@ -1451,7 +1451,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     struct StatItem { const char* label; std::string value; COLORREF color; const wchar_t* wIcon = nullptr; };
     StatItem row1[] = {
         //{ "", Market_Fmt(L1.prevClose), closeColor  },
-        { "", Market_Fmt(L1.high),      highColor,SPEAKER_GLYPH  },
+        { "", " " + Market_Fmt(L1.high),      highColor,SPEAKER_GLYPH  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
         { "", (L1.last > 0 && L1.vwap > 0) ? " " + Market_Fmt(L1.last - L1.vwap) : " --",    vwapColor, LOCATE_GLYPH  },
         { "", formatVolume((long long)volRates.vol5min), rateColor(volRates.volRatio) },
@@ -1460,7 +1460,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
         //{ "", Market_Fmt(L1.open),  openColor},
-        { "", Market_Fmt(L1.low),   lowColor, MOON_GLYPH   },
+        { "", " " + Market_Fmt(L1.low),   lowColor, MOON_GLYPH   },
         { "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
 
@@ -1502,9 +1502,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 }
                 DrawTextW(hdc, items[i].wIcon, -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
                 cx += iconSz.cx + 2; // small gap after icon
-                if (isSpeakerIcon || isMoonIcon) {
-                    cx += 2;
-                }
                 SelectObject(hdc, hFont11ptbold);
             }
 

@@ -723,23 +723,14 @@ void ApplyDarkMode(HWND hWnd) {
     BOOL dark = darkMode ? TRUE : FALSE;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
 
-    // Automatically find and theme any ListViews and RichEdit inside this window
     EnumChildWindows(hWnd, EnumChildProcForLists, (LPARAM)dark);
     EnumChildWindows(hWnd, EnumChildProcForEdits, (LPARAM)dark);
 
     DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
     DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
     
-    //char className[256] = {};
-    //GetClassNameA(hWnd, className, sizeof(className));
-    //if (strcmp(className, DASHBOARD_CLASS_NAME) == 0) {
-    // Set backdrop type
-    // DWMSBT_MAINWINDOW    = Mica
-    // DWMSBT_TABBEDWINDOW  = Mica Alt (a darker/more intense version)
-    // DWMSBT_TRANSIENTWINDOW = Acrylic
     DWM_SYSTEMBACKDROP_TYPE backdropType = DWMSBT_TRANSIENTWINDOW;
     DwmSetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdropType, sizeof(backdropType));
-    //}
 }
 
 
