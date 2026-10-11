@@ -185,7 +185,7 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
             return (int)sz.cx;
         };
         auto drawText = [&](const std::wstring& ws, COLORREF clr, int left, int right, UINT extra) {
-            RECT r = { left, 0, right, capH };
+            RECT r = { left, 2, right, capH };
             DTTOPTS opts = { sizeof(opts) };
             opts.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
             opts.crText  = clr;

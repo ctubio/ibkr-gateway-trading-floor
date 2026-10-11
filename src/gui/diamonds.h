@@ -241,7 +241,7 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     if (!hIcon) hIcon = (HICON)GetClassLongPtr(hWnd, GCLP_HICONSM);
     // When maximized the top FrameY pixels of the client area are behind the
     // screen edge.  Shift the icon and text down so they stay visible.
-    const int captionYOfs = IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 0;
+    const int captionYOfs = IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 2;
 
     if (hIcon) {
         const int iconY = captionYOfs + (capH - captionYOfs - iconH) / 2;
