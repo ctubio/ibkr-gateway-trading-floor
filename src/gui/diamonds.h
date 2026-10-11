@@ -1092,6 +1092,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
         if (isHeldPosition) {
             Diamonds_UpdatePnLCols(hWnd, pos.conId);
+        } else {
+            cacheRow.sortValues[DCOL_UNREALIZED_PL] = BOTTOM_SORT_VALUE - cacheRow.conId;
         }
 
         diamondsState.displayOrder.push_back(pos.conId);
