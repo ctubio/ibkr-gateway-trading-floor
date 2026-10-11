@@ -130,7 +130,7 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
 
     RECT btn = {};
     DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &btn, sizeof(btn));
-    const int maxX  = (btn.left > 0 ? btn.left + 40 : w - 100);
+    const int maxX  = (btn.left > 0 ? btn.left + 125 : w - 100);
     const int iconW = GetSystemMetrics(SM_CXSMICON);
     const int iconH = GetSystemMetrics(SM_CYSMICON);
     const int iconX = 8;
@@ -209,23 +209,15 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
         struct Seg { std::wstring text; COLORREF color; int w; int x; };
         Seg segs[2] = {
             { StringToWide(FormatFixed(chg, 2) + "  " + FormatFixed(chgPct, 2) + "%"),
-              (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, 0, 0 },
-            { StringToWide(formatVolume((long long)vr.vol5min)), volColor, 0, 0 },
+              (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, 0, maxX - 80 },
+            { StringToWide(formatVolume((long long)vr.vol5min)), volColor, 0, maxX },
         };
 
-        const int GAP = 14;
-        int rx = maxX;
-        int firstFit = 2;
-        for (int i = 1; i >= 0; --i) {
+        for (int i = 0; i < 2; ++i) {
             segs[i].w = textWidth(segs[i].text);
-            if (rx - segs[i].w < titleEnd + GAP) break;   // no room, drop this and everything left of it
-            rx -= segs[i].w;
-            segs[i].x = rx;
-            rx -= GAP;
-            firstFit = i;
-        }
-        for (int i = firstFit; i < 2; ++i)
+            segs[i].x -= segs[i].w;
             drawText(segs[i].text, segs[i].color, segs[i].x, segs[i].x + segs[i].w + 2, 0);
+        }
     }
     if (theme) CloseThemeData(theme);
 
