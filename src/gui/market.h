@@ -292,8 +292,8 @@ static void UpdateMarketRegistry() {
 // ── Column definitions ────────────────────────────────────────────────────────
 struct TsCol { const char* header; int width; int fmt; };
 static const TsCol tsCols[] = {
-    { "Price",    60, LVCFMT_RIGHT },
-    { "Size",     45, LVCFMT_RIGHT },
+    { "Price",    58, LVCFMT_RIGHT },
+    { "Size",     44, LVCFMT_RIGHT },
     { "Time",     70, LVCFMT_LEFT  },
 };
 static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
@@ -547,8 +547,8 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     int leftW  = (int)((tsW - splitThick) / 2);
     int rightW = leftW;
     const int tsCol2WidthDiff = (tsCols[2].width / 2);
-    leftW -= tsCol2WidthDiff - 10;
-    rightW += tsCol2WidthDiff - 10;
+    leftW -= tsCol2WidthDiff - 12;
+    rightW += tsCol2WidthDiff - 12;
 
     int ordersPanelH = (int)state->orderRows.size() * MARKET_ORDER_ROW_H;
 
@@ -2414,20 +2414,22 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     Market_Minimize(hWnd, state);
                 } else if (PtInRect(&state->moonRect, pt)) {
                     Market_ToggleOVN(hWnd, state);
-auto* tick     = new TradingAPI::TsTickEntry();
-tick->price    = 1234;
-tick->size     = 1233;
-tick->exchange = "";
-std::time_t t = std::time(nullptr);
-struct tm localTime;
-localtime_s(&localTime, &t);
-char buf[32] = {};
-strftime(buf, sizeof(buf), "%H:%M:%S", &localTime);
-tick->time = buf;
+                    // uncomment to test
+                    /*
+                    auto* tick     = new TradingAPI::TsTickEntry();
+                    tick->price    = 1234;
+                    tick->size     = 1233;
+                    tick->exchange = "";
+                    std::time_t t = std::time(nullptr);
+                    struct tm localTime;
+                    localtime_s(&localTime, &t);
+                    char buf[32] = {};
+                    strftime(buf, sizeof(buf), "%H:%M:%S", &localTime);
+                    tick->time = buf;
 
-if (!PostMessage(hWnd, WM_MARKET_TICK, 0, (LPARAM)tick)) {
-    delete tick; // deleteme
-}
+                    if (!PostMessage(hWnd, WM_MARKET_TICK, 0, (LPARAM)tick)) {
+                        delete tick;
+                    }*/
                 }
             }
         }
