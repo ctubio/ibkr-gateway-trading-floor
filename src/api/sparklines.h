@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iterator>
-
 struct SparkPoint {
     ULONGLONG date; 
     double price;

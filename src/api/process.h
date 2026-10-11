@@ -1,6 +1,5 @@
 #pragma once
 
-#include <tlhelp32.h>
 DWORD PIDProcessRunning(const char* processName) {
     DWORD pid = 0;
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);

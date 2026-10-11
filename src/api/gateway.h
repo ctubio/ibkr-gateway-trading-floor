@@ -18,6 +18,7 @@
 #include <commctrl.h>
 #include <commdlg.h>
 #include <gdiplus.h>
+#include <tlhelp32.h>
 
 #include <string>
 #include <cstring>
@@ -44,6 +45,7 @@
 #include <algorithm>
 #include <functional>
 #include <filesystem>
+#include <iterator>
 #include <format>
 #include <memory>
 #include <exception>
