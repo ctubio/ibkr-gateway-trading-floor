@@ -775,15 +775,19 @@ static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
     double profitPrice = std::atof(ppBuf);
 
     if ((price > 0 || stopPrice > 0) && qty > 0) {
-        if (stopPrice < 0.1)   stopPrice = 0.0;
-        if (profitPrice < 0.1) profitPrice = 0.0;
-        double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
-        if (price > 0 && stopPrice > 0)   stopPrice   = st->orderSide == "BUY" ? price - stopPrice   : price + stopPrice;
-        if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
-
         auto fail = [&](const std::string& msg, const char* title) {
             MessageBoxA(hMarket, msg.c_str(), title, MB_ICONERROR);
         };
+
+        if (stopPrice > 0.0 && stopPrice < 0.1) {
+            fail("Stop price must be greater than 0.1.", "Invalid Stop Price"); return;
+        }
+        if (profitPrice > 0.0 && profitPrice < 0.1) {
+            fail("Profit price must be greater than 0.1.", "Invalid Profit Price"); return;
+        }
+        double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
+        if (price > 0 && stopPrice > 0)   stopPrice   = st->orderSide == "BUY" ? price - stopPrice   : price + stopPrice;
+        if (price > 0 && profitPrice > 0) profitPrice = st->orderSide == "BUY" ? price + profitPrice : price - profitPrice;
 
         if (price > 0) {
             if (st->orderSide == "BUY") {

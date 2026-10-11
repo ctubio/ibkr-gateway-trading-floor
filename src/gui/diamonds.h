@@ -947,7 +947,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
                 AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, true};
-                PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
+                if (!PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data)) {
+                    delete data;
+                }
             }
         }
     }
@@ -962,7 +964,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
             HWND hMain = FindWindowA(DASHBOARD_CLASS_NAME, NULL);
             if (hMain) {
                 AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, false};
-                PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data);
+                if (!PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data)) {
+                    delete data;
+                }
             }
         }
     }
