@@ -59,7 +59,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
             }
         } else {
             // Flagged window is already closed -- its slot is free.
-            int fx, fy, fw, fh;
+            int fx = 0, fy = 0, fw = 0, fh = 0;
             if (LoadWinPosition(flaggedKey.c_str(), fx, fy, fw, fh))
                 SaveWinPositionRaw(key, fx, fy, fw, fh);
         }

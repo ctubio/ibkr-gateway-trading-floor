@@ -429,12 +429,42 @@ bool LoadWinPosition(const char* subKeyName, int &x, int &y, int &w, int &h) {
     std::string fullPath = std::format("{}\\{}", APP_REG_ROOT, subKeyName);
 
     if (RegOpenKeyEx(HKEY_CURRENT_USER, fullPath.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        int readX = 0, readY = 0, readW = 0, readH = 0;
         DWORD dwSize = sizeof(DWORD);
-        RegQueryValueEx(hKey, "Window_X", NULL, NULL, (LPBYTE)&x, &dwSize);
-        RegQueryValueEx(hKey, "Window_Y", NULL, NULL, (LPBYTE)&y, &dwSize);
-        RegQueryValueEx(hKey, "Window_W", NULL, NULL, (LPBYTE)&w, &dwSize);
-        RegQueryValueEx(hKey, "Window_H", NULL, NULL, (LPBYTE)&h, &dwSize);
+        if (RegQueryValueEx(hKey, "Window_X", NULL, NULL, (LPBYTE)&readX, &dwSize) != ERROR_SUCCESS) { RegCloseKey(hKey); return false; }
+        dwSize = sizeof(DWORD);
+        if (RegQueryValueEx(hKey, "Window_Y", NULL, NULL, (LPBYTE)&readY, &dwSize) != ERROR_SUCCESS) { RegCloseKey(hKey); return false; }
+        dwSize = sizeof(DWORD);
+        if (RegQueryValueEx(hKey, "Window_W", NULL, NULL, (LPBYTE)&readW, &dwSize) != ERROR_SUCCESS) { RegCloseKey(hKey); return false; }
+        dwSize = sizeof(DWORD);
+        if (RegQueryValueEx(hKey, "Window_H", NULL, NULL, (LPBYTE)&readH, &dwSize) != ERROR_SUCCESS) { RegCloseKey(hKey); return false; }
         RegCloseKey(hKey);
+
+        if (readW <= 0 || readH <= 0) return false;
+
+        RECT rc = { readX, readY, readX + readW, readY + readH };
+        HMONITOR hMon = MonitorFromRect(&rc, MONITOR_DEFAULTTONULL);
+        if (!hMon) {
+            hMon = MonitorFromPoint(POINT{ readX, readY }, MONITOR_DEFAULTTONEAREST);
+        }
+
+        if (hMon) {
+            MONITORINFO mi = { sizeof(MONITORINFO) };
+            if (GetMonitorInfo(hMon, &mi)) {
+                const RECT& work = mi.rcWork;
+                if (readW > (work.right - work.left)) readW = work.right - work.left;
+                if (readH > (work.bottom - work.top)) readH = work.bottom - work.top;
+                if (readX + readW > work.right)  readX = work.right - readW;
+                if (readY + readH > work.bottom) readY = work.bottom - readH;
+                if (readX < work.left) readX = work.left;
+                if (readY < work.top)  readY = work.top;
+            }
+        }
+
+        x = readX;
+        y = readY;
+        w = readW;
+        h = readH;
         return true;
     }
     return false;
