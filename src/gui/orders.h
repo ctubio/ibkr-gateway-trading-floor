@@ -616,7 +616,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_PRICE_EDIT, hInst, NULL);
 
             HWND hEditQty = CreateWindowA("EDIT", "",
-                WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER | ES_MULTILINE,
+                WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
                 0, 0, 1, 1, hWnd, (HMENU)ID_ORDERS_QTY_EDIT, hInst, NULL);
 
             HWND hTotalLabel = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "0",

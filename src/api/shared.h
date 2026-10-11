@@ -163,6 +163,7 @@ struct TsState {
     HWND  hOrderStopPrice   = NULL;
     HWND  hOrderProfitPrice = NULL;
     HWND  hOrderQty         = NULL;
+    HWND  hTotalQtyLabel    = NULL;
     HWND  hTotalLabel       = NULL; // right of hOrderLabel: Notional value only
      // Hint overlays: transparent 12pt labels painted on top of the price/qty/
      // stop/profit inputs, corner-anchored. Input itself stays untouched,
