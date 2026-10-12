@@ -1480,11 +1480,36 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SetBkMode(hdc, TRANSPARENT);
 
     const TradingAPI::L1Book& L1 = state->l1Info;
-    // Update sparkline with latest price and draw it first so labels paint on top
     if (L1.last > 0.0) state->sparkline.AddPrice(L1.last);
-    state->sparkline.Draw(hdc, rc, rc.right - 260, HEADER_H - 2);
-    
+
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
+
+    // ── Pre-measure the Last + PnL block so the sparkline can end where it begins ──
+    const int RB_X     = rc.right - RB_TOTAL - RB_MARGIN - 2;   // left edge of Ask/Bid block
+    const int LC_RIGHT = RB_X - 10;                             // right edge of last+PnL block
+    const int STATS_X  = LC_MARGIN;
+
+    double dPnL = state->dailyPnL;
+    double uPnL = state->unrealizedPnL;
+    std::string bufD = FormatFixed(dPnL, 2, true);
+    std::string bufU = FormatFixed(uPnL, 2, true);
+
+    std::string lastStr = Market_Fmt(L1.last);
+    SIZE lastSz = {}, bufDSz = {}, bufUSz = {};
+    SelectObject(hdc, hFont21ptbold.get());
+    GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
+    SelectObject(hdc, hFont11ptbold.get());
+    GetTextExtentPoint32A(hdc, bufD.c_str(), (int)bufD.size(), &bufDSz);
+    GetTextExtentPoint32A(hdc, bufU.c_str(), (int)bufU.size(), &bufUSz);
+
+    int lcBlockW = std::max(lastSz.cx, bufDSz.cx + bufUSz.cx + 7) + 7;
+    int lcX = LC_RIGHT - lcBlockW;
+    if (lcX < STATS_X) lcX = STATS_X;
+
+    // Sparkline spans from the left edge of the header up to the Last block.
+    // Drawn first so all labels paint on top of it.
+    const int sparkW = std::max(1, lcX - (int)rc.left);
+    state->sparkline.Draw(hdc, rc, (float)sparkW, HEADER_H - 2);
 
     // ── Color helpers ─────────────────────────────────────────────────────────
     // COLORREF openColor = (L1.open > 0.0 && L1.last > 0.0) ?  (L1.last >= L1.open ? COINS_CLR_GREEN : COINS_CLR_RED) : textColor;
@@ -1501,9 +1526,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // COLORREF avgPrColor = textColor;
     // if (displayLast > 0.0 && state->avgPrice > 0.0) avgPrColor = (displayLast >= state->avgPrice) ? COINS_CLR_GREEN : COINS_CLR_RED;
 
-    // ── RIGHT BLOCK: Ask / Bid ────────────────────────────────────────────────
-    // Anchored to right edge, two rows.
-    const int RB_X = rc.right - RB_TOTAL - RB_MARGIN - 2;
 
     // Ask (top row, red)
     {
@@ -1535,21 +1557,8 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
 
-    // ── STATS BLOCK: O/C/H/L (row 1) + Pos/Avg (row 2) ──────────────────────
-    // Starts right after the left controls (speaker + checkbox).
-    const int STATS_X = LC_MARGIN;
-
     SelectObject(hdc, hFont11ptbold.get());
     
-    // Calculate PnL (Fallback to local calculation if TWS hasn't sent a stream update yet)
-    double dPnL = state->dailyPnL;
-    double uPnL = state->unrealizedPnL;
-
-    // Format Strings (Only show if we hold a position, else "--")
-    std::string bufD, bufU;
-    bufD = FormatFixed(dPnL, 2, true);
-    bufU = FormatFixed(uPnL, 2, true);
-
     // Determine Colors
     COLORREF dPnlColor = (dPnL > 0.0) ? COINS_CLR_GREEN : (dPnL < 0.0 ? COINS_CLR_RED : textColor);
     COLORREF uPnlColor = (uPnL > 0.0) ? COINS_CLR_GREEN : (uPnL < 0.0 ? COINS_CLR_RED : textColor);
@@ -1662,30 +1671,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     drawStatRow(row1, std::size(row1), STATS_X, 0,    rowH);
     drawStatRow(row2, std::size(row2), STATS_X, rowH, HEADER_H - 1);
 
-    // ── LAST + CHANGE: right-aligned just left of Ask/Bid block ──────────────
-    // We measure both pieces then right-justify them to RB_X - 10.
-    const int LC_RIGHT = RB_X - 10;   // right edge for the last+change block
-
-    // Measure large last price
-    SelectObject(hdc, hFont21ptbold.get());
-    std::string lastStr = Market_Fmt(L1.last);
-    SIZE lastSz = {};
-    GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
-
-    SIZE bufDSz = {};
-    SelectObject(hdc, hFont11ptbold.get());
-    GetTextExtentPoint32A(hdc, bufD.c_str(), (int)bufD.size(), &bufDSz);
-    SIZE bufUSz = {};
-    SelectObject(hdc, hFont11ptbold.get());
-    GetTextExtentPoint32A(hdc, bufU.c_str(), (int)bufU.size(), &bufUSz);
-
-    // Total width of the last+change block
-    int lcBlockW = std::max(lastSz.cx, bufDSz.cx + bufUSz.cx + 7) + 7;
-
-    // Left edge of the block: right-justified to LC_RIGHT, but no further left
-    // than STATS_X (so it never overlaps the stats when window is very narrow).
-    int lcX = LC_RIGHT - lcBlockW;
-    if (lcX < STATS_X) lcX = STATS_X;
 
     if (lcX < LC_RIGHT) {
         // Draw large last price (vertically centred, full header height)
