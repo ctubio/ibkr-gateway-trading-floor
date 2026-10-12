@@ -2036,7 +2036,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (api().getMarketData(state->conId, fresh)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
             //if if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
-            //if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
+            if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
             if (fresh.high      > 0.0) state->l1Info.high      = fresh.high;
             if (fresh.low       > 0.0) state->l1Info.low       = fresh.low;
             if (fresh.bid       > 0.0) state->l1Info.bid       = fresh.bid;
