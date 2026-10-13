@@ -1753,9 +1753,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         }
                     } else if (cmd == 302) {
                         TradingAPI::L1Book quickInfo;
-                        if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
-                            StartAlertEditor(sym, conId, quickInfo.last);
-                        }
+                        api().getMarketData(conId, quickInfo);
+                        StartAlertEditor(sym, conId, quickInfo.last); // quickInfo.last is fine as zero here
                     }
                 }
             }
