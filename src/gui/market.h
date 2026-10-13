@@ -2079,7 +2079,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
             tick->side = darkMode ? DM_TEXT : LM_TEXT;
-            if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0 && tick->price != state->l1Info.last) {
+            if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0) {
                 if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
                 else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
                 else if (tick->price <  state->l1Info.bid)  tick->side = COINS_CLR_RED_DARK;
