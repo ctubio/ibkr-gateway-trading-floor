@@ -122,7 +122,28 @@ static void Market_UpdateFrameMargins(HWND hWnd) {
     DwmExtendFrameIntoClientArea(hWnd, &m);
 }
 
+static void Market_FreeCaptionCache(TsState* state, bool alsoTheme) {
+    if (!state) return;
+    if (state->hdcCaptionMem) {
+        if (state->hbmCaptionOld) SelectObject(state->hdcCaptionMem, state->hbmCaptionOld);
+        if (state->hbmCaption)    DeleteObject(state->hbmCaption);
+        DeleteDC(state->hdcCaptionMem);
+    } else if (state->hbmCaption) {
+        DeleteObject(state->hbmCaption);
+    }
+    state->hdcCaptionMem = NULL;
+    state->hbmCaption    = NULL;
+    state->hbmCaptionOld = NULL;
+    state->captionBits   = nullptr;
+    state->captionBufW = state->captionBufH = 0;
+    if (alsoTheme && state->hCaptionTheme) {
+        CloseThemeData(state->hCaptionTheme);
+        state->hCaptionTheme = NULL;
+    }
+}
+
 static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
+    if (!state) return;
     RECT rc;
     GetClientRect(hWnd, &rc);
     const int w = rc.right, capH = Market_CaptionH(hWnd);
@@ -136,26 +157,30 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
     const int iconX = 8;
     int x = iconX + iconW + 8;
 
-    BITMAPINFO bi = {};
-    bi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bi.bmiHeader.biWidth       = w;
-    bi.bmiHeader.biHeight      = -capH;
-    bi.bmiHeader.biPlanes      = 1;
-    bi.bmiHeader.biBitCount    = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-
-    HDC mem = CreateCompatibleDC(hdcWin);
-    if (!mem) return;
-    void* bits = nullptr;
-    HBITMAP dib = CreateDIBSection(hdcWin, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!dib || !bits) {
-        if (dib) DeleteObject(dib);
-        DeleteDC(mem);
-        return;
+    if (!state->hdcCaptionMem || state->captionBufW != w || state->captionBufH != capH) {
+        Market_FreeCaptionCache(state, false);
+        BITMAPINFO bi = {};
+        bi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+        bi.bmiHeader.biWidth       = w;
+        bi.bmiHeader.biHeight      = -capH;
+        bi.bmiHeader.biPlanes      = 1;
+        bi.bmiHeader.biBitCount    = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        state->hdcCaptionMem = CreateCompatibleDC(hdcWin);
+        if (!state->hdcCaptionMem) return;
+        state->hbmCaption = CreateDIBSection(hdcWin, &bi, DIB_RGB_COLORS, &state->captionBits, nullptr, 0);
+        if (!state->hbmCaption || !state->captionBits) {
+            Market_FreeCaptionCache(state, false);
+            return;
+        }
+        state->hbmCaptionOld = (HBITMAP)SelectObject(state->hdcCaptionMem, state->hbmCaption);
+        state->captionBufW = w;
+        state->captionBufH = capH;
     }
+    HDC mem = state->hdcCaptionMem;
+    void* bits = state->captionBits;
     std::memset(bits, 0, static_cast<size_t>(w) * capH * 4);
 
-    HGDIOBJ oldBmp  = SelectObject(mem, dib);
     HGDIOBJ oldFont = SelectObject(mem, hFont11ptbold.get());
 
     // ── Icon ─────────────────────────────────────────────────────────────────
@@ -174,8 +199,10 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
         }
     }
 
-    HTHEME theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
-    if (theme && state) {
+    if (!state->hCaptionTheme)
+        state->hCaptionTheme = OpenThemeData(hWnd, L"CompositedWindow::Window");
+    HTHEME theme = state->hCaptionTheme;
+    if (theme) {
         const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
         const TradingAPI::L1Book& L1 = state->l1Info;
 
@@ -219,13 +246,8 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
             drawText(segs[i].text, segs[i].color, segs[i].x, segs[i].x + segs[i].w + 2, 0);
         }
     }
-    if (theme) CloseThemeData(theme);
-
     BitBlt(hdcWin, 0, 0, w, capH, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldFont);
-    SelectObject(mem, oldBmp);
-    DeleteObject(dib);
-    DeleteDC(mem);
 }
 
 // Recomputes hTotalLabel (price × qty notional) for one editable-order row.
@@ -2387,6 +2409,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
+    case WM_THEMECHANGED:
+        if (state && state->hCaptionTheme) {
+            CloseThemeData(state->hCaptionTheme);
+            state->hCaptionTheme = NULL;
+        }
+        if (state) state->marketHdrDirty = true;
+        break;
+
     case WM_SETCURSOR: {
         if (state && LOWORD(lParam) == HTCLIENT) {
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
@@ -2482,6 +2512,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             if (state->hbmHeader)    DeleteObject(state->hbmHeader);
             if (state->hdcHeaderMem) DeleteDC(state->hdcHeaderMem);
+            Market_FreeCaptionCache(state, true);
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hTotalLabel = state->hTotalQtyLabel = NULL;
             state->hOptProfitTarget = state->hOptStopTarget = state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             // Row controls are children of hWnd, DestroyWindow(hWnd) tears them
