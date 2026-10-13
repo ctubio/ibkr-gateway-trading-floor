@@ -130,7 +130,7 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
 
     RECT btn = {};
     DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &btn, sizeof(btn));
-    const int maxX  = (btn.left > 0 ? btn.left + 125 : w - 100);
+    const int maxX  = (btn.left > 0 ? btn.left + 125 : w - 100); // intentionally over the grayed out maximize button
     const int iconW = GetSystemMetrics(SM_CXSMICON);
     const int iconH = GetSystemMetrics(SM_CYSMICON);
     const int iconX = 8;
@@ -997,7 +997,7 @@ static LRESULT CALLBACK Market_EditSubclassProc(
     if (msg == WM_KEYDOWN && st) {
         // ── ESC: cancel every order for this symbol ──────────────────────────
         // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
-        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'X' || wParam == 'E' || wParam == 'A' || wParam == 'N' || wParam == 'M' || wParam == 'S') {
+        if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'X' || wParam == 'E' || wParam == 'A' || wParam == 'N' || wParam == 'M' || wParam == 'S') { // intentionally intercepting on edit controls
             SendMessage(hMarket, WM_KEYDOWN, wParam, lParam);
             return 0;
         }
@@ -2041,7 +2041,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             return 0;
         }
-        if (wParam == VK_CONTROL) {
+        if (wParam == VK_CONTROL) { // intentionally flashing on repeated hits
             bool isRight = (lParam & (1 << 24)) != 0;
             Market_HandleCtrlOrderBar(hWnd, state, isRight);
         }
