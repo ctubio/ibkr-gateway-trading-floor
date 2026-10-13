@@ -1966,9 +1966,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
                         COLORREF upColor = (last > 0 && cacheRow.upAlert > 0 && cacheRow.upAlert <= last) ? COINS_CLR_GREEN : COINS_CLR_GRAY;
                         COLORREF downColor = (last > 0 && cacheRow.downAlert > 0 && cacheRow.downAlert >= last) ? COINS_CLR_RED : COINS_CLR_GRAY;
+                        size_t upDot = cacheRow.upStr.find('.');
+                        std::string upText = (upDot == std::string::npos) ? cacheRow.upStr : cacheRow.upStr.substr(0, upDot);
+
+                        size_t downDot = cacheRow.downStr.find('.');
+                        std::string downText = (downDot == std::string::npos) ? cacheRow.downStr : cacheRow.downStr.substr(0, downDot);
+
                         DrawTwoLineCell(cd->nmcd.hdc, rcCell,
-                                        cacheRow.upStr.c_str(), upColor,
-                                        cacheRow.downStr.c_str(), downColor, hBrush);
+                                        upText.c_str(), upColor,
+                                        downText.c_str(), downColor, hBrush);
                         return CDRF_SKIPDEFAULT;
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
