@@ -532,8 +532,8 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     const int splitThick = 4;
 
     // ── Left panel: Level 2 (top) / Executions (bottom), split by splitYExec ──
-    int leftTopH = (int)(bodyH * state->splitYExec) - splitThick / 2;
-    int leftBotH = bodyH - leftTopH - splitThick;
+    int leftTopH = std::max(0, (int)(bodyH * state->splitYExec) - splitThick / 2);
+    int leftBotH = std::max(0, bodyH - leftTopH - splitThick);
 
     if (state->hL2List)
         MoveWindow(state->hL2List, 0, bodyY, L2_W, leftTopH, TRUE);
