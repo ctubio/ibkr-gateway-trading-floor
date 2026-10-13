@@ -12,7 +12,7 @@
 static const char*         DECISION_HOST  = "192.168.1.21";
 static const INTERNET_PORT DECISION_PORT  = 11434;
 static const char*         DECISION_PATH  = "/v1/systemone";
-static const char*         DECISION_MODEL = "nimble:9b";
+static const char*         DECISION_MODEL = "nimble-v3:9b";
 static std::atomic<bool>   s_decisionBusy{ false };
 
 // ── Volume rate / print-frequency rate ────────────────────────────────────────
