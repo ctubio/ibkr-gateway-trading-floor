@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-static const int windowDiamondsWidth = 1030;
+static const int windowDiamondsWidth = 1025;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST    7001
@@ -636,6 +636,7 @@ static void Diamonds_Layout(HWND hWnd) {
     const int capH = Diamonds_CaptionH(hWnd);
     int listH = diamondsState.checkboxesVisible ? rc.bottom - DIAMONDS_CHK_STRIP_H : rc.bottom;
     MoveWindow(hList, 0, capH, rc.right, listH - capH, TRUE);
+    RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME);
 
     if (!diamondsState.checkboxesVisible) return;
 
@@ -1173,7 +1174,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
         HWND hList = CreateWindowExA(
-            WS_EX_CLIENTEDGE, "SysListView32", "",
+            0, "SysListView32", "",
             WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_OWNERDATA,
             0, 0, 1100, 420, hWnd, (HMENU)ID_DIAMONDS_RESULTS_LIST, hInst, NULL);
 

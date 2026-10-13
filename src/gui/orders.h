@@ -583,7 +583,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             DWORD lvStyle = WS_CHILD | WS_VISIBLE | WS_BORDER
                         | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER;
             HWND hList = CreateWindowExA(
-                WS_EX_CLIENTEDGE, "SysListView32", "",
+                0, "SysListView32", "",
                 lvStyle,
                 0, 0, 760, 420,
                 hWnd, (HMENU)ID_ORDERS_LIST, hInst, NULL);

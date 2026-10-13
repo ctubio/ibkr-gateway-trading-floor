@@ -483,13 +483,28 @@ static ScopedFont hFont21ptbold(21, true);
 // (Previously also handled Ctrl+MouseWheel zoom, that feature has been removed;
 // this proc now only keeps the zero-flicker background-erase suppression.)
 LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (uMsg == WM_SIZE) {
+        LRESULT res = DefSubclassProc(hList, uMsg, wParam, lParam);
+        RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME);
+        return res;
+    }
+
     if (uMsg == WM_ERASEBKGND) {
         // Don't erase the whole client area (that's what flickers), but DO paint
-        // the empty region below the last item, otherwise scrolling leaves stale
-        // pixels (a ghost duplicate row) there.
+        // empty regions, otherwise scrolling leaves stale pixels behind.
         HDC hdc = (HDC)wParam;
         RECT rc;
         GetClientRect(hList, &rc);
+        HBRUSH hBr = CreateSolidBrush(ListView_GetBkColor(hList));
+
+        HWND hHeader = ListView_GetHeader(hList);
+        int columnCount = hHeader ? Header_GetItemCount(hHeader) : 0;
+        RECT headerItemRect = {};
+        if (columnCount > 0 && Header_GetItemRect(hHeader, columnCount - 1, &headerItemRect) &&
+            headerItemRect.right < rc.right) {
+            RECT rightStrip = { std::max(0, (int)headerItemRect.right), rc.top, rc.right, rc.bottom };
+            FillRect(hdc, &rightStrip, hBr);
+        }
 
         int count = ListView_GetItemCount(hList);
         if (count > 0) {
@@ -498,12 +513,10 @@ LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPA
             if (ListView_GetItemRect(hList, count - 1, &ri, LVIR_BOUNDS))
                 rc.top = std::max(rc.top, ri.bottom);
         }
-
         if (rc.top < rc.bottom) {
-            HBRUSH hBr = CreateSolidBrush(ListView_GetBkColor(hList));
             FillRect(hdc, &rc, hBr);
-            DeleteObject(hBr);
         }
+        DeleteObject(hBr);
         return 1;
     }
     return DefSubclassProc(hList, uMsg, wParam, lParam);
