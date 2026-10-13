@@ -1217,10 +1217,29 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     return HandleCommonMessages(hWnd, message, wParam, lParam);
 }
 
+// Height of the body area (Level 2 / T&S / Executions), identical to the
+// bodyH that Market_Layout() uses. Shared so splitter hit-testing and drag
+// math always agree with where the splitters are actually drawn.
+static int Market_BodyH(HWND hWnd, const TsState* state) {
+    RECT rc; GetClientRect(hWnd, &rc);
+    const int hdrH = Market_CaptionH(hWnd) + HEADER_H;
+    const int barH = (state && state->orderBarVisible)
+                   ? ORDER_BAR_H / (state->isOvernight ? 2 : 1)
+                   : 0;
+    return rc.bottom - hdrH - barH;
+}
+
+// Vertical space taken by the editable-order rows under hTsList. Market_Layout
+// subtracts half of it from the right-column splitter position, so hit-testing
+// and dragging must do the same. Does not affect the left (L2/Exec) splitter.
+static int Market_OrdersPanelH(const TsState* state) {
+    return state ? (int)state->orderRows.size() * MARKET_ORDER_ROW_H : 0;
+}
+
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     RECT rc; GetClientRect(hWnd, &rc);
     const int capH       = Market_CaptionH(hWnd);
-    const int bodyH      = rc.bottom - capH - HEADER_H;
+    const int bodyH      = Market_BodyH(hWnd, state);
     const int splitThick = 4;
 
     int relY = y - capH - HEADER_H;
@@ -1241,7 +1260,7 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     if (relX < 0) return 0;
 
     int splitXPos      = (int)(tsW / 2);
-    int rightSplitYPos = (int)(bodyH * state->splitY);
+    int rightSplitYPos = (int)(bodyH * state->splitY) - Market_OrdersPanelH(state) / 2;
 
     if (relX > splitXPos + splitThick && relY >= rightSplitYPos - splitThick && relY <= rightSplitYPos + splitThick)
         return 1;
@@ -2423,16 +2442,19 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_MOUSEMOVE: {
         if (state && state->dragMode != 0) {
-            RECT rc; GetClientRect(hWnd, &rc);
             const int capH  = Market_CaptionH(hWnd);
-            const int bodyH = rc.bottom - capH - HEADER_H;
+            const int bodyH = Market_BodyH(hWnd, state);
             int y = (short)HIWORD(lParam) - capH - HEADER_H;
 
-            float ns = (bodyH > 0) ? (float)y / (float)bodyH : 0.5f;
-            ns = std::max(0.1f, std::min(0.9f, ns));
+            auto toFraction = [&](int yPos) -> float {
+                float f = (bodyH > 0) ? (float)yPos / (float)bodyH : 0.5f;
+                return std::max(0.1f, std::min(0.9f, f));
+            };
 
-            if (state->dragMode == 1)      state->splitY     = ns;
-            else if (state->dragMode == 2) state->splitYExec = ns;
+            if (state->dragMode == 1)
+                state->splitY     = toFraction(y + Market_OrdersPanelH(state) / 2);
+            else if (state->dragMode == 2)
+                state->splitYExec = toFraction(y);
 
             Market_Layout(hWnd, state);
             InvalidateRect(hWnd, NULL, TRUE);
