@@ -472,6 +472,7 @@ public:
 
 static ScopedFont hFont11pt(11, false);
 static ScopedFont hFont11ptbold(11, true);
+static ScopedFont hFont12pt(12, false);
 static ScopedFont hFont12ptbold(12, true);
 static ScopedFont hFont14pt(14, false);
 static ScopedFont hFont14ptbold(14, true);

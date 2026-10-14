@@ -324,7 +324,7 @@ static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
     { "Size",  54, LVCFMT_RIGHT  },
-    { "Price", 64, LVCFMT_CENTER },
+    { "Price", 72, LVCFMT_CENTER },
 };
 static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 
@@ -332,7 +332,7 @@ static const int L2_COL_COUNT = (int)(sizeof(l2Cols) / sizeof(l2Cols[0]));
 struct ExecCol { const char* header; int width; int fmt; };
 static const ExecCol execCols[] = {
     { "Side",    0, LVCFMT_CENTER },
-    { "Quote", 112, LVCFMT_RIGHT },
+    { "Quote", 118, LVCFMT_RIGHT },
 };
 static const int EXEC_COL_COUNT = (int)(sizeof(execCols) / sizeof(execCols[0]));
 
@@ -1871,7 +1871,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         SendMessage(state->hTsListF100,  WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SendMessage(state->hTsListF1000, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
         SendMessage(state->hL2List,      WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
-        SendMessage(state->hExecList,    WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+        SendMessage(state->hExecList,    WM_SETFONT, (WPARAM)hFont12pt.get(), TRUE);
 
         ShowWindow(state->hTsList, SW_SHOW);
         ShowWindow(state->hL2List, SW_SHOW);
@@ -2360,7 +2360,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     cd->clrTextBk = bg;
                     cd->clrText   = clr;
                     if (isOpenOrder) {
-                        SelectObject(cd->nmcd.hdc, hFont11ptbold.get());
+                        SelectObject(cd->nmcd.hdc, hFont12ptbold.get());
                         return CDRF_NEWFONT;
                     }
                     return CDRF_DODEFAULT;
