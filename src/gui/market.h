@@ -83,6 +83,7 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
 #define TIMER_MARKET_SPEAKER    6020  // WM_TIMER id for per-market TTS (21s)
 // 6021 is in use by TIMER_SAVE_WINPOS
 #define TIMER_MARKET_PAINT      6022  // WM_TIMER id for throttled header repaint (30-60 FPS)
+#define TIMER_MARKET_VOLDECAY   6023
 #define MARKET_PAINT_TIMER_MS   33      // ~30 FPS
 
 // ── Layout constants ─────────────────────────────────────────────────────────
@@ -495,6 +496,13 @@ static const int RB_MARGIN  = 4;
 // Left controls block (speaker + checkbox): fixed width anchored to left edge.
 static const int LC_MARGIN  = 4;    // left margin and gap between icon and stats
 
+static void Market_TsColumnWidths(int tsW, int splitThick, int& leftW, int& rightW) {
+    leftW = (tsW - splitThick) / 2;
+    rightW = leftW;
+    const int diff = (tsCols[2].width / 2) - 12;
+    leftW -= diff; rightW += diff;
+}
+
 // ── Layout ────────────────────────────────────────────────────────────────────
 // Positions every editable-order row directly below hTsList, within the same
 // column (panelX/panelW match hTsList's x/width). Called from Market_Layout()
@@ -541,7 +549,7 @@ static void Market_LayoutOrderRows(TsState* state, int panelX, int panelTop, int
     }
 }
 
-static void Market_Layout(HWND hWnd, TsState* state) {
+static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = true) {
     if (!state || !state->hTsList) return;
     RECT rc; GetClientRect(hWnd, &rc);
 
@@ -557,20 +565,12 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     int leftTopH = std::max(0, (int)(bodyH * state->splitYExec) - splitThick / 2);
     int leftBotH = std::max(0, bodyH - leftTopH - splitThick);
 
-    if (state->hL2List)
-        MoveWindow(state->hL2List, 0, bodyY, L2_W, leftTopH, TRUE);
-    if (state->hExecList)
-        MoveWindow(state->hExecList, 0, bodyY + leftTopH + splitThick, L2_W, leftBotH, TRUE);
-
     // ── T&S area ──────────────────────────────────────────────────────────────
     const int tsX = L2_W + splitThick;
     const int tsW = bodyW - L2_W - splitThick;
 
-    int leftW  = (int)((tsW - splitThick) / 2);
-    int rightW = leftW;
-    const int tsCol2WidthDiff = (tsCols[2].width / 2);
-    leftW -= tsCol2WidthDiff - 12;
-    rightW += tsCol2WidthDiff - 12;
+    int leftW = 0, rightW = 0;
+    Market_TsColumnWidths(tsW, splitThick, leftW, rightW);
 
     int ordersPanelH = (int)state->orderRows.size() * MARKET_ORDER_ROW_H;
 
@@ -581,20 +581,53 @@ static void Market_Layout(HWND hWnd, TsState* state) {
     ShowWindow(state->hTsList,      SW_SHOW);
     ShowWindow(state->hTsListF100,  SW_SHOW);
     ShowWindow(state->hTsListF1000, SW_SHOW);
-    MoveWindow(state->hTsList,      tsX,                        bodyY,                     leftW,  tsListH, TRUE);
-    MoveWindow(state->hTsListF100,  tsX + leftW + splitThick,   bodyY,                     rightW, topH,  TRUE);
-    MoveWindow(state->hTsListF1000, tsX + leftW + splitThick,   bodyY + topH + splitThick, rightW, botH,  TRUE);
+
+    const UINT deferFlags = SWP_NOZORDER | SWP_NOACTIVATE;
+    HDWP deferPos = BeginDeferWindowPos(5);
+    if (deferPos) deferPos = DeferWindowPos(deferPos, state->hL2List, NULL, 0, bodyY, L2_W, leftTopH, deferFlags);
+    if (deferPos) deferPos = DeferWindowPos(deferPos, state->hExecList, NULL, 0, bodyY + leftTopH + splitThick, L2_W, leftBotH, deferFlags);
+    if (deferPos) deferPos = DeferWindowPos(deferPos, state->hTsList, NULL, tsX, bodyY, leftW, tsListH, deferFlags);
+    if (deferPos) deferPos = DeferWindowPos(deferPos, state->hTsListF100, NULL, tsX + leftW + splitThick, bodyY, rightW, topH, deferFlags);
+    if (deferPos) deferPos = DeferWindowPos(deferPos, state->hTsListF1000, NULL, tsX + leftW + splitThick, bodyY + topH + splitThick, rightW, botH, deferFlags);
+    if (!deferPos || !EndDeferWindowPos(deferPos)) {
+        MoveWindow(state->hL2List,      0, bodyY,                     L2_W, leftTopH, TRUE);
+        MoveWindow(state->hExecList,    0, bodyY + leftTopH + splitThick, L2_W, leftBotH, TRUE);
+        MoveWindow(state->hTsList,      tsX, bodyY,                    leftW, tsListH, TRUE);
+        MoveWindow(state->hTsListF100,  tsX + leftW + splitThick, bodyY, rightW, topH, TRUE);
+        MoveWindow(state->hTsListF1000, tsX + leftW + splitThick, bodyY + topH + splitThick, rightW, botH, TRUE);
+    }
 
     // LVS_NOSCROLL doesn't reliably clear an already-shown scrollbar after a
     // resize (e.g. restoring from the minimized state, where these lists were
     // squeezed to near-zero height while still holding a full set of rows).
     // Force it hidden explicitly.
-    ShowScrollBar(state->hL2List,      SB_VERT, FALSE);
-    ShowScrollBar(state->hTsList,      SB_VERT, FALSE);
-    ShowScrollBar(state->hTsListF100,  SB_VERT, FALSE);
-    ShowScrollBar(state->hTsListF1000, SB_VERT, FALSE);
+    const int scrollSizes[4][2] = {
+        { L2_W, leftTopH }, { leftW, tsListH }, { rightW, topH }, { rightW, botH }
+    };
+    bool scrollSizesChanged = false;
+    for (int i = 0; i < 4; ++i) {
+        if (state->scrollListSizes[i][0] != scrollSizes[i][0] ||
+            state->scrollListSizes[i][1] != scrollSizes[i][1]) {
+            scrollSizesChanged = true;
+            break;
+        }
+    }
+    if (scrollSizesChanged) {
+        ShowScrollBar(state->hL2List,      SB_VERT, FALSE);
+        ShowScrollBar(state->hTsList,      SB_VERT, FALSE);
+        ShowScrollBar(state->hTsListF100,  SB_VERT, FALSE);
+        ShowScrollBar(state->hTsListF1000, SB_VERT, FALSE);
+        for (int i = 0; i < 4; ++i) {
+            state->scrollListSizes[i][0] = scrollSizes[i][0];
+            state->scrollListSizes[i][1] = scrollSizes[i][1];
+        }
+    }
 
-    Market_LayoutOrderRows(state, tsX, bodyY + tsListH, leftW + rightW);
+    if (layoutOrderControls) {
+        Market_LayoutOrderRows(state, tsX, bodyY + tsListH, leftW + rightW);
+    } else {
+        return;
+    }
 
     // ── Order entry bar ───────────────────────────────────────────────────────
     if (state->hOrderLabel && state->hOrderPrice && state->hOrderStopPrice && state->hOrderProfitPrice && state->hOrderQty) {
@@ -1144,7 +1177,8 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
     std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
     SetWindowTextA(row.hQtyEdit, qtyStr.c_str());
 
-    SetFocus(row.hPriceEdit);
+    HWND focus = GetFocus();
+    if (!focus || focus == hWnd) SetFocus(row.hPriceEdit);
 
     return row;
 }
@@ -1281,10 +1315,11 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     int relX = x - tsX;
     if (relX < 0) return 0;
 
-    int splitXPos      = (int)(tsW / 2);
+    int leftW = 0, rightW = 0;
+    Market_TsColumnWidths(tsW, splitThick, leftW, rightW);
     int rightSplitYPos = (int)(bodyH * state->splitY) - Market_OrdersPanelH(state) / 2;
 
-    if (relX > splitXPos + splitThick && relY >= rightSplitYPos - splitThick && relY <= rightSplitYPos + splitThick)
+    if (relX >= leftW + splitThick && relY >= rightSplitYPos - splitThick && relY <= rightSplitYPos + splitThick)
         return 1;
 
     return 0;
@@ -1323,39 +1358,34 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
     if (!state || !state->hExecList) return;
 
     HWND hList = state->hExecList;
-    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
-    ListView_DeleteAllItems(hList);
-
-    int row = 0;
-
-    // ── Open orders (bold) ───────────────────────────────────────────────────
-    for (const auto& o : state->openOrdersSummary) {
-        bool isBuy = (o.action == "BUY");
-
-        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
-        lvi.iItem  = row;
-        lvi.lParam = isBuy ? 3 : 4;
-        lvi.pszText = (LPSTR)o.action.c_str();
-        ListView_InsertItem(hList, &lvi);
-        std::string quoteStr;
-        if (o.trailStopPrice > 0.0)
-            quoteStr = std::format("{:.2f} | {:.2f}", o.trailStopPrice, o.price);//quoteStr += std::format("{:.0f} @ {:.2f} | {:.2f}", o.totalQty, o.trailStopPrice, o.price);
-        else if (o.price > 0)
-            quoteStr = std::format("{:.2f}", o.price);//quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.price);
-        else
-            quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
-
-        if (o.status != "Submitted" && o.orderType == "LMT") {
-            quoteStr +=  "?";
-        }
-
-        ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
-
-        ++row;
-    }
-
     // ── Executions (as before) ───────────────────────────────────────────────
     auto orders = api().getExecutions();
+    struct ExecRow {
+        int side;
+        std::string action;
+        std::string quote;
+    };
+    std::vector<ExecRow> rows;
+    rows.reserve(state->openOrdersSummary.size() + orders.size());
+    std::string signature;
+    auto addRow = [&](int side, std::string action, std::string quote) {
+        signature += std::format("{}:{}:{}:{}:{};", side, action.size(), action, quote.size(), quote);
+        rows.push_back({ side, std::move(action), std::move(quote) });
+    };
+
+    for (const auto& o : state->openOrdersSummary) {
+        std::string quoteStr;
+        if (o.trailStopPrice > 0.0)
+            quoteStr = std::format("{:.2f} | {:.2f}", o.trailStopPrice, o.price);
+        else if (o.price > 0)
+            quoteStr = std::format("{:.2f}", o.price);
+        else
+            quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
+        if (o.status != "Submitted" && o.orderType == "LMT")
+            quoteStr += "?";
+        addRow(o.action == "BUY" ? 3 : 4, o.action, std::move(quoteStr));
+    }
+
     for (const auto& o : orders) {
         if (o.symbol != state->symbol) continue;
 
@@ -1364,13 +1394,6 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
         if (side == "BOT") side = "BUY";
         else if (side == "SLD") side = "SELL";
 
-        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
-        lvi.iItem  = row;
-        lvi.lParam = (side == "BUY") ? 1 : 2;
-        lvi.pszText = (LPSTR)side.c_str();
-        ListView_InsertItem(hList, &lvi);
-
-        // Quote: "qty @ price"
         std::string quoteStr;
         if (o.price > 0)
             quoteStr = std::format("{:.0f} @ {:.2f}", o.filledQty > 0 ? o.filledQty : o.totalQty, o.price);
@@ -1378,11 +1401,25 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
             quoteStr = std::format("{:.0f} @ {:.2f}", o.filledQty > 0 ? o.filledQty : o.totalQty, o.avgFillPx);
         else
             quoteStr = std::format("{:.0f} @ --", o.filledQty > 0 ? o.filledQty : o.totalQty);
-        ListView_SetItemText(hList, row, 1, (LPSTR)quoteStr.c_str());
-
-        ++row;
+        int rowSide = side == "BUY" ? 1 : 2;
+        addRow(rowSide, std::move(side), std::move(quoteStr));
     }
 
+    if (signature == state->execSignature) return;
+    state->execSignature = std::move(signature);
+
+    SendMessage(hList, WM_SETREDRAW, FALSE, 0);
+    ListView_DeleteAllItems(hList);
+    int row = 0;
+    for (const auto& execRow : rows) {
+        LVITEMA lvi = {}; lvi.mask = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem  = row;
+        lvi.lParam = execRow.side;
+        lvi.pszText = (LPSTR)execRow.action.c_str();
+        ListView_InsertItem(hList, &lvi);
+        ListView_SetItemText(hList, row, 1, (LPSTR)execRow.quote.c_str());
+        ++row;
+    }
     SendMessage(hList, WM_SETREDRAW, TRUE, 0);
     InvalidateRect(hList, NULL, FALSE);
 }
@@ -1395,11 +1432,13 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
 // price/qty text untouched (the user may be mid-edit), only metadata
 // (tif/orderType/partialFill) is refreshed. Rows for orders that disappeared
 // (filled/cancelled/no longer editable) are destroyed; rows for newly
-// editable orders are created and pre-filled fresh. Always relays out, since
-// the row count (and therefore hTsList's height) may have changed.
+// editable orders are created and pre-filled fresh. Relayout only when the
+// row count or a row's partial-fill state changes.
 static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
     if (!state) return;
     HINSTANCE hInst = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
+    const size_t originalRowCount = state->orderRows.size();
+    bool layoutNeeded = false;
 
     auto orders = api().getOrdersSorted();
     std::vector<TradingAPI::OrderInfo> matched;
@@ -1436,6 +1475,7 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
         if (!matchedIds.count(state->orderRows[i].orderId)) {
             Market_DestroyOrderRow(state->orderRows[i]);
             state->orderRows.erase(state->orderRows.begin() + i);
+            layoutNeeded = true;
         }
     }
 
@@ -1445,7 +1485,10 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
             if (row.orderId == o.orderId) { existing = &row; break; }
         }
         if (existing) {
-            existing->partialFill = (o.status == "Partially Filled");
+            bool partialFill = (o.status == "Partially Filled");
+            if (existing->partialFill != partialFill)
+                layoutNeeded = true;
+            existing->partialFill = partialFill;
             existing->originalQty = o.totalQty;
             existing->orderType   = o.orderType;
             existing->tif         = o.tif;
@@ -1474,10 +1517,12 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
             Market_UpdateOrderRowTotalLabel(*existing); // keep the notional hint in sync too
         } else {
             state->orderRows.push_back(Market_CreateOrderRow(hWnd, hInst, o));
+            layoutNeeded = true;
         }
     }
 
-    Market_Layout(hWnd, state);
+    if (state->orderRows.size() != originalRowCount) layoutNeeded = true;
+    if (layoutNeeded) Market_Layout(hWnd, state);
 }
 
 // ── Header paint ──────────────────────────────────────────────────────────────
@@ -1521,7 +1566,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SetBkMode(hdc, TRANSPARENT);
 
     const TradingAPI::L1Book& L1 = state->l1Info;
-    if (L1.last > 0.0) state->sparkline.AddPrice(L1.last);
 
     const int rowH = HEADER_H / 2;   // height of each of the two stat rows
 
@@ -1644,12 +1688,6 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         { "", "",               lowColor, FLAG_GLYPH  },
         //{ "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
-
-    std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice) /*+ (state->exchange.empty() ? "" : " on " + state->exchange)*/;
-    if (state->titlebar != titlebar) {
-        state->titlebar = titlebar;
-        SetWindowTextA(hWnd, state->titlebar.c_str());
-    }
 
     // Helper: draw a row of stat pairs starting at (startX, y0).
     // Returns the x position after the last pair.
@@ -1949,6 +1987,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api().addApiUpdateWindow(hWnd);
         api().setMarketWindow(hWnd, state->conId, state->symbol);
         SetTimer(hWnd, TIMER_MARKET_PAINT, MARKET_PAINT_TIMER_MS, NULL);
+        SetTimer(hWnd, TIMER_MARKET_VOLDECAY, 1000, NULL);
         // Seed immediately
         PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
         PostMessage(hWnd, WM_PNL_SINGLE, 0, (LPARAM)state->conId);
@@ -2026,6 +2065,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
             
     case WM_KEYDOWN: {
+        if (!lockHotkeys && state && state->minimized && wParam == 'M') {
+            Market_Minimize(hWnd, state);
+            return 0;
+        }
         if (lockHotkeys || !state || state->minimized) break;
         if (wParam == 'X') {
             Market_RequestDecision(hWnd, state);
@@ -2076,7 +2119,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         TradingAPI::L1Book fresh;
         if (api().getMarketData(state->conId, fresh)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
-            //if if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
+            if (fresh.last      > 0.0) state->sparkline.AddPrice(state->l1Info.last);
+            if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
             if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
             if (fresh.high      > 0.0) state->l1Info.high      = fresh.high;
             if (fresh.low       > 0.0) state->l1Info.low       = fresh.low;
@@ -2133,17 +2177,24 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_PNL_SINGLE: {
         int conId = (int)lParam;
         if (!conId || !state || state->conId != conId) break;
-        std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
-        auto& pm = api().getPortfolioMap();
-        auto it = pm.find(state->conId);
-        if (it != pm.end()) {
-            state->position      = it->second.shares;
-            state->avgPrice      = it->second.avgCost;
-            state->exchange      = it->second.exchange;
-            state->dailyPnL      = it->second.pnlSingle.dailyPnL;
-            state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
+        {
+            std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
+            auto& pm = api().getPortfolioMap();
+            auto it = pm.find(state->conId);
+            if (it != pm.end()) {
+                state->position      = it->second.shares;
+                state->avgPrice      = it->second.avgCost;
+                state->exchange      = it->second.exchange;
+                state->dailyPnL      = it->second.pnlSingle.dailyPnL;
+                state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
+            }
         }
 
+        std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice);
+        if (state->titlebar != titlebar) {
+            state->titlebar = titlebar;
+            SetWindowTextA(hWnd, state->titlebar.c_str());
+        }
         state->marketHdrDirty = true;
         break;
     }
@@ -2253,12 +2304,16 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             Market_SpeakLast(state);
         }
         if (wParam == TIMER_MARKET_PAINT) {
+            if (state && state->orderBarVisible && state->marketHdrDirty)
+                Market_UpdateOrderRiskLabel(state);
             if (state && state->marketHdrDirty) {
                 RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Market_CaptionH(hWnd) + HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
                 state->marketHdrDirty = false;
             }
         }
+        if (wParam == TIMER_MARKET_VOLDECAY && state)
+            state->marketHdrDirty = true;
         break;
 
     case WM_TTS_VOICE_CHANGED: {
@@ -2399,6 +2454,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 for (auto& row : state->orderRows) Market_DestroyOrderRow(row);
                 state->orderRows.clear();
                 state->openOrdersSummary.clear();
+                state->execSignature.clear();
                 Market_Layout(hWnd, state);
                 state->l1Info = TradingAPI::L1Book{};
                 state->volRate.clear();      // stale on disconnect, avoid a phantom ratio off a frozen history
@@ -2486,11 +2542,18 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             else if (state->dragMode == 2)
                 state->splitYExec = toFraction(y);
 
-            Market_Layout(hWnd, state);
-            InvalidateRect(hWnd, NULL, TRUE);
+            Market_Layout(hWnd, state, false);
+            RECT bodyRc;
+            GetClientRect(hWnd, &bodyRc);
+            bodyRc.top = Market_CaptionH(hWnd) + HEADER_H;
+            InvalidateRect(hWnd, &bodyRc, FALSE);
         }
         break;
     }
+
+    case WM_CAPTURECHANGED:
+        if (state) state->dragMode = 0;
+        break;
 
     case WM_LBUTTONUP: {
         if (state && state->dragMode != 0) {
@@ -2502,6 +2565,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_DESTROY:
         KillTimer(hWnd, TIMER_MARKET_PAINT);
+        KillTimer(hWnd, TIMER_MARKET_VOLDECAY);
         api().unsetMarketWindow(hWnd);
         api().removeApiUpdateWindow(hWnd);
         if (state) {

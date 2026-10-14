@@ -154,7 +154,7 @@ struct DiamondsState {
     bool checkboxesVisible = false;
     // ── Sort state ────────────────────────────────────────────────────────────────
     int sortCol = DCOL_SYMBOL;
-    bool sortAsc = true;
+    bool sortAsc = false;
     // Keyed by conId. Populated / updated in Diamonds_UpdateMarketCols.
     std::unordered_map<int, MiniSparkline> sparklines;
     std::unordered_map<int, DiamondsWeeklyCloseCache> weeklyCloseCache;
@@ -164,6 +164,8 @@ struct DiamondsState {
     // The list view sends one row-level custom-draw notification before that
     // row's subitems, so reuse its cache entry throughout the subitem callbacks.
     const DiamondRowCache* paintRowCache = nullptr;
+    // One GDI+ context per ListView paint, reused by each visible-row sparkline.
+    std::unique_ptr<Gdiplus::Graphics> paintGraphics;
     // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
     std::vector<int> displayOrder;
     // Full visible-range redraw (sort order changed).
@@ -178,6 +180,13 @@ struct DiamondsState {
     std::deque<DiamondsTitleEvent> diamondsTitleEvents;
     // Client-space bounds of drawn title events and their associated conIds.
     std::vector<std::pair<RECT, int>> titleHitRects;
+    HDC hdcCaptionMem = NULL;
+    HBITMAP hbmCaption = NULL;
+    HBITMAP hbmCaptionOld = NULL;
+    void* captionBits = nullptr;
+    int captionBufW = 0;
+    int captionBufH = 0;
+    HTHEME hCaptionTheme = NULL;
 };
 
 static DiamondsState diamondsState;
@@ -199,6 +208,27 @@ static void Diamonds_UpdateFrameMargins(HWND hWnd) {
     DwmExtendFrameIntoClientArea(hWnd, &m);
 }
 
+static void Diamonds_FreeCaptionCache(bool alsoTheme) {
+    if (diamondsState.hdcCaptionMem) {
+        if (diamondsState.hbmCaptionOld)
+            SelectObject(diamondsState.hdcCaptionMem, diamondsState.hbmCaptionOld);
+        if (diamondsState.hbmCaption)
+            DeleteObject(diamondsState.hbmCaption);
+        DeleteDC(diamondsState.hdcCaptionMem);
+    } else if (diamondsState.hbmCaption) {
+        DeleteObject(diamondsState.hbmCaption);
+    }
+    diamondsState.hdcCaptionMem = NULL;
+    diamondsState.hbmCaption = NULL;
+    diamondsState.hbmCaptionOld = NULL;
+    diamondsState.captionBits = nullptr;
+    diamondsState.captionBufW = diamondsState.captionBufH = 0;
+    if (alsoTheme && diamondsState.hCaptionTheme) {
+        CloseThemeData(diamondsState.hCaptionTheme);
+        diamondsState.hCaptionTheme = NULL;
+    }
+}
+
 static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     diamondsState.titleHitRects.clear();
 
@@ -215,26 +245,34 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     const int iconX = 8;
     int x = iconX + iconW + 8;
 
-    BITMAPINFO bi = {};
-    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bi.bmiHeader.biWidth = w;
-    bi.bmiHeader.biHeight = -capH;
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
+    if (!diamondsState.hdcCaptionMem ||
+        diamondsState.captionBufW != w || diamondsState.captionBufH != capH) {
+        Diamonds_FreeCaptionCache(false);
+        BITMAPINFO bi = {};
+        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -capH;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
 
-    HDC mem = CreateCompatibleDC(hdcWin);
-    if (!mem) return;
-    void* bits = nullptr;
-    HBITMAP dib = CreateDIBSection(hdcWin, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!dib || !bits) {
-        if (dib) DeleteObject(dib);
-        DeleteDC(mem);
-        return;
+        diamondsState.hdcCaptionMem = CreateCompatibleDC(hdcWin);
+        if (!diamondsState.hdcCaptionMem) return;
+        diamondsState.hbmCaption = CreateDIBSection(
+            hdcWin, &bi, DIB_RGB_COLORS, &diamondsState.captionBits, nullptr, 0);
+        if (!diamondsState.hbmCaption || !diamondsState.captionBits) {
+            Diamonds_FreeCaptionCache(false);
+            return;
+        }
+        diamondsState.hbmCaptionOld = (HBITMAP)SelectObject(
+            diamondsState.hdcCaptionMem, diamondsState.hbmCaption);
+        diamondsState.captionBufW = w;
+        diamondsState.captionBufH = capH;
     }
-    std::memset(bits, 0, static_cast<size_t>(w) * capH * 4);
 
-    HGDIOBJ oldBmp = SelectObject(mem, dib);
+    HDC mem = diamondsState.hdcCaptionMem;
+    void* bits = diamondsState.captionBits;
+    std::memset(bits, 0, static_cast<size_t>(w) * capH * 4);
     HGDIOBJ oldFont = SelectObject(mem, hFont11ptbold.get());
 
     HICON hIcon = (HICON)SendMessage(hWnd, WM_GETICON, ICON_SMALL, 0);
@@ -256,7 +294,9 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
         }
     }
 
-    HTHEME theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
+    if (!diamondsState.hCaptionTheme)
+        diamondsState.hCaptionTheme = OpenThemeData(hWnd, L"CompositedWindow::Window");
+    HTHEME theme = diamondsState.hCaptionTheme;
     if (theme) {
         const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
         auto drawSeg = [&](const std::string& s, COLORREF clr, int conId) -> bool {
@@ -279,14 +319,10 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
             for (const auto& ev : diamondsState.diamondsTitleEvents)
                 if (!drawSeg(ev.text, ev.color, ev.conId)) break;
         }
-        CloseThemeData(theme);
     }
 
     BitBlt(hdcWin, 0, 0, w, capH, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldFont);
-    SelectObject(mem, oldBmp);
-    DeleteObject(dib);
-    DeleteDC(mem);
 }
 
 // Returns the conId of the title event under a client-space point, or 0.
@@ -394,7 +430,24 @@ static_assert((int)(sizeof(diamondCols) / sizeof(diamondCols[0])) == DCOL_COUNT,
 // (bit 2) is checked. Each group is hidden by collapsing its column widths to
 // 0 and restored to diamondCols[]'s defined width when its tab is checked.
 // The window is resized to fit however many groups are currently visible.
+static int Diamonds_ExtraWidth(bool maximized) {
+    int extraWidth = 0;
+    if (maximized && (diamondsState.checkedTabs & (1u << 1))) {
+        extraWidth += diamondCols[DCOL_DIV_YIELD].width + diamondCols[DCOL_DIV_DATE].width +
+                      diamondCols[DCOL_DIV_AMT].width + diamondCols[DCOL_ANNUAL_DIV].width;
+    }
+    if (maximized && (diamondsState.checkedTabs & (1u << 2))) {
+        extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
+                      diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_AVGPRICE].width +
+                      diamondCols[DCOL_EXCHANGE].width;
+    }
+    if (extraWidth > 0) extraWidth += 10;
+    return extraWidth;
+}
+
 static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
+    if (IsIconic(hWnd)) return;
+
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
@@ -422,28 +475,19 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
     ListView_SetColumnWidth(hList, DCOL_EXCHANGE, showWeeks ? diamondCols[DCOL_EXCHANGE].width : 0);
 
-    // Sum the extra width needed for each currently-visible group.
-    int extraWidth = 0;
-    if (showDiv) {
-        extraWidth += diamondCols[DCOL_DIV_YIELD].width   + diamondCols[DCOL_DIV_DATE].width +
-                      diamondCols[DCOL_DIV_AMT].width      + diamondCols[DCOL_ANNUAL_DIV].width;
-    }
-    if (showWeeks) {
-        extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
-                      diamondCols[DCOL_CHG52WEEK].width + 
-                      diamondCols[DCOL_AVGPRICE].width + 
-                      diamondCols[DCOL_EXCHANGE].width;
-    }
-    if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
+    const int extraWidth = Diamonds_ExtraWidth(isMaximized);
 
     RECT windowRect;
     GetWindowRect(hWnd, &windowRect);
     int left = windowRect.left;
 
     if (isMaximized) {    
-        RECT workArea;
-        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
-        left = workArea.left - workArea.left + ((workArea.right - workArea.left - windowDiamondsWidth - extraWidth)/2); // relative to monitor, or workArea.left
+        MONITORINFO mi{ sizeof(mi) };
+        if (GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), &mi)) {
+            const int workW = mi.rcWork.right - mi.rcWork.left;
+            const int total = windowDiamondsWidth + extraWidth;
+            left = mi.rcWork.left + (workW - total) / 2;
+        }
     }
 
     MoveWindow(hWnd, left, windowRect.top, windowDiamondsWidth + extraWidth, windowRect.bottom - windowRect.top, TRUE);
@@ -551,6 +595,7 @@ static void Diamonds_CleanupStaleTabAssignments() {
         for (auto const& [conId, info] : api().getPortfolioMap())
             liveConIds.insert(conId);
     }
+    if (liveConIds.empty() || !api().isConnected()) return;
 
     if (!diamondsState.tabMap.empty()) {
         bool changedTabs = false;
@@ -589,6 +634,7 @@ static void Diamonds_CleanupStaleDividends() {
         for (auto const& [conId, info] : api().getPortfolioMap())
             liveConIds.insert(conId);
     }
+    if (liveConIds.empty() || !api().isConnected()) return;
 
     HKEY hKey;
     std::string fullPath = std::format("{}\\Dividends", APP_REG_ROOT);
@@ -715,7 +761,7 @@ static void Diamonds_ApplySort(HWND hList) {
         tmp.push_back({ &diamondsState.dataCache.at(id), id });
     }
 
-    std::sort(tmp.begin(), tmp.end(), [](const auto& x, const auto& y) {
+    std::stable_sort(tmp.begin(), tmp.end(), [](const auto& x, const auto& y) {
         const auto& a = *x.first;
         const auto& b = *y.first;
         if (diamondsState.sortCol == DCOL_SYMBOL || diamondsState.sortCol == DCOL_EXCHANGE) {
@@ -1230,7 +1276,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_LoadSymbolColors();
         Diamonds_RefreshAlertCache();
         diamondsState.sortCol = (int)Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
-        diamondsState.sortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 1) != 0;
+        diamondsState.sortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 0) != 0;
         if (diamondsState.sortCol < 0 || diamondsState.sortCol >= DCOL_COUNT) diamondsState.sortCol = DCOL_SYMBOL;
 
         // Restore checkbox bitmask (default 0x7 = all checked).
@@ -1324,47 +1370,41 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             isMaximized = wp.showCmd == SW_SHOWMAXIMIZED;
         }
 
-        bool showDiv   = false;
-        bool showWeeks = false;
-        if (isMaximized) {
-            showDiv   = (diamondsState.checkedTabs & (1u << 1)) != 0;   // Dividends
-            showWeeks = (diamondsState.checkedTabs & (1u << 2)) != 0;   // Quarantine
-        }
-
-        int extraWidth = 0;
-        if (showDiv) {
-            extraWidth += diamondCols[DCOL_DIV_YIELD].width   + diamondCols[DCOL_DIV_DATE].width +
-                        diamondCols[DCOL_DIV_AMT].width      + diamondCols[DCOL_ANNUAL_DIV].width;
-        }
-        if (showWeeks) {
-            extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
-                        diamondCols[DCOL_CHG52WEEK].width + 
-                        diamondCols[DCOL_AVGPRICE].width + diamondCols[DCOL_EXCHANGE].width;
-        }
-        if (extraWidth > 0) extraWidth += 10; // margin, same buffer the original single-group case used
+        const int extraWidth = Diamonds_ExtraWidth(isMaximized);
         MINMAXINFO* mmi = (MINMAXINFO*)lParam;
         mmi->ptMinTrackSize.x = windowDiamondsWidth + extraWidth;
-        mmi->ptMaxTrackSize.x = windowDiamondsWidth + extraWidth;// 2. Retrieve the desktop work area (excludes the taskbar)
-        RECT workArea;
-        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+        mmi->ptMaxTrackSize.x = windowDiamondsWidth + extraWidth;
 
-        // 3. Force the maximized size and position to respect the work area
-        mmi->ptMaxSize.x = workArea.right - workArea.left;
-        mmi->ptMaxSize.y = workArea.bottom - workArea.top;
-        mmi->ptMaxPosition.x = workArea.left - workArea.left + ((mmi->ptMaxSize.x - mmi->ptMaxTrackSize.x)/2); // relative to monitor, or workArea.left
-        mmi->ptMaxPosition.y = workArea.top - workArea.top;
+        MONITORINFO mi{ sizeof(mi) };
+        if (GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), &mi)) {
+            const int workW = mi.rcWork.right - mi.rcWork.left;
+            const int total = windowDiamondsWidth + extraWidth;
+            mmi->ptMaxSize.x = workW;
+            mmi->ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
+            mmi->ptMaxPosition.x = (mi.rcWork.left - mi.rcMonitor.left) + (workW - total) / 2;
+            mmi->ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
+        }
         return 0;
     }
 
     case WM_SIZE: {
         Diamonds_UpdateFrameMargins(hWnd);
-        Diamonds_UpdateDivColumnsVisibility(hWnd);
+        if (wParam != SIZE_MINIMIZED)
+            Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Layout(hWnd);
         Diamonds_InvalidateCaption(hWnd);
         // DWM may still report old caption-button bounds during maximize/restore.
         SetTimer(hWnd, TIMER_DIAMONDS_CAPTION, DIAMONDS_CAPTION_TIMER_MS, NULL);
         break;
     }
+
+    case WM_THEMECHANGED:
+        if (diamondsState.hCaptionTheme) {
+            CloseThemeData(diamondsState.hCaptionTheme);
+            diamondsState.hCaptionTheme = NULL;
+        }
+        Diamonds_InvalidateCaption(hWnd);
+        break;
 
     case WM_LBUTTONDOWN: {
         POINT pt = { (short)LOWORD(lParam), (short)HIWORD(lParam) };
@@ -1596,9 +1636,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (!lockHotkeys) {
                 LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
                 int row = act->iItem;
-                if (row >= 0) {
+                if (row >= 0 && row < (int)diamondsState.displayOrder.size()) {
                     int conId = diamondsState.displayOrder[row];
-                    const std::string& sym = diamondsState.dataCache[conId].textCols[DCOL_SYMBOL];
+                    std::string sym = diamondsState.dataCache[conId].textCols[DCOL_SYMBOL];
                     StartMarket(sym, conId);
                 }
             }
@@ -1608,9 +1648,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (!lockHotkeys) {
                 LPNMITEMACTIVATE act = (LPNMITEMACTIVATE)lParam;
                 int row = act->iItem;
-                if (row >= 0) {
+                if (row >= 0 && row < (int)diamondsState.displayOrder.size()) {
                     int conId = diamondsState.displayOrder[row];
-                    const std::string& sym = diamondsState.dataCache[conId].textCols[DCOL_SYMBOL];
+                    std::string sym = diamondsState.dataCache[conId].textCols[DCOL_SYMBOL];
 
                     // Determine current group assignment for this item.
                     auto mapIt = diamondsState.tabMap.find(conId);
@@ -1765,7 +1805,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
             switch (cd->nmcd.dwDrawStage) {
                 case CDDS_PREPAINT:
-                    return CDRF_NOTIFYITEMDRAW;
+                    diamondsState.paintGraphics = std::make_unique<Gdiplus::Graphics>(cd->nmcd.hdc);
+                    return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
 
                 case CDDS_ITEMPREPAINT:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
@@ -1988,6 +2029,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 case CDDS_ITEMPOSTPAINT | CDDS_SUBITEM: {
                     if (cd->iSubItem != DCOL_POSITION) return CDRF_DODEFAULT;
+                    if (!diamondsState.paintGraphics) return CDRF_DODEFAULT;
 
                     int rowIndex = (int)cd->nmcd.dwItemSpec;
                     if (rowIndex < 0 || rowIndex >= diamondsState.displayOrder.size()) return CDRF_DODEFAULT;
@@ -2002,9 +2044,13 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     // The list view already paints through its own double buffer.
                     // Drawing through a second buffer here can copy an intermediate
                     // frame back over the row while the list is being invalidated.
-                    sit->second.Draw(cd->nmcd.hdc, cellRect);
+                    sit->second.Draw(*diamondsState.paintGraphics, cellRect);
                     return CDRF_DODEFAULT;
                 }
+
+                case CDDS_POSTPAINT:
+                    diamondsState.paintGraphics.reset();
+                    return CDRF_DODEFAULT;
             }
         }
         break;
@@ -2058,8 +2104,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         diamondsState.dirtyMarket.clear();
         diamondsState.dirtyRedraw.clear();
         diamondsState.dirty = false;
+        diamondsState.paintGraphics.reset();
         diamondsState.sparklines.clear();
         diamondsState.dividendCache.clear();   // NEW
+        Diamonds_FreeCaptionCache(true);
         if (diamondsState.rowHeightImageList) {
             ImageList_Destroy(diamondsState.rowHeightImageList);
             diamondsState.rowHeightImageList = NULL;

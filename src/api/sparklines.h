@@ -138,14 +138,14 @@ protected:
     // width, dot radius range, the "flat price" epsilon nudged into min/max
     // price when every point in `data` shares one price, and the gradient
     // palette/endpoint, is passed in explicitly rather than assumed.
-    void DrawLineAndDots(HDC hdc, float originX, float originY, float W, float H,
+    void DrawLineAndDots(Gdiplus::Graphics& graphics, float originX, float originY, float W, float H,
                           float dotAreaWidth, float minRadius, float maxRadius,
                           double flatPriceEpsilon,
                           const Gdiplus::Color* paletteColors, const float* paletteStops, int paletteCount,
                           Gdiplus::Color endpointColor, float endpointPad) const {
         if (data.size() < 2) return;
 
-        Gdiplus::Graphics graphics(hdc);
+        Gdiplus::GraphicsState graphicsState = graphics.Save();
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         // Everything below is in cell-local coordinates; the transform places it.
         // The gradient brush lives in this same space, so its cache key no longer
@@ -199,6 +199,7 @@ protected:
             else           dotBrush->SetColor(dotColor);
             graphics.FillEllipse(dotBrush.get(), dotX - dotRadius, dotY - dotRadius, dotRadius * 2, dotRadius * 2);
         }
+        graphics.Restore(graphicsState);
     }
 
 public:
@@ -248,7 +249,8 @@ public:
 class Sparkline : public SparklineEngine {
 public:
     void Draw(HDC hdc, RECT clientRect, float W, float H) {
-        DrawLineAndDots(hdc, (float)clientRect.left, (float)clientRect.top, W, H,
+        Gdiplus::Graphics graphics(hdc);
+        DrawLineAndDots(graphics, (float)clientRect.left, (float)clientRect.top, W, H,
                          /*dotAreaWidth=*/15.0f, /*minRadius=*/1.5f, /*maxRadius=*/4.5f,
                          /*flatPriceEpsilon=*/1.0,
                          sparkColors, sparkStops, 3,
@@ -261,7 +263,7 @@ class MiniSparkline : public SparklineEngine {
 public:
     // Draws into the sub-item bounding rect. Leaves a small left margin so
     // the text (position number) is still visible.
-    void Draw(HDC hdc, const RECT& cellRect) const {
+    void Draw(Gdiplus::Graphics& graphics, const RECT& cellRect) const {
         if (data.size() < 2) return;
 
         // Reserve the right portion for the numeric text; the sparkline
@@ -277,7 +279,7 @@ public:
         float ox = (float)(cellRect.left - rightMargin);
         float oy = (float)(cellRect.top  + topPad);
 
-        DrawLineAndDots(hdc, ox, oy, W, H,
+        DrawLineAndDots(graphics, ox, oy, W, H,
                          /*dotAreaWidth=*/18.0f, /*minRadius=*/1.0f, /*maxRadius=*/2.8f,
                          /*flatPriceEpsilon=*/0.5,
                          sparkColorsMini, sparkStops, 3,
