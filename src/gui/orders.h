@@ -83,16 +83,8 @@ static void UpdatePriceLabel(HWND hWnd) {
 
     if (!hTotalLabel || !hPriceEdit || !hOrderQty) return;
 
-    char priceBuf[32] = {}, qtyBuf[32] = {};
-    GetWindowTextA(hPriceEdit, priceBuf, sizeof(priceBuf));
-    GetWindowTextA(hOrderQty, qtyBuf, sizeof(qtyBuf));
-
-    double price = 0;
-    double qty   = 0;
-    try {
-        price = std::stod(priceBuf);
-        qty = std::abs(std::stod(qtyBuf));
-    } catch (...) { price = 0; qty = 0; }
+    double price = EditNum(hPriceEdit);
+    double qty   = std::abs(EditNum(hOrderQty));
 
     if (SetWindowTextAIfChanged(hTotalLabel, FormatWithCommas(price * qty)))
         InvalidateRect(hOrderQty, NULL, TRUE);
@@ -404,13 +396,10 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                 HWND hParent = GetParent(hWnd);
                 HWND hPriceEdit = GetDlgItem(hParent, ID_ORDERS_PRICE_EDIT);
                 HWND hOrderQty  = GetDlgItem(hParent, ID_ORDERS_QTY_EDIT);
-                char pBuf[32] = {}, qBuf[32] = {};
-                if (hPriceEdit) GetWindowTextA(hPriceEdit, pBuf, sizeof(pBuf));
-                double price = atof(pBuf);
+                double price = EditNum(hPriceEdit);
                 double qty = s_editState.originalQty;
                 if (!s_editState.partialFill && hOrderQty) {
-                    GetWindowTextA(hOrderQty, qBuf, sizeof(qBuf));
-                    qty = std::abs(atof(qBuf));
+                    qty = std::abs(EditNum(hOrderQty));
                 }
                 if (qty > 0) {
                     if (s_editState.isUnsent) {
@@ -473,9 +462,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
         }
 
         if (wParam == VK_UP || wParam == VK_DOWN) {
-            char buf[32] = {};
-            GetWindowTextA(hWnd, buf, sizeof(buf));
-            double val  = atof(buf);
+            double val  = EditNum(hWnd);
             if (uIdSubclass == 2) val = std::abs(val);
             double step = 0.0;
             if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {

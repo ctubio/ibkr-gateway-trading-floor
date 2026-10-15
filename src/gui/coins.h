@@ -389,9 +389,8 @@ static void Coins_ApplyFocusLayout(HWND hWnd, bool active) {
 
 static void Coins_SpeakDailyPnL() {
     if (!coinsState.coinsTtsOn || !coinsState.hCoin_BigPnL) return;
-    char buf[128] = {};
-    GetWindowTextA(coinsState.hCoin_BigPnL, buf, sizeof(buf));
-    std::wstring wtext(buf, buf + strlen(buf));
+    std::string text = EditText(coinsState.hCoin_BigPnL);
+    std::wstring wtext(text.begin(), text.end());
     size_t dotPos = wtext.find(L'.');
     if (dotPos != std::wstring::npos) {
         wtext.erase(dotPos);
@@ -727,9 +726,7 @@ static void CoinsFx_UpdateTitle(HWND hWnd) {
     int sel = hCombo ? (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0) : 0;
     bool isBuy = (sel != 1);   // 0 = BUY (USD->EUR), 1 = SELL (EUR->USD)
 
-    char buf[32] = {};
-    if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
-    double amount = atof(buf);
+    double amount = EditNum(hEdit);
 
     std::string title = "Exchange: ";
     if (rate > 0.0) {
@@ -762,9 +759,7 @@ static void CoinsFx_SubmitAndClose(HWND hWnd) {
     int sel = hCombo ? (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0) : 0;
     bool isBuy = (sel != 1);
 
-    char buf[32] = {};
-    if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
-    double amount = atof(buf);
+    double amount = EditNum(hEdit);
 
     if (amount > 2.0) {
         TradingAPI::L1Book fx;
@@ -886,10 +881,9 @@ static LockState lockState;
 //     so the user can retry.
 static void Lock_TrySubmit(HWND hWnd) {
     HWND hEdit = GetDlgItem(hWnd, ID_LOCK_EDIT);
-    char buf[128] = {};
-    if (hEdit) GetWindowTextA(hEdit, buf, sizeof(buf));
+    std::string text = EditText(hEdit);
 
-    if (lockScreen != std::string(buf)) {
+    if (lockScreen != text) {
         MessageBoxA(hWnd, "Incorrect Lock Keyword", "Lock Keyword Required", MB_ICONERROR);
         if (hEdit) {
             SetWindowTextA(hEdit, "");

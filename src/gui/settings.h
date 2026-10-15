@@ -96,10 +96,9 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 // Add near the top of settings.h, e.g. just above WndProcSettings:
 static void Settings_SaveCredentialsFromUI(HWND hWnd) {
-    char userBuf[256] = {}, passBuf[256] = {};
-    GetWindowTextA(GetDlgItem(hWnd, ID_SETTINGS_USERNAME), userBuf, sizeof(userBuf));
-    GetWindowTextA(GetDlgItem(hWnd, ID_SETTINGS_PASSWORD), passBuf, sizeof(passBuf));
-    Credentials_Save(userBuf, passBuf);
+    std::string username = EditText(GetDlgItem(hWnd, ID_SETTINGS_USERNAME));
+    std::string password = EditText(GetDlgItem(hWnd, ID_SETTINGS_PASSWORD));
+    Credentials_Save(username, password);
 }
 
 LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -390,32 +389,20 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             if (LOWORD(wParam) == ID_SETTINGS_GROUP_ID) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_GROUP_ID);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    groupIdGateway = atoi(buf.data());
-                }
+                std::string text = EditText(hEdit);
+                if (!text.empty()) groupIdGateway = std::atoi(text.c_str());
                 Settings_Save("GroupId", groupIdGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_CLIENT_ID) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_CLIENT_ID);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    clientIdGateway = atoi(buf.data());
-                }
+                std::string text = EditText(hEdit);
+                if (!text.empty()) clientIdGateway = std::atoi(text.c_str());
                 Settings_Save("ClientId", clientIdGateway);
             }
             if ((LOWORD(wParam) == ID_SETTINGS_ADDRESS)) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_ADDRESS);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    addressGateway = std::string(buf.data());
-                } else {
+                addressGateway = EditText(hEdit);
+                if (addressGateway.empty()) {
                     addressGateway = std::string("127.0.0.1");
                 }
                 Settings_SaveString("IPAddress", addressGateway);
@@ -435,12 +422,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             if ((LOWORD(wParam) == ID_SETTINGS_LOCK)) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
-                int len = GetWindowTextLength(hEdit);
-                if (len >= 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    lockScreen = std::string(buf.data());
-                }
+                lockScreen = EditText(hEdit);
                 Settings_SaveString("Lock", lockScreen);
             }
             if (LOWORD(wParam) == ID_SETTINGS_FULL_SCREEN_ALERTS) {
@@ -461,52 +443,28 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             if (LOWORD(wParam) == ID_SETTINGS_QTY_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    qtyGateway = atoi(buf.data());
-                }
+                std::string text = EditText(hEdit);
+                if (!text.empty()) qtyGateway = std::atoi(text.c_str());
                 Settings_Save("OrderQty", qtyGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_STOP_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    stopGateway = (float)atof(buf.data()); // atof handles decimals
-                }
+                if (GetWindowTextLengthA(hEdit) > 0) stopGateway = static_cast<float>(EditNum(hEdit));
                 Settings_SaveFloat("StopPrice", stopGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_PROFIT_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_PROFIT_VALUE);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    profitGateway = (float)atof(buf.data()); // atof handles decimals
-                }
+                if (GetWindowTextLengthA(hEdit) > 0) profitGateway = static_cast<float>(EditNum(hEdit));
                 Settings_SaveFloat("ProfitPrice", profitGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_RISK_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_RISK_VALUE);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    riskGateway = (float)atof(buf.data()); // atof handles decimals
-                }
+                if (GetWindowTextLengthA(hEdit) > 0) riskGateway = static_cast<float>(EditNum(hEdit));
                 Settings_SaveFloat("RiskPct", riskGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_SAFETY_VALUE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_SAFETY_VALUE);
-                int len = GetWindowTextLength(hEdit);
-                if (len > 0) {
-                    std::vector<char> buf(len + 1);
-                    GetWindowTextA(hEdit, buf.data(), len + 1);
-                    safetyGateway = (float)atof(buf.data()); // atof handles decimals
-                }
+                if (GetWindowTextLengthA(hEdit) > 0) safetyGateway = static_cast<float>(EditNum(hEdit));
                 Settings_SaveFloat("Safety", safetyGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {

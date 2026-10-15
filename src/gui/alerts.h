@@ -96,17 +96,16 @@ static void AlertEditor_SaveAndClose(HWND hWnd) {
     HWND hUp   = GetDlgItem(hWnd, ID_ALERTS_UP_EDIT);
     HWND hDown = GetDlgItem(hWnd, ID_ALERTS_DOWN_EDIT);
 
-    char upBuf[32] = {}, downBuf[32] = {};
-    if (hUp)   GetWindowTextA(hUp,   upBuf,   sizeof(upBuf));
-    if (hDown) GetWindowTextA(hDown, downBuf, sizeof(downBuf));
+    std::string upText = EditText(hUp);
+    std::string downText = EditText(hDown);
 
     auto trim = [](std::string s) -> std::string {
         size_t b = s.find_first_not_of(" \t\r\n");
         size_t e = s.find_last_not_of(" \t\r\n");
         return (b == std::string::npos) ? std::string() : s.substr(b, e - b + 1);
     };
-    std::string upStr   = trim(upBuf);
-    std::string downStr = trim(downBuf);
+    std::string upStr   = trim(std::move(upText));
+    std::string downStr = trim(std::move(downText));
 
     if (!alertsEditState.symbol.empty() && alertsEditState.conId > 0) {
         Settings_Alerts_Save(alertsEditState.symbol, alertsEditState.conId, upStr, downStr);
@@ -149,9 +148,7 @@ static LRESULT CALLBACK AlertEditor_KeySubclassProc(HWND hCtrl, UINT msg, WPARAM
             return 0;
         }
         if (wParam == VK_UP || wParam == VK_DOWN) {
-            char buf[32] = {};
-            GetWindowTextA(hCtrl, buf, sizeof(buf));
-            double val  = atof(buf);
+            double val  = EditNum(hCtrl);
             double step = 1.0;
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;

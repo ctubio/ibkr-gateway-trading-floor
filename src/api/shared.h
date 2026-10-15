@@ -1,5 +1,20 @@
 #pragma once
 
+static std::string EditText(HWND hWnd) {
+    if (!hWnd) return {};
+    int length = GetWindowTextLengthA(hWnd);
+    if (length <= 0) return {};
+
+    std::string text(static_cast<size_t>(length) + 1, '\0');
+    int copied = GetWindowTextA(hWnd, text.data(), length + 1);
+    text.resize(static_cast<size_t>(copied));
+    return text;
+}
+
+static double EditNum(HWND hWnd) {
+    return hWnd ? std::atof(EditText(hWnd).c_str()) : 0.0;
+}
+
 static bool IsAllowedNumericEditCharacter(WPARAM wParam) {
     return (wParam >= '0' && wParam <= '9') ||
            wParam == '.' || wParam == '+' || wParam == '-' ||
@@ -210,9 +225,7 @@ static std::unordered_map<HWND, TsState*> marketStates;
 // ── Text Labels ───────────────────────────────────────────────────────────
 static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
     if (!hWnd) return false;
-    char buf[256] = {};
-    GetWindowTextA(hWnd, buf, sizeof(buf));
-    if (std::string(buf) == newText) return false;
+    if (EditText(hWnd) == newText) return false;
     SetWindowTextA(hWnd, newText.c_str());
     InvalidateRect(hWnd, NULL, TRUE);
     return true;

@@ -258,14 +258,9 @@ static void Market_UpdateOrderRowTotalLabel(MarketOrderRow& row) {
     if (row.trailStopPrice > 0) {
         price = row.trailStopPrice;
     } else {
-        char priceBuf[32] = {};
-        GetWindowTextA(row.hPriceEdit, priceBuf, sizeof(priceBuf));
-        try { price = std::stod(priceBuf); } catch (...) { price = 0.0; }
+        price = EditNum(row.hPriceEdit);
     }
-    double qty = 0.0;
-    char qtyBuf[32] = {};
-    GetWindowTextA(row.hQtyEdit,   qtyBuf,   sizeof(qtyBuf));
-    try { qty   = std::abs(std::stod(qtyBuf)); } catch (...) { qty = 0.0; }
+    double qty = std::abs(EditNum(row.hQtyEdit));
     if (SetWindowTextAIfChanged(row.hTotalLabel, FormatWithCommas(price * qty)))
         InvalidateRect(row.hQtyEdit, NULL, TRUE);
 }
@@ -697,16 +692,10 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
 static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (!state || !state->hTotalLabel || !state->hTotalQtyLabel || state->l1Info.last <= 0.0) return;
 
-    char pBuf[32] = {}, qBuf[32] = {}, sBuf[32] = {}, profitBuf[32] = {};
-    GetWindowTextA(state->hOrderPrice,     pBuf, sizeof(pBuf));
-    GetWindowTextA(state->hOrderQty,       qBuf, sizeof(qBuf));
-    GetWindowTextA(state->hOrderStopPrice, sBuf, sizeof(sBuf));
-    GetWindowTextA(state->hOrderProfitPrice, profitBuf, sizeof(profitBuf));
-
-    double price    = std::atof(pBuf);
-    double qty      = std::abs(std::atof(qBuf));
-    double stopDist = std::atof(sBuf);
-    double profitDist = std::atof(profitBuf);
+    double price      = EditNum(state->hOrderPrice);
+    double qty        = std::abs(EditNum(state->hOrderQty));
+    double stopDist   = EditNum(state->hOrderStopPrice);
+    double profitDist = EditNum(state->hOrderProfitPrice);
     double stopDistOriginal = stopDist;
     std::string profitTargetValueStr = "";
     std::string stopTargetValueStr = "";
@@ -946,15 +935,10 @@ static void Market_RedrawEditHints(TsState* st, MarketOrderRow* row, HWND hEdit)
 static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
     if (!st || st->l1Info.last <= 0.0) return;
 
-    char pBuf[32] = {}, qBuf[32] = {}, psBuf[32] = {}, ppBuf[32] = {};
-    GetWindowTextA(st->hOrderPrice,       pBuf,  sizeof(pBuf));
-    GetWindowTextA(st->hOrderQty,         qBuf,  sizeof(qBuf));
-    GetWindowTextA(st->hOrderStopPrice,   psBuf, sizeof(psBuf));
-    GetWindowTextA(st->hOrderProfitPrice, ppBuf, sizeof(ppBuf));
-    double price       = std::atof(pBuf);
-    double qty         = std::abs(std::atof(qBuf));
-    double stopPrice   = std::atof(psBuf);
-    double profitPrice = std::atof(ppBuf);
+    double price       = EditNum(st->hOrderPrice);
+    double qty         = std::abs(EditNum(st->hOrderQty));
+    double stopPrice   = EditNum(st->hOrderStopPrice);
+    double profitPrice = EditNum(st->hOrderProfitPrice);
 
     if ((price > 0 || stopPrice > 0) && qty > 0) {
         auto fail = [&](const std::string& msg, const char* title) {
@@ -1017,13 +1001,10 @@ static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
 
 // ENTER on an editable-order row: modify that order in place.
 static void Market_SubmitOrderRow(MarketOrderRow& row) {
-    char pBuf[32] = {}, qBuf[32] = {};
-    GetWindowTextA(row.hPriceEdit, pBuf, sizeof(pBuf));
-    double price = atof(pBuf);
+    double price = EditNum(row.hPriceEdit);
     double qty   = row.originalQty;
     if (!row.partialFill) {
-        GetWindowTextA(row.hQtyEdit, qBuf, sizeof(qBuf));
-        qty = std::abs(atof(qBuf));
+        qty = std::abs(EditNum(row.hQtyEdit));
     }
     if (price > 0.0 && qty > 0.0)
         api().modifyOrder(row.orderId, price, qty);
@@ -1088,9 +1069,7 @@ static LRESULT CALLBACK Market_EditSubclassProc(
             const bool isPrice = (uIdSubclass == MEDIT_PRICE);
             const std::string& action = row ? row->action : st->orderSide;
 
-            char buf[32] = {};
-            GetWindowTextA(hEdit, buf, sizeof(buf));
-            double val = atof(buf);
+            double val = EditNum(hEdit);
             if (!isPrice) val = std::abs(val);
 
             bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -1253,8 +1232,8 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         case WM_COMMAND:
             if (LOWORD(wParam) == ID_MARKET_SEARCH_INPUT && HIWORD(wParam) == EN_CHANGE) {
-                char t[256] = {}; GetWindowTextA(GetDlgItem(hWnd, ID_MARKET_SEARCH_INPUT), t, sizeof(t));
-                if (strlen(t) > 0) { api().searchSymbols(hWnd, t); }
+                std::string text = EditText(GetDlgItem(hWnd, ID_MARKET_SEARCH_INPUT));
+                if (!text.empty()) { api().searchSymbols(hWnd, text.c_str()); }
                 else { SendMessage(GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST), LB_RESETCONTENT, 0, 0); tsSearchResults.clear(); }
             }
             break;
