@@ -226,27 +226,22 @@ public:
         double changePct() const { return (prevClose > 0 && last > 0) ? (last - prevClose) / prevClose * 100.0 : 0.0; }
         double dividendYield() const { return (last > 0 && annualDividends > 0) ? (annualDividends / last * 100.0) : ((prevClose > 0 && annualDividends > 0) ? (annualDividends / prevClose * 100.0) : 0.0); }
 
-        // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
+        // Position in a price range: 0% = at low, 100% = at high.
         // Returns a sentinel (0.0) when data is not yet available.
-        double Week52RangePct() const {
-            double range = high52 - low52;
+        double RangePct(double lo, double hi) const {
+            double range = hi - lo;
             if (range <= 0 || last <= 0) return 0.0;
-            return (last - low52) / range * 100.0;
+            return (last - lo) / range * 100.0;
         }
         // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
         // Returns a sentinel (0.0) when data is not yet available.
-        double Week26RangePct() const {
-            double range = high26 - low26;
-            if (range <= 0 || last <= 0) return 0.0;
-            return (last - low26) / range * 100.0;
-        }
-        // Position in 52W range: 0% = at 52W low, 100% = at 52W high.
+        double Week52RangePct() const { return RangePct(low52, high52); }
+        // Position in 26W range: 0% = at 26W low, 100% = at 26W high.
         // Returns a sentinel (0.0) when data is not yet available.
-        double Week13RangePct() const {
-            double range = high13 - low13;
-            if (range <= 0 || last <= 0) return 0.0;
-            return (last - low13) / range * 100.0;
-        }
+        double Week26RangePct() const { return RangePct(low26, high26); }
+        // Position in 13W range: 0% = at 13W low, 100% = at 13W high.
+        // Returns a sentinel (0.0) when data is not yet available.
+        double Week13RangePct() const { return RangePct(low13, high13); }
 
         // ── RT_VOLUME-derived recent-activity metric (generic tick 233) ─────────────
         double rtVolSum5min   = 0.0;  // approx. shares traded in the trailing ~5 minutes
