@@ -125,6 +125,12 @@ struct TsState {
     HWND hTsListF1000 = NULL;
     HWND hL2List = NULL;
     HWND hExecList = NULL;   // Executions list (far left, beside L2)
+
+    // ── Level 2 visual data (mirrors the 12 list rows) ───────────────────────
+    double    l2Price[12]     = {};
+    double    l2Size[12]      = {};
+    ULONGLONG l2ChangedAt[12] = {};   // GetTickCount64() of last size change
+
     bool isOvernight = false;
     std::string symbol;
     int conId = 0;

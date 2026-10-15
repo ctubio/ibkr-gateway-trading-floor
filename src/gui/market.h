@@ -6,7 +6,7 @@ static const int windowMarketHeight = 505;
 static const size_t MAX_MARKET_WINDOWS = 3;
 
 void StartMarketSearch() {
-    HWND hWnd = CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",
+    CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
         (GetSystemMetrics(SM_CXSCREEN) - 268) / 2, (GetSystemMetrics(SM_CYSCREEN) - 255) / 2, 268, 255,
         NULL, NULL, GetModuleHandle(NULL), NULL);
@@ -1236,19 +1236,28 @@ static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* updat
     if (!state || !state->hL2List || !update) return;
     if (update->position < 0 || update->position >= 6 || (update->side != 0 && update->side != 1)) return;
 
-    // Ask position 0 is the best ask, displayed immediately above bids.
-    // Fixed slots reverse asks so the best ask remains closest to the spread.
     int row = update->side == 0 ? 5 - update->position : 6 + update->position;
+    double newSize = 0.0, newPrice = 0.0;
+
     if (update->operation == 2) {
         ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
         ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
     } else {
-        std::string price = Market_Fmt(update->entry.price);
-        std::string size = Market_FmtQty(update->entry.size);
+        newSize = update->entry.size;
+        newPrice = update->entry.price;
+        std::string price = Market_Fmt(newPrice);
+        std::string size = Market_FmtQty(newSize);
         ListView_SetItemText(state->hL2List, row, 0, (LPSTR)size.c_str());
         ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
     }
-    ListView_RedrawItems(state->hL2List, row, row);
+
+    if (state->l2Size[row] != newSize || state->l2Price[row] != newPrice)
+        state->l2ChangedAt[row] = GetTickCount64();
+    state->l2Size[row] = newSize;
+    state->l2Price[row] = newPrice;
+
+    // Bars are relative to the biggest row, so any change can rescale all rows.
+    InvalidateRect(state->hL2List, NULL, FALSE);
 }
 
 // ── Open-orders + executions list refresh ─────────────────────────────────────
@@ -1771,6 +1780,107 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
     state->marketHdrDirty = true;
 }
 
+static COLORREF L2_Mix(COLORREF a, COLORREF b, float t) {
+    t = std::max(0.0f, std::min(1.0f, t));
+    return RGB(GetRValue(a) + (int)((GetRValue(b) - GetRValue(a)) * t),
+               GetGValue(a) + (int)((GetGValue(b) - GetGValue(a)) * t),
+               GetBValue(a) + (int)((GetBValue(b) - GetBValue(a)) * t));
+}
+
+static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
+    const int row = (int)cd->nmcd.dwItemSpec;
+    if (row < 0 || row >= 12) return;
+
+    HDC hdc = cd->nmcd.hdc;
+    RECT cl; GetClientRect(st->hL2List, &cl);
+    RECT rc = cd->nmcd.rc;
+    rc.left = 0;
+    rc.right = cl.right - 5;
+
+    const bool ask = row < 6;
+    const bool best = (row == 5 || row == 6);
+    const COLORREF accent = ask ? COINS_CLR_RED : COINS_CLR_BLUE;
+    const COLORREF bg = darkMode ? DM_BG : GetSysColor(COLOR_WINDOW);
+
+    double maxSize = 0.0, sum = 0.0;
+    int n = 0;
+    for (int i = 0; i < 12; ++i) {
+        if (st->l2Size[i] > 0.0) {
+            maxSize = std::max(maxSize, st->l2Size[i]);
+            sum += st->l2Size[i];
+            ++n;
+        }
+    }
+    const double avg = n ? sum / n : 0.0;
+    const double size = st->l2Size[row];
+
+    float flash = 0.0f;
+    ULONGLONG age = GetTickCount64() - st->l2ChangedAt[row];
+    if (st->l2ChangedAt[row] && age < 300)
+        flash = 1.0f - (float)age / 300.0f;
+
+    HBRUSH dc = (HBRUSH)GetStockObject(DC_BRUSH);
+    SetDCBrushColor(hdc, L2_Mix(bg, accent, 0.30f * flash));
+    FillRect(hdc, &rc, dc);
+
+    if (size <= 0.0 || maxSize <= 0.0) return;
+
+    float frac = (float)std::sqrt(size / maxSize);
+    RECT bar = rc;
+    bar.right = bar.left + std::max(2, (int)((rc.right - rc.left) * frac));
+    float strength = (darkMode ? 0.42f : 0.50f) + (best ? 0.18f : 0.0f) + 0.25f * flash;
+    SetDCBrushColor(hdc, L2_Mix(bg, accent, strength));
+    FillRect(hdc, &bar, dc);
+
+    RECT edge = bar;
+    edge.left = std::max(bar.left, bar.right - 2);
+    SetDCBrushColor(hdc, accent);
+    FillRect(hdc, &edge, dc);
+
+    const bool wall = avg > 0.0 && size >= avg * 1.5;
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, (wall || best) ? ThemeText() : L2_Mix(accent, ThemeText(), 0.25f));
+    SelectObject(hdc, best ? hFont12ptbold.get() : hFont11ptbold.get());
+
+    std::string sz = Market_FmtQty(size), px = Market_Fmt(st->l2Price[row]);
+    RECT tl = rc; tl.left += 6;
+    RECT tr = rc; tr.right -= 6;
+    DrawTextA(hdc, sz.c_str(), -1, &tl, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    DrawTextA(hdc, px.c_str(), -1, &tr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+    if (row == 5) {
+        RECT line = { rc.left, rc.bottom - 1, rc.right, rc.bottom + 1 };
+        SetDCBrushColor(hdc, darkMode ? DM_BORDER : RGB(180, 180, 180));
+        FillRect(hdc, &line, dc);
+    }
+}
+
+static void Market_PaintL2Pressure(TsState* st, HDC hdc) {
+    double askTot = 0.0, bidTot = 0.0;
+    for (int i = 0; i < 12; ++i)
+        (i < 6 ? askTot : bidTot) += st->l2Size[i];
+
+    RECT cl; GetClientRect(st->hL2List, &cl);
+    RECT last = {};
+    int bottom = cl.bottom;
+    if (ListView_GetItemRect(st->hL2List, 11, &last, LVIR_BOUNDS))
+        bottom = last.bottom;
+
+    RECT strip = { cl.right - 4, 0, cl.right, bottom };
+    HBRUSH dc = (HBRUSH)GetStockObject(DC_BRUSH);
+    double total = askTot + bidTot;
+    if (total <= 0.0) {
+        SetDCBrushColor(hdc, darkMode ? DM_BG2 : RGB(230, 230, 230));
+        FillRect(hdc, &strip, dc);
+        return;
+    }
+    int split = (int)(bottom * (askTot / total));
+    RECT top = strip; top.bottom = split;
+    RECT bot = strip; bot.top = split;
+    SetDCBrushColor(hdc, COINS_CLR_RED); FillRect(hdc, &top, dc);
+    SetDCBrushColor(hdc, COINS_CLR_BLUE); FillRect(hdc, &bot, dc);
+}
+
 // ── Window procedure ──────────────────────────────────────────────────────────
 LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
@@ -2178,6 +2288,15 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 InvalidateRect(hWnd, &hdrRc, FALSE);
                 state->marketHdrDirty = false;
             }
+            if (state && state->hL2List) {
+                ULONGLONG now = GetTickCount64();
+                for (int i = 0; i < 12; ++i) {
+                    if (state->l2ChangedAt[i] && now - state->l2ChangedAt[i] < 320) {
+                        InvalidateRect(state->hL2List, NULL, FALSE);
+                        break;
+                    }
+                }
+            }
         }
         if (wParam == TIMER_MARKET_VOLDECAY && state)
             state->marketHdrDirty = true;
@@ -2248,15 +2367,14 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (hdr->idFrom == ID_MARKET_L2_LIST) {
             NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)lParam;
             switch (cd->nmcd.dwDrawStage) {
-                case CDDS_PREPAINT:     return CDRF_NOTIFYITEMDRAW;
-                case CDDS_ITEMPREPAINT: return CDRF_NOTIFYSUBITEMDRAW;
-                case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
-                    // lParam stores 1=ask, 2=bid
-                    LPARAM side = cd->nmcd.lItemlParam;
-                    cd->clrText   =  (side == 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
-                    cd->clrTextBk  = RowBg(cd->nmcd.dwItemSpec);
+                case CDDS_PREPAINT:
+                    return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
+                case CDDS_ITEMPREPAINT:
+                    if (state) Market_PaintL2Row(state, cd);
+                    return CDRF_SKIPDEFAULT;
+                case CDDS_POSTPAINT:
+                    if (state) Market_PaintL2Pressure(state, cd->nmcd.hdc);
                     return CDRF_DODEFAULT;
-                }
             }
             break;
         }
@@ -2313,6 +2431,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
                         ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
                     }
+                    std::fill(std::begin(state->l2Size), std::end(state->l2Size), 0.0);
+                    std::fill(std::begin(state->l2Price), std::end(state->l2Price), 0.0);
+                    std::fill(std::begin(state->l2ChangedAt), std::end(state->l2ChangedAt), 0);
+                    InvalidateRect(state->hL2List, NULL, FALSE);
                 }
                 if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
                 // Editable-orders panel is stale without a live connection, drop it.
