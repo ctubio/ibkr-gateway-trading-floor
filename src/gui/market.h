@@ -2442,8 +2442,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->hbmHeader)    DeleteObject(state->hbmHeader);
             if (state->hdcHeaderMem) DeleteDC(state->hdcHeaderMem);
             state->caption.Free(true);
-            state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hTotalLabel = state->hTotalQtyLabel = NULL;
-            state->hOptProfitTarget = state->hOptStopTarget = state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             // Row controls are children of hWnd, DestroyWindow(hWnd) tears them
             // down (and unsubclasses them via their own WM_NCDESTROY) automatically.
             state->orderRows.clear();

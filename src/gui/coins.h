@@ -1154,26 +1154,33 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         case WM_API_UPDATE: // only called when the api connects or disconnects
             if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
                 const int m    = 10;
-                const int boxW = 226;
                 int box1H = 94;
                 int y1 = 8;
                 int y2 = y1 + box1H + 9; // y2 = 114
                 int box2H = 124;
                 int y3 = y2 + box2H + 9; // y3 = 250
-                int box3H = 64;
-                if (coinsState.hCoin_NetLiq)      { SetWindowTextA(coinsState.hCoin_NetLiq,    "--"); SetWindowPos(coinsState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(coinsState.hCoin_NetLiq, NULL, TRUE); }
-                if (coinsState.hCoin_BigPnL)      SetWindowTextA(coinsState.hCoin_BigPnL,      "--");
-                if (coinsState.hCoin_Pct)         SetWindowTextA(coinsState.hCoin_Pct,         "--");
-                if (coinsState.hCoin_Realized)    SetWindowTextA(coinsState.hCoin_Realized,    "--");
-                if (coinsState.hCoin_Positions)   { SetWindowTextA(coinsState.hCoin_Positions, "--"); SetWindowPos(coinsState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(coinsState.hCoin_Positions, NULL, TRUE); }
-                if (coinsState.hCoin_Unrealized)  SetWindowTextA(coinsState.hCoin_Unrealized,  "--");
-                if (coinsState.hCoin_Dividends)   SetWindowTextA(coinsState.hCoin_Dividends,   "--");
-                if (coinsState.hCoin_Accruals)    SetWindowTextA(coinsState.hCoin_Accruals,    "--");
-                if (coinsState.hCoin_BuyingPower) SetWindowTextA(coinsState.hCoin_BuyingPower, "--");
-                if (coinsState.hCoin_MaintMargin) SetWindowTextA(coinsState.hCoin_MaintMargin, "--");
-                if (coinsState.hCoin_Cash)        { SetWindowTextA(coinsState.hCoin_Cash,      "--"); SetWindowPos(coinsState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE); InvalidateRect(coinsState.hCoin_Cash, NULL, TRUE); }
-                if (coinsState.hCoin_EUR)         SetWindowTextA(coinsState.hCoin_EUR,         "--");
-                if (coinsState.hCoin_USD)         SetWindowTextA(coinsState.hCoin_USD,         "--");
+                const HWND labels[] = {
+                    coinsState.hCoin_NetLiq, coinsState.hCoin_BigPnL, coinsState.hCoin_Pct,
+                    coinsState.hCoin_Realized, coinsState.hCoin_Positions, coinsState.hCoin_Unrealized,
+                    coinsState.hCoin_Dividends, coinsState.hCoin_Accruals, coinsState.hCoin_BuyingPower,
+                    coinsState.hCoin_MaintMargin, coinsState.hCoin_Cash, coinsState.hCoin_EUR,
+                    coinsState.hCoin_USD,
+                };
+                for (HWND label : labels) {
+                    if (label) SetWindowTextA(label, "--");
+                }
+                if (coinsState.hCoin_NetLiq) {
+                    SetWindowPos(coinsState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                    InvalidateRect(coinsState.hCoin_NetLiq, NULL, TRUE);
+                }
+                if (coinsState.hCoin_Positions) {
+                    SetWindowPos(coinsState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                    InvalidateRect(coinsState.hCoin_Positions, NULL, TRUE);
+                }
+                if (coinsState.hCoin_Cash) {
+                    SetWindowPos(coinsState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+                    InvalidateRect(coinsState.hCoin_Cash, NULL, TRUE);
+                }
                 coinsState.currencyCoins = "--";
                 Coins_UpdateTaskbarOrders(hWnd, 0);
             }
@@ -1538,21 +1545,15 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                 KillTimer(hWnd, TIMER_COINS_SPEAKER);
                 SharedTts().Release();
             }
-            coinsState.coinsTtsOn = false;
-
             if (coinsState.taskbar) {
                 coinsState.taskbar->SetProgressState(hWnd, TBPF_NOPROGRESS);
                 coinsState.taskbar->Release();
-                coinsState.taskbar = nullptr;
             }
             if (coinsState.taskbarComInitialized) {
                 CoUninitialize();
-                coinsState.taskbarComInitialized = false;
             }
 
-            coinsState.hLblEUR = coinsState.hLblUSD = coinsState.hCoin_NetLiq = coinsState.hCoin_BigPnL = coinsState.hCoin_Pct = coinsState.hCoin_Realized = coinsState.hCoin_Speaker = coinsState.hCoin_Lock = NULL;
-            coinsState.hCoin_Positions = coinsState.hCoin_Unrealized = coinsState.hCoin_Dividends = coinsState.hCoin_Accruals = coinsState.hCoin_BuyingPower = coinsState.hCoin_MaintMargin = NULL;
-            coinsState.hCoin_Clock = coinsState.hLblBP = coinsState.hLblMM = coinsState.hLblDividends = coinsState.hLblAccruals = coinsState.hCoinBox1 = coinsState.hCoinBox2 = coinsState.hCoinBox3 = coinsState.hCoin_Cash = coinsState.hCoin_EUR = coinsState.hCoin_USD = NULL;
+            coinsState = {};
 
             Settings_Market_CleanupOldWindows();
             
