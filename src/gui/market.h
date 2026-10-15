@@ -1793,12 +1793,13 @@ static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
 
     HDC hdc = cd->nmcd.hdc;
     RECT cl; GetClientRect(st->hL2List, &cl);
-    RECT rc = cd->nmcd.rc;
+    RECT rc = {};
+    if (!ListView_GetItemRect(st->hL2List, row, &rc, LVIR_BOUNDS)) return;
     rc.left = 0;
     rc.right = cl.right - 5;
+    if (rc.bottom <= rc.top || rc.right <= rc.left) return;
 
     const bool ask = row < 6;
-    const bool best = (row == 5 || row == 6);
     const COLORREF accent = ask ? COINS_CLR_RED : COINS_CLR_BLUE;
     const COLORREF bg = darkMode ? DM_BG : GetSysColor(COLOR_WINDOW);
 
@@ -1813,6 +1814,7 @@ static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
     }
     const double avg = n ? sum / n : 0.0;
     const double size = st->l2Size[row];
+    const bool wall = avg > 0.0 && size >= avg * 1.5;
 
     float flash = 0.0f;
     ULONGLONG age = GetTickCount64() - st->l2ChangedAt[row];
@@ -1828,7 +1830,7 @@ static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
     float frac = (float)std::sqrt(size / maxSize);
     RECT bar = rc;
     bar.right = bar.left + std::max(2, (int)((rc.right - rc.left) * frac));
-    float strength = (darkMode ? 0.42f : 0.50f) + (best ? 0.18f : 0.0f) + 0.25f * flash;
+    float strength = (darkMode ? 0.42f : 0.50f) + 0.25f * flash;
     SetDCBrushColor(hdc, L2_Mix(bg, accent, strength));
     FillRect(hdc, &bar, dc);
 
@@ -1837,15 +1839,15 @@ static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
     SetDCBrushColor(hdc, accent);
     FillRect(hdc, &edge, dc);
 
-    const bool wall = avg > 0.0 && size >= avg * 1.5;
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, (wall || best) ? ThemeText() : L2_Mix(accent, ThemeText(), 0.25f));
-    SelectObject(hdc, best ? hFont12ptbold.get() : hFont11ptbold.get());
+    SetTextColor(hdc, wall ? ThemeText() : L2_Mix(accent, ThemeText(), 0.25f));
+    //SelectObject(hdc, best ? hFont12ptbold.get() : hFont11ptbold.get());
+    SelectObject(hdc, hFont11pt.get());
 
     std::string sz = Market_FmtQty(size), px = Market_Fmt(st->l2Price[row]);
-    RECT tl = rc; tl.left += 6;
-    RECT tr = rc; tr.right -= 6;
-    DrawTextA(hdc, sz.c_str(), -1, &tl, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    RECT tl = rc; tl.right -= 80;
+    RECT tr = rc; tr.right -= 10;
+    DrawTextA(hdc, sz.c_str(), -1, &tl, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     DrawTextA(hdc, px.c_str(), -1, &tr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
     if (row == 5) {
@@ -1863,8 +1865,6 @@ static void Market_PaintL2Pressure(TsState* st, HDC hdc) {
     RECT cl; GetClientRect(st->hL2List, &cl);
     RECT last = {};
     int bottom = cl.bottom;
-    if (ListView_GetItemRect(st->hL2List, 11, &last, LVIR_BOUNDS))
-        bottom = last.bottom;
 
     RECT strip = { cl.right - 4, 0, cl.right, bottom };
     HBRUSH dc = (HBRUSH)GetStockObject(DC_BRUSH);
@@ -1877,8 +1877,9 @@ static void Market_PaintL2Pressure(TsState* st, HDC hdc) {
     int split = (int)(bottom * (askTot / total));
     RECT top = strip; top.bottom = split;
     RECT bot = strip; bot.top = split;
-    SetDCBrushColor(hdc, COINS_CLR_RED); FillRect(hdc, &top, dc);
-    SetDCBrushColor(hdc, COINS_CLR_BLUE); FillRect(hdc, &bot, dc);
+    const COLORREF bg = darkMode ? DM_BG : GetSysColor(COLOR_WINDOW);
+    SetDCBrushColor(hdc, L2_Mix(bg, COINS_CLR_RED, 0.50f)); FillRect(hdc, &top, dc);
+    SetDCBrushColor(hdc, L2_Mix(bg, COINS_CLR_BLUE, 0.50f)); FillRect(hdc, &bot, dc);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
