@@ -841,6 +841,46 @@ std::string FormatWithCommas(double value, bool showDecimals = true) {
     return s;
 }
 
+static COLORREF ThemeText() {
+    return darkMode ? DM_TEXT : LM_TEXT;
+}
+
+static HBRUSH ThemeBrush() {
+    return darkMode ? hDarkBrush : hLightBrush;
+}
+
+static COLORREF RowBg(size_t i) {
+    return darkMode
+        ? (i % 2 ? DM_BG2 : DM_BG)
+        : (i % 2 ? RGB(245, 245, 245) : GetSysColor(COLOR_WINDOW));
+}
+
+static HBRUSH RowBrush(size_t i) {
+    return darkMode
+        ? (i % 2 ? hDarkBrush2 : hDarkBrush)
+        : (i % 2 ? hLightBrushBg2 : hLightBrushBg);
+}
+
+static COLORREF SignColor(double value) {
+    return value > 0.0 ? COINS_CLR_GREEN : value < 0.0 ? COINS_CLR_RED : ThemeText();
+}
+
+static bool SetSigned(HWND hWnd, double value, COLORREF& color, const std::string& text) {
+    if (!SetWindowTextAIfChanged(hWnd, text)) return false;
+    color = SignColor(value);
+    return true;
+}
+
+static bool SetSigned(HWND hWnd, double value, COLORREF& color, const std::wstring& text) {
+    if (!SetWindowTextWIfChanged(hWnd, text)) return false;
+    color = SignColor(value);
+    return true;
+}
+
+static bool SetSigned(HWND hWnd, double value, COLORREF& color) {
+    return SetSigned(hWnd, value, color, FormatWithCommas(value));
+}
+
 std::wstring StringToWide(const std::string& str) {
     int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0);
     std::wstring wstrTo(size_needed, 0);

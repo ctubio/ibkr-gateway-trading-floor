@@ -769,11 +769,11 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     case CDDS_ITEMPREPAINT:
                         cd->nmcd.uItemState &= ~CDIS_SELECTED;
                         if (darkMode) {
-                            cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                            cd->clrText   = DM_TEXT;
+                            cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
+                            cd->clrText   = ThemeText();
                         } else {
-                            cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
-                            cd->clrText   = LM_TEXT;
+                            cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
+                            cd->clrText   = ThemeText();
                         }
                         // Highlight the row of the order currently open in the inline edit panel.
                         // lItemlParam is the LVITEM.lParam set in Orders_Repopulate (the orderId).
@@ -805,7 +805,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             if (isEditRow)
                                 cd->clrTextBk = darkMode ? RGB(40, 50, 75) : RGB(255, 244, 190);
                             else if (darkMode)
-                                cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                                cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                             if (cd->iSubItem == OCOL_STATUS) {
                                 SelectObject(cd->nmcd.hdc, hFont11pt.get());
                             }
@@ -899,7 +899,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     clr = s_editState.action == "BUY" ? COINS_CLR_GREEN : COINS_CLR_RED;
                 SetTextColor(hdc, clr);
                 if (hCtrl == GetDlgItem(hWnd, ID_ORDERS_HINT_LABEL))
-                    return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+                    return (LRESULT)ThemeBrush();
                 return (LRESULT)GetStockObject(NULL_BRUSH);
             }
             break;

@@ -386,7 +386,7 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
                     HDC hdc = (HDC)wParam;
                     SetTextColor(hdc, data->isUp ? COINS_CLR_GREEN : COINS_CLR_RED);
                     SetBkMode(hdc, TRANSPARENT);
-                    return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+                    return (LRESULT)ThemeBrush();
                 }
             }
             break;

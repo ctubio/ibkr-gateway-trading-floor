@@ -569,28 +569,19 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     Coins_UpdateTaskbarOrders(hWnd, openOrdersCount);
     
-    COLORREF pnlClr = daily >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
     if (coinsState.hCoin_BigPnL) {
         std::string formattedNum = FormatWithCommas(daily);
         if (daily >= 0.0) formattedNum = "+" + formattedNum;
-        if (SetWindowTextAIfChanged(coinsState.hCoin_BigPnL, formattedNum)) {
-            coinsState.bigPnlColor = pnlClr;
-        }
+        SetSigned(coinsState.hCoin_BigPnL, daily, coinsState.bigPnlColor, formattedNum);
     }
     if (coinsState.hCoin_Pct) {
         double pct = (NetLiquidation != 0.0) ? (daily / NetLiquidation * 100.0) : 0.0;
         std::string formattedNum = FormatWithCommas(pct);
         if (pct >= 0.0) formattedNum = "+" + formattedNum;
-        if (SetWindowTextAIfChanged(coinsState.hCoin_Pct, std::format("{}%", formattedNum))) {
-            coinsState.pctColor = pnlClr;
-        }
+        SetSigned(coinsState.hCoin_Pct, pct, coinsState.pctColor, std::format("{}%", formattedNum));
     }
     if (coinsState.hCoin_Realized) {
-        std::string formattedNum = FormatWithCommas(realized);
-        if (SetWindowTextAIfChanged(coinsState.hCoin_Realized, formattedNum)) {
-            COLORREF clr = realized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            coinsState.realizedColor = clr;
-        }
+        SetSigned(coinsState.hCoin_Realized, realized, coinsState.realizedColor);
     }
 
     if (coinsState.hCoin_Positions) {
@@ -604,10 +595,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     if (coinsState.hCoin_Unrealized) {
         std::string formattedNum = FormatWithCommas(unrealized, coinsState.fullDetails);
-        if (SetWindowTextAIfChanged(coinsState.hCoin_Unrealized, formattedNum)) {
-            COLORREF clr = unrealized >= 0.0 ? COINS_CLR_GREEN : COINS_CLR_RED;
-            coinsState.unrealizedColor = clr;
-        }
+        SetSigned(coinsState.hCoin_Unrealized, unrealized, coinsState.unrealizedColor, formattedNum);
     }
     if (coinsState.hCoin_Dividends) {
         double div = tryParse("AccruedDividend");
@@ -618,11 +606,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     if (coinsState.hCoin_Accruals) {
         double acc = tryParse("AccruedCash");
-        std::string formattedNum = FormatWithCommas(acc);
-        if (SetWindowTextAIfChanged(coinsState.hCoin_Accruals, formattedNum)) {
-            COLORREF clr = acc > 0.0 ? COINS_CLR_GREEN : (acc < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
-            coinsState.accrualsColor = clr;
-        }
+        SetSigned(coinsState.hCoin_Accruals, acc, coinsState.accrualsColor);
     }
     if (coinsState.hCoin_BuyingPower) {
         double bp = tryParse("BuyingPower");
@@ -638,9 +622,7 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (coinsState.hCoin_Cash) {
         double cash = tryParse("BASE_CashBalance");
         std::string formattedNum = FormatWithCommas(cash, coinsState.fullDetails) + " " + coinsState.currencyCoins;
-        if (SetWindowTextAIfChanged(coinsState.hCoin_Cash, formattedNum)) {
-            COLORREF clr = cash > 0.0 ? COINS_CLR_GREEN : (cash < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
-            coinsState.cashColor = clr;
+        if (SetSigned(coinsState.hCoin_Cash, cash, coinsState.cashColor, formattedNum)) {
             int w2 = Coins_GetTextWidth(hWnd, hFont14ptbold.get(), formattedNum.c_str());
             if (valueLabelMoves)
                 valueLabelMoves = DeferWindowPos(valueLabelMoves, coinsState.hCoin_Cash, NULL, m + 10 + 45, y3 - 3, w2 + 4, 20, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -649,18 +631,12 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (coinsState.hCoin_EUR) {
         double eur = tryParse("EUR_CashBalance");
         std::string formattedNum = FormatWithCommas(eur, coinsState.fullDetails) + (coinsState.fullDetails ? "" : " €");
-        if (SetWindowTextWIfChanged(coinsState.hCoin_EUR, StringToWide(formattedNum))) {
-            COLORREF clr = eur > 0.0 ? COINS_CLR_GREEN : (eur < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
-            coinsState.eurColor = clr;
-        }
+        SetSigned(coinsState.hCoin_EUR, eur, coinsState.eurColor, StringToWide(formattedNum));
     }
     if (coinsState.hCoin_USD) {
         double usd = tryParse("USD_CashBalance");
         std::string formattedNum = FormatWithCommas(usd, coinsState.fullDetails) + (coinsState.fullDetails ? "" : " $");
-        if (SetWindowTextWIfChanged(coinsState.hCoin_USD, StringToWide(formattedNum))) {
-            COLORREF clr = usd > 0.0 ? COINS_CLR_GREEN : (usd < 0.0 ? COINS_CLR_RED : (darkMode ? DM_TEXT : LM_TEXT));
-            coinsState.usdColor = clr;
-        }
+        SetSigned(coinsState.hCoin_USD, usd, coinsState.usdColor, StringToWide(formattedNum));
     }
     if (valueLabelMoves) EndDeferWindowPos(valueLabelMoves);
 }
@@ -1455,7 +1431,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
         case WM_CTLCOLORSTATIC: {
             HWND hCtrl = (HWND)lParam;
-            COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
+            COLORREF clr = ThemeText();
             if (hCtrl == coinsState.hCoin_Clock) clr = coinsState.clockColor;
             else if (hCtrl == coinsState.hCoin_Speaker) clr = coinsState.speakerColor;
             else if (hCtrl == coinsState.hCoin_BigPnL) clr = coinsState.bigPnlColor;
@@ -1473,7 +1449,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             HDC hdc = (HDC)wParam;
             SetTextColor(hdc, clr);
             SetBkMode(hdc, TRANSPARENT);
-            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+            return (LRESULT)ThemeBrush();
         }
 
         case WM_COMMAND: {

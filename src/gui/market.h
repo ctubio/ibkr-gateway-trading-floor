@@ -133,7 +133,7 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
         state->caption.theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
     HTHEME theme = state->caption.theme;
     if (theme) {
-        const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
+        const COLORREF themeText = ThemeText();
         const TradingAPI::L1Book& L1 = state->l1Info;
 
         auto textWidth = [&](const std::wstring& ws) {
@@ -1470,7 +1470,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Fill background
     RECT hdrRc = { 0, 0, rc.right, HEADER_H };
-    FillRect(hdc, &hdrRc, darkMode ? hDarkBrush : hLightBrush);
+    FillRect(hdc, &hdrRc, ThemeBrush());
     SetBkMode(hdc, TRANSPARENT);
 
     const TradingAPI::L1Book& L1 = state->l1Info;
@@ -2013,7 +2013,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            tick->side = darkMode ? DM_TEXT : LM_TEXT;
+            tick->side = ThemeText();
             if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0) {
                 if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
                 else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
@@ -2122,7 +2122,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state) {
             HWND hCtrl = (HWND)lParam;
             HDC hdc = (HDC)wParam;
-            COLORREF clr = darkMode ? DM_TEXT : LM_TEXT;
+            COLORREF clr = ThemeText();
             bool transparent = false;
 
             if (hCtrl == state->hProfitLossPercentLabel || hCtrl == state->hProfitLossValueLabel || hCtrl == state->hOptStopTarget || hCtrl == state->hOptProfitTarget) {
@@ -2163,7 +2163,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 return (LRESULT)GetStockObject(NULL_BRUSH); // no fill = truly transparent
             }
             SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
-            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+            return (LRESULT)ThemeBrush();
         }
         break;
     }
@@ -2224,7 +2224,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     if (darkMode)
-                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                     LPARAM itemParam = cd->nmcd.lItemlParam;
                     COLORREF rowColor = static_cast<COLORREF>(itemParam & 0xFFFFFFFF);
                     int tickTimeSec = static_cast<int>(itemParam >> 32);
@@ -2233,7 +2233,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                         if (diff < 0) diff += 86400;
                         bool isMatch = (diff >= 0 && diff <= 1);
                         if (isMatch) {
-                            cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                            cd->clrText = ThemeText();
                         } else {
                             cd->clrText = COINS_CLR_GRAY;
                         }
@@ -2241,7 +2241,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     else if (rowColor && cd->iSubItem != 0)
                         cd->clrText = rowColor;
                     else
-                        cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                        cd->clrText = ThemeText();
                     return CDRF_DODEFAULT;
             }
             break;
@@ -2256,9 +2256,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     // lParam stores 1=ask, 2=bid
                     LPARAM side = cd->nmcd.lItemlParam;
                     cd->clrText   =  (side == 1) ? COINS_CLR_RED : COINS_CLR_BLUE;
-                    cd->clrTextBk  = darkMode
-                        ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
-                        : (cd->nmcd.dwItemSpec % 2 == 0 ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245));
+                    cd->clrTextBk  = RowBg(cd->nmcd.dwItemSpec);
                     return CDRF_DODEFAULT;
                 }
             }
@@ -2278,7 +2276,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     bool isBuy       = (side == 1 || side == 3);
                     COLORREF clr = isBuy ? COINS_CLR_BLUE : COINS_CLR_RED;
                     COLORREF bg  = darkMode
-                        ? (cd->nmcd.dwItemSpec % 2 == 0 ? DM_BG : DM_BG2)
+                        ? RowBg(cd->nmcd.dwItemSpec)
                         : (cd->nmcd.dwItemSpec % 2 == 0 ? COINS_CLR_GRAY : COINS_CLR_WHITE);
                     cd->nmcd.uItemState &= ~CDIS_SELECTED;
                     cd->clrTextBk = bg;

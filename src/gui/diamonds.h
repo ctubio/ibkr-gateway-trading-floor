@@ -215,7 +215,7 @@ static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
         diamondsState.caption.theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
     HTHEME theme = diamondsState.caption.theme;
     if (theme) {
-        const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
+        const COLORREF themeText = ThemeText();
         auto drawSeg = [&](const std::string& s, COLORREF clr, int conId) -> bool {
             std::wstring ws = StringToWide(s);
             SIZE sz;
@@ -663,6 +663,15 @@ static void DrawTwoLineCell(HDC hdc, const RECT& cellRect,
     DrawTextA(hdc, topText, -1, &topRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     SetTextColor(hdc, bottomColor);
     DrawTextA(hdc, bottomText, -1, &bottomRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+}
+
+static LRESULT TwoLine(NMLVCUSTOMDRAW* cd, const char* top, COLORREF topClr,
+                       const char* bottom, COLORREF botClr) {
+    const int rowIndex = static_cast<int>(cd->nmcd.dwItemSpec);
+    RECT cellRect;
+    ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &cellRect);
+    DrawTwoLineCell(cd->nmcd.hdc, cellRect, top, topClr, bottom, botClr, RowBrush(rowIndex));
+    return CDRF_SKIPDEFAULT;
 }
 
 // ── Virtual Sort ──────────────────────────────────────────────────────────────
@@ -1351,16 +1360,16 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2) {
             HDC hdc = (HDC)wParam;
             bool checked = SendMessage(hCtrl, BM_GETCHECK, 0, 0) == BST_CHECKED;
-            SetTextColor(hdc, checked ? (darkMode ? DM_TEXT : LM_TEXT) : COINS_CLR_GRAY);
+            SetTextColor(hdc, checked ? ThemeText() : COINS_CLR_GRAY);
             SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
-            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+            return (LRESULT)ThemeBrush();
         }
         if (id == ID_DIAMONDS_ROW_TIMECLOCK) {
             HDC hdc = (HDC)wParam;
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, darkMode ? DM_TEXT : LM_TEXT);
+            SetTextColor(hdc, ThemeText());
             SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
-            return (LRESULT)(darkMode ? hDarkBrush : hLightBrush);
+            return (LRESULT)ThemeBrush();
         }
         break;
     }
@@ -1713,13 +1722,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (cacheIt != diamondsState.dataCache.end())
                             diamondsState.paintRowCache = &cacheIt->second;
                     }
-                    if (darkMode) {
-                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
-                        cd->clrText   = DM_TEXT;
-                    } else {
-                        cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
-                        cd->clrText   = LM_TEXT;
-                    }
+                    cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
+                    cd->clrText = ThemeText();
                     return CDRF_NOTIFYSUBITEMDRAW;
 
                 case CDDS_ITEMPREPAINT | CDDS_SUBITEM: {
@@ -1733,14 +1737,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         if (cit != diamondsState.symbolColors.end() &&
                             cit->second >= 0 && cit->second < DIAMONDS_COLOR_COUNT) {
                             cd->clrText = diamondColorPalette[cit->second].rgb;
-                            if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                            if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         }
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_EXCHANGE) {
                         SelectObject(cd->nmcd.hdc, hFont12ptbold.get());
-                        cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        cd->clrText = ThemeText();
+                        if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_VWAP) {
@@ -1748,9 +1752,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             double diff = cacheRow.sortValues[DCOL_VWAP];
                             if      (diff > 0.0) cd->clrText = COINS_CLR_GREEN;
                             else if (diff < 0.0) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                            else cd->clrText = ThemeText();
                         }
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
@@ -1761,9 +1765,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             else if (ratio >= 1.5) cd->clrText = COINS_CLR_PURPLE;
                             else cd->clrText = COINS_CLR_BLUE;
                         } else {
-                            cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                            cd->clrText = ThemeText();
                         }
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
@@ -1777,8 +1781,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         // explicit avoids any locale-specific atof surprises.
                         if      (val > 0.0) cd->clrText = COINS_CLR_GREEN;
                         else if (val < 0.0) cd->clrText = COINS_CLR_RED;
-                        else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        else cd->clrText = ThemeText();
+                        if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         if (cd->iSubItem == DCOL_CHG5MIN) {
                             SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         } else {
@@ -1791,37 +1795,19 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_UNREALIZED_PL) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        
-                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
-                        
-                        RECT rcCell;
-                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
                         double val = cacheRow.sortValues[DCOL_UNREALIZED_PL];
                         COLORREF topColor = val > 0.0 ? COINS_CLR_GREEN : val < 0.0 ? COINS_CLR_RED : COINS_CLR_GRAY;
                         COLORREF bottomColor = val > 0.0 ? COINS_CLR_GREEN_DARK2 : val < 0.0 ? COINS_CLR_RED_DARK2 : COINS_CLR_GRAY;
-                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
-                                        cacheRow.textCols[DCOL_UNREALIZED_PL].c_str(), topColor,
-                                        cacheRow.unrealizedPnLPctStr.c_str(), bottomColor, hBrush);
-                        return CDRF_SKIPDEFAULT;
+                        return TwoLine(cd, cacheRow.textCols[DCOL_UNREALIZED_PL].c_str(), topColor,
+                                       cacheRow.unrealizedPnLPctStr.c_str(), bottomColor);
                     }
                     if (cd->iSubItem == DCOL_SIZE) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        
-                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
-                        
-                        RECT rcCell;
-                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
                         COLORREF sizeColor = cacheRow.halted ? COINS_CLR_GRAY
                             : cacheRow.askSize > cacheRow.bidSize ? COINS_CLR_RED
                             : cacheRow.askSize < cacheRow.bidSize ? COINS_CLR_GREEN
                             : COINS_CLR_BLUE;
-                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
-                                        cacheRow.askSizeStr.c_str(), sizeColor,
-                                        cacheRow.bidSizeStr.c_str(), sizeColor, hBrush);
-                        return CDRF_SKIPDEFAULT;
+                        return TwoLine(cd, cacheRow.askSizeStr.c_str(), sizeColor,
+                                       cacheRow.bidSizeStr.c_str(), sizeColor);
                     }
                     if (cd->iSubItem == DCOL_LAST) {
                         double last = cacheRow.sortValues[DCOL_LAST];
@@ -1833,26 +1819,19 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             double pct = (last - low) / (high - low) * 100.0; // 0% at low, 100% at high
                             if (pct <= 25.0) cd->clrText = COINS_CLR_RED;
                             else if (pct >= 75.0) cd->clrText = COINS_CLR_GREEN;
-                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                            else cd->clrText = ThemeText();
                         } else if (last > 0.0 && prevClose > 0.0) {
                             if (last > prevClose) cd->clrText = COINS_CLR_GREEN;
                             else if (last < prevClose) cd->clrText = COINS_CLR_RED;
-                            else cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                            else cd->clrText = ThemeText();
                         } else {
-                            cd->clrText = darkMode ? DM_TEXT : LM_TEXT;
+                            cd->clrText = ThemeText();
                         }
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         SelectObject(cd->nmcd.hdc, hFont16pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_BIDASK) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        
-                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
-                        
-                        RECT rcCell;
-                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
                         double last = cacheRow.sortValues[DCOL_LAST];
                         COLORREF quoteColor = COINS_CLR_WHITE;
                         if (cacheRow.halted || last <= 0.0 || cacheRow.ask <= 0.0 || cacheRow.bid <= 0.0) {
@@ -1863,44 +1842,26 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             if (distAsk < distBid) quoteColor = COINS_CLR_GREEN;
                             else if (distBid < distAsk) quoteColor = COINS_CLR_RED;
                         }
-                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
-                                        cacheRow.askStr.c_str(), quoteColor,
-                                        cacheRow.bidStr.c_str(), quoteColor, hBrush);
-                        return CDRF_SKIPDEFAULT;
+                        return TwoLine(cd, cacheRow.askStr.c_str(), quoteColor,
+                                       cacheRow.bidStr.c_str(), quoteColor);
                     }
                     if (cd->iSubItem == DCOL_MKTVAL) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
-                        
-                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
-                        
-                        RECT rcCell;
-                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
-                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
-                                        cacheRow.textCols[DCOL_MKTVAL].c_str(), darkMode ? DM_TEXT : LM_TEXT,
-                                        cacheRow.pctNetLiq.c_str(), COINS_CLR_GRAY, hBrush);
-                        return CDRF_SKIPDEFAULT;
+                        return TwoLine(cd, cacheRow.textCols[DCOL_MKTVAL].c_str(), ThemeText(),
+                                       cacheRow.pctNetLiq.c_str(), COINS_CLR_GRAY);
                     }
                     if (cd->iSubItem == DCOL_AVGPRICE) {
                         if (darkMode) {
-                            cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                            cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                             cd->clrText   = DM_TEXT;
                         } else {
-                            cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? GetSysColor(COLOR_WINDOW) : RGB(245, 245, 245);
+                            cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                             cd->clrText   = LM_TEXT;
                         }
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
                     if (cd->iSubItem == DCOL_ALERT) {
-                        int rowIndex = (int)cd->nmcd.dwItemSpec;
                         double last = cacheRow.sortValues[DCOL_LAST];
-                        
-                        HBRUSH hBrush = darkMode ? ((cd->nmcd.dwItemSpec % 2 == 0) ? hDarkBrush : hDarkBrush2) 
-                                                : ((cd->nmcd.dwItemSpec % 2 == 0) ? hLightBrushBg : hLightBrushBg2);
-                        
-                        RECT rcCell;
-                        ListView_GetSubItemRect(cd->nmcd.hdr.hwndFrom, rowIndex, cd->iSubItem, LVIR_BOUNDS, &rcCell);
                         COLORREF upColor = (last > 0 && cacheRow.upAlert > 0 && cacheRow.upAlert <= last) ? COINS_CLR_GREEN : COINS_CLR_GRAY;
                         COLORREF downColor = (last > 0 && cacheRow.downAlert > 0 && cacheRow.downAlert >= last) ? COINS_CLR_RED : COINS_CLR_GRAY;
                         size_t upDot = cacheRow.upStr.find('.');
@@ -1909,14 +1870,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         size_t downDot = cacheRow.downStr.find('.');
                         std::string downText = (downDot == std::string::npos) ? cacheRow.downStr : cacheRow.downStr.substr(0, downDot);
 
-                        DrawTwoLineCell(cd->nmcd.hdc, rcCell,
-                                        upText.c_str(), upColor,
-                                        downText.c_str(), downColor, hBrush);
-                        return CDRF_SKIPDEFAULT;
+                        return TwoLine(cd, upText.c_str(), upColor, downText.c_str(), downColor);
                     }
                     if (cd->iSubItem == DCOL_DIV_YIELD || cd->iSubItem == DCOL_DIV_DATE  ||  cd->iSubItem == DCOL_DIV_AMT || cd->iSubItem == DCOL_ANNUAL_DIV) {
                         cd->clrText = COINS_CLR_PURPLE;
-                        if (darkMode) cd->clrTextBk = (cd->nmcd.dwItemSpec % 2 == 0) ? DM_BG : DM_BG2;
+                        if (darkMode) cd->clrTextBk = RowBg(cd->nmcd.dwItemSpec);
                         SelectObject(cd->nmcd.hdc, hFont14pt.get());
                         return CDRF_NEWFONT;
                     }
