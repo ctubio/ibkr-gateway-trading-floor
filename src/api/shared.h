@@ -936,17 +936,17 @@ void CenterEditText(HWND hEdit) {
 }
 
 static void LoadRegistrySettings() {
-    darkMode          = Settings_Load("DarkMode",           0) != 0;
-    playSounds        = Settings_Load("PlaySounds",         0) != 0;
-    killGatewayOnExit = Settings_Load("Gateway_KillOnExit", 0) != 0;
-    autoGateway       = Settings_Load("Gateway_AutoStart",  0) != 0;
-    fullScreenAlerts  = Settings_Load("FullScreenAlerts",   0) != 0;
+    darkMode          = RegGetDword(SETTINGS_CLASS_NAME, "DarkMode",           0) != 0;
+    playSounds        = RegGetDword(SETTINGS_CLASS_NAME, "PlaySounds",         0) != 0;
+    killGatewayOnExit = RegGetDword(SETTINGS_CLASS_NAME, "Gateway_KillOnExit", 0) != 0;
+    autoGateway       = RegGetDword(SETTINGS_CLASS_NAME, "Gateway_AutoStart",  0) != 0;
+    fullScreenAlerts  = RegGetDword(SETTINGS_CLASS_NAME, "FullScreenAlerts",   0) != 0;
     pathGateway       = GetGatewayPath();
-    lockScreen        = Settings_LoadString("Lock",        "");
-    clientIdGateway   = (int)Settings_Load("ClientId",      0);
-    addressGateway    = Settings_LoadString("IPAddress", "127.0.0.1");
-    groupIdGateway    = (int)Settings_Load("GroupId",        4);
-    qtyGateway        = (int)Settings_Load("OrderQty",      20);
+    lockScreen        = RegGetString(SETTINGS_CLASS_NAME, "Lock",        "");
+    clientIdGateway   = (int)RegGetDword(SETTINGS_CLASS_NAME, "ClientId",      0);
+    addressGateway    = RegGetString(SETTINGS_CLASS_NAME, "IPAddress", "127.0.0.1");
+    groupIdGateway    = (int)RegGetDword(SETTINGS_CLASS_NAME, "GroupId",        4);
+    qtyGateway        = (int)RegGetDword(SETTINGS_CLASS_NAME, "OrderQty",      20);
     stopGateway       = Settings_LoadFloat("StopPrice",   1.0f);
     profitGateway     = Settings_LoadFloat("ProfitPrice", 2.0f);
     riskGateway       = Settings_LoadFloat("RiskPct",     1.0f);

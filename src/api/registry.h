@@ -283,58 +283,13 @@ std::vector<AlertEntry> Settings_Alerts_LoadAll() {
     return result;
 }
 
-// Convenience wrappers
-void Settings_SaveString(const char* key, const std::string& value) {
-    RegSetString(SETTINGS_CLASS_NAME, key, value);
-}
-
-std::string Settings_LoadString(const char* key, const std::string& defaultValue = "") {
-    return RegGetString(SETTINGS_CLASS_NAME, key, defaultValue);
-}
-
-std::string Settings_Tab_Load(const char* key, const std::string& defaultValue = "") {
-    return RegGetString(DIAMONDS_CLASS_NAME, key, defaultValue);
-}
-
-void Settings_Tab_Save(const char* key, const std::string& value) {
-    RegSetString(DIAMONDS_CLASS_NAME, key, value);
-}
-
-std::string Settings_SymbolColors_Load(const std::string& defaultValue = "") {
-    return RegGetString(DIAMONDS_CLASS_NAME, "SymbolColors", defaultValue);
-}
-
-void Settings_SymbolColors_Save(const std::string& value) {
-    RegSetString(DIAMONDS_CLASS_NAME, "SymbolColors", value);
-}
-
 void Settings_SaveMarket(const std::vector<std::string>& sessions) {
     std::string combined;
     for (size_t i = 0; i < sessions.size(); ++i) {
         if (i > 0) combined += " ";
         combined += sessions[i];
     }
-    Settings_SaveString("OpenWindows_Market", combined);
-}
-
-DWORD Settings_Sort_Load(const char* windowClassKey, const char* sortKey, DWORD defaultValue) {
-    return RegGetDword(windowClassKey, sortKey, defaultValue);
-}
-
-void Settings_Sort_Save(const char* windowClassKey, const char* sortKey, DWORD value) {
-    RegSetDword(windowClassKey, sortKey, value);
-}
-
-DWORD Settings_CheckedTabs_Load(DWORD defaultValue) {
-    return RegGetDword(DIAMONDS_CLASS_NAME, "CheckedTabs", defaultValue);
-}
-
-void Settings_CheckedTabs_Save(DWORD value) {
-    RegSetDword(DIAMONDS_CLASS_NAME, "CheckedTabs", value);
-}
-
-void Settings_Save(const char* key, DWORD value) {
-    RegSetDword(SETTINGS_CLASS_NAME, key, value);
+    RegSetString(SETTINGS_CLASS_NAME, "OpenWindows_Market", combined);
 }
 
 // ─── Decimal helpers (stored as DWORD scaled by 10000, i.e. 4 decimal places) ────
@@ -347,38 +302,6 @@ double Settings_LoadFloat(const char* key, double defaultValue = 0.0) {
     DWORD scaled = RegGetDword(SETTINGS_CLASS_NAME, key, 0xFFFFFFFF);
     if (scaled == 0xFFFFFFFF) return defaultValue; // sentinel: never saved → use default
     return (double)scaled / 10000.0;
-}
-
-DWORD Settings_Load(const char* key, DWORD defaultValue) {
-    return RegGetDword(SETTINGS_CLASS_NAME, key, defaultValue);
-}
-
-DWORD Settings_Overnight_Load(const char* windowClassKey, DWORD defaultValue) {
-    return RegGetDword(windowClassKey, "OVERNIGHT", defaultValue);
-}
-
-void Settings_Overnight_Save(const char* windowClassKey, DWORD value) {
-    RegSetDword(windowClassKey, "OVERNIGHT", value);
-}
-
-DWORD Settings_Minimize_Load(const char* windowClassKey, DWORD defaultValue) {
-    return RegGetDword(windowClassKey, "Minimized", defaultValue);
-}
-
-void Settings_Minimize_Save(const char* windowClassKey, DWORD value) {
-    RegSetDword(windowClassKey, "Minimized", value);
-}
-
-void Settings_AlwaysOnTop_Save(const char* windowClassKey, DWORD value) {
-    RegSetDword(windowClassKey, "AlwaysOnTop", value);
-}
-
-void Settings_AlwaysOnTop_Delete(const char* windowClassKey) {
-    RegDelete(windowClassKey, "AlwaysOnTop");
-}
-
-DWORD Settings_AlwaysOnTop_Load(const char* windowClassKey, DWORD defaultValue) {
-    return RegGetDword(windowClassKey, "AlwaysOnTop", defaultValue);
 }
 
 void SaveWinPositionRaw(const std::string& winKey, int x, int y, int w, int h) {
@@ -772,7 +695,7 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
         std::string key = (windowIdentifier && strlen(windowIdentifier) > 0)
             ? std::format("{}_{}", windowClassName, windowIdentifier)
             : std::string(windowClassName);
-        Settings_AlwaysOnTop_Save(key.c_str(), 0);
+        RegSetDword(key.c_str(), "AlwaysOnTop", 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
@@ -785,14 +708,14 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
         } else {
             ShowWindow(hWnd, SW_SHOW);
         }
-        Settings_AlwaysOnTop_Save(key.c_str(), 1);
+        RegSetDword(key.c_str(), "AlwaysOnTop", 1);
     }
 }
 
 // Check if a specific Market window is set to Always On Top
 bool IsMarketAlwaysOnTop(const std::string& symbol) {
     std::string key = std::format("{}_{}", MARKET_CLASS_NAME, symbol);
-    return Settings_AlwaysOnTop_Load(key.c_str(), 0) != 0;
+    return RegGetDword(key.c_str(), "AlwaysOnTop", 0) != 0;
 }
 
 // Toggle Always On Top for a specific Market window by symbol
@@ -810,11 +733,11 @@ void ToggleMarketAlwaysOnTop(HWND hWnd, const std::string& symbol) {
     if (isCurrentlyOnTop) {
         // Currently always on top, remove it
         SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_AlwaysOnTop_Save(key.c_str(), 0);
+        RegSetDword(key.c_str(), "AlwaysOnTop", 0);
     } else {
         // Not always on top, make it so
         SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Settings_AlwaysOnTop_Save(key.c_str(), 1);
+        RegSetDword(key.c_str(), "AlwaysOnTop", 1);
     }
 }
 
@@ -877,7 +800,7 @@ void Session_AddWindow(HWND hWnd, LPARAM lParam) {
     }
 
     if (!winKey.empty()) {
-        if (Settings_AlwaysOnTop_Load(winKey.c_str(), 0)) {
+        if (RegGetDword(winKey.c_str(), "AlwaysOnTop", 0)) {
             if (strcmp(className, MARKET_CLASS_NAME) == 0)
                 SetMarketAlwaysOnTop(hWnd, true);
             else ToggleWindowAlwaysOnTop(winKey.c_str());                        
@@ -1110,7 +1033,7 @@ void Session_RestoreWindows(
             StartDebugLog(); 
         }
         else if (cls == MARKET_CLASS_NAME) {
-            std::string tsSaved = Settings_LoadString("OpenWindows_Market");
+            std::string tsSaved = RegGetString(SETTINGS_CLASS_NAME, "OpenWindows_Market");
             if (tsSaved.empty()) {
                 StartMarket("", 0);
             } else {

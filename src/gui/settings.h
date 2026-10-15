@@ -99,7 +99,7 @@ static void Settings_SaveCredentialsFromUI(HWND hWnd) {
 
 static void SaveCheck(HWND hWnd, int id, const char* key, bool& value) {
     value = SendDlgItemMessage(hWnd, id, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    Settings_Save(key, value);
+    RegSetDword(SETTINGS_CLASS_NAME, key, value);
 }
 
 static const struct {
@@ -141,7 +141,7 @@ static void SaveNumericEdit(HWND hWnd, const SettingsNumericEdit& setting) {
         int& value = *static_cast<int*>(setting.value);
         std::string text = EditText(hEdit);
         if (!text.empty()) value = std::atoi(text.c_str());
-        Settings_Save(setting.key, value);
+        RegSetDword(SETTINGS_CLASS_NAME, setting.key, value);
     } else {
         double& value = *static_cast<double*>(setting.value);
         if (GetWindowTextLengthA(hEdit) > 0)
@@ -372,7 +372,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 if (addressGateway.empty()) {
                     addressGateway = std::string("127.0.0.1");
                 }
-                Settings_SaveString("IPAddress", addressGateway);
+                RegSetString(SETTINGS_CLASS_NAME, "IPAddress", addressGateway);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
                 StartDebugLog();
@@ -384,12 +384,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_SETTINGS_LOCK && HIWORD(wParam) == EN_CHANGE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
                 lockScreen = EditText(hEdit);
-                Settings_SaveString("Lock", lockScreen);
+                RegSetString(SETTINGS_CLASS_NAME, "Lock", lockScreen);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DARK_MODE) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
                 DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                Settings_Save("DarkMode", checked);
+                RegSetDword(SETTINGS_CLASS_NAME, "DarkMode", checked);
                 darkMode = (checked == 1);
                 ApplyDarkModeToAllWindows();
                 // Force full repaint of this window and all children

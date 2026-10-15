@@ -5,11 +5,11 @@
 // Default is empty string → caller should fall back to Herena-Catalan search.
 
 void Settings_SaveTtsVoice(const std::string& tokenId) {
-    Settings_SaveString("VoiceTokenId", tokenId);
+    RegSetString(SETTINGS_CLASS_NAME, "VoiceTokenId", tokenId);
 }
 
 std::string Settings_LoadTtsVoice() {
-    return Settings_LoadString("VoiceTokenId", "");
+    return RegGetString(SETTINGS_CLASS_NAME, "VoiceTokenId", "");
 }
 
 // ── Shared TTS voice-selection helper ────────────────────────────────────────

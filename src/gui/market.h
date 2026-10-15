@@ -1730,7 +1730,7 @@ static void Market_Minimize(HWND hWnd, TsState* state) {
     state->minimized = !state->minimized;
     if (!state->symbol.empty()) {
         std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
-        Settings_Minimize_Save(windowKey.c_str(), state->minimized ? 1 : 0);
+        RegSetDword(windowKey.c_str(), "Minimized", state->minimized ? 1 : 0);
     }
     if (state->orderBarVisible && state->minimized) {
         Market_Layout_HideBar(hWnd, state);
@@ -1761,7 +1761,7 @@ static void Market_ToggleOVN(HWND hWnd, TsState* state) {
     
     if (!state->symbol.empty()) {
         std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
-        Settings_Overnight_Save(windowKey.c_str(), state->isOvernight ? 1 : 0);
+        RegSetDword(windowKey.c_str(), "OVERNIGHT", state->isOvernight ? 1 : 0);
     }
     if (state->orderBarVisible) {
         Market_Layout_HideBar(hWnd, state);
@@ -1871,11 +1871,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Restore filter
         if (!state->symbol.empty()) {
             std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
-            if (Settings_Overnight_Load(windowKey.c_str(), 0)) {
+            if (RegGetDword(windowKey.c_str(), "OVERNIGHT", 0)) {
                 state->isOvernight = false;
                 Market_ToggleOVN(hWnd, state);
             }
-            if (Settings_Minimize_Load(windowKey.c_str(), 0)) {
+            if (RegGetDword(windowKey.c_str(), "Minimized", 0)) {
                 state->minimized = false;
                 Market_Minimize(hWnd, state);
             }

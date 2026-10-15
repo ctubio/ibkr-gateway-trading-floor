@@ -445,8 +445,8 @@ static void Diamonds_SaveTabMap() {
             quarentineList += std::to_string(conId);
         }
     }
-    Settings_Tab_Save("Tab_Dividends",  growthList);
-    Settings_Tab_Save("Tab_Quarantine", quarentineList);
+    RegSetString(DIAMONDS_CLASS_NAME, "Tab_Dividends", growthList);
+    RegSetString(DIAMONDS_CLASS_NAME, "Tab_Quarantine", quarentineList);
 }
 
 // Loads diamondsState.tabMap from the registry.
@@ -464,8 +464,8 @@ static void Diamonds_LoadTabMap() {
             start = end + 1;
         }
     };
-    parseIds(Settings_Tab_Load("Tab_Dividends"),  DTAB_GROWTH);
-    parseIds(Settings_Tab_Load("Tab_Quarantine"), DTAB_QUARENTINE);
+    parseIds(RegGetString(DIAMONDS_CLASS_NAME, "Tab_Dividends"),  DTAB_GROWTH);
+    parseIds(RegGetString(DIAMONDS_CLASS_NAME, "Tab_Quarantine"), DTAB_QUARENTINE);
 }
 
 // ── Symbol color persistence ──────────────────────────────────────────────────
@@ -476,12 +476,12 @@ static void Diamonds_SaveSymbolColors() {
         if (!s.empty()) s += ' ';
         s += std::to_string(conId) + ':' + std::to_string(idx);
     }
-    Settings_SymbolColors_Save(s);
+    RegSetString(DIAMONDS_CLASS_NAME, "SymbolColors", s);
 }
 
 static void Diamonds_LoadSymbolColors() {
     diamondsState.symbolColors.clear();
-    std::string s = Settings_SymbolColors_Load();
+    std::string s = RegGetString(DIAMONDS_CLASS_NAME, "SymbolColors");
     size_t pos = 0;
     while (pos < s.size()) {
         size_t end = s.find(' ', pos);
@@ -1201,12 +1201,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_LoadTabMap();
         Diamonds_LoadSymbolColors();
         Diamonds_RefreshAlertCache();
-        diamondsState.sortCol = (int)Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
-        diamondsState.sortAsc = Settings_Sort_Load(DIAMONDS_CLASS_NAME, "SortAsc", 0) != 0;
+        diamondsState.sortCol = (int)RegGetDword(DIAMONDS_CLASS_NAME, "SortCol", DCOL_SYMBOL);
+        diamondsState.sortAsc = RegGetDword(DIAMONDS_CLASS_NAME, "SortAsc", 0) != 0;
         if (diamondsState.sortCol < 0 || diamondsState.sortCol >= DCOL_COUNT) diamondsState.sortCol = DCOL_SYMBOL;
 
         // Restore checkbox bitmask (default 0x7 = all checked).
-        diamondsState.checkedTabs = (UINT)Settings_CheckedTabs_Load(0x7);
+        diamondsState.checkedTabs = (UINT)RegGetDword(DIAMONDS_CLASS_NAME, "CheckedTabs", 0x7);
         diamondsState.checkedTabs &= 0x7;  // clamp to valid 3-bit range
         for (int i = 0; i < DIAMONDS_TAB_COUNT; ++i) {
             bool checked = (diamondsState.checkedTabs >> i) & 1;
@@ -1398,7 +1398,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 }
                 InvalidateRect(tab, NULL, TRUE);
             }
-            Settings_CheckedTabs_Save((int)diamondsState.checkedTabs);
+            RegSetDword(DIAMONDS_CLASS_NAME, "CheckedTabs", (int)diamondsState.checkedTabs);
             Diamonds_UpdateDivColumnsVisibility(hWnd);
             Diamonds_Repopulate(hWnd);
             InvalidateRect(hWnd, NULL, TRUE);
@@ -1529,8 +1529,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             int col = nmlv->iSubItem;
             if (col == diamondsState.sortCol) diamondsState.sortAsc = !diamondsState.sortAsc;
             else { diamondsState.sortCol = col; diamondsState.sortAsc = false; }
-            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortCol", diamondsState.sortCol);
-            Settings_Sort_Save(DIAMONDS_CLASS_NAME, "SortAsc", diamondsState.sortAsc ? 1 : 0);
+            RegSetDword(DIAMONDS_CLASS_NAME, "SortCol", diamondsState.sortCol);
+            RegSetDword(DIAMONDS_CLASS_NAME, "SortAsc", diamondsState.sortAsc ? 1 : 0);
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
             InvalidateRect(hList, NULL, FALSE);
