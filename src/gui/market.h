@@ -1251,8 +1251,6 @@ static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* updat
         ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
     }
 
-    if (state->l2Price[row] != newPrice)
-        state->l2TickAt[row] = 0;
     state->l2Size[row] = newSize;
     state->l2Price[row] = newPrice;
 
@@ -2122,17 +2120,37 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
-            bool matchedL2Price = false;
+            // ── Flash the whole L2 side the trade hit ─────────────────────────────
+            // Trade at/above ask  -> buyer lifted offers -> flash ask rows (0-5)
+            // Trade at/below bid  -> seller hit bids     -> flash bid rows (6-11)
+            // Trade between       -> whichever side the price is closer to
             if (tick->price > 0.0 && state->hL2List) {
-                const ULONGLONG now = GetTickCount64();
-                for (int i = 0; i < 12; ++i) {
-                    if (state->l2Price[i] == tick->price) {
-                        state->l2TickAt[i] = now;
-                        matchedL2Price = true;
-                    }
+                double bid = state->l1Info.bid;
+                double ask = state->l1Info.ask;
+                // Fall back to the top of the L2 book if L1 isn't populated yet
+                if (bid <= 0.0) bid = state->l2Price[6];
+                if (ask <= 0.0) ask = state->l2Price[5];
+
+                int side = -1;   // 0 = ask side, 1 = bid side, -1 = unknown
+                if (ask > 0.0 && tick->price >= ask)       side = 0;
+                else if (bid > 0.0 && tick->price <= bid)  side = 1;
+                else if (bid > 0.0 && ask > 0.0) {
+                    double dAsk = ask - tick->price;
+                    double dBid = tick->price - bid;
+                    if (dAsk < dBid)      side = 0;
+                    else if (dBid < dAsk) side = 1;
                 }
-                if (matchedL2Price)
+
+                if (side >= 0) {
+                    const ULONGLONG now = GetTickCount64();
+                    const int first = (side == 0) ? 0 : 6;
+                    const int last  = first + 6;
+                    for (int i = first; i < last; ++i) {
+                        if (state->l2Size[i] > 0.0)   // don't tint empty rows
+                            state->l2TickAt[i] = now;
+                    }
                     InvalidateRect(state->hL2List, NULL, FALSE);
+                }
             }
 
             tick->side = ThemeText();
