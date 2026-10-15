@@ -129,7 +129,7 @@ struct TsState {
     // ── Level 2 visual data (mirrors the 12 list rows) ───────────────────────
     double    l2Price[12]     = {};
     double    l2Size[12]      = {};
-    ULONGLONG l2ChangedAt[12] = {};   // GetTickCount64() of last size change
+    ULONGLONG l2TickAt[12] = {};      // GetTickCount64() of last trade at this row's price
 
     bool isOvernight = false;
     std::string symbol;

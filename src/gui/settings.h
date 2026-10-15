@@ -200,12 +200,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND hChkAutoGtw = Ctl(hWnd, "BUTTON", "Auto-start IBKR Gateway",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 18, gw, 22,
                 ID_SETTINGS_AUTO_GATEWAY);
-            SendMessage(hChkAutoGtw, autoGateway ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+            SendMessage(hChkAutoGtw, BM_SETCHECK, autoGateway ? BST_CHECKED : BST_UNCHECKED, 0);
 
             HWND hChkKill = Ctl(hWnd, "BUTTON", "Kill IBKR Gateway on exit",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 44, gw, 22,
                 ID_SETTINGS_KILL_GATEWAY);
-            SendMessage(hChkKill, killGatewayOnExit ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+            SendMessage(hChkKill, BM_SETCHECK, killGatewayOnExit ? BST_CHECKED : BST_UNCHECKED, 0);
 
             Ctl(hWnd, "BUTTON", "Change executable path",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
@@ -249,7 +249,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND hChkSounds = Ctl(hWnd, "BUTTON", "Play notification sounds",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 18, gw, 22,
                 ID_SETTINGS_PLAY_SOUNDS);
-            SendMessage(hChkSounds, playSounds ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+            SendMessage(hChkSounds, BM_SETCHECK, playSounds ? BST_CHECKED : BST_UNCHECKED, 0);
 
             // ── TTS Voice selector ───────────────────────────────────────────
             Ctl(hWnd, "STATIC", "Voice:", WS_CHILD | WS_VISIBLE,
@@ -309,12 +309,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             HWND hChkDark = Ctl(hWnd, "BUTTON", "Dark mode",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 col2_x + gm, y + 18, gw, 22, ID_SETTINGS_DARK_MODE);
-            SendMessage(hChkDark, darkMode ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+            SendMessage(hChkDark, BM_SETCHECK, darkMode ? BST_CHECKED : BST_UNCHECKED, 0);
 
             HWND hChkAlerts = Ctl(hWnd, "BUTTON", "Full screen alerts",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                 col2_x + gm, y + 44, gw, 22, ID_SETTINGS_FULL_SCREEN_ALERTS);
-            SendMessage(hChkAlerts, fullScreenAlerts ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
+            SendMessage(hChkAlerts, BM_SETCHECK, fullScreenAlerts ? BST_CHECKED : BST_UNCHECKED, 0);
                 
             Ctl(hWnd, "STATIC", "Lock:", WS_CHILD | WS_VISIBLE,
                 col2_x + gm, y + 70, 72, 20);

@@ -1251,8 +1251,8 @@ static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* updat
         ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
     }
 
-    if (state->l2Size[row] != newSize || state->l2Price[row] != newPrice)
-        state->l2ChangedAt[row] = GetTickCount64();
+    if (state->l2Price[row] != newPrice)
+        state->l2TickAt[row] = 0;
     state->l2Size[row] = newSize;
     state->l2Price[row] = newPrice;
 
@@ -1817,8 +1817,8 @@ static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
     const bool wall = avg > 0.0 && size >= avg * 1.5;
 
     float flash = 0.0f;
-    ULONGLONG age = GetTickCount64() - st->l2ChangedAt[row];
-    if (st->l2ChangedAt[row] && age < 300)
+    ULONGLONG age = GetTickCount64() - st->l2TickAt[row];
+    if (st->l2TickAt[row] && age < 300)
         flash = 1.0f - (float)age / 300.0f;
 
     HBRUSH dc = (HBRUSH)GetStockObject(DC_BRUSH);
@@ -2122,6 +2122,19 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_MARKET_TICK: {
         auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
         if (state) {
+            bool matchedL2Price = false;
+            if (tick->price > 0.0 && state->hL2List) {
+                const ULONGLONG now = GetTickCount64();
+                for (int i = 0; i < 12; ++i) {
+                    if (state->l2Price[i] == tick->price) {
+                        state->l2TickAt[i] = now;
+                        matchedL2Price = true;
+                    }
+                }
+                if (matchedL2Price)
+                    InvalidateRect(state->hL2List, NULL, FALSE);
+            }
+
             tick->side = ThemeText();
             if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0) {
                 if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
@@ -2292,7 +2305,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state && state->hL2List) {
                 ULONGLONG now = GetTickCount64();
                 for (int i = 0; i < 12; ++i) {
-                    if (state->l2ChangedAt[i] && now - state->l2ChangedAt[i] < 320) {
+                    if (state->l2TickAt[i] && now - state->l2TickAt[i] < 320) {
                         InvalidateRect(state->hL2List, NULL, FALSE);
                         break;
                     }
@@ -2434,7 +2447,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     }
                     std::fill(std::begin(state->l2Size), std::end(state->l2Size), 0.0);
                     std::fill(std::begin(state->l2Price), std::end(state->l2Price), 0.0);
-                    std::fill(std::begin(state->l2ChangedAt), std::end(state->l2ChangedAt), 0);
+                    std::fill(std::begin(state->l2TickAt), std::end(state->l2TickAt), 0);
                     InvalidateRect(state->hL2List, NULL, FALSE);
                 }
                 if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
