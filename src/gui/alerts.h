@@ -349,36 +349,30 @@ LRESULT CALLBACK WndProcAlertNotification(HWND hWnd, UINT message, WPARAM wParam
             SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
 
             // Message text
-            HWND hSymbol = CreateWindowA("STATIC", data->symbol.c_str(),
+            Ctl(hWnd, "STATIC", data->symbol.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_CENTER,
-                10, 20, 120, 40, hWnd, (HMENU)ID_ALERT_SYMBOL, cs->hInstance, NULL);
-            SendMessage(hSymbol, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
+                10, 20, 120, 40, ID_ALERT_SYMBOL, hFont21ptbold.get());
 
-            HWND hShares = CreateWindowA("STATIC", std::format("{:.0f} @ ", data->shares).c_str(),
+            Ctl(hWnd, "STATIC", std::format("{:.0f} @ ", data->shares).c_str(),
                 WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                130, 29, 40, 40, hWnd, NULL, cs->hInstance, NULL);
-            SendMessage(hShares, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+                130, 29, 40, 40, 0, hFont11pt.get());
             
-            HWND hMsg = CreateWindowA("STATIC", data->msg.c_str(),
+            Ctl(hWnd, "STATIC", data->msg.c_str(),
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                170, 20, 120, 40, hWnd, NULL, cs->hInstance, NULL);
-            SendMessage(hMsg, WM_SETFONT, (WPARAM)hFont21ptbold.get(), TRUE);
+                170, 20, 120, 40, 0, hFont21ptbold.get());
             
             // Buttons
-            HWND hKeep = CreateWindowA("BUTTON", "Keep",
+            Ctl(hWnd, "BUTTON", "Keep",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                0, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_KEEP_BTN, cs->hInstance, NULL);
-            SendMessage(hKeep, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+                0, 75, (300 / 3) - 8, 22, ID_ALERT_KEEP_BTN, hFont11pt.get());
 
-            HWND hEdit = CreateWindowA("BUTTON", "Edit",
+            Ctl(hWnd, "BUTTON", "Edit",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                (300 / 3), 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_EDIT_BTN, cs->hInstance, NULL);
-            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+                (300 / 3), 75, (300 / 3) - 8, 22, ID_ALERT_EDIT_BTN, hFont11pt.get());
             
-            HWND hDelete = CreateWindowA("BUTTON", "Delete",
+            Ctl(hWnd, "BUTTON", "Delete",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                (300 / 3) * 2, 75, (300 / 3) - 8, 22, hWnd, (HMENU)ID_ALERT_DELETE_BTN, cs->hInstance, NULL);
-            SendMessage(hDelete, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+                (300 / 3) * 2, 75, (300 / 3) - 8, 22, ID_ALERT_DELETE_BTN, hFont11pt.get());
 
             ShowWindow(hWnd, SW_SHOWNOACTIVATE);
             break;

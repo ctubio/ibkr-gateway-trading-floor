@@ -1895,28 +1895,28 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         ShowWindow(state->hExecList, SW_SHOW);
 
         // ── Order entry bar (hidden until Ctrl key pressed) ───────────────────
-        state->hOrderLabel = CreateWindowA("STATIC", "BUY",
+        state->hOrderLabel = Ctl(hWnd, "STATIC", "BUY",
             WS_CHILD | SS_CENTER | SS_CENTERIMAGE,
-            0, 0, 42, 26, hWnd, NULL, hInst, NULL);
+            0, 0, 42, 26, 0, hFont16ptbold.get());
 
-        state->hOrderPrice = CreateWindowA("EDIT", "0.00",
+        state->hOrderPrice = Ctl(hWnd, "EDIT", "0.00",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
-            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+            0, 0, 10, 10, 0, hFont16ptbold.get());
         SetWindowSubclass(state->hOrderPrice,       Market_EditSubclassProc, MEDIT_PRICE, 0);
 
-        state->hOrderQty = CreateWindowA("EDIT", "1",
+        state->hOrderQty = Ctl(hWnd, "EDIT", "1",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
-            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+            0, 0, 10, 10, 0, hFont16ptbold.get());
         SetWindowSubclass(state->hOrderQty,         Market_EditSubclassProc, MEDIT_QTY,   0);
 
-        state->hOrderStopPrice = CreateWindowA("EDIT", "0.00",
+        state->hOrderStopPrice = Ctl(hWnd, "EDIT", "0.00",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
-            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+            0, 0, 10, 10, 0, hFont16ptbold.get());
         SetWindowSubclass(state->hOrderStopPrice,   Market_EditSubclassProc, MEDIT_PRICE, 0);
 
-        state->hOrderProfitPrice = CreateWindowA("EDIT", "0.00",
+        state->hOrderProfitPrice = Ctl(hWnd, "EDIT", "0.00",
             WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER | ES_MULTILINE,
-            0, 0, 10, 10, hWnd, NULL, hInst, NULL);
+            0, 0, 10, 10, 0, hFont16ptbold.get());
         SetWindowSubclass(state->hOrderProfitPrice, Market_EditSubclassProc, MEDIT_PRICE, 0);
 
         // ── Hint overlay labels ─────────────────────────────────────────────
@@ -1927,11 +1927,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // WS_CLIPSIBLINGS on the edits above, the edit's own repaints never
         // draw over the area a label occupies, so a label is never hidden.
         auto makeHintLabel = [&](UINT align) -> HWND {
-            HWND h = CreateWindowExA(WS_EX_TRANSPARENT, "STATIC", "",
+            return Ctl(hWnd, "STATIC", "",
                 WS_CHILD | align | SS_NOPREFIX,
-                0, 0, 10, 10, hWnd, NULL, hInst, NULL);
-            SendMessage(h, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
-            return h;
+                0, 0, 10, 10, 0, hFont11ptbold.get(), WS_EX_TRANSPARENT);
         };
         state->hProfitLossPercentLabel = makeHintLabel(SS_LEFT);
         state->hProfitLossValueLabel = makeHintLabel(SS_RIGHT);
@@ -1942,13 +1940,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         state->hOptStopLabel = makeHintLabel(SS_RIGHT);
         state->hTotalLabel  = makeHintLabel(SS_RIGHT);
         state->hTotalQtyLabel = makeHintLabel(SS_RIGHT);
-
-        // Apply font to order bar controls
-        SendMessage(state->hOrderLabel, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-        SendMessage(state->hOrderPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-        SendMessage(state->hOrderStopPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-        SendMessage(state->hOrderProfitPrice, WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
-        SendMessage(state->hOrderQty,   WM_SETFONT, (WPARAM)hFont16ptbold.get(), TRUE);
 
         // Restore filter
         if (!state->symbol.empty()) {

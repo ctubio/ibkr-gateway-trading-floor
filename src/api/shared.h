@@ -495,6 +495,15 @@ static ScopedFont hFont16pt(16, false);
 static ScopedFont hFont16ptbold(16, true);
 static ScopedFont hFont21ptbold(21, true);
 
+static HWND Ctl(HWND parent, const char* cls, const char* text, DWORD style,
+                int x, int y, int w, int h, UINT_PTR id = 0,
+                HFONT font = nullptr, DWORD ex = 0) {
+    HWND control = CreateWindowExA(ex, cls, text, style, x, y, w, h,
+                                   parent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    if (font) SendMessage(control, WM_SETFONT, (WPARAM)font, TRUE);
+    return control;
+}
+
 // Suppresses WM_ERASEBKGND on list views so custom-draw repaints stay flicker-free.
 // (Previously also handled Ctrl+MouseWheel zoom, that feature has been removed;
 // this proc now only keeps the zero-flicker background-erase suppression.)
@@ -643,6 +652,14 @@ static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wP
         RemoveWindowSubclass(hCtrl, DarkGroupBoxSubclassProc, uIdSubclass);
     }
     return DefSubclassProc(hCtrl, msg, wParam, lParam);
+}
+
+static HWND GroupBox(HWND parent, const char* text, int x, int y, int w, int h,
+                     UINT_PTR subclassId = 1, DWORD style = 0) {
+    HWND group = Ctl(parent, "BUTTON", text, WS_CHILD | WS_VISIBLE | BS_GROUPBOX | style,
+                     x, y, w, h, 0, hFont11pt.get());
+    SetWindowSubclass(group, DarkGroupBoxSubclassProc, subclassId, 0);
+    return group;
 }
 
 LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {

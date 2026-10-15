@@ -104,8 +104,6 @@ static void Settings_SaveCredentialsFromUI(HWND hWnd) {
 LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
-            HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
-
             int m  = 8;   // outer margin
             int gm = 14;  // inner margin inside a group box
             int w  = 252; // usable width of one column (fieldset)
@@ -113,64 +111,45 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             int col2_x = m + w + 16; // x origin of the second column (fieldset + gutter)
             int y  = m;
 
-            // ── Gateway ──────────────────────────────────────────────────────
-            HWND hSettingBox1 = CreateWindowA("BUTTON", "Gateway:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 280,
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox1, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox1, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            auto MakeRow = [&](const char* label, UINT id, int xOrigin, int rowBaseY,
+                               int rowY, int editWidth, bool isInt, DWORD extraStyle = 0) -> HWND {
+                Ctl(hWnd, "STATIC", label, WS_CHILD | WS_VISIBLE,
+                    xOrigin + gm, rowBaseY + rowY, 72, 20);
+                DWORD numStyle = isInt ? ES_NUMBER : 0;
+                return Ctl(hWnd, "EDIT", "",
+                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | numStyle | extraStyle,
+                    xOrigin + gm + 76, rowBaseY + rowY - 3, editWidth, 26,
+                    id, nullptr, WS_EX_CLIENTEDGE);
+            };
 
-            HWND hChkAutoGtw = CreateWindowA("BUTTON", "Auto-start IBKR Gateway",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_AUTO_GATEWAY, hInst, NULL);
+            // ── Gateway ──────────────────────────────────────────────────────
+            GroupBox(hWnd, "Gateway:", m, y, w, 280);
+
+            HWND hChkAutoGtw = Ctl(hWnd, "BUTTON", "Auto-start IBKR Gateway",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 18, gw, 22,
+                ID_SETTINGS_AUTO_GATEWAY);
             SendMessage(hChkAutoGtw, autoGateway ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
-            HWND hChkKill = CreateWindowA("BUTTON", "Kill IBKR Gateway on exit",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 44, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_KILL_GATEWAY, hInst, NULL);
+            HWND hChkKill = Ctl(hWnd, "BUTTON", "Kill IBKR Gateway on exit",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 44, gw, 22,
+                ID_SETTINGS_KILL_GATEWAY);
             SendMessage(hChkKill, killGatewayOnExit ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
-            CreateWindowA("BUTTON", "Change executable path",
+            Ctl(hWnd, "BUTTON", "Change executable path",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                m + gm, y + 70, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH, hInst, NULL);
+                m + gm, y + 70, gw, 22, ID_SETTINGS_GATEWAY_PATH);
 
-            HWND hGatewayEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            HWND hGatewayEdit = Ctl(hWnd, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_READONLY,
-                m + gm, y + 98, gw, 20,
-                hWnd, (HMENU)ID_SETTINGS_GATEWAY_PATH_EDIT, hInst, NULL);
+                m + gm, y + 98, gw, 20, ID_SETTINGS_GATEWAY_PATH_EDIT, nullptr, WS_EX_CLIENTEDGE);
             SetWindowTextA(hGatewayEdit, pathGateway.c_str());
 
-            CreateWindowA("STATIC", "Address:",
-                WS_CHILD | WS_VISIBLE,
-                m + gm, y + 128, 72, 20,
-                hWnd, NULL, hInst, NULL);
-            HWND hAddressEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                m + gm + 76, y + 125, 147, 26,
-                hWnd, (HMENU)ID_SETTINGS_ADDRESS, hInst, NULL);
+            HWND hAddressEdit = MakeRow("Address:", ID_SETTINGS_ADDRESS, m, y, 128, 147, false);
             SetWindowTextA(hAddressEdit, addressGateway.c_str());
 
-            CreateWindowA("STATIC", "Username:",
-                WS_CHILD | WS_VISIBLE,
-                m + gm, y + 158, 72, 20,
-                hWnd, NULL, hInst, NULL);
-            HWND hUsernameEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                m + gm + 76, y + 155, 147, 26,
-                hWnd, (HMENU)ID_SETTINGS_USERNAME, hInst, NULL);
+            HWND hUsernameEdit = MakeRow("Username:", ID_SETTINGS_USERNAME, m, y, 158, 147, false);
             
-            CreateWindowA("STATIC", "Password:",
-                WS_CHILD | WS_VISIBLE,
-                m + gm, y + 188, 72, 20,
-                hWnd, NULL, hInst, NULL);
-            HWND hPasswordEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
-                m + gm + 76, y + 185, 147, 26,
-                hWnd, (HMENU)ID_SETTINGS_PASSWORD, hInst, NULL);
+            HWND hPasswordEdit = MakeRow("Password:", ID_SETTINGS_PASSWORD, m, y, 188, 147, false, ES_PASSWORD);
 
             // ── Populate from Windows Credential Manager (if previously saved) ────────
             {
@@ -182,54 +161,31 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
 
             // Client ID, passed as the second parameter to api().connect().
-            CreateWindowA("STATIC", "Client ID:",
-                WS_CHILD | WS_VISIBLE,
-                m + gm, y + 218, 72, 20,
-                hWnd, NULL, hInst, NULL);
-            HWND hClientIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                m + gm + 76, y + 215, 80, 26,
-                hWnd, (HMENU)ID_SETTINGS_CLIENT_ID, hInst, NULL);
+            HWND hClientIdEdit = MakeRow("Client ID:", ID_SETTINGS_CLIENT_ID, m, y, 218, 80, true);
             SetWindowTextA(hClientIdEdit, std::format("{}", clientIdGateway).c_str());
 
             // Group ID, TWS "linked window" group color id, used for
             // subscribeToGroupEvents()/updateDisplayGroup().
-            CreateWindowA("STATIC", "Group ID:",
-                WS_CHILD | WS_VISIBLE,
-                m + gm, y + 248, 72, 20,
-                hWnd, NULL, hInst, NULL);
-            HWND hGroupIdEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_NUMBER,
-                m + gm + 76, y + 245, 80, 26,
-                hWnd, (HMENU)ID_SETTINGS_GROUP_ID, hInst, NULL);
+            HWND hGroupIdEdit = MakeRow("Group ID:", ID_SETTINGS_GROUP_ID, m, y, 248, 80, true);
             SetWindowTextA(hGroupIdEdit, std::format("{}", groupIdGateway).c_str());
 
             y += 288;
 
             // ── Audio ────────────────────────────────────────────────────────
-            HWND hSettingBox3 = CreateWindowA("BUTTON", "Audio:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                m, y, w, 14 + (30 * 2),
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox3, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox3, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            GroupBox(hWnd, "Audio:", m, y, w, 14 + (30 * 2));
 
-            HWND hChkSounds = CreateWindowA("BUTTON", "Play notification sounds",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                m + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_PLAY_SOUNDS, hInst, NULL);
+            HWND hChkSounds = Ctl(hWnd, "BUTTON", "Play notification sounds",
+                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 18, gw, 22,
+                ID_SETTINGS_PLAY_SOUNDS);
             SendMessage(hChkSounds, playSounds ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
             // ── TTS Voice selector ───────────────────────────────────────────
-            CreateWindowA("STATIC", "Voice:",
-                WS_CHILD | WS_VISIBLE,
-                m + gm, y + 44, 40, 20,
-                hWnd, NULL, hInst, NULL);
+            Ctl(hWnd, "STATIC", "Voice:", WS_CHILD | WS_VISIBLE,
+                m + gm, y + 44, 40, 20);
 
-            HWND hVoiceCombo = CreateWindowA("COMBOBOX", "",
+            HWND hVoiceCombo = Ctl(hWnd, "COMBOBOX", "",
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
-                m + gm + 44, y + 42, gw - 44, 200,
-                hWnd, (HMENU)ID_SETTINGS_VOICE_COMBO, hInst, NULL);
+                m + gm + 44, y + 42, gw - 44, 200, ID_SETTINGS_VOICE_COMBO);
 
             // Enumerate all system voices and fill the combo
             settingsVoices = TTS_EnumerateVoices();
@@ -267,31 +223,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y = m;
 
             // ── Trading ────────────────────────────────────────────────────── (column 2)
-            HWND hSettingBox4 = CreateWindowA("BUTTON", "Trading:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 37 * 5,
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox4, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox4, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            GroupBox(hWnd, "Trading:", col2_x, y, w, 37 * 5);
 
-            // Row helper: label + edit
-            auto MakeRow = [&](const char* label, UINT id, int rowY, bool isInt) -> HWND {
-                CreateWindowA("STATIC", label,
-                    WS_CHILD | WS_VISIBLE,
-                    col2_x + gm, y + rowY, 72, 20,
-                    hWnd, NULL, hInst, NULL);
-                DWORD numStyle = isInt ? ES_NUMBER : 0;
-                return CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
-                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | numStyle,
-                    col2_x + gm + 76, y + rowY - 3, 80, 26,
-                    hWnd, (HMENU)(UINT_PTR)id, hInst, NULL);
-            };
-
-            HWND hQtyEdit    = MakeRow("Quantity:",   ID_SETTINGS_QTY_VALUE,     20, true);
-            HWND hStopEdit   = MakeRow("Stop:",       ID_SETTINGS_STOP_VALUE,    53, false);
-            HWND hProfitEdit = MakeRow("Profit:",     ID_SETTINGS_PROFIT_VALUE,  86, false);
-            HWND hRiskEdit   = MakeRow("Risk %:",     ID_SETTINGS_RISK_VALUE,   119, false);
-            HWND hSafetyEdit = MakeRow("Safety:",     ID_SETTINGS_SAFETY_VALUE, 152, false);
+            HWND hQtyEdit    = MakeRow("Quantity:", ID_SETTINGS_QTY_VALUE, col2_x, y, 20, 80, true);
+            HWND hStopEdit   = MakeRow("Stop:",     ID_SETTINGS_STOP_VALUE, col2_x, y, 53, 80, false);
+            HWND hProfitEdit = MakeRow("Profit:",   ID_SETTINGS_PROFIT_VALUE, col2_x, y, 86, 80, false);
+            HWND hRiskEdit   = MakeRow("Risk %:",   ID_SETTINGS_RISK_VALUE, col2_x, y, 119, 80, false);
+            HWND hSafetyEdit = MakeRow("Safety:",   ID_SETTINGS_SAFETY_VALUE, col2_x, y, 152, 80, false);
             y += 152 + 40;
 
             SetWindowTextA(hQtyEdit,    std::format("{}",     qtyGateway).c_str());
@@ -301,61 +239,43 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowTextA(hSafetyEdit, std::format("{:.2f}", safetyGateway).c_str());
             
             // ── Display ──────────────────────────────────────────────────────
-            HWND hSettingBox2 = CreateWindowA("BUTTON", "Display:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 14 + (30 * 3),
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox2, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox2, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            GroupBox(hWnd, "Display:", col2_x, y, w, 14 + (30 * 3));
 
-            HWND hChkDark = CreateWindowA("BUTTON", "Dark mode",
+            HWND hChkDark = Ctl(hWnd, "BUTTON", "Dark mode",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                col2_x + gm, y + 18, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_DARK_MODE, hInst, NULL);
+                col2_x + gm, y + 18, gw, 22, ID_SETTINGS_DARK_MODE);
             SendMessage(hChkDark, darkMode ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
 
-            HWND hChkAlerts = CreateWindowA("BUTTON", "Full screen alerts",
+            HWND hChkAlerts = Ctl(hWnd, "BUTTON", "Full screen alerts",
                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                col2_x + gm, y + 44, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_FULL_SCREEN_ALERTS, hInst, NULL);
+                col2_x + gm, y + 44, gw, 22, ID_SETTINGS_FULL_SCREEN_ALERTS);
             SendMessage(hChkAlerts, fullScreenAlerts ? BM_SETCHECK : BST_UNCHECKED, BST_CHECKED, 0);
                 
-            CreateWindowA("STATIC", "Lock:",
-                WS_CHILD | WS_VISIBLE,
-                col2_x + gm, y + 70, 72, 20,
-                hWnd, NULL, hInst, NULL);
-            HWND hLockEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            Ctl(hWnd, "STATIC", "Lock:", WS_CHILD | WS_VISIBLE,
+                col2_x + gm, y + 70, 72, 20);
+            HWND hLockEdit = Ctl(hWnd, "EDIT", "",
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
-                col2_x + gm + 76, y + 67, 147, 26,
-                hWnd, (HMENU)ID_SETTINGS_LOCK, hInst, NULL);
+                col2_x + gm + 76, y + 67, 147, 26, ID_SETTINGS_LOCK, nullptr, WS_EX_CLIENTEDGE);
             SetWindowTextA(hLockEdit, lockScreen.c_str());
 
             y += 114;
 
             // ── System Tools ─────────────────────────────────────────── (column 2)
-            HWND hSettingBox5 = CreateWindowA("BUTTON", "Configuration:",
-                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                col2_x, y, w, 78,
-                hWnd, NULL, hInst, NULL);
-            SetWindowSubclass(hSettingBox5, DarkGroupBoxSubclassProc, 1, 0);
-            SendMessage(hSettingBox5, WM_SETFONT, (WPARAM)hFont11pt.get(), TRUE);
+            GroupBox(hWnd, "Configuration:", col2_x, y, w, 78);
 
             // Two buttons share the row: Backup (left) and Restore (right), with a 4px gutter.
             int btn = (gw - 4) / 2; // width of each button
-            CreateWindowA("BUTTON", "Backup",
+            Ctl(hWnd, "BUTTON", "Backup",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                col2_x + gm, y + 20, btn, 22,
-                hWnd, (HMENU)ID_SETTINGS_BACKUP_DOWNLOAD, hInst, NULL);
+                col2_x + gm, y + 20, btn, 22, ID_SETTINGS_BACKUP_DOWNLOAD);
 
-            CreateWindowA("BUTTON", "Restore",
+            Ctl(hWnd, "BUTTON", "Restore",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                col2_x + gm + btn + 4, y + 20, btn, 22,
-                hWnd, (HMENU)ID_SETTINGS_BACKUP_RESTORE, hInst, NULL);
+                col2_x + gm + btn + 4, y + 20, btn, 22, ID_SETTINGS_BACKUP_RESTORE);
 
-            CreateWindowA("BUTTON", "Debug Log",
+            Ctl(hWnd, "BUTTON", "Debug Log",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-                col2_x + gm, y + 48, gw, 22,
-                hWnd, (HMENU)ID_SETTINGS_DEBUG_LOG, hInst, NULL);
+                col2_x + gm, y + 48, gw, 22, ID_SETTINGS_DEBUG_LOG);
 
             break;
         }
