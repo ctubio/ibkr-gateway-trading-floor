@@ -2102,10 +2102,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
             if (fresh.high      > 0.0) state->l1Info.high      = fresh.high;
             if (fresh.low       > 0.0) state->l1Info.low       = fresh.low;
-            if (fresh.bid       > 0.0) state->l1Info.bid       = fresh.bid;
-            if (fresh.ask       > 0.0) state->l1Info.ask       = fresh.ask;
-            if (fresh.bidSize   > 0.0) state->l1Info.bidSize   = fresh.bidSize;
-            if (fresh.askSize   > 0.0) state->l1Info.askSize   = fresh.askSize;
+            state->l1Info.bid     = fresh.bid;
+            state->l1Info.ask     = fresh.ask;
+            state->l1Info.bidSize = fresh.bidSize;
+            state->l1Info.askSize = fresh.askSize;
             if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
             state->marketHdrDirty = true;
         }

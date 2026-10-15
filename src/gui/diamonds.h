@@ -683,9 +683,20 @@ static void Diamonds_ApplySort(HWND hList) {
     // Pointers stay valid because nothing inserts into dataCache during the sort.
     std::vector<std::pair<const DiamondRowCache*, int>> tmp;
     tmp.reserve(diamondsState.displayOrder.size());
+    std::vector<int> validDisplayOrder;
+    validDisplayOrder.reserve(diamondsState.displayOrder.size());
     for (int id : diamondsState.displayOrder) {
-        tmp.push_back({ &diamondsState.dataCache.at(id), id });
+        auto it = diamondsState.dataCache.find(id);
+        if (it == diamondsState.dataCache.end()) continue;
+        tmp.push_back({ &it->second, id });
+        validDisplayOrder.push_back(id);
     }
+    if (validDisplayOrder.size() != diamondsState.displayOrder.size()) {
+        diamondsState.displayOrder.swap(validDisplayOrder);
+        ListView_SetItemCountEx(hList, static_cast<int>(diamondsState.displayOrder.size()),
+                                LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL);
+    }
+    if (tmp.empty()) return;
 
     std::stable_sort(tmp.begin(), tmp.end(), [](const auto& x, const auto& y) {
         const auto& a = *x.first;
@@ -793,9 +804,10 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
     cacheRow.sortValues[DCOL_DIV_DATE] = dc.dateSortable;
     cacheRow.textCols[DCOL_DIV_DATE]   = dc.date;
 
-    double priceForYield = tickInfo.last > 0.0 ? tickInfo.last : tickInfo.prevClose;
-    if (priceForYield > 0.0 && dc.annual > 0.0) {
-        double pct = dc.annual / priceForYield * 100.0;
+    TradingAPI::L1Book cachedYieldInfo = tickInfo;
+    cachedYieldInfo.annualDividends = dc.annual;
+    double pct = cachedYieldInfo.dividendYield();
+    if (pct > 0.0) {
         cacheRow.sortValues[DCOL_DIV_YIELD] = pct;
         cacheRow.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
     } else if (dc.annual == 0.0) {
@@ -856,12 +868,15 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.textCols[DCOL_DIV_DATE] = t.dividendDate;
     row.sortValues[DCOL_DIV_DATE] = t.dividendDateSortable;
 
-    if (t.last > 0.0 && t.annualDividends > 0.0) {
+    if (t.annualDividends > 0.0) {
         double pct = t.dividendYield();
         row.sortValues[DCOL_DIV_YIELD] = pct;
         row.textCols[DCOL_DIV_YIELD]   = std::format("{:.2f}%", pct);
     }
-    else if (t.annualDividends == 0.0) setCol(DCOL_DIV_YIELD, 0.0, 2, true);
+    else if (t.annualDividends == 0.0) {
+        row.sortValues[DCOL_DIV_YIELD] = 0.0;
+        row.textCols[DCOL_DIV_YIELD] = "0.00%";
+    }
     else setNA(DCOL_DIV_YIELD);
     Diamonds_ApplyCachedDividends(row, conId, t);
 
@@ -1066,7 +1081,12 @@ static void Diamonds_Repopulate(HWND hWnd) {
         if (isHeldPosition) {
             Diamonds_UpdatePnLCols(hWnd, pos.conId);
         } else {
+            cacheRow.sortValues[DCOL_DAILYPNL] = BOTTOM_SORT_VALUE - cacheRow.conId;
+            cacheRow.textCols[DCOL_DAILYPNL] = DIAMONDS_NO_DATA;
             cacheRow.sortValues[DCOL_UNREALIZED_PL] = BOTTOM_SORT_VALUE - cacheRow.conId;
+            cacheRow.textCols[DCOL_UNREALIZED_PL] = DIAMONDS_NO_DATA;
+            cacheRow.unrealizedPnLPctStr = DIAMONDS_NO_DATA;
+            cacheRow.textCols[DCOL_EXCHANGE] = DIAMONDS_NO_DATA;
         }
 
         diamondsState.displayOrder.push_back(pos.conId);
@@ -1192,6 +1212,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | BS_AUTOCHECKBOX | BS_NOTIFY,
                 0, 0, 10, 10,
                 hWnd, (HMENU)(UINT_PTR)(ID_DIAMONDS_CHK_0 + i), hInst, NULL);
+            // Classic rendering honors the per-checkbox colors from WM_CTLCOLORBTN.
+            SetWindowTheme(hChk, L"", L"");
             // Default: all checked.
             SendMessage(hChk, BM_SETCHECK, BST_CHECKED, 0);
         }
@@ -1354,7 +1376,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_ShowCheckboxes(hWnd, LOWORD(wParam) != WA_INACTIVE);
         break;
 
-    case WM_CTLCOLORSTATIC: {
+    case WM_CTLCOLORBTN: {
         HWND hCtrl = (HWND)lParam;
         int id = GetDlgCtrlID(hCtrl);
         if (id >= ID_DIAMONDS_CHK_0 && id <= ID_DIAMONDS_CHK_2) {
@@ -1364,6 +1386,12 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetBkColor(hdc, darkMode ? DM_BG : GetSysColor(COLOR_BTNFACE));
             return (LRESULT)ThemeBrush();
         }
+        break;
+    }
+
+    case WM_CTLCOLORSTATIC: {
+        HWND hCtrl = (HWND)lParam;
+        int id = GetDlgCtrlID(hCtrl);
         if (id == ID_DIAMONDS_ROW_TIMECLOCK) {
             HDC hdc = (HDC)wParam;
             SetBkMode(hdc, TRANSPARENT);
@@ -1375,11 +1403,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_KEYDOWN: {
-        if (wParam == 'A') {
+        if (!lockHotkeys && wParam == 'A') {
             SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_ANY_BTN, 0);
             return 0;
         }
-        if (wParam == 'T') {
+        if (!lockHotkeys && wParam == 'T') {
             SendMessage(hWnd, WM_COMMAND, ID_VIEW_SELECTIONS_TOP_BTN, 0);
             return 0;
         }
@@ -1954,6 +1982,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
         KillTimer(hWnd, TIMER_DIAMONDS_CAPTION);
         api().removeApiUpdateWindow(hWnd);
+        diamondsState.checkboxesVisible = false;
+        diamondsState.viewSelectionEnabled = 0;
         diamondsState.dataCache.clear();
         diamondsState.dirtyMarket.clear();
         diamondsState.dirtyRedraw.clear();
