@@ -101,6 +101,82 @@ static void Settings_SaveCredentialsFromUI(HWND hWnd) {
     Credentials_Save(username, password);
 }
 
+static void SaveCheck(HWND hWnd, int id, const char* key, bool& value) {
+    value = SendDlgItemMessage(hWnd, id, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    Settings_Save(key, value);
+}
+
+static const struct {
+    int id;
+    const char* key;
+    bool* value;
+} settingsChecks[] = {
+    {ID_SETTINGS_AUTO_GATEWAY, "Gateway_AutoStart", &autoGateway},
+    {ID_SETTINGS_KILL_GATEWAY, "Gateway_KillOnExit", &killGatewayOnExit},
+    {ID_SETTINGS_PLAY_SOUNDS, "PlaySounds", &playSounds},
+    {ID_SETTINGS_FULL_SCREEN_ALERTS, "FullScreenAlerts", &fullScreenAlerts},
+};
+
+enum class NumericSettingKind {
+    Integer,
+    Float,
+};
+
+struct SettingsNumericEdit {
+    int id;
+    const char* key;
+    NumericSettingKind kind;
+    void* value;
+};
+
+static const SettingsNumericEdit settingsNumericEdits[] = {
+    {ID_SETTINGS_GROUP_ID, "GroupId", NumericSettingKind::Integer, &groupIdGateway},
+    {ID_SETTINGS_CLIENT_ID, "ClientId", NumericSettingKind::Integer, &clientIdGateway},
+    {ID_SETTINGS_QTY_VALUE, "OrderQty", NumericSettingKind::Integer, &qtyGateway},
+    {ID_SETTINGS_STOP_VALUE, "StopPrice", NumericSettingKind::Float, &stopGateway},
+    {ID_SETTINGS_PROFIT_VALUE, "ProfitPrice", NumericSettingKind::Float, &profitGateway},
+    {ID_SETTINGS_RISK_VALUE, "RiskPct", NumericSettingKind::Float, &riskGateway},
+    {ID_SETTINGS_SAFETY_VALUE, "Safety", NumericSettingKind::Float, &safetyGateway},
+};
+
+static void SaveNumericEdit(HWND hWnd, const SettingsNumericEdit& setting) {
+    HWND hEdit = GetDlgItem(hWnd, setting.id);
+    if (setting.kind == NumericSettingKind::Integer) {
+        int& value = *static_cast<int*>(setting.value);
+        std::string text = EditText(hEdit);
+        if (!text.empty()) value = std::atoi(text.c_str());
+        Settings_Save(setting.key, value);
+    } else {
+        double& value = *static_cast<double*>(setting.value);
+        if (GetWindowTextLengthA(hEdit) > 0)
+            value = EditNum(hEdit);
+        Settings_SaveFloat(setting.key, value);
+    }
+}
+
+static bool RunRegExe(const std::string& args) {
+    std::string command = "reg.exe " + args;
+    command.push_back('\0');
+
+    STARTUPINFOA si = { sizeof(si) };
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = { 0 };
+
+    if (!CreateProcessA(NULL, command.data(), NULL, NULL, FALSE, CREATE_NO_WINDOW,
+                        NULL, NULL, &si, &pi))
+        return false;
+
+    DWORD waitResult = WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exitCode = 1;
+    bool succeeded = waitResult == WAIT_OBJECT_0 &&
+                     GetExitCodeProcess(pi.hProcess, &exitCode) &&
+                     exitCode == 0;
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return succeeded;
+}
+
 LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
@@ -285,17 +361,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case WM_COMMAND:
-            if (LOWORD(wParam) == ID_SETTINGS_AUTO_GATEWAY) {
-                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_AUTO_GATEWAY);
-                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                Settings_Save("Gateway_AutoStart", checked);
-                autoGateway = (checked == 1);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_KILL_GATEWAY) {
-                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_KILL_GATEWAY);
-                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                Settings_Save("Gateway_KillOnExit", checked);
-                killGatewayOnExit = (checked == 1);
+            for (const auto& setting : settingsChecks) {
+                if (LOWORD(wParam) == setting.id) {
+                    SaveCheck(hWnd, setting.id, setting.key, *setting.value);
+                    break;
+                }
             }
             if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
                 HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);
@@ -307,31 +377,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                 }
             }
-            if (LOWORD(wParam) == ID_SETTINGS_GROUP_ID) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_GROUP_ID);
-                std::string text = EditText(hEdit);
-                if (!text.empty()) groupIdGateway = std::atoi(text.c_str());
-                Settings_Save("GroupId", groupIdGateway);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_CLIENT_ID) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_CLIENT_ID);
-                std::string text = EditText(hEdit);
-                if (!text.empty()) clientIdGateway = std::atoi(text.c_str());
-                Settings_Save("ClientId", clientIdGateway);
-            }
-            if ((LOWORD(wParam) == ID_SETTINGS_ADDRESS)) {
+            if (LOWORD(wParam) == ID_SETTINGS_ADDRESS && HIWORD(wParam) == EN_CHANGE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_ADDRESS);
                 addressGateway = EditText(hEdit);
                 if (addressGateway.empty()) {
                     addressGateway = std::string("127.0.0.1");
                 }
                 Settings_SaveString("IPAddress", addressGateway);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_PLAY_SOUNDS) {
-                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_PLAY_SOUNDS);
-                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                Settings_Save("PlaySounds", checked);
-                playSounds = (checked == 1);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
                 StartDebugLog();
@@ -340,16 +392,10 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if ((LOWORD(wParam) == ID_SETTINGS_PASSWORD || LOWORD(wParam) == ID_SETTINGS_USERNAME) && HIWORD(wParam) == EN_CHANGE) {
                 Settings_SaveCredentialsFromUI(hWnd);
             }
-            if ((LOWORD(wParam) == ID_SETTINGS_LOCK)) {
+            if (LOWORD(wParam) == ID_SETTINGS_LOCK && HIWORD(wParam) == EN_CHANGE) {
                 HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
                 lockScreen = EditText(hEdit);
                 Settings_SaveString("Lock", lockScreen);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_FULL_SCREEN_ALERTS) {
-                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_FULL_SCREEN_ALERTS);
-                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                Settings_Save("FullScreenAlerts", checked);
-                fullScreenAlerts = (checked == 1);
             }
             if (LOWORD(wParam) == ID_SETTINGS_DARK_MODE) {
                 HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
@@ -361,31 +407,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 InvalidateRect(hWnd, NULL, TRUE);
                 RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
             }
-            if (LOWORD(wParam) == ID_SETTINGS_QTY_VALUE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_QTY_VALUE);
-                std::string text = EditText(hEdit);
-                if (!text.empty()) qtyGateway = std::atoi(text.c_str());
-                Settings_Save("OrderQty", qtyGateway);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_STOP_VALUE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_STOP_VALUE);
-                if (GetWindowTextLengthA(hEdit) > 0) stopGateway = static_cast<float>(EditNum(hEdit));
-                Settings_SaveFloat("StopPrice", stopGateway);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_PROFIT_VALUE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_PROFIT_VALUE);
-                if (GetWindowTextLengthA(hEdit) > 0) profitGateway = static_cast<float>(EditNum(hEdit));
-                Settings_SaveFloat("ProfitPrice", profitGateway);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_RISK_VALUE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_RISK_VALUE);
-                if (GetWindowTextLengthA(hEdit) > 0) riskGateway = static_cast<float>(EditNum(hEdit));
-                Settings_SaveFloat("RiskPct", riskGateway);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_SAFETY_VALUE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_SAFETY_VALUE);
-                if (GetWindowTextLengthA(hEdit) > 0) safetyGateway = static_cast<float>(EditNum(hEdit));
-                Settings_SaveFloat("Safety", safetyGateway);
+            if (HIWORD(wParam) == EN_CHANGE) {
+                for (const auto& setting : settingsNumericEdits) {
+                    if (LOWORD(wParam) == setting.id) {
+                        SaveNumericEdit(hWnd, setting);
+                        break;
+                    }
+                }
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
                 HWND hCombo = GetDlgItem(hWnd, ID_SETTINGS_VOICE_COMBO);
@@ -417,22 +445,9 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
                 if (GetSaveFileNameA(&ofn)) {
-                    // Tell reg.exe to export the root registry path for this app.
-                    // /y suppresses the overwrite confirmation since GetSaveFileName already handles it.
-                    std::string cmd = std::format("reg.exe export \"HKCU\\{}\" \"{}\" /y", APP_REG_ROOT, szFile);
-                    
-                    STARTUPINFOA si = { sizeof(si) };
-                    si.dwFlags = STARTF_USESHOWWINDOW;
-                    si.wShowWindow = SW_HIDE; // Hide the cmd window popup
-                    PROCESS_INFORMATION pi = { 0 };
-                    
-                    char cmdBuf[1024];
-                    strcpy_s(cmdBuf, sizeof(cmdBuf), cmd.c_str());
-                    
-                    if (CreateProcessA(NULL, cmdBuf, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-                        WaitForSingleObject(pi.hProcess, INFINITE);
-                        CloseHandle(pi.hProcess);
-                        CloseHandle(pi.hThread);
+                    // /y suppresses overwrite confirmation since the file picker already handles it.
+                    std::string args = std::format("export \"HKCU\\{}\" \"{}\" /y", APP_REG_ROOT, szFile);
+                    if (RunRegExe(args)) {
                         MessageBoxA(hWnd, "Settings backed up successfully.", "Backup", MB_OK | MB_ICONINFORMATION);
                     } else {
                         MessageBoxA(hWnd, "Failed to create backup.", "Error", MB_OK | MB_ICONERROR);
@@ -452,21 +467,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
                 if (GetOpenFileNameA(&ofn)) {
-                    // Tell reg.exe to import the selected .reg file back into the registry.
-                    std::string cmd = std::format("reg.exe import \"{}\"", szFile);
-                    
-                    STARTUPINFOA si = { sizeof(si) };
-                    si.dwFlags = STARTF_USESHOWWINDOW;
-                    si.wShowWindow = SW_HIDE;
-                    PROCESS_INFORMATION pi = { 0 };
-                    
-                    char cmdBuf[1024];
-                    strcpy_s(cmdBuf, sizeof(cmdBuf), cmd.c_str());
-                    
-                    if (CreateProcessA(NULL, cmdBuf, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
-                        WaitForSingleObject(pi.hProcess, INFINITE);
-                        CloseHandle(pi.hProcess);
-                        CloseHandle(pi.hThread);
+                    std::string args = std::format("import \"{}\"", szFile);
+                    if (RunRegExe(args)) {
                         MessageBoxA(hWnd, "Settings restored successfully. Please restart the application to apply all changes.", "Restore", MB_OK | MB_ICONINFORMATION);
                     } else {
                         MessageBoxA(hWnd, "Failed to restore backup.", "Error", MB_OK | MB_ICONERROR);

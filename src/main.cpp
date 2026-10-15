@@ -1,5 +1,6 @@
 #include "api/gateway.h"
 #include "api/registry.h"
+#include "api/speech.h"
 #include "api/sound.h"
 #include "api/process.h"
 #include "api/sparklines.h"
