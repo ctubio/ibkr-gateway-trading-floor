@@ -16,23 +16,35 @@
 #include "gui/orders.h"
 #include "gui/coins.h"
 
+struct WindowClassInfo {
+    WNDPROC proc;
+    const char* name;
+    int icon;
+    bool popup;
+};
+
+static const WindowClassInfo windowClasses[] = {
+    { WndProcCoins,              COINS_CLASS_NAME,                101, false },
+    { WndProcExchange,           COINS_EXCHANGE_CLASS_NAME,       106, true  },
+    { WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true  },
+    { WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true  },
+    { WndProcOrders,             ORDERS_CLASS_NAME,               109, false },
+    { WndProcDiamonds,           DIAMONDS_CLASS_NAME,             104, false },
+    { WndProcMarket,             MARKET_CLASS_NAME,               105, false },
+    { WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,        105, true  },
+    { WndProcSettings,           SETTINGS_CLASS_NAME,             107, false },
+    { WndProcDebugLog,           DEBUGLOG_CLASS_NAME,             108, true  },
+    { WndProcLock,               LOCK_CLASS_NAME,                 110, true  },
+    { WndProcScreenFlashOverlay, SCREEN_FLASH_OVERLAY_CLASS_NAME, 102, true  },
+};
+
 class RegisterWindowRAII {
     HINSTANCE hInst_;
     bool allowed = true;
 public:
     explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
-        RegisterWindowClass(hInst_, WndProcCoins,              COINS_CLASS_NAME,            101);
-        RegisterWindowClass(hInst_, WndProcExchange,           COINS_EXCHANGE_CLASS_NAME,   106, true);
-        RegisterWindowClass(hInst_, WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true);
-        RegisterWindowClass(hInst_, WndProcAlertNotification,  ALERT_NOTIFY_CLASS_NAME,         102, true);
-        RegisterWindowClass(hInst_, WndProcOrders,             ORDERS_CLASS_NAME,               109);
-        RegisterWindowClass(hInst_, WndProcDiamonds,           DIAMONDS_CLASS_NAME,             104);
-        RegisterWindowClass(hInst_, WndProcMarket,             MARKET_CLASS_NAME,               105);
-        RegisterWindowClass(hInst_, WndProcTsSearch,           MARKET_SEARCH_CLASS_NAME,        105, true);
-        RegisterWindowClass(hInst_, WndProcSettings,           SETTINGS_CLASS_NAME,             107);
-        RegisterWindowClass(hInst_, WndProcDebugLog,           DEBUGLOG_CLASS_NAME,             108, true);
-        RegisterWindowClass(hInst_, WndProcLock,               LOCK_CLASS_NAME,                 110, true);
-        RegisterWindowClass(hInst_, WndProcScreenFlashOverlay, SCREEN_FLASH_OVERLAY_CLASS_NAME, 102, true);
+        for (const auto& windowClass : windowClasses)
+            RegisterWindowClass(hInst_, windowClass.proc, windowClass.name, windowClass.icon, windowClass.popup);
 
         CreateScreenFlashOverlay(hInst_);
 
@@ -52,18 +64,8 @@ public:
     bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
         DestroyScreenFlashOverlay();
-        UnregisterClass(COINS_CLASS_NAME, hInst_);
-        UnregisterClass(COINS_EXCHANGE_CLASS_NAME, hInst_);
-        UnregisterClass(ALERTS_EDITOR_CLASS_NAME, hInst_);
-        UnregisterClass(ALERT_NOTIFY_CLASS_NAME, hInst_);
-        UnregisterClass(ORDERS_CLASS_NAME, hInst_);
-        UnregisterClass(DIAMONDS_CLASS_NAME, hInst_);
-        UnregisterClass(MARKET_CLASS_NAME, hInst_);
-        UnregisterClass(MARKET_SEARCH_CLASS_NAME, hInst_);
-        UnregisterClass(SETTINGS_CLASS_NAME, hInst_);
-        UnregisterClass(DEBUGLOG_CLASS_NAME, hInst_);
-        UnregisterClass(LOCK_CLASS_NAME, hInst_);
-        UnregisterClass(SCREEN_FLASH_OVERLAY_CLASS_NAME, hInst_);
+        for (const auto& windowClass : windowClasses)
+            UnregisterClass(windowClass.name, hInst_);
     }
 };
 

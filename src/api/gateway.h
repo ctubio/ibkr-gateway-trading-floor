@@ -13,7 +13,6 @@
 #include <richedit.h>
 #include <sapi.h>
 #include <sphelper.h>
-#include <dwmapi.h>
 #include <uxtheme.h>
 #include <commctrl.h>
 #include <commdlg.h>
@@ -250,14 +249,6 @@ public:
         }
 
         // ── RT_VOLUME-derived recent-activity metric (generic tick 233) ─────────────
-        // A coarser, conflated-arrival cousin of the tick-by-tick-derived ratio
-        // Market_ComputeVolRates() computes locally in market.h, NOT the same
-        // numbers (RT_VOLUME batches multiple prints into one update), but same
-        // idea: recent 15s share-rate vs. a trailing ~5min baseline rate. This is
-        // the only volume signal available for every portfolio position, not just
-        // symbols with an open Market window. Populated by
-        // TradingAPI::Impl::UpdateVolRate() in ibkr.cpp. Both built on
-        // RollingRateTracker (shared with tick-by-tick Market window tracking).
         double rtVolSum5min   = 0.0;  // approx. shares traded in the trailing ~5 minutes
         double rtVolRatio5min = 0.0;  // recent-vs-baseline share-rate ratio
     };

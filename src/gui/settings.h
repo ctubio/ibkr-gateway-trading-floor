@@ -1,9 +1,5 @@
 #pragma once
 
-// Layout: two columns. Column 1 holds Gateway/Display/Audio; column 2 holds Trading/Configuration.
-// Client area is 560px wide: two 252px fieldsets with a 16px gutter between them (252 + 16 + 252 = 560).
-// The outer window (title bar + borders) adds ~36px horizontally and ~30px vertically, giving a
-// total size of 596x713.
 static const int WindowSettingsWidth = 543;
 static const int WindowSettingsHeight = 430;
 
@@ -279,14 +275,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     selectIdx = i;
 
                 if (herenaIdx < 0 &&
-                    (TTS_ContainsCI(v.tokenId.c_str(),  L"herena") ||
-                    TTS_ContainsCI(v.display.c_str(),  L"herena")  ||
-                    TTS_ContainsCI(v.tokenId.c_str(),  L"helena")  ||
-                    TTS_ContainsCI(v.display.c_str(),  L"helena")  ||
-                    TTS_ContainsCI(v.tokenId.c_str(),  L"ca-es")   ||
-                    TTS_ContainsCI(v.display.c_str(),  L"ca-es")   ||
-                    TTS_ContainsCI(v.tokenId.c_str(),  L"catalan") ||
-                    TTS_ContainsCI(v.display.c_str(),  L"catalan")))
+                    TTS_IsHerenaCatalan(v.tokenId.c_str(), v.display.c_str(), nullptr))
                     herenaIdx = i;
             }
 

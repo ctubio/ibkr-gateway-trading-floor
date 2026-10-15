@@ -32,13 +32,6 @@ struct VolRateResult {
                                // denominator.
 };
 
-static VolRateResult Market_ComputeVolRates(const TsState* state, ULONGLONG now) {
-    VolRateResult r;
-    r.vol5min  = state->volRate.total(now);
-    r.volRatio = state->volRate.ratio(now);
-    return r;
-}
-
 // ── Formatting helpers ────────────────────────────────────────────────────────
 static std::string Market_Fmt(double v, int dec = 2) {
     if (v == 0.0) return "--";
@@ -107,7 +100,9 @@ static std::string Market_BuildDecisionState(TsState* st) {
     TradingAPI::L1Book full;
     bool haveFull = api().getMarketData(st->conId, full);
     ULONGLONG now = GetTickCount64();
-    VolRateResult vr = Market_ComputeVolRates(st, now);
+    VolRateResult vr;
+    vr.vol5min  = st->volRate.total(now);
+    vr.volRatio = st->volRate.ratio(now);
 
     std::string s;
     s += std::format("Trading snapshot for {} (US-listed, short-term trading).\n", st->symbol);

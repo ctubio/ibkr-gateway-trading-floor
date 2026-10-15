@@ -349,10 +349,6 @@ double Settings_LoadFloat(const char* key, double defaultValue = 0.0) {
     return (double)scaled / 10000.0;
 }
 
-void Settings_Delete(const char* key) {
-    RegDelete(SETTINGS_CLASS_NAME, key);
-}
-
 DWORD Settings_Load(const char* key, DWORD defaultValue) {
     return RegGetDword(SETTINGS_CLASS_NAME, key, defaultValue);
 }
@@ -791,29 +787,6 @@ void ToggleWindowAlwaysOnTop(const char* windowClassName, const char* windowIden
         }
         Settings_AlwaysOnTop_Save(key.c_str(), 1);
     }
-}
-
-// Enumerate all open Market windows and extract their symbols
-struct MarketWindowInfo {
-    HWND hWnd;
-    std::string symbol;
-};
-
-static std::vector<MarketWindowInfo> EnumerateMarketWindows() {
-    std::vector<MarketWindowInfo> result;
-    
-    HWND hWnd = FindWindowA(MARKET_CLASS_NAME, NULL);
-    while (hWnd) {
-        TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-        if (data && !data->symbol.empty()) {
-            result.push_back({hWnd, data->symbol});
-        }
-        
-        // Find next window of the same class with a different title
-        hWnd = FindWindowExA(NULL, hWnd, MARKET_CLASS_NAME, NULL);
-    }
-    
-    return result;
 }
 
 // Check if a specific Market window is set to Always On Top

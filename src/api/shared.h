@@ -146,7 +146,6 @@ struct TsState {
     double unrealizedPnL = 0.0;
 
     // ── Volume / print-frequency tracking (tick-by-tick) ─────────────────────
-    // Fed from WM_MARKET_TICK; read at paint time via Market_ComputeVolRates().
     RollingRateTracker volRate;
 
     // ── TTS state ─────────────────────────────────────────────────────────────

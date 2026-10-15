@@ -23,6 +23,53 @@ static bool TTS_ContainsCI(const WCHAR* s, const WCHAR* needle) {
     return ws.find(wn) != std::wstring::npos;
 }
 
+static bool TTS_IsHerenaCatalan(const WCHAR* id, const WCHAR* description, const WCHAR* attributeName) {
+    const WCHAR* fields[] = { id, description, attributeName };
+    const WCHAR* needles[] = { L"herena", L"helena", L"ca-es", L"catalan" };
+    for (const WCHAR* needle : needles)
+        for (const WCHAR* field : fields)
+            if (TTS_ContainsCI(field, needle)) return true;
+    return false;
+}
+
+struct TtsTokenInfo {
+    std::wstring id;
+    std::wstring description;
+    std::wstring attributeName;
+    bool hasId = false;
+    bool hasDescription = false;
+    bool hasAttributeName = false;
+};
+
+static TtsTokenInfo TTS_ReadTokenInfo(ISpObjectToken* pToken) {
+    WCHAR* pId = nullptr;
+    WCHAR* pDesc = nullptr;
+    WCHAR* pAttrName = nullptr;
+
+    if (pToken) {
+        pToken->GetId(&pId);
+        SpGetDescription(pToken, &pDesc);
+        ISpDataKey* pAttribs = nullptr;
+        if (SUCCEEDED(pToken->OpenKey(L"Attributes", &pAttribs))) {
+            pAttribs->GetStringValue(L"Name", &pAttrName);
+            pAttribs->Release();
+        }
+    }
+
+    TtsTokenInfo info;
+    if (pId) info.id = pId;
+    if (pDesc) info.description = pDesc;
+    if (pAttrName) info.attributeName = pAttrName;
+    info.hasId = pId != nullptr;
+    info.hasDescription = pDesc != nullptr;
+    info.hasAttributeName = pAttrName != nullptr;
+
+    if (pId) CoTaskMemFree(pId);
+    if (pDesc) CoTaskMemFree(pDesc);
+    if (pAttrName) CoTaskMemFree(pAttrName);
+    return info;
+}
+
 // Search one voice category for a token matching the given ID string.
 // If tokenId is empty, falls back to searching for Herena/Catalan.
 // Returns a token the caller must Release(), or nullptr.
@@ -34,41 +81,17 @@ static ISpObjectToken* TTS_FindVoiceInCategory(const WCHAR* categoryId, const st
     ISpObjectToken* pFound  = nullptr;
 
     while (!pFound && SUCCEEDED(pEnum->Next(1, &pToken, NULL)) && pToken) {
-        WCHAR* pId       = nullptr;
-        WCHAR* pDesc     = nullptr;
-        WCHAR* pAttrName = nullptr;
-
-        pToken->GetId(&pId);
-        SpGetDescription(pToken, &pDesc);
-        ISpDataKey* pAttribs = nullptr;
-        if (SUCCEEDED(pToken->OpenKey(L"Attributes", &pAttribs))) {
-            pAttribs->GetStringValue(L"Name", &pAttrName);
-            pAttribs->Release();
-        }
+        TtsTokenInfo info = TTS_ReadTokenInfo(pToken);
 
         bool match = false;
         if (!tokenId.empty()) {
             // Exact match on token ID (registry path)
-            match = (pId && tokenId == std::wstring(pId));
+            match = info.hasId && tokenId == info.id;
         } else {
             // Default fallback: search for Herena/Catalan
-            match = TTS_ContainsCI(pId,       L"herena")  ||
-                    TTS_ContainsCI(pDesc,     L"herena")  ||
-                    TTS_ContainsCI(pAttrName, L"herena")  ||
-                    TTS_ContainsCI(pId,       L"helena")  ||
-                    TTS_ContainsCI(pDesc,     L"helena")  ||
-                    TTS_ContainsCI(pAttrName, L"helena")  ||
-                    TTS_ContainsCI(pId,       L"ca-es")   ||
-                    TTS_ContainsCI(pDesc,     L"ca-es")   ||
-                    TTS_ContainsCI(pAttrName, L"ca-es")   ||
-                    TTS_ContainsCI(pId,       L"catalan") ||
-                    TTS_ContainsCI(pDesc,     L"catalan") ||
-                    TTS_ContainsCI(pAttrName, L"catalan");
+            match = TTS_IsHerenaCatalan(
+                info.id.c_str(), info.description.c_str(), info.attributeName.c_str());
         }
-
-        if (pId)       CoTaskMemFree(pId);
-        if (pDesc)     CoTaskMemFree(pDesc);
-        if (pAttrName) CoTaskMemFree(pAttrName);
 
         if (match) pFound = pToken;
         else       { pToken->Release(); pToken = nullptr; }
@@ -117,34 +140,20 @@ static std::vector<TtsVoiceEntry> TTS_EnumerateVoices() {
 
         ISpObjectToken* pToken = nullptr;
         while (SUCCEEDED(pEnum->Next(1, &pToken, NULL)) && pToken) {
-            WCHAR* pId       = nullptr;
-            WCHAR* pDesc     = nullptr;
-            WCHAR* pAttrName = nullptr;
+            TtsTokenInfo info = TTS_ReadTokenInfo(pToken);
 
-            pToken->GetId(&pId);
-            SpGetDescription(pToken, &pDesc);
-            ISpDataKey* pAttribs = nullptr;
-            if (SUCCEEDED(pToken->OpenKey(L"Attributes", &pAttribs))) {
-                pAttribs->GetStringValue(L"Name", &pAttrName);
-                pAttribs->Release();
-            }
-
-            if (pId) {
-                std::wstring tid(pId);
+            if (info.hasId) {
                 // Deduplicate by tokenId
                 bool dup = false;
-                for (const auto& v : voices) if (v.tokenId == tid) { dup = true; break; }
+                for (const auto& v : voices) if (v.tokenId == info.id) { dup = true; break; }
                 if (!dup) {
-                    std::wstring disp = pAttrName ? std::wstring(pAttrName)
-                                      : pDesc    ? std::wstring(pDesc)
-                                      :            tid;
-                    voices.push_back({ tid, disp });
+                    const std::wstring& display = info.hasAttributeName ? info.attributeName
+                                                 : info.hasDescription   ? info.description
+                                                 :                         info.id;
+                    voices.push_back({ info.id, display });
                 }
             }
 
-            if (pId)       CoTaskMemFree(pId);
-            if (pDesc)     CoTaskMemFree(pDesc);
-            if (pAttrName) CoTaskMemFree(pAttrName);
             pToken->Release();
         }
         pEnum->Release();

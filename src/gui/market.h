@@ -159,7 +159,10 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
         double chg = L1.change();
         double chgPct = L1.changePct();
 
-        VolRateResult vr = Market_ComputeVolRates(state, GetTickCount64());
+        ULONGLONG now = GetTickCount64();
+        VolRateResult vr;
+        vr.vol5min  = state->volRate.total(now);
+        vr.volRatio = state->volRate.ratio(now);
         COLORREF volColor = (vr.volRatio >= 3.0) ? COINS_CLR_PINK
                           : (vr.volRatio >= 1.5) ? COINS_CLR_PURPLE : COINS_CLR_BLUE;
 
@@ -399,13 +402,6 @@ static void Market_RedrawHintsFor(TsState* state, HWND hEdit) {
         redraw(state->hRRLabel);
         redraw(state->hOptProfitTarget);
     }
-}
-
-// Kept for any other caller that only has the HWND, one lookup, as before.
-static void Market_RedrawHintsFor(HWND hEdit) {
-    HWND hMarket = GetParent(hEdit);
-    auto it = marketStates.find(hMarket);
-    Market_RedrawHintsFor((it != marketStates.end()) ? it->second : nullptr, hEdit);
 }
 
 // ── Right block geometry (shared by paint and layout) ────────────────────────
@@ -1558,9 +1554,11 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     
     if (state->position == 0.0) { uPnlColor = textColor; }
 
-    // ── Volume rate / print-frequency rate (tick-by-tick, see Market_ComputeVolRates) ──
+    // ── Volume rate / print-frequency rate (tick-by-tick) ──
     //ULONGLONG nowTick = GetTickCount64();
-    //VolRateResult volRates = Market_ComputeVolRates(state, nowTick);
+    //VolRateResult volRates;
+    //volRates.vol5min  = state->volRate.total(nowTick);
+    //volRates.volRatio = state->volRate.ratio(nowTick);
 
     double chg    = 0.0;
     double chgPct = 0.0;

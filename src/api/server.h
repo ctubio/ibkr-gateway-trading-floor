@@ -279,13 +279,6 @@ static const char* s_monthNames[] = {
     "september", "october", "november", "december"
 };
 
-/*/) Build the old TraderTV watchlist URL for a given date (YYYY, MM, DD)
-static std::string News_BuildUrl(int year, int month, int day) {
-    return std::string("https://tradertv-live.beehiiv.com/p/tradertv-watchlist-")
-        + s_monthNames[month] + "-" + std::to_string(day)
-        + "-" + std::to_string(year);
-}*/
-
 // Format a date as "Month D, YYYY" (no leading zero on day, matching Python)
 static std::string News_FormatHeader(SYSTEMTIME st) {
     return std::string(s_monthNames[st.wMonth][0] ? (std::string() + (char)toupper(s_monthNames[st.wMonth][0]) + (s_monthNames[st.wMonth] + 1)) : "")

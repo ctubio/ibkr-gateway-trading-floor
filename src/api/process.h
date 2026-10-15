@@ -68,7 +68,6 @@ struct WindowFinderData {
 };
 
 // Callback function to evaluate each window
-// Callback function to evaluate each window
 BOOL CALLBACK EnumAnyWindowsCallback(HWND hwnd, LPARAM lParam) {
     WindowFinderData* data = reinterpret_cast<WindowFinderData*>(lParam);
     DWORD processId = 0;
@@ -159,12 +158,6 @@ std::string AskGatewayPath(HWND hWnd) {
     if (GetOpenFileNameA(&ofn)) return std::string(path);
     return "";
 }
-
-/*struct EnsureOnceFlag {
-    bool& flag;
-    EnsureOnceFlag(bool& f) : flag(f) { flag = true; }
-    ~EnsureOnceFlag() { flag = false; }
-};*/
 
 bool alreadyEnsureGatewayRunning = false;
 
