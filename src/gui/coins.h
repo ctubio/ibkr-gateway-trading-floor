@@ -3,6 +3,15 @@
 static const int windowCoinsWidth  = 250;
 static const int windowCoinsHeight = 382;
 
+constexpr int y1 = 8;
+constexpr int box1H = 94;
+constexpr int y2 = y1 + box1H + 9;
+constexpr int box2H = 124;
+constexpr int y3 = y2 + box2H + 9;
+constexpr int box3H = 64;
+constexpr int boxW = 226;
+constexpr int m = 10;
+
 void StartCoins(HINSTANCE hInst) { StartGenericWindow(COINS_CLASS_NAME, "Trading Floor", L"TWSAPIClientTradingFloor.Coins", windowCoinsWidth, windowCoinsHeight, hInst); }
 
 #define ID_M_COINS   1001
@@ -313,15 +322,6 @@ static void UpdateMarketClock(HWND hWnd) {
 }
 
 static void Coins_ApplyFocusLayout(HWND hWnd, bool active) {
-    const int m = 10;
-    const int boxW = 226;
-    const int y1 = 8;
-    const int box1H = 94;
-    const int y2 = y1 + box1H + 9;
-    const int box2H = 124;
-    const int y3 = y2 + box2H + 9;
-    const int box3H = 64;
-
     const int show = active ? SW_SHOW : SW_HIDE;
     ShowWindow(coinsState.hLblDividends, show);
     ShowWindow(coinsState.hLblAccruals, show);
@@ -540,13 +540,6 @@ void Coins_UpdateLabels(HWND hWnd) {
     if (coinsState.currencyCoins != prevCurrency)
         UpdateTrayIcon(hWnd);
 
-    const int m = 10;
-    int y1 = 8;
-    int box1H = 94;
-    int y2 = y1 + box1H + 9;
-    int box2H = 124;
-    int y3 = y2 + box2H + 9;
-    const int boxW = 226;
     HDWP valueLabelMoves = BeginDeferWindowPos(4);
 
     if (coinsState.hCoin_NetLiq) {
@@ -980,12 +973,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         case WM_CREATE:	{
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
-            const int m    = 10;
-            const int boxW = 226;
-
             // ─── Box 1: Net Liq & PnL ──────────────────────────────────────────
-            int y1 = 8;
-            int box1H = 94;
             coinsState.hCoinBox1 = GroupBox(hWnd, "Today:", m, y1, boxW, box1H, 1, WS_CLIPSIBLINGS);
 
             coinsState.hCoin_NetLiq = Ctl(hWnd, "STATIC", "--", WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -1031,8 +1019,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 
             // ─── Box 2: Positions & Margin ─────────────────────────────────────
-            int y2 = y1 + box1H + 9; // y2 = 114
-            int box2H = 124;
             coinsState.hCoinBox2 = GroupBox(hWnd, "Positions:", m, y2, boxW, box2H, 2, WS_CLIPSIBLINGS);
 
             coinsState.hCoin_Positions = Ctl(hWnd, "STATIC", "--", WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -1079,8 +1065,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 
             // ─── Box 3: Cash ───────────────────────────────────────────────────
-            int y3 = y2 + box2H + 9; // y3 = 250
-            int box3H = 64;
             coinsState.hCoinBox3 = GroupBox(hWnd, "Cash:", m, y3, boxW, box3H, 3, WS_CLIPSIBLINGS);
 
             coinsState.hCoin_Cash = Ctl(hWnd, "STATIC", "--", WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -1153,12 +1137,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
         case WM_API_UPDATE: // only called when the api connects or disconnects
             if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
-                const int m    = 10;
-                int box1H = 94;
-                int y1 = 8;
-                int y2 = y1 + box1H + 9; // y2 = 114
-                int box2H = 124;
-                int y3 = y2 + box2H + 9; // y3 = 250
                 const HWND labels[] = {
                     coinsState.hCoin_NetLiq, coinsState.hCoin_BigPnL, coinsState.hCoin_Pct,
                     coinsState.hCoin_Realized, coinsState.hCoin_Positions, coinsState.hCoin_Unrealized,
