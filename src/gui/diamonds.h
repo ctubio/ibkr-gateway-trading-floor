@@ -180,123 +180,40 @@ struct DiamondsState {
     std::deque<DiamondsTitleEvent> diamondsTitleEvents;
     // Client-space bounds of drawn title events and their associated conIds.
     std::vector<std::pair<RECT, int>> titleHitRects;
-    HDC hdcCaptionMem = NULL;
-    HBITMAP hbmCaption = NULL;
-    HBITMAP hbmCaptionOld = NULL;
-    void* captionBits = nullptr;
-    int captionBufW = 0;
-    int captionBufH = 0;
-    HTHEME hCaptionTheme = NULL;
+    CaptionCache caption;
 };
 
 static DiamondsState diamondsState;
-
-static int Diamonds_FrameY(HWND hWnd) {
-    UINT dpi = GetDpiForWindow(hWnd);
-    return GetSystemMetricsForDpi(SM_CYFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-}
-
-// Height of the area we own at the top of the client rect.
-static int Diamonds_CaptionH(HWND hWnd) {
-    UINT dpi = GetDpiForWindow(hWnd);
-    int height = GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + Diamonds_FrameY(hWnd);
-    return std::max(1, height - MulDiv(4, dpi, 96));
-}
-
-static void Diamonds_UpdateFrameMargins(HWND hWnd) {
-    MARGINS m = { 0, 0, Diamonds_CaptionH(hWnd), 0 };
-    DwmExtendFrameIntoClientArea(hWnd, &m);
-}
-
-static void Diamonds_FreeCaptionCache(bool alsoTheme) {
-    if (diamondsState.hdcCaptionMem) {
-        if (diamondsState.hbmCaptionOld)
-            SelectObject(diamondsState.hdcCaptionMem, diamondsState.hbmCaptionOld);
-        if (diamondsState.hbmCaption)
-            DeleteObject(diamondsState.hbmCaption);
-        DeleteDC(diamondsState.hdcCaptionMem);
-    } else if (diamondsState.hbmCaption) {
-        DeleteObject(diamondsState.hbmCaption);
-    }
-    diamondsState.hdcCaptionMem = NULL;
-    diamondsState.hbmCaption = NULL;
-    diamondsState.hbmCaptionOld = NULL;
-    diamondsState.captionBits = nullptr;
-    diamondsState.captionBufW = diamondsState.captionBufH = 0;
-    if (alsoTheme && diamondsState.hCaptionTheme) {
-        CloseThemeData(diamondsState.hCaptionTheme);
-        diamondsState.hCaptionTheme = NULL;
-    }
-}
 
 static void Diamonds_PaintCaption(HWND hWnd, HDC hdcWin) {
     diamondsState.titleHitRects.clear();
 
     RECT rc;
     GetClientRect(hWnd, &rc);
-    const int w = rc.right, capH = Diamonds_CaptionH(hWnd);
+    const int w = rc.right, capH = Caption_H(hWnd);
     if (w <= 0 || capH <= 0) return;
 
     RECT btn = {};
     DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &btn, sizeof(btn));
     const int maxX = (btn.left > 0 ? btn.left : w - 140) - 8;
     const int iconW = GetSystemMetrics(SM_CXSMICON);
-    const int iconH = GetSystemMetrics(SM_CYSMICON);
     const int iconX = 8;
     int x = iconX + iconW + 8;
 
-    if (!diamondsState.hdcCaptionMem ||
-        diamondsState.captionBufW != w || diamondsState.captionBufH != capH) {
-        Diamonds_FreeCaptionCache(false);
-        BITMAPINFO bi = {};
-        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bi.bmiHeader.biWidth = w;
-        bi.bmiHeader.biHeight = -capH;
-        bi.bmiHeader.biPlanes = 1;
-        bi.bmiHeader.biBitCount = 32;
-        bi.bmiHeader.biCompression = BI_RGB;
-
-        diamondsState.hdcCaptionMem = CreateCompatibleDC(hdcWin);
-        if (!diamondsState.hdcCaptionMem) return;
-        diamondsState.hbmCaption = CreateDIBSection(
-            hdcWin, &bi, DIB_RGB_COLORS, &diamondsState.captionBits, nullptr, 0);
-        if (!diamondsState.hbmCaption || !diamondsState.captionBits) {
-            Diamonds_FreeCaptionCache(false);
-            return;
-        }
-        diamondsState.hbmCaptionOld = (HBITMAP)SelectObject(
-            diamondsState.hdcCaptionMem, diamondsState.hbmCaption);
-        diamondsState.captionBufW = w;
-        diamondsState.captionBufH = capH;
-    }
-
-    HDC mem = diamondsState.hdcCaptionMem;
-    void* bits = diamondsState.captionBits;
+    if (!diamondsState.caption.Ensure(hdcWin, w, capH)) return;
+    HDC mem = diamondsState.caption.dc;
+    void* bits = diamondsState.caption.bits;
     std::memset(bits, 0, static_cast<size_t>(w) * capH * 4);
     HGDIOBJ oldFont = SelectObject(mem, hFont11ptbold.get());
 
-    HICON hIcon = (HICON)SendMessage(hWnd, WM_GETICON, ICON_SMALL, 0);
-    if (!hIcon) hIcon = (HICON)GetClassLongPtr(hWnd, GCLP_HICONSM);
     // When maximized the top FrameY pixels of the client area are behind the
     // screen edge.  Shift the icon and text down so they stay visible.
-    const int captionYOfs = IsZoomed(hWnd) ? Diamonds_FrameY(hWnd) : 2;
+    const int captionYOfs = IsZoomed(hWnd) ? Caption_FrameY(hWnd) : 2;
+    Caption_DrawIcon(hWnd, mem, bits, w, capH, captionYOfs);
 
-    if (hIcon) {
-        const int iconY = captionYOfs + (capH - captionYOfs - iconH) / 2;
-        DrawIconEx(mem, iconX, iconY, hIcon, iconW, iconH, 0, NULL, DI_NORMAL);
-
-        DWORD* px = (DWORD*)bits;
-        for (int yy = std::max(0, iconY); yy < std::min(capH, iconY + iconH); ++yy) {
-            for (int xx = iconX; xx < std::min(w, iconX + iconW); ++xx) {
-                DWORD& p = px[(size_t)yy * w + xx];
-                if ((p >> 24) == 0 && (p & 0x00FFFFFF) != 0) p |= 0xFF000000;
-            }
-        }
-    }
-
-    if (!diamondsState.hCaptionTheme)
-        diamondsState.hCaptionTheme = OpenThemeData(hWnd, L"CompositedWindow::Window");
-    HTHEME theme = diamondsState.hCaptionTheme;
+    if (!diamondsState.caption.theme)
+        diamondsState.caption.theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
+    HTHEME theme = diamondsState.caption.theme;
     if (theme) {
         const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
         auto drawSeg = [&](const std::string& s, COLORREF clr, int conId) -> bool {
@@ -336,7 +253,7 @@ static int Diamonds_TitleHitTest(POINT clientPt) {
 static void Diamonds_InvalidateCaption(HWND hWnd) {
     RECT rc;
     GetClientRect(hWnd, &rc);
-    rc.bottom = Diamonds_CaptionH(hWnd);
+    rc.bottom = Caption_H(hWnd);
     InvalidateRect(hWnd, &rc, TRUE);
 }
 
@@ -679,7 +596,7 @@ static void Diamonds_Layout(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
     RECT rc; GetClientRect(hWnd, &rc);
-    const int capH = Diamonds_CaptionH(hWnd);
+    const int capH = Caption_H(hWnd);
     int listH = diamondsState.checkboxesVisible ? rc.bottom - DIAMONDS_CHK_STRIP_H : rc.bottom;
     MoveWindow(hList, 0, capH, rc.right, listH - capH, TRUE);
     RedrawWindow(hList, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME);
@@ -1292,7 +1209,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
         Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Repopulate(hWnd);
-        Diamonds_UpdateFrameMargins(hWnd);
+        Caption_UpdateMargins(hWnd);
         SetWindowPos(hWnd, NULL, 0, 0, 0, 0,
             SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         Diamonds_UpdateEventTitle(hWnd);
@@ -1307,50 +1224,29 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     // so there is no non-client strip at the top — this eliminates the visible border
     // and lets DwmDefWindowProc handle the full caption-button area.
     case WM_NCCALCSIZE:
-        if (wParam) {
-            auto* p = (NCCALCSIZE_PARAMS*)lParam;
-            LONG origTop = p->rgrc[0].top;
-            DefWindowProc(hWnd, message, wParam, lParam);
-            p->rgrc[0].top = origTop;
-            return 0;
-        }
-        break;
-
-    case WM_NCHITTEST: {
-        LRESULT dwm = 0;
-        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
-        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        RECT wr;
-        GetWindowRect(hWnd, &wr);
-        int dy = pt.y - wr.top;
-        if (!IsZoomed(hWnd) && dy >= 0 && dy < Diamonds_FrameY(hWnd) / 2) return HTTOP;
-        POINT cpt = pt;
-        ScreenToClient(hWnd, &cpt);
-        if (Diamonds_TitleHitTest(cpt)) return HTCLIENT;
-        if (cpt.y >= 0 && cpt.y < Diamonds_CaptionH(hWnd)) return HTCAPTION;
-        break;
-    }
-
+    case WM_NCHITTEST:
     case WM_NCMOUSEMOVE:
     case WM_NCLBUTTONDOWN:
     case WM_NCLBUTTONUP:
-    case WM_NCMOUSELEAVE: {
-        LRESULT dwm = 0;
-        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
-        break;
-    }
-
+    case WM_NCMOUSELEAVE:
     case WM_ERASEBKGND: {
-        HDC hdc = (HDC)wParam;
-        RECT rc;
-        GetClientRect(hWnd, &rc);
-        RECT cap = rc;
-        cap.bottom = Diamonds_CaptionH(hWnd);
-        FillRect(hdc, &cap, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        RECT rest = rc;
-        rest.top = cap.bottom;
-        FillRect(hdc, &rest, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
-        return 1;
+        LRESULT result = 0;
+        bool handled = Caption_HandleNcMessages(hWnd, message, wParam, lParam, result);
+        if (message == WM_NCHITTEST && (!handled || result == HTCAPTION)) {
+            POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            RECT wr;
+            GetWindowRect(hWnd, &wr);
+            int dy = pt.y - wr.top;
+            if (!IsZoomed(hWnd) && dy >= 0 && dy < Caption_FrameY(hWnd) / 2)
+                result = HTTOP;
+            else if (handled) {
+                POINT clientPt = pt;
+                ScreenToClient(hWnd, &clientPt);
+                if (Diamonds_TitleHitTest(clientPt)) result = HTCLIENT;
+            }
+        }
+        if (handled) return result;
+        break;
     }
 
     case WM_PAINT: {
@@ -1388,7 +1284,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_SIZE: {
-        Diamonds_UpdateFrameMargins(hWnd);
+        Caption_UpdateMargins(hWnd);
         if (wParam != SIZE_MINIMIZED)
             Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Layout(hWnd);
@@ -1399,9 +1295,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_THEMECHANGED:
-        if (diamondsState.hCaptionTheme) {
-            CloseThemeData(diamondsState.hCaptionTheme);
-            diamondsState.hCaptionTheme = NULL;
+        if (diamondsState.caption.theme) {
+            CloseThemeData(diamondsState.caption.theme);
+            diamondsState.caption.theme = NULL;
         }
         Diamonds_InvalidateCaption(hWnd);
         break;
@@ -1577,7 +1473,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         RECT rc;
         GetClientRect(hWnd, &rc);
-        rc.bottom = Diamonds_CaptionH(hWnd);
+        rc.bottom = Caption_H(hWnd);
         InvalidateRect(hWnd, &rc, FALSE);
         break;
     }
@@ -2107,7 +2003,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         diamondsState.paintGraphics.reset();
         diamondsState.sparklines.clear();
         diamondsState.dividendCache.clear();   // NEW
-        Diamonds_FreeCaptionCache(true);
+        diamondsState.caption.Free(true);
         if (diamondsState.rowHeightImageList) {
             ImageList_Destroy(diamondsState.rowHeightImageList);
             diamondsState.rowHeightImageList = NULL;

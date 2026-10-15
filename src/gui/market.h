@@ -107,102 +107,31 @@ static const int MARKET_ORDER_ROW_H = 44;   // per-row height, matches Orders.h'
 // ── Custom caption (same technique as diamonds.h) ────────────────────────────
 // The client area covers the title bar; DWM glass is extended behind it and we
 // paint the icon, the title and the right-aligned stats ourselves.
-static int Market_FrameY(HWND hWnd) {
-    UINT dpi = GetDpiForWindow(hWnd);
-    return GetSystemMetricsForDpi(SM_CYFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-}
-
-static int Market_CaptionH(HWND hWnd) {
-    UINT dpi = GetDpiForWindow(hWnd);
-    int height = GetSystemMetricsForDpi(SM_CYCAPTION, dpi) + Market_FrameY(hWnd);
-    return std::max(1, height - MulDiv(4, dpi, 96));
-}
-
-static void Market_UpdateFrameMargins(HWND hWnd) {
-    MARGINS m = { 0, 0, Market_CaptionH(hWnd), 0 };
-    DwmExtendFrameIntoClientArea(hWnd, &m);
-}
-
-static void Market_FreeCaptionCache(TsState* state, bool alsoTheme) {
-    if (!state) return;
-    if (state->hdcCaptionMem) {
-        if (state->hbmCaptionOld) SelectObject(state->hdcCaptionMem, state->hbmCaptionOld);
-        if (state->hbmCaption)    DeleteObject(state->hbmCaption);
-        DeleteDC(state->hdcCaptionMem);
-    } else if (state->hbmCaption) {
-        DeleteObject(state->hbmCaption);
-    }
-    state->hdcCaptionMem = NULL;
-    state->hbmCaption    = NULL;
-    state->hbmCaptionOld = NULL;
-    state->captionBits   = nullptr;
-    state->captionBufW = state->captionBufH = 0;
-    if (alsoTheme && state->hCaptionTheme) {
-        CloseThemeData(state->hCaptionTheme);
-        state->hCaptionTheme = NULL;
-    }
-}
-
 static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
     if (!state) return;
     RECT rc;
     GetClientRect(hWnd, &rc);
-    const int w = rc.right, capH = Market_CaptionH(hWnd);
+    const int w = rc.right, capH = Caption_H(hWnd);
     if (w <= 0 || capH <= 0) return;
 
     RECT btn = {};
     DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &btn, sizeof(btn));
     const int maxX  = (btn.left > 0 ? btn.left + 125 : w - 100); // intentionally over the grayed out maximize button
     const int iconW = GetSystemMetrics(SM_CXSMICON);
-    const int iconH = GetSystemMetrics(SM_CYSMICON);
-    const int iconX = 8;
-    int x = iconX + iconW + 8;
+    int x = 8 + iconW + 8;
 
-    if (!state->hdcCaptionMem || state->captionBufW != w || state->captionBufH != capH) {
-        Market_FreeCaptionCache(state, false);
-        BITMAPINFO bi = {};
-        bi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-        bi.bmiHeader.biWidth       = w;
-        bi.bmiHeader.biHeight      = -capH;
-        bi.bmiHeader.biPlanes      = 1;
-        bi.bmiHeader.biBitCount    = 32;
-        bi.bmiHeader.biCompression = BI_RGB;
-        state->hdcCaptionMem = CreateCompatibleDC(hdcWin);
-        if (!state->hdcCaptionMem) return;
-        state->hbmCaption = CreateDIBSection(hdcWin, &bi, DIB_RGB_COLORS, &state->captionBits, nullptr, 0);
-        if (!state->hbmCaption || !state->captionBits) {
-            Market_FreeCaptionCache(state, false);
-            return;
-        }
-        state->hbmCaptionOld = (HBITMAP)SelectObject(state->hdcCaptionMem, state->hbmCaption);
-        state->captionBufW = w;
-        state->captionBufH = capH;
-    }
-    HDC mem = state->hdcCaptionMem;
-    void* bits = state->captionBits;
+    if (!state->caption.Ensure(hdcWin, w, capH)) return;
+    HDC mem = state->caption.dc;
+    void* bits = state->caption.bits;
     std::memset(bits, 0, static_cast<size_t>(w) * capH * 4);
 
     HGDIOBJ oldFont = SelectObject(mem, hFont11ptbold.get());
 
-    // ── Icon ─────────────────────────────────────────────────────────────────
-    HICON hIcon = (HICON)SendMessage(hWnd, WM_GETICON, ICON_SMALL, 0);
-    if (!hIcon) hIcon = (HICON)GetClassLongPtr(hWnd, GCLP_HICONSM);
-    if (hIcon) {
-        const int iconY = (capH - iconH) / 2;
-        DrawIconEx(mem, iconX, iconY, hIcon, iconW, iconH, 0, NULL, DI_NORMAL);
+    Caption_DrawIcon(hWnd, mem, bits, w, capH);
 
-        DWORD* px = (DWORD*)bits;
-        for (int yy = std::max(0, iconY); yy < std::min(capH, iconY + iconH); ++yy) {
-            for (int xx = iconX; xx < std::min(w, iconX + iconW); ++xx) {
-                DWORD& p = px[(size_t)yy * w + xx];
-                if ((p >> 24) == 0 && (p & 0x00FFFFFF) != 0) p |= 0xFF000000;
-            }
-        }
-    }
-
-    if (!state->hCaptionTheme)
-        state->hCaptionTheme = OpenThemeData(hWnd, L"CompositedWindow::Window");
-    HTHEME theme = state->hCaptionTheme;
+    if (!state->caption.theme)
+        state->caption.theme = OpenThemeData(hWnd, L"CompositedWindow::Window");
+    HTHEME theme = state->caption.theme;
     if (theme) {
         const COLORREF themeText = darkMode ? DM_TEXT : LM_TEXT;
         const TradingAPI::L1Book& L1 = state->l1Info;
@@ -548,7 +477,7 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
     if (!state || !state->hTsList) return;
     RECT rc; GetClientRect(hWnd, &rc);
 
-    const int hdrH  = Market_CaptionH(hWnd) + HEADER_H;
+    const int hdrH  = Caption_H(hWnd) + HEADER_H;
     const int bodyY = hdrH;
     const int barH  = (state->orderBarVisible) ? ORDER_BAR_H / (state->isOvernight ? 2 : 1) : 0;
     const int bodyH = rc.bottom - hdrH - barH;
@@ -1257,7 +1186,7 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // math always agree with where the splitters are actually drawn.
 static int Market_BodyH(HWND hWnd, const TsState* state) {
     RECT rc; GetClientRect(hWnd, &rc);
-    const int hdrH = Market_CaptionH(hWnd) + HEADER_H;
+    const int hdrH = Caption_H(hWnd) + HEADER_H;
     const int barH = (state && state->orderBarVisible)
                    ? ORDER_BAR_H / (state->isOvernight ? 2 : 1)
                    : 0;
@@ -1273,7 +1202,7 @@ static int Market_OrdersPanelH(const TsState* state) {
 
 static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
     RECT rc; GetClientRect(hWnd, &rc);
-    const int capH       = Market_CaptionH(hWnd);
+    const int capH       = Caption_H(hWnd);
     const int bodyH      = Market_BodyH(hWnd, state);
     const int splitThick = 4;
 
@@ -1772,7 +1701,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     SelectObject(hdc, hOldPen);*/
 
     // Blit the composed header to the window in a single operation
-    BitBlt(hdcOrig, 0, Market_CaptionH(hWnd), rc.right, HEADER_H, hdc, 0, 0, SRCCOPY);
+    BitBlt(hdcOrig, 0, Caption_H(hWnd), rc.right, HEADER_H, hdc, 0, 0, SRCCOPY);
 
     SelectObject(hdcMem, hbmOld); // deselect; DC/bitmap are cached and reused next paint
 
@@ -1811,7 +1740,7 @@ static void Market_Minimize(HWND hWnd, TsState* state) {
     RECT windowRect, clientRect; 
     GetClientRect(hWnd, &clientRect);
     GetWindowRect(hWnd, &windowRect);
-    MoveWindow(hWnd, windowRect.left, windowRect.top, windowMarketWidth, state->minimized ?     (windowRect.bottom - windowRect.top) - clientRect.bottom + Market_CaptionH(hWnd) + HEADER_H : windowMarketHeight
+    MoveWindow(hWnd, windowRect.left, windowRect.top, windowMarketWidth, state->minimized ?     (windowRect.bottom - windowRect.top) - clientRect.bottom + Caption_H(hWnd) + HEADER_H : windowMarketHeight
 , TRUE);    state->marketHdrDirty = true;
     Market_Layout(hWnd, state);
 }
@@ -1869,7 +1798,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         marketStates[hWnd] = state;
 
-        Market_UpdateFrameMargins(hWnd);
+        Caption_UpdateMargins(hWnd);
         SetWindowPos(hWnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
         // ── Lists ─────────────────────────────────────────────────────────────
@@ -1967,50 +1896,20 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         Market_Layout(hWnd, state);
         break;
     }
-    // Client area covers the caption (keep side/bottom borders as-is).
     case WM_NCCALCSIZE:
-        if (wParam) {
-            auto* p = (NCCALCSIZE_PARAMS*)lParam;
-            LONG origTop = p->rgrc[0].top;
-            DefWindowProc(hWnd, message, wParam, lParam);
-            p->rgrc[0].top = origTop;
-            return 0;
-        }
-        break;
-
-    case WM_NCHITTEST: {
-        LRESULT dwm = 0;
-        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
-        POINT cpt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        ScreenToClient(hWnd, &cpt);
-        if (cpt.y >= 0 && cpt.y < Market_CaptionH(hWnd)) return HTCAPTION;
-        break;
-    }
-
+    case WM_NCHITTEST:
     case WM_NCMOUSEMOVE:
     case WM_NCLBUTTONDOWN:
     case WM_NCLBUTTONUP:
-    case WM_NCMOUSELEAVE: {
-        LRESULT dwm = 0;
-        if (DwmDefWindowProc(hWnd, message, wParam, lParam, &dwm)) return dwm;
+    case WM_NCMOUSELEAVE:
+    case WM_ERASEBKGND: {
+        LRESULT result = 0;
+        if (Caption_HandleNcMessages(hWnd, message, wParam, lParam, result)) return result;
         break;
     }
 
-    case WM_ERASEBKGND: {
-        HDC hdc = (HDC)wParam;
-        RECT rc;
-        GetClientRect(hWnd, &rc);
-        RECT cap = rc;
-        cap.bottom = Market_CaptionH(hWnd);
-        FillRect(hdc, &cap, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        RECT rest = rc;
-        rest.top = cap.bottom;
-        FillRect(hdc, &rest, darkMode ? hDarkBrush : (HBRUSH)(COLOR_BTNFACE + 1));
-        return 1;
-    }
-
     case WM_SIZE:
-        Market_UpdateFrameMargins(hWnd);
+        Caption_UpdateMargins(hWnd);
         break;
 
     case WM_PAINT:
@@ -2277,7 +2176,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state && state->orderBarVisible && state->marketHdrDirty)
                 Market_UpdateOrderRiskLabel(state);
             if (state && state->marketHdrDirty) {
-                RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Market_CaptionH(hWnd) + HEADER_H;
+                RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Caption_H(hWnd) + HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
                 state->marketHdrDirty = false;
             }
@@ -2428,7 +2327,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 Market_Layout(hWnd, state);
                 state->l1Info = TradingAPI::L1Book{};
                 state->volRate.clear();      // stale on disconnect, avoid a phantom ratio off a frozen history
-                RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Market_CaptionH(hWnd) + HEADER_H;
+                RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Caption_H(hWnd) + HEADER_H;
                 InvalidateRect(hWnd, &hdrRc, FALSE);
             }
         }
@@ -2436,9 +2335,9 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     }
 
     case WM_THEMECHANGED:
-        if (state && state->hCaptionTheme) {
-            CloseThemeData(state->hCaptionTheme);
-            state->hCaptionTheme = NULL;
+        if (state && state->caption.theme) {
+            CloseThemeData(state->caption.theme);
+            state->caption.theme = NULL;
         }
         if (state) state->marketHdrDirty = true;
         break;
@@ -2447,7 +2346,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (state && LOWORD(lParam) == HTCLIENT) {
             POINT pt; GetCursorPos(&pt); ScreenToClient(hWnd, &pt);
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
-            pt.y -= Market_CaptionH(hWnd);   // header rects are stored header-local
+            pt.y -= Caption_H(hWnd);   // header rects are stored header-local
             if (hit == 1 || hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
             if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt) || PtInRect(&state->locateRect, pt) || PtInRect(&state->speakerRect, pt) || PtInRect(&state->moonRect, pt)) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
@@ -2465,7 +2364,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (state->dragMode != 0) {
                 SetCapture(hWnd);
             } else {
-                POINT pt = { x, y - Market_CaptionH(hWnd) };   // header rects are header-local
+                POINT pt = { x, y - Caption_H(hWnd) };   // header rects are header-local
                 if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->speakerRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
                 } else if (PtInRect(&state->flaqRect, pt)) {
@@ -2498,7 +2397,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 
     case WM_MOUSEMOVE: {
         if (state && state->dragMode != 0) {
-            const int capH  = Market_CaptionH(hWnd);
+            const int capH  = Caption_H(hWnd);
             const int bodyH = Market_BodyH(hWnd, state);
             int y = (short)HIWORD(lParam) - capH - HEADER_H;
 
@@ -2515,7 +2414,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             Market_Layout(hWnd, state, false);
             RECT bodyRc;
             GetClientRect(hWnd, &bodyRc);
-            bodyRc.top = Market_CaptionH(hWnd) + HEADER_H;
+            bodyRc.top = Caption_H(hWnd) + HEADER_H;
             InvalidateRect(hWnd, &bodyRc, FALSE);
         }
         break;
@@ -2546,7 +2445,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
             if (state->hbmHeader)    DeleteObject(state->hbmHeader);
             if (state->hdcHeaderMem) DeleteDC(state->hdcHeaderMem);
-            Market_FreeCaptionCache(state, true);
+            state->caption.Free(true);
             state->hOrderLabel = state->hOrderPrice = state->hOrderStopPrice = state->hOrderProfitPrice = state->hOrderQty = state->hTotalLabel = state->hTotalQtyLabel = NULL;
             state->hOptProfitTarget = state->hOptStopTarget = state->hProfitLossPercentLabel = state->hProfitLossValueLabel = state->hRRLabel = state->hOptQtyLabel = state->hOptStopLabel = NULL;
             // Row controls are children of hWnd, DestroyWindow(hWnd) tears them

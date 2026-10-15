@@ -210,14 +210,7 @@ struct TsState {
     HDC     hdcHeaderMem = NULL;
     HBITMAP hbmHeader    = NULL;
 
-    // ── Cached caption double-buffer + theme handle (Market_PaintCaption) ──
-    HDC     hdcCaptionMem = NULL;
-    HBITMAP hbmCaption    = NULL;
-    HBITMAP hbmCaptionOld = NULL;   // bitmap originally selected into hdcCaptionMem
-    void*   captionBits   = nullptr;
-    int     captionBufW   = 0;
-    int     captionBufH   = 0;
-    HTHEME  hCaptionTheme = NULL;
+    CaptionCache caption;
 };
 // ── Market Windows States ─────────────────────
 static std::unordered_map<HWND, TsState*> marketStates;
