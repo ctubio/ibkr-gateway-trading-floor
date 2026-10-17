@@ -16,14 +16,12 @@
 #include "gui/orders.h"
 #include "gui/coins.h"
 
-struct WindowClassInfo {
+static const struct WindowClassInfo {
     WNDPROC proc;
     const char* name;
     int icon;
     bool popup;
-};
-
-static const WindowClassInfo windowClasses[] = {
+} windowClasses[] = {
     { WndProcCoins,              COINS_CLASS_NAME,                101, false },
     { WndProcExchange,           COINS_EXCHANGE_CLASS_NAME,       106, true  },
     { WndProcAlertsEditor,       ALERTS_EDITOR_CLASS_NAME,        102, true  },
