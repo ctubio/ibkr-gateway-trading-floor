@@ -53,15 +53,14 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
                 GetWindowPlacement(hFlaggedWnd, &wp);
                 SaveWinPositionRaw(key,
                     wp.rcNormalPosition.left, wp.rcNormalPosition.top,
-                    wp.rcNormalPosition.right  - wp.rcNormalPosition.left,
-                    wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
+                    windowMarketWidth, windowMarketHeight);
                 DestroyWindow(hFlaggedWnd); // synchronous -- runs WM_DESTROY, which re-flags itself
             }
         } else {
             // Flagged window is already closed -- its slot is free.
             int fx = 0, fy = 0, fw = 0, fh = 0;
             if (LoadWinPosition(flaggedKey.c_str(), fx, fy, fw, fh))
-                SaveWinPositionRaw(key, fx, fy, fw, fh);
+                SaveWinPositionRaw(key, fx, fy, windowMarketWidth, windowMarketHeight);
         }
     }
 

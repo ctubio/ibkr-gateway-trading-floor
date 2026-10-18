@@ -29,11 +29,18 @@
 // ── Config ────────────────────────────────────────────────────────────────────
 
 static constexpr unsigned short HTTP_SERVER_PORT = 4011;
+static constexpr size_t HTTP_MAX_BODY_SIZE = 64 * 1024;
+static constexpr size_t HTTP_CLIENT_WORKER_COUNT = 8;
+static constexpr size_t HTTP_CLIENT_QUEUE_LIMIT = 16;
 
 // ── Internal state ────────────────────────────────────────────────────────────
 
 static SOCKET            httpListenSocket = INVALID_SOCKET;
 static std::thread       httpThread;
+static std::vector<std::thread> httpClientWorkers;
+static std::queue<SOCKET> httpClientQueue;
+static std::mutex        httpClientQueueMutex;
+static std::condition_variable httpClientQueueCv;
 static std::atomic<bool> httpRunning{ false };
 
 // ── JSON helpers ──────────────────────────────────────────────────────────────
@@ -155,7 +162,7 @@ static std::string MakeMethodNotAllowed() {
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
 
 // GET /chart/year/{SYMBOL}  →  plain-text CSV of historical bars. Blocks this
-// connection's server thread (never the UI thread) until the async TWS response
+// connection's worker thread (never the UI thread) until the async TWS response
 // arrives or times out.
 static std::string HandleGetHistory(const std::string& symbol, const std::string& timeframe) {
     auto rows = api().getHistoricalDataSync(symbol, timeframe);
@@ -924,9 +931,28 @@ static std::string News_CleanWhitespace(const std::string& text) {
 
 // Fetches https://tradertv-live.beehiiv.com/ and returns the raw HTML, or ""
 // on any network failure.
+static bool News_SetInternetTimeouts(HINTERNET hInet) {
+    DWORD timeout = 10000;
+    for (DWORD option : { INTERNET_OPTION_CONNECT_TIMEOUT,
+                          INTERNET_OPTION_SEND_TIMEOUT,
+                          INTERNET_OPTION_RECEIVE_TIMEOUT }) {
+        if (!InternetSetOptionA(hInet, option, &timeout, sizeof(timeout))) {
+            DWORD error = GetLastError();
+            LogDebug("News: failed to set WinInet timeout (error " +
+                     std::to_string(error) + ")");
+            return false;
+        }
+    }
+    return true;
+}
+
 static std::string News_FetchHomepageHtml() {
     HINTERNET hInet = InternetOpenA("Mozilla/5.0 (compatible; OpenClawBot/1.0)", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInet) return "";
+    if (!News_SetInternetTimeouts(hInet)) {
+        InternetCloseHandle(hInet);
+        return "";
+    }
 
     HINTERNET hConn = InternetOpenUrlA(hInet, "https://tradertv-live.beehiiv.com/", NULL, 0,
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
@@ -1003,6 +1029,8 @@ static std::string News_BuildUrl(int year, int month, int day) {
 
     static std::map<std::string, std::string> s_listingCache;
     static ULONGLONG s_listingFetchedAt = 0;
+    static std::mutex s_listingCacheMutex;
+    std::lock_guard<std::mutex> lock(s_listingCacheMutex);
     ULONGLONG now = GetTickCount64();
     if (s_listingFetchedAt == 0 || now - s_listingFetchedAt > 60000ULL) {
         std::string html = News_FetchHomepageHtml();
@@ -1025,6 +1053,10 @@ static std::string News_BuildUrl(int year, int month, int day) {
 static std::string News_FetchContent(const std::string& url) {
     HINTERNET hInet = InternetOpenA("Mozilla/5.0 (compatible; OpenClawBot/1.0)", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInet) return "";
+    if (!News_SetInternetTimeouts(hInet)) {
+        InternetCloseHandle(hInet);
+        return "";
+    }
 
     HINTERNET hConn = InternetOpenUrlA(hInet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
     if (!hConn) { InternetCloseHandle(hInet); return ""; }
@@ -1194,7 +1226,7 @@ static void ForwardTradeToCoins(const std::string& symbol, const std::string& si
         profitPriceStr = ",\"profitPrice\":" + std::format("{:.2f}", profitPrice);
     }
     // Build JSON payload
-    std::string payload = std::format(R"({{"symbol":"{}", "side":"{}", "quantity":{:.0f}, "price":{:.2f}, "stopPrice":{:.2f}{}}})", symbol, side, quantity, price, stopPrice, profitPriceStr);
+    std::string payload = std::format(R"({{"symbol":"{}", "side":"{}", "quantity":{:.0f}, "price":{:.2f}, "stopPrice":{:.2f}{}}})", JsonEscapeString(symbol), side, quantity, price, stopPrice, profitPriceStr);
 
     // Build the raw HTTP POST request
     // Host: 192.168.1.105:2025  Path: /paper?action=place_trade
@@ -1223,16 +1255,43 @@ static void ForwardTradeToCoins(const std::string& symbol, const std::string& si
     addr.sin_port   = htons((u_short)port);
     inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
 
-    // Set a short connect timeout (2 s) so we don't block the server thread
-    DWORD timeout = 2000;
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
-
-    if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
-        LogDebug("ForwardTrade: connect failed to " + host);
+    u_long mode = 1;
+    if (ioctlsocket(sock, FIONBIO, &mode) == SOCKET_ERROR) {
+        LogDebug("ForwardTrade: failed to set non-blocking socket mode");
         closesocket(sock);
         return;
     }
+
+    // Bound connect time explicitly; SO_SNDTIMEO does not cover connect().
+    ::connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    fd_set writeSet, errSet;
+    FD_ZERO(&writeSet);
+    FD_SET(sock, &writeSet);
+    FD_ZERO(&errSet);
+    FD_SET(sock, &errSet);
+    timeval connectTimeout{ 2, 0 };
+    int sel = select(0, nullptr, &writeSet, &errSet, &connectTimeout);
+    int connectError = 0;
+    int connectErrorSize = sizeof(connectError);
+    if (sel <= 0 || !FD_ISSET(sock, &writeSet) || FD_ISSET(sock, &errSet) ||
+        getsockopt(sock, SOL_SOCKET, SO_ERROR,
+                   reinterpret_cast<char*>(&connectError), &connectErrorSize) == SOCKET_ERROR ||
+        connectError != 0) {
+        LogDebug("ForwardTrade: connect failed or timed out to " + host);
+        closesocket(sock);
+        return;
+    }
+
+    mode = 0;
+    if (ioctlsocket(sock, FIONBIO, &mode) == SOCKET_ERROR) {
+        LogDebug("ForwardTrade: failed to restore blocking socket mode");
+        closesocket(sock);
+        return;
+    }
+
+    DWORD timeout = 2000;
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
     send(sock, request.c_str(), (int)request.size(), 0);
 
@@ -1260,9 +1319,22 @@ static std::string HandlePostTrade(const std::string& body) {
             "{\"error\":\"missing required fields: symbol, side, quantity, price\"}");
     }
 
+    if (symbol.size() > 16) {
+        return MakeHttpResponse(400, "Bad Request",
+            "{\"error\":\"symbol must contain only letters, digits, . or - and be at most 16 characters\"}");
+    }
+    for (char& c : symbol) {
+        const unsigned char value = static_cast<unsigned char>(c);
+        if (!std::isalnum(value) && value != '.' && value != '-') {
+            return MakeHttpResponse(400, "Bad Request",
+                "{\"error\":\"symbol must contain only letters, digits, . or - and be at most 16 characters\"}");
+        }
+        c = static_cast<char>(std::toupper(value));
+    }
+
     // Normalise
-    std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::toupper);
-    std::transform(side.begin(),   side.end(),   side.begin(),   ::toupper);
+    std::transform(side.begin(), side.end(), side.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     if (side != "BUY" && side != "SELL") {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"side must be BUY or SELL\"}");
@@ -1292,7 +1364,7 @@ static std::string HandlePostTrade(const std::string& body) {
     }
     if (quantity > 10.0) {
         return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"quantity must be less than 10\"}");
+            "{\"error\":\"quantity can't be greater than 10\"}");
     }
     if (stopPrice <= 0.0 && side == "BUY") {
         return MakeHttpResponse(400, "Bad Request",
@@ -1479,6 +1551,7 @@ static std::string RouteRequest(const std::string& rawRequest) {
 static void HandleHttpClient(SOCKET client) {
     std::string buf;
     buf.reserve(2048);
+    std::string response;
     char tmp[1024];
     while (true) {
         int n = recv(client, tmp, sizeof(tmp) - 1, 0);
@@ -1494,20 +1567,46 @@ static void HandleHttpClient(SOCKET client) {
                 if (clPos == std::string::npos) clPos = buf.find("content-length:");
                 if (clPos != std::string::npos) {
                     size_t valStart = buf.find_first_not_of(" \t", clPos + 15);
-                    size_t valEnd   = buf.find('\r', valStart);
-                    int contentLen = 0;
-                    try {
-                        contentLen = std::stoi(buf.substr(valStart, valEnd - valStart));
-                    } catch (...) {
-                        contentLen = 0;
+                    size_t valEnd = buf.find('\r', valStart);
+                    size_t contentLen = 0;
+                    bool invalidLength = valStart == std::string::npos || valEnd == std::string::npos;
+                    bool oversized = false;
+                    bool hasDigit = false;
+                    for (size_t i = valStart; !invalidLength && i < valEnd; ++i) {
+                        char c = buf[i];
+                        if (c == ' ' || c == '\t') {
+                            for (++i; i < valEnd; ++i) {
+                                if (buf[i] != ' ' && buf[i] != '\t') invalidLength = true;
+                            }
+                            break;
+                        }
+                        if (c < '0' || c > '9') {
+                            invalidLength = true;
+                            break;
+                        }
+                        size_t digit = static_cast<size_t>(c - '0');
+                        hasDigit = true;
+                        if (contentLen > (HTTP_MAX_BODY_SIZE - digit) / 10) {
+                            oversized = true;
+                            break;
+                        }
+                        contentLen = contentLen * 10 + digit;
                     }
-                    size_t hdEnd    = buf.find("\r\n\r\n") + 4;
-                    // Keep reading until we have the full body
-                    while ((int)(buf.size() - hdEnd) < contentLen) {
-                        int m = recv(client, tmp, sizeof(tmp) - 1, 0);
-                        if (m <= 0) break;
-                        tmp[m] = '\0';
-                        buf.append(tmp, m);
+                    if (!hasDigit) invalidLength = true;
+                    if (invalidLength) {
+                        response = MakeHttpResponse(400, "Bad Request",
+                            "{\"error\":\"invalid Content-Length\"}");
+                    } else if (oversized || contentLen > HTTP_MAX_BODY_SIZE) {
+                        response = MakeHttpResponse(413, "Payload Too Large",
+                            "{\"error\":\"request body too large\"}");
+                    } else {
+                        size_t hdEnd = buf.find("\r\n\r\n") + 4;
+                        while (buf.size() - hdEnd < contentLen) {
+                            int m = recv(client, tmp, sizeof(tmp) - 1, 0);
+                            if (m <= 0) break;
+                            tmp[m] = '\0';
+                            buf.append(tmp, m);
+                        }
                     }
                 }
             }
@@ -1517,7 +1616,7 @@ static void HandleHttpClient(SOCKET client) {
     }
 
     if (!buf.empty()) {
-        std::string response = RouteRequest(buf);
+        if (response.empty()) response = RouteRequest(buf);
         send(client, response.c_str(), (int)response.size(), 0);
     }
 
@@ -1539,6 +1638,47 @@ static void HttpServerLoop() {
         SOCKET client = accept(httpListenSocket, nullptr, nullptr);
         if (client == INVALID_SOCKET) continue;
 
+        DWORD timeout = 5000;
+        if (setsockopt(client, SOL_SOCKET, SO_RCVTIMEO,
+                       reinterpret_cast<const char*>(&timeout), sizeof(timeout)) == SOCKET_ERROR ||
+            setsockopt(client, SOL_SOCKET, SO_SNDTIMEO,
+                       reinterpret_cast<const char*>(&timeout), sizeof(timeout)) == SOCKET_ERROR) {
+            LogDebug("HTTP API: failed to set client socket timeouts");
+            closesocket(client);
+            continue;
+        }
+
+        bool queued = false;
+        {
+            std::lock_guard<std::mutex> lock(httpClientQueueMutex);
+            if (httpRunning.load() && httpClientQueue.size() < HTTP_CLIENT_QUEUE_LIMIT) {
+                httpClientQueue.push(client);
+                queued = true;
+            }
+        }
+        if (queued) {
+            httpClientQueueCv.notify_one();
+        } else {
+            static const std::string busyResponse = MakeHttpResponse(
+                503, "Service Unavailable", "{\"error\":\"server busy\"}");
+            send(client, busyResponse.c_str(), static_cast<int>(busyResponse.size()), 0);
+            closesocket(client);
+        }
+    }
+}
+
+static void HttpClientWorkerLoop() {
+    while (true) {
+        SOCKET client = INVALID_SOCKET;
+        {
+            std::unique_lock<std::mutex> lock(httpClientQueueMutex);
+            httpClientQueueCv.wait(lock, [] {
+                return !httpRunning.load() || !httpClientQueue.empty();
+            });
+            if (!httpRunning.load()) return;
+            client = httpClientQueue.front();
+            httpClientQueue.pop();
+        }
         HandleHttpClient(client);
     }
 }
@@ -1580,7 +1720,23 @@ static bool HttpServer_Start() {
     }
 
     httpRunning.store(true);
-    httpThread = std::thread(HttpServerLoop);
+    try {
+        for (size_t i = 0; i < HTTP_CLIENT_WORKER_COUNT; ++i)
+            httpClientWorkers.emplace_back(HttpClientWorkerLoop);
+        httpThread = std::thread(HttpServerLoop);
+    } catch (const std::exception& e) {
+        LogDebug("HTTP API: failed to start server threads: " + std::string(e.what()));
+        httpRunning.store(false);
+        closesocket(httpListenSocket);
+        httpListenSocket = INVALID_SOCKET;
+        httpClientQueueCv.notify_all();
+        for (std::thread& worker : httpClientWorkers) {
+            if (worker.joinable()) worker.join();
+        }
+        httpClientWorkers.clear();
+        WSACleanup();
+        return false;
+    }
 
     LogDebug(std::string("HTTP API listening on 127.0.0.1:") +
              std::to_string(HTTP_SERVER_PORT));
@@ -1598,6 +1754,19 @@ static void HttpServer_Stop() {
     if (httpThread.joinable()) {
         httpThread.join();
     }
+
+    {
+        std::lock_guard<std::mutex> lock(httpClientQueueMutex);
+        while (!httpClientQueue.empty()) {
+            closesocket(httpClientQueue.front());
+            httpClientQueue.pop();
+        }
+    }
+    httpClientQueueCv.notify_all();
+    for (std::thread& worker : httpClientWorkers) {
+        if (worker.joinable()) worker.join();
+    }
+    httpClientWorkers.clear();
 
     WSACleanup();
 }
