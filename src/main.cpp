@@ -55,6 +55,8 @@ public:
             }
         }
 
+        Alerts_Reload();
+
         StartCoins(hInst_);
 
         Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartDebugLog);

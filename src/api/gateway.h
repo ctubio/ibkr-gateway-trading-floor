@@ -77,6 +77,15 @@
 #define WM_DEBUG_LOG_APPEND     (WM_USER + 21)
 #define WM_ACTIVATE_ORDER_ROW   (WM_USER + 22)
 
+struct AlertPopupData {
+    std::string title;
+    std::string msg;
+    std::string symbol;
+    double shares;
+    double price;
+    int conId;
+    bool isUp;
+};
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 #define COINS_CLR_GREEN       RGB( 18, 220,  18)
@@ -275,6 +284,12 @@ public:
         int         conId = 0;   // 0 = no associated symbol (double-click no-ops)
         std::string symbol;
     };
+    struct PriceAlert {
+        std::string symbol;
+        int conId = 0;
+        double up = 0.0;
+        double down = 0.0;
+    };
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     TradingAPI();
@@ -339,6 +354,9 @@ public:
     // IS a held position (no-ops on top of the existing subscription).
     // Deliberately skips PnLSingle/L2/tick-by-tick, those stay Market-window-only.
     void watchSymbol(int conId, const std::string& symbol);
+    // Replaces active price alerts and starts L1 watches for their symbols.
+    // resetConId re-arms that symbol's one-shot alerts after an edit.
+    void setPriceAlerts(const std::vector<PriceAlert>& alerts, int resetConId = 0);
 
     // ── Level 1 (market window) ────────────────────────────────
 

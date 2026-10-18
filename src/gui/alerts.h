@@ -9,7 +9,8 @@
 //
 // Values are stored in the registry under a dedicated "Alerts" subkey (see
 // Settings_Alerts_* in registry.h), keyed by SYMBOL_CONID_UP / SYMBOL_CONID_DOWN.
-// Nothing here checks live prices or fires notifications yet, that's a later step.
+// Live-price alert evaluation runs in the API market-data callback so alerts
+// continue to fire even when the Diamonds window is closed.
 
 #define ID_ALERTS_UP_EDIT    5301
 #define ID_ALERTS_DOWN_EDIT  5302
@@ -27,16 +28,6 @@ static HWND  hScreenFlashOverlay = NULL;
 static ULONGLONG s_flashStartTime   = 0;
 static int   s_flashDurationMs     = 800;
 
-struct AlertPopupData {
-    std::string title;
-    std::string msg;
-    std::string symbol;
-    double shares;
-    double price;
-    int conId;
-    bool isUp;
-};
-
 struct AlertsEditState {
     std::string symbol;   // symbol currently loaded into the popup
     int conId = 0;        // conId currently loaded into the popup
@@ -52,10 +43,24 @@ void Market_NotifyAlertsChanged(int conId) {
     }
 }
 
+static void Alerts_Reload(int resetConId = 0) {
+    std::vector<TradingAPI::PriceAlert> alerts;
+    for (const auto& entry : Settings_Alerts_LoadAll()) {
+        TradingAPI::PriceAlert alert;
+        alert.symbol = entry.symbol;
+        alert.conId = entry.conId;
+        alert.up = std::atof(entry.upStr.c_str());
+        alert.down = std::atof(entry.downStr.c_str());
+        alerts.push_back(std::move(alert));
+    }
+    api().setPriceAlerts(alerts, resetConId);
+}
+
 // Posts WM_ALERTS_CHANGED directly to the two window classes that actually
 // handle it (WndProcMarket / WndProcDiamonds) instead of enumerating every
 // top-level window in the process.
 static void Alerts_NotifyChanged(int conId) {
+    Alerts_Reload(conId);
     HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
     if (hDiamonds && IsWindow(hDiamonds))
         PostMessage(hDiamonds, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);

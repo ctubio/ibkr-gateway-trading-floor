@@ -139,9 +139,6 @@ struct DiamondsTitleEvent {
 };
 
 struct DiamondsState {
-    // Ephemeral storage for triggered alerts to prevent spamming
-    std::unordered_set<int> firedAlertsUp;
-    std::unordered_set<int> firedAlertsDown;
     // Bitmask: bit N set means group N is currently visible.  Default = all visible.
     UINT checkedTabs = 0x7;
     // Maps conId → assigned group (DTAB_ALL = untagged = shown when bit 0 is set).
@@ -583,7 +580,7 @@ static void Diamonds_CleanupStaleDividends() {
         RegDelete("Dividends", name.c_str());
 }
 
-static void Disamonds_SetTime(const std::string& time_str) {
+static void Diamonds_SetTime(const std::string& time_str) {
     HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
     if (hDiamonds && IsWindow(hDiamonds)) {
         SetWindowTextA(GetDlgItem(hDiamonds, ID_DIAMONDS_ROW_TIMECLOCK), time_str.c_str());
@@ -925,40 +922,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
 
     setCol(DCOL_LAST, t.last, 2, true);
 
-    // Alert Up Trigger (Alert High is equal to or lower than Last)
-    if (row.upAlert > 0.0 && t.last >= row.upAlert) {
-        if (diamondsState.firedAlertsUp.find(conId) == diamondsState.firedAlertsUp.end()) {
-            diamondsState.firedAlertsUp.insert(conId); // Mark as fired
-            //std::string msg = std::format("Last: {:.2f}\n\nAlert: {:.2f}", t.last, alertHigh);
-            std::string msg = FormatFixed(t.last, 2);
-            std::string title = row.symbol + ": Alert UP!";
-            HWND hMain = FindWindowA(COINS_CLASS_NAME, NULL);
-            if (hMain) {
-                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, true};
-                if (!PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data)) {
-                    delete data;
-                }
-            }
-        }
-    }
-
-    // Alert Down Trigger (Alert Low is equal to or higher than Last)
-    if (row.downAlert > 0.0 && t.last <= row.downAlert) {
-        if (diamondsState.firedAlertsDown.find(conId) == diamondsState.firedAlertsDown.end()) {
-            diamondsState.firedAlertsDown.insert(conId); // Mark as fired
-            //std::string msg = std::format("Alert: {:.2f}\n\nLast: {:.2f}", alertLow, t.last);
-            std::string msg = FormatFixed(t.last, 2);
-            std::string title = row.symbol + ": Alert DOWN!";
-            HWND hMain = FindWindowA(COINS_CLASS_NAME, NULL);
-            if (hMain) {
-                AlertPopupData* data = new AlertPopupData{title, msg, row.symbol, shares, t.last, conId, false};
-                if (!PostMessage(hMain, WM_SHOW_ALERT, 0, (LPARAM)data)) {
-                    delete data;
-                }
-            }
-        }
-    }
-
     // ── VWAP: display the VWAP price, but sort by (Last - VWAP) so the
     // column ranks by how far price has drifted from VWAP, not by VWAP itself. ──
     double vwapDiff = (t.vwap > 0.0 && t.last > 0.0) ? t.last - t.vwap : 0.0;
@@ -1109,7 +1072,7 @@ static void Diamonds_FlushDirty(HWND hWnd) {
     if (!hList) return;
 
     // 1) Rebuild cache rows for every symbol that ticked (visible or not):
-    //    alert triggers and the sparkline history depend on this running for all of them.
+    //    the sparkline history depends on this running for all of them.
     if (!diamondsState.dirtyMarket.empty()) {
         std::unordered_set<int> pending;
         pending.swap(diamondsState.dirtyMarket);
@@ -1461,9 +1424,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         int conId = (int)lParam;
         if (!conId) break;
         
-        diamondsState.firedAlertsUp.erase(conId);
-        diamondsState.firedAlertsDown.erase(conId);
-
         Diamonds_RefreshAlertCache();
         Diamonds_Repopulate(hWnd);
         InvalidateRect(hWnd, NULL, TRUE);

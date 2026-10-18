@@ -197,8 +197,7 @@ bool Settings_Dividends_Load(const std::string& symbol, int conId, double& annua
 // Stored under a dedicated "Alerts" subkey, one REG_SZ value per direction:
 //   SYMBOL_CONID_UP, SYMBOL_CONID_DOWN
 // A missing value means no alert is set for that direction. Values are saved
-// as-typed (no parsing/validation, no live-price comparison yet, that's a
-// later feature).
+// as-typed and parsed by the API's live-price alert evaluator.
 
 struct AlertEntry {
     std::string symbol;
