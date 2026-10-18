@@ -1179,6 +1179,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         }
 
         case WM_ACCOUNT_SUMMARY:
+            api().ackAccountSummary();
             Coins_UpdateLabels(hWnd);
             break;
 

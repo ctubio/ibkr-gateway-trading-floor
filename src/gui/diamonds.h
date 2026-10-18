@@ -1037,7 +1037,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
         // PnL columns for the first open (before WM_PNL_SINGLE arrives).
         // This runs for both held positions AND watch-only (quarantine) symbols.
         TradingAPI::L1Book tickInfo;
-        if (api().getMarketData(pos.conId, tickInfo)) {
+        if (api().getMarketData(pos.conId, tickInfo, TradingAPI::L1Consumer::Diamonds)) {
             Diamonds_UpdateMarketCols(pos.conId, tickInfo);
         }
 
@@ -1078,7 +1078,7 @@ static void Diamonds_FlushDirty(HWND hWnd) {
         pending.swap(diamondsState.dirtyMarket);
         for (int conId : pending) {
             TradingAPI::L1Book fresh;
-            if (!api().getMarketData(conId, fresh)) continue;
+            if (!api().getMarketData(conId, fresh, TradingAPI::L1Consumer::Diamonds)) continue;
             Diamonds_UpdateMarketCols(conId, fresh);
             if (fresh.last > 0.0)
                 diamondsState.sparklines[conId].AddPrice(fresh.last);
@@ -1416,6 +1416,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_DIAMONDS_UPDATE: {
+        api().ackDiamondsUpdate();
         Diamonds_Repopulate(hWnd);
         break;
     }
@@ -1446,6 +1447,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_PNL_SINGLE: {
         int conId = (int)lParam;
         if (!conId) break;
+        api().ackPnl(conId, TradingAPI::L1Consumer::Diamonds);
         Diamonds_UpdatePnLCols(hWnd, conId);
         // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single PnL tick!
         break;
@@ -1579,7 +1581,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     double quickLastPrice = 0.0;
                     {
                         TradingAPI::L1Book quickInfo;
-                        if (conId > 0 && api().getMarketData(conId, quickInfo)) quickLastPrice = quickInfo.last;
+                        if (conId > 0 && api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds)) quickLastPrice = quickInfo.last;
                     }
                     std::string sellLabel = sym + (
                         (quickLastPrice > 0.0)
@@ -1652,20 +1654,20 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     } else if (cmd == 300 && conId > 0) {
                         // Quick BUY placeholder: 1 share @ $1.00.
                         TradingAPI::L1Book quickInfo;
-                        if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
+                        if (api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds) && quickInfo.last > 0.0) {
                             double buyPrice = quickInfo.last;
                             SubmitUnsentOrderAsync(conId, sym, "BUY", false, 1.0, buyPrice, 0.0, 0.0, 0.0);
                         }
                     } else if (cmd == 301 && conId > 0) {
                         // Quick SELL placeholder: 1 share @ 2x last price.
                         TradingAPI::L1Book quickInfo;
-                        if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
+                        if (api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds) && quickInfo.last > 0.0) {
                             double sellPrice = quickInfo.last;
                             SubmitUnsentOrderAsync(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0);
                         }
                     } else if (cmd == 302) {
                         TradingAPI::L1Book quickInfo;
-                        api().getMarketData(conId, quickInfo);
+                        api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds);
                         StartAlertEditor(sym, conId, quickInfo.last); // quickInfo.last is fine as zero here
                     }
                 }

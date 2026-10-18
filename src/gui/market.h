@@ -2094,7 +2094,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         int conId = (int)lParam;
         if (!conId || !state || state->conId != conId) break;
         TradingAPI::L1Book fresh;
-        if (api().getMarketData(state->conId, fresh)) {
+        if (api().getMarketData(state->conId, fresh, TradingAPI::L1Consumer::Market)) {
             if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
             if (fresh.last      > 0.0) state->sparkline.AddPrice(state->l1Info.last);
             if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
@@ -2167,6 +2167,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_PNL_SINGLE: {
         int conId = (int)lParam;
         if (!conId || !state || state->conId != conId) break;
+        api().ackPnl(state->conId, TradingAPI::L1Consumer::Market);
         {
             std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
             auto& pm = api().getPortfolioMap();
@@ -2427,7 +2428,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
 
     case WM_MARKET_ORDERS_UPDATE:
-        if (state) Market_SyncOrderRows(hWnd, state);
+        if (state) {
+            api().ackOrdersChanged(state->conId);
+            Market_SyncOrderRows(hWnd, state);
+        }
         break;
 
     case WM_API_UPDATE: {

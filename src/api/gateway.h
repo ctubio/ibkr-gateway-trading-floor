@@ -290,6 +290,8 @@ public:
         double up = 0.0;
         double down = 0.0;
     };
+    enum class L1Consumer { None, Market, Diamonds };
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     TradingAPI();
@@ -319,6 +321,9 @@ public:
     double getUnrealizedPnL() const;
     double getRealizedPnL()   const;
     std::string getAccountNumber();
+    void ackAccountSummary();
+    void ackOrdersChanged(int conId);
+    void ackDiamondsUpdate();
 
     // ── Orders ────────────────────────────────────────────────────────────────
 
@@ -360,8 +365,8 @@ public:
 
     // ── Level 1 (market window) ────────────────────────────────
 
-    bool getMarketData(int conId, L1Book& out);
-    
+    bool getMarketData(int conId, L1Book& out, L1Consumer who = L1Consumer::None);
+    void ackPnl(int conId, L1Consumer who);
 
     // ── Symbol search ─────────────────────────────────────────────────────────
 
