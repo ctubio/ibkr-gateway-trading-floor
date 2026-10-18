@@ -30,6 +30,15 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_LOCK               4021
 #define ID_SETTINGS_ADDRESS            4022
 
+static void UpdateDarkModeSettingCheckbox(bool checked) {
+    HWND hSettings = FindWindowA(SETTINGS_CLASS_NAME, NULL);
+    if (!hSettings || !IsWindow(hSettings)) return;
+
+    HWND hCheckbox = GetDlgItem(hSettings, ID_SETTINGS_DARK_MODE);
+    if (hCheckbox)
+        SendMessage(hCheckbox, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+
 static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 
 // ─── Debug Log ────────────────────────────────────────────────────────────────

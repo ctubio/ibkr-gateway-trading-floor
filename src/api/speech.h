@@ -139,7 +139,8 @@ static std::vector<TtsVoiceEntry> TTS_EnumerateVoices() {
         if (FAILED(SpEnumTokens(categoryId, NULL, NULL, &pEnum))) return;
 
         ISpObjectToken* pToken = nullptr;
-        while (SUCCEEDED(pEnum->Next(1, &pToken, NULL)) && pToken) {
+        ULONG fetched = 0;
+        while (pEnum->Next(1, &pToken, &fetched) == S_OK && fetched == 1 && pToken) {
             TtsTokenInfo info = TTS_ReadTokenInfo(pToken);
 
             if (info.hasId) {
@@ -155,6 +156,7 @@ static std::vector<TtsVoiceEntry> TTS_EnumerateVoices() {
             }
 
             pToken->Release();
+            pToken = nullptr;
         }
         pEnum->Release();
     };

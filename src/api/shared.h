@@ -36,7 +36,24 @@ void ApplyDarkModeToAllWindows() {
     }, 0);
 }
 
+static bool HasStoredDarkModePreference() {
+    std::string settingsPath = std::format("{}\\{}", APP_REG_ROOT, SETTINGS_CLASS_NAME);
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, settingsPath.c_str(), 0, KEY_QUERY_VALUE, &hKey) != ERROR_SUCCESS)
+        return false;
+
+    DWORD type = 0;
+    DWORD size = 0;
+    LSTATUS status = RegQueryValueExA(hKey, "DarkMode", NULL, &type, NULL, &size);
+    RegCloseKey(hKey);
+    return status == ERROR_SUCCESS && type == REG_DWORD && size == sizeof(DWORD);
+}
+
+static void UpdateDarkModeSettingCheckbox(bool checked);
+
 static void SyncDarkModeFromWindows() {
+    if (HasStoredDarkModePreference()) return;
+
     DWORD appsUseLightTheme = 1;
     DWORD valueSize = sizeof(appsUseLightTheme);
     LSTATUS status = RegGetValueA(
@@ -52,6 +69,7 @@ static void SyncDarkModeFromWindows() {
     bool windowsDarkMode = (appsUseLightTheme == 0);
     if (darkMode == windowsDarkMode) return;
     darkMode = windowsDarkMode;
+    UpdateDarkModeSettingCheckbox(darkMode);
     ApplyDarkModeToAllWindows();
 }
 
@@ -150,6 +168,8 @@ struct TsState {
     HWND hExecList = NULL;   // Executions list (far left, beside L2)
 
     // ── Level 2 visual data (mirrors the 12 list rows) ───────────────────────
+    std::vector<TradingAPI::Level2Entry> l2Asks;
+    std::vector<TradingAPI::Level2Entry> l2Bids;
     double    l2Price[12]     = {};
     double    l2Size[12]      = {};
     ULONGLONG l2TickAt[12] = {};      // GetTickCount64() of last trade at this row's price

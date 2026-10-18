@@ -281,8 +281,7 @@ static HWND Market_CreateL2List(HWND hParent, HINSTANCE hInst) {
             ListView_SetColumn(hList, i, &lvcUpdate);
         }
     }
-    // Keep one stable row for each supported book position. Depth callbacks
-    // can then update or clear a single row without rebuilding the control.
+    // Keep one stable display row for each supported book position.
     for (int i = 0; i < 12; ++i) {
         LVITEMA lvi = {};
         lvi.mask = LVIF_TEXT | LVIF_PARAM;
@@ -1233,27 +1232,45 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 // lParam: 1 = ask row, 2 = bid row  (used by NM_CUSTOMDRAW for colouring).
 static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* update) {
     if (!state || !state->hL2List || !update) return;
-    if (update->position < 0 || update->position >= 6 || (update->side != 0 && update->side != 1)) return;
+    if (update->position < 0 || update->position >= 6 ||
+        (update->side != 0 && update->side != 1) ||
+        (update->operation != 0 && update->operation != 1 && update->operation != 2)) return;
 
-    int row = update->side == 0 ? 5 - update->position : 6 + update->position;
-    double newSize = 0.0, newPrice = 0.0;
-
-    if (update->operation == 2) {
-        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
-        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
+    auto& book = update->side == 0 ? state->l2Asks : state->l2Bids;
+    const size_t position = static_cast<size_t>(update->position);
+    if (update->operation == 0) {
+        if (position > book.size()) return;
+        book.insert(book.begin() + position, update->entry);
+        if (book.size() > 6) book.pop_back();
+    } else if (update->operation == 1) {
+        if (position >= book.size()) return;
+        book[position] = update->entry;
     } else {
-        newSize = update->entry.size;
-        newPrice = update->entry.price;
-        std::string price = Market_Fmt(newPrice);
-        std::string size = Market_FmtQty(newSize);
-        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)size.c_str());
-        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
+        if (position >= book.size()) return;
+        book.erase(book.begin() + position);
     }
 
-    if (state->l2Price[row] != newPrice)
-        state->l2TickAt[row] = 0;
-    state->l2Size[row] = newSize;
-    state->l2Price[row] = newPrice;
+    for (int depth = 0; depth < 6; ++depth) {
+        const int row = update->side == 0 ? 5 - depth : 6 + depth;
+        const bool populated = static_cast<size_t>(depth) < book.size();
+        const double newPrice = populated ? book[depth].price : 0.0;
+        const double newSize = populated ? book[depth].size : 0.0;
+
+        if (state->l2Price[row] != newPrice)
+            state->l2TickAt[row] = 0;
+        state->l2Size[row] = newSize;
+        state->l2Price[row] = newPrice;
+
+        if (populated) {
+            std::string price = Market_Fmt(newPrice);
+            std::string size = Market_FmtQty(newSize);
+            ListView_SetItemText(state->hL2List, row, 0, (LPSTR)size.c_str());
+            ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
+        } else {
+            ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
+            ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
+        }
+    }
 
     // Bars are relative to the biggest row, so any change can rescale all rows.
     InvalidateRect(state->hL2List, NULL, FALSE);
@@ -2451,6 +2468,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     std::fill(std::begin(state->l2Size), std::end(state->l2Size), 0.0);
                     std::fill(std::begin(state->l2Price), std::end(state->l2Price), 0.0);
                     std::fill(std::begin(state->l2TickAt), std::end(state->l2TickAt), 0);
+                    state->l2Asks.clear();
+                    state->l2Bids.clear();
                     InvalidateRect(state->hL2List, NULL, FALSE);
                 }
                 if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
