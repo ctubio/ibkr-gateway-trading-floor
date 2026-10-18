@@ -191,7 +191,7 @@ struct TsState {
 
     // ── Hit-test rect for the large "last price" display (click to toggle TTS) ─
     RECT lastPriceRect = { 0, 0, 0, 0 };
-    RECT flaqRect      = { 0, 0, 0, 0 };
+    RECT flagRect      = { 0, 0, 0, 0 };
     RECT locateRect    = { 0, 0, 0, 0 };
     RECT speakerRect   = { 0, 0, 0, 0 };
     RECT moonRect      = { 0, 0, 0, 0 };

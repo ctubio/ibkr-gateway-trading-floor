@@ -1620,7 +1620,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 bool isMoonIcon = (wcscmp(items[i].wIcon, MOON_GLYPH) == 0);
                 RECT ir = { cx, y0, cx + iconSz.cx, y1 };
                 if (isFlagIcon) {
-                    state->flaqRect = ir;
+                    state->flagRect = ir;
                     SetTextColor(hdc, state->hasAlert ? COINS_CLR_YELLOW : labelColor);
                 } else if (isLocateIcon) {
                     state->locateRect = ir;
@@ -2480,7 +2480,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             int hit = HitTestSplitter(hWnd, state, pt.x, pt.y);
             pt.y -= Caption_H(hWnd);   // header rects are stored header-local
             if (hit == 1 || hit == 2) { SetCursor(LoadCursor(NULL, IDC_SIZENS)); return TRUE; }
-            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flaqRect, pt) || PtInRect(&state->locateRect, pt) || PtInRect(&state->speakerRect, pt) || PtInRect(&state->moonRect, pt)) {
+            if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->flagRect, pt) || PtInRect(&state->locateRect, pt) || PtInRect(&state->speakerRect, pt) || PtInRect(&state->moonRect, pt)) {
                 SetCursor(LoadCursor(NULL, IDC_HAND));
                 return TRUE;
             }
@@ -2499,7 +2499,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 POINT pt = { x, y - Caption_H(hWnd) };   // header rects are header-local
                 if (PtInRect(&state->lastPriceRect, pt) || PtInRect(&state->speakerRect, pt)) {
                     Market_ToggleTTS(hWnd, state);
-                } else if (PtInRect(&state->flaqRect, pt)) {
+                } else if (PtInRect(&state->flagRect, pt)) {
                     StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
                 } else if (PtInRect(&state->locateRect, pt)) {
                     Market_Minimize(hWnd, state);
