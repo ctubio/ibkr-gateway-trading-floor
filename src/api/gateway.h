@@ -49,6 +49,9 @@
 #include <memory>
 #include <exception>
 #include <condition_variable>
+#include <charconv>
+#include <optional>
+#include <string_view>
 
 #include "volume.h"
 
@@ -310,7 +313,7 @@ public:
     std::vector<OrderInfo> getOrdersSorted();
     std::vector<OrderInfo> getExecutions();
     // Transmit a cancel request for the given order.
-    void cancelOrder(int orderId);
+    void cancelOrder(int orderId, bool refresh);
     // Submit a new limit order
     void submitOrder(int conId, const std::string& symbol, const std::string& action, const bool isOvernight, double qty, double price, double stopPrice, double stopPriceAwayFrom, double profitPrice, bool transmit = true);
     // Resubmit an existing order with a new limit price and quantity while

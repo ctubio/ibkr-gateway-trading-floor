@@ -1544,7 +1544,15 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (pdi->item.iItem < 0 || pdi->item.iItem >= (int)diamondsState.displayOrder.size()) return 0;
             
             int conId = diamondsState.displayOrder[pdi->item.iItem];
-            const auto& row = diamondsState.dataCache[conId];
+            auto cacheIt = diamondsState.dataCache.find(conId);
+            if (cacheIt == diamondsState.dataCache.end()) {
+                if (pdi->item.mask & LVIF_TEXT) {
+                    static char emptyText[] = "";
+                    pdi->item.pszText = emptyText;
+                }
+                return 0;
+            }
+            const auto& row = cacheIt->second;
 
             if (pdi->item.mask & LVIF_TEXT) {
                 // VIRTUAL LIST FIX: Direct pointer assignment is zero-copy and avoids buffer truncation

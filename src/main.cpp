@@ -71,6 +71,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     SetUnhandledExceptionFilter(WindowsCrashHandler);
 
     try {
+        taskbarCreatedMessage = RegisterWindowMessageW(L"TaskbarCreated");
+        if (!taskbarCreatedMessage) {
+            MessageBoxW(NULL, L"Failed to register the TaskbarCreated window message.",
+                        L"Trading Floor", MB_ICONERROR | MB_OK);
+            return 1;
+        }
+
         if (!MutexGatewayInstance())
             return 0;
 

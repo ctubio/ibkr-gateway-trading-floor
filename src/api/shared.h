@@ -56,6 +56,7 @@ static void SyncDarkModeFromWindows() {
 }
 
 static NOTIFYICONDATAW nid = { 0 };
+static UINT taskbarCreatedMessage = 0;
 
 // glyph: E767 = Volume on (Segoe MDL2 Assets)
 static const wchar_t SPEAKER_GLYPH[] = L"\uE767";
@@ -540,7 +541,8 @@ LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPA
         HDC hdc = (HDC)wParam;
         RECT rc;
         GetClientRect(hList, &rc);
-        HBRUSH hBr = CreateSolidBrush(ListView_GetBkColor(hList));
+        HBRUSH hBr = (HBRUSH)GetStockObject(DC_BRUSH);
+        SetDCBrushColor(hdc, ListView_GetBkColor(hList));
 
         HWND hHeader = ListView_GetHeader(hList);
         int columnCount = hHeader ? Header_GetItemCount(hHeader) : 0;
@@ -561,7 +563,6 @@ LRESULT CALLBACK ListViewNoFlickerProc(HWND hList, UINT uMsg, WPARAM wParam, LPA
         if (rc.top < rc.bottom) {
             FillRect(hdc, &rc, hBr);
         }
-        DeleteObject(hBr);
         return 1;
     }
     return DefSubclassProc(hList, uMsg, wParam, lParam);

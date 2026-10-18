@@ -476,9 +476,8 @@ void BindTrayIcon(HWND hWnd) {
 
     wcscpy_s(nid.szTip, sizeof(nid.szTip) / sizeof(wchar_t), L"Offline");
 
-    Shell_NotifyIconW(NIM_ADD, &nid);
-    
     nid.uVersion = NOTIFYICON_VERSION_4;
+    Shell_NotifyIconW(NIM_ADD, &nid);
     Shell_NotifyIconW(NIM_SETVERSION, &nid);
 }
 
@@ -969,6 +968,13 @@ static bool PromptLockAtStartup() {
 }
 
 LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (message == taskbarCreatedMessage) {
+        Shell_NotifyIconW(NIM_ADD, &nid);
+        nid.uVersion = NOTIFYICON_VERSION_4;
+        Shell_NotifyIconW(NIM_SETVERSION, &nid);
+        return 0;
+    }
+
     switch (message) {
         case WM_CREATE:	{
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;

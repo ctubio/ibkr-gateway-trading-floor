@@ -187,10 +187,10 @@ bool EnsureGatewayRunning(HWND hWnd) {
 // Helper function to send a string as keyboard input
 void SendString(const std::string& text) {
     std::vector<INPUT> inputs;
-    for (char c : text) {
+    for (unsigned char c : text) {
         INPUT input = {0};
         input.type = INPUT_KEYBOARD;
-        input.ki.wScan = c;
+        input.ki.wScan = static_cast<WORD>(c);
         input.ki.dwFlags = KEYEVENTF_UNICODE;
         inputs.push_back(input);
         
@@ -242,7 +242,6 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
         GetWindowTextA(hwnd, title, sizeof(title));
         std::string titleStr(title);
         if (titleStr.find("Login") != std::string::npos) {
-            ensureGatewayLoggedInOnce = true;
             LogDebug("Found login window: " + titleStr);
             ShowWindow(hwnd, SW_RESTORE);
             SetForegroundWindow(hwnd);
@@ -255,6 +254,7 @@ void EnsureGatewayLoggedIn(HWND hWnd) {
                 SendString(password);
                 Sleep(50);
                 SendKey(VK_RETURN);
+                ensureGatewayLoggedInOnce = true;
             }
             break;
         }

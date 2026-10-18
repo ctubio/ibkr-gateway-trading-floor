@@ -384,7 +384,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                         unsentOrders.erase(s_editState.orderId);
                     SetOrdersTitle(hParent, api().getOrdersSorted());
                 } else {
-                    api().cancelOrder(s_editState.orderId);
+                    api().cancelOrder(s_editState.orderId, true);
                 }
                 Orders_HideInlinePanel(hParent);
                 SetFocus(hList);
@@ -710,7 +710,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                                 unsentOrders.erase(s_editState.orderId);
                             SetOrdersTitle(hWnd, api().getOrdersSorted());
                         } else {
-                            api().cancelOrder(s_editState.orderId);
+                            api().cancelOrder(s_editState.orderId, true);
                         }
                         Orders_HideInlinePanel(hWnd);
                         SetFocus(hList);
