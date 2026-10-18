@@ -1686,44 +1686,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         TradingAPI::L1Book quickInfo;
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                             double buyPrice = quickInfo.last;
-                            std::thread([conId, sym, buyPrice]() {
-                                HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
-                                if (hCoins && IsWindow(hCoins)) {
-                                    PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
-                                }
-                                HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                                int max = 10;
-                                while (!hOrders || !IsWindow(hOrders)) {
-                                    if (!max--) break;
-                                    std::this_thread::sleep_for(std::chrono::milliseconds(121));
-                                    hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                                }
-                                if (hOrders && IsWindow(hOrders)) {
-                                    api().submitOrder(conId, sym, "BUY", false, 1.0, buyPrice, 0.0, 0.0, 0.0, false);
-                                }
-                            }).detach();
+                            SubmitUnsentOrderAsync(conId, sym, "BUY", false, 1.0, buyPrice, 0.0, 0.0, 0.0);
                         }
                     } else if (cmd == 301 && conId > 0) {
                         // Quick SELL placeholder: 1 share @ 2x last price.
                         TradingAPI::L1Book quickInfo;
                         if (api().getMarketData(conId, quickInfo) && quickInfo.last > 0.0) {
                             double sellPrice = quickInfo.last;
-                            std::thread([conId, sym, sellPrice]() {
-                                HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
-                                if (hCoins && IsWindow(hCoins)) {
-                                    PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
-                                }
-                                HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                                int max = 10;
-                                while (!hOrders || !IsWindow(hOrders)) {
-                                    if (!max--) break;
-                                    std::this_thread::sleep_for(std::chrono::milliseconds(121));
-                                    hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-                                }
-                                if (hOrders && IsWindow(hOrders)) {
-                                    api().submitOrder(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0, false);
-                                }
-                            }).detach();
+                            SubmitUnsentOrderAsync(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0);
                         }
                     } else if (cmd == 302) {
                         TradingAPI::L1Book quickInfo;
@@ -1962,6 +1932,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
         }
         if (wParam == TIMER_DIAMONDS_SORT) {
+            // Let rolling volume decay show on rows that have had no ticks.
+            for (int id : diamondsState.displayOrder)
+                diamondsState.dirtyMarket.insert(id);
+
             HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
             Diamonds_ApplySort(hList);
             InvalidateRect(hList, NULL, FALSE);

@@ -428,7 +428,9 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                         HWND hList = GetDlgItem(hParent, ID_ORDERS_LIST);
                         int sel = ListView_GetNextItem(hList, -1, LVNI_SELECTED);
                         if (sel >= 0) ListView_DeleteItem(hList, sel);
+                        unsentOrders.erase(s_editState.orderId);
                         Orders_HideInlinePanel(hParent);
+                        SetOrdersTitle(hParent, api().getOrdersSorted());
                     } else {
                         api().modifyOrder(s_editState.orderId, price, qty);
                     }

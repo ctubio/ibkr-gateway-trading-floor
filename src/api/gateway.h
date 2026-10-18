@@ -244,8 +244,8 @@ public:
         double Week13RangePct() const { return RangePct(low13, high13); }
 
         // ── RT_VOLUME-derived recent-activity metric (generic tick 233) ─────────────
-        double rtVolSum5min   = 0.0;  // approx. shares traded in the trailing ~5 minutes
-        double rtVolRatio5min = 0.0;  // recent-vs-baseline share-rate ratio
+        double rtVolSum5min   = 0.0;  // approx. trailing 5-minute volume; filled by getMarketData() at read time
+        double rtVolRatio5min = 0.0;  // recent-vs-baseline rate; filled by getMarketData() at read time
     };
 
     // ── Level 2 depth entry (one row per side) ────────────────────────────────

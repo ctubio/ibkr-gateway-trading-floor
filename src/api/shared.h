@@ -88,6 +88,28 @@ TradingAPI& api() {
     return *TWS_API;
 }
 
+static void SubmitUnsentOrderAsync(int conId, std::string symbol, std::string side,
+                                   bool isOvernight, double quantity, double price,
+                                   double stopPrice, double stopPriceAwayFrom, double profitPrice) {
+    std::thread([conId, symbol = std::move(symbol), side = std::move(side),
+                 isOvernight, quantity, price, stopPrice, stopPriceAwayFrom, profitPrice]() {
+        HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
+        if (hCoins && IsWindow(hCoins))
+            PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
+
+        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+        int max = 10;
+        while (!hOrders || !IsWindow(hOrders)) {
+            if (!max--) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(121));
+            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
+        }
+        if (hOrders && IsWindow(hOrders))
+            api().submitOrder(conId, symbol, side, isOvernight, quantity, price,
+                              stopPrice, stopPriceAwayFrom, profitPrice, false);
+    }).detach();
+}
+
 // ── Global Account Summary ───────────────────────────────────────────────────────────
 static double NetLiquidation = 0.0;
 

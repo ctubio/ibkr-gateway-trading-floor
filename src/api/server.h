@@ -1347,22 +1347,8 @@ static std::string HandlePostTrade(const std::string& body) {
     ForwardTradeToCoins(symbol, side, quantity, price, stopPrice, profitPrice);
 
     // ── Submit the order to IBKR (transmit = false) ───────────────────────────
-    std::thread([conId, symbol, side, quantity, price, stopPrice, profitPrice]() {
-        HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
-        if (hCoins && IsWindow(hCoins)) {
-            PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
-        }
-        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-        int max = 10;
-        while (!hOrders || !IsWindow(hOrders)) {
-            if (!max--) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(121));
-            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-        }
-        if (hOrders && IsWindow(hOrders)) {
-            api().submitOrder(conId, symbol, side, false, quantity, price, stopPrice, price, profitPrice, false);
-        }
-    }).detach();
+    SubmitUnsentOrderAsync(conId, symbol, side, false, quantity, price,
+                           stopPrice, price, profitPrice);
 
     /*LogDebug("POST /trade: " + side + " " + std::to_string((int)quantity) +
              " " + symbol + " @ " + std::to_string(price) +
