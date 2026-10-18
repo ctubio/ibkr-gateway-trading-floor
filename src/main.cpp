@@ -73,8 +73,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     try {
         taskbarCreatedMessage = RegisterWindowMessageW(L"TaskbarCreated");
         if (!taskbarCreatedMessage) {
-            MessageBoxW(NULL, L"Failed to register the TaskbarCreated window message.",
-                        L"Trading Floor", MB_ICONERROR | MB_OK);
+            MessageBoxW(NULL, L"Failed to register the TaskbarCreated window message.", L"Trading Floor", MB_ICONERROR | MB_OK);
             return 1;
         }
 
