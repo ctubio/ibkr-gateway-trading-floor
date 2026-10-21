@@ -128,7 +128,6 @@ static std::string MakeHttpResponse(int status, const std::string& statusText,
     resp += "HTTP/1.1 " + std::to_string(status) + " " + statusText + "\r\n";
     resp += "Content-Type: application/json\r\n";
     resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    resp += "Access-Control-Allow-Origin: *\r\n";
     resp += "Connection: close\r\n";
     resp += "\r\n";
     resp += body;
@@ -140,7 +139,6 @@ static std::string MakePlainText(const std::string& body) {
     resp += "HTTP/1.1 200 OK\r\n";
     resp += "Content-Type: text/plain; charset=utf-8\r\n";
     resp += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    resp += "Access-Control-Allow-Origin: *\r\n";
     resp += "Connection: close\r\n";
     resp += "\r\n";
     resp += body;
@@ -157,6 +155,31 @@ static std::string MakeNotFound(const std::string& msg = "{\"error\":\"not found
 
 static std::string MakeMethodNotAllowed() {
     return MakeHttpResponse(405, "Method Not Allowed", "{\"error\":\"method not allowed\"}");
+}
+
+static bool HttpGetHeader(const std::string& raw, const char* name, std::string& value) {
+    const size_t headEnd = raw.find("\r\n\r\n");
+    const std::string_view head(raw.data(), headEnd == std::string::npos ? raw.size() : headEnd);
+    const size_t nameLen = strlen(name);
+
+    size_t pos = head.find("\r\n");
+    while (pos != std::string_view::npos) {
+        const size_t ls = pos + 2;
+        const size_t le = head.find("\r\n", ls);
+        const std::string_view line = head.substr(
+            ls, le == std::string_view::npos ? std::string_view::npos : le - ls);
+        if (line.size() > nameLen && line[nameLen] == ':' &&
+            _strnicmp(line.data(), name, nameLen) == 0) {
+            const size_t b = line.find_first_not_of(" \t", nameLen + 1);
+            const size_t e = line.find_last_not_of(" \t\r");
+            value = (b == std::string_view::npos)
+                ? ""
+                : std::string(line.substr(b, e - b + 1));
+            return true;
+        }
+        pos = le;
+    }
+    return false;
 }
 
 // ── Endpoint handlers ─────────────────────────────────────────────────────────
@@ -1468,6 +1491,11 @@ static std::string RouteRequest(const std::string& rawRequest) {
     // ── POST /trade ───────────────────────────────────────────────────────────
     if (path == "/trade" || path == "/trade/") {
         if (method != "POST") return MakeMethodNotAllowed();
+        std::string origin;
+        if (HttpGetHeader(rawRequest, "Origin", origin)) {
+            return MakeHttpResponse(403, "Forbidden",
+                "{\"error\":\"browser-origin requests are not allowed\"}");
+        }
         // Extract body: everything after the blank line separating headers from body
         std::string body;
         size_t bodyStart = rawRequest.find("\r\n\r\n");
@@ -1561,51 +1589,30 @@ static void HandleHttpClient(SOCKET client) {
         // For GET requests stop after headers; for POST keep reading the body too
         if (buf.find("\r\n\r\n") != std::string::npos) {
             // If this is a POST, also wait for the Content-Length bytes
-            if (buf.substr(0, 4) == "POST") {
-                // Parse Content-Length header
-                size_t clPos = buf.find("Content-Length:");
-                if (clPos == std::string::npos) clPos = buf.find("content-length:");
-                if (clPos != std::string::npos) {
-                    size_t valStart = buf.find_first_not_of(" \t", clPos + 15);
-                    size_t valEnd = buf.find('\r', valStart);
+            if (buf.compare(0, 4, "POST") == 0) {
+                std::string clValue;
+                if (HttpGetHeader(buf, "Content-Length", clValue)) {
                     size_t contentLen = 0;
-                    bool invalidLength = valStart == std::string::npos || valEnd == std::string::npos;
-                    bool oversized = false;
-                    bool hasDigit = false;
-                    for (size_t i = valStart; !invalidLength && i < valEnd; ++i) {
-                        char c = buf[i];
-                        if (c == ' ' || c == '\t') {
-                            for (++i; i < valEnd; ++i) {
-                                if (buf[i] != ' ' && buf[i] != '\t') invalidLength = true;
-                            }
-                            break;
-                        }
-                        if (c < '0' || c > '9') {
-                            invalidLength = true;
-                            break;
-                        }
-                        size_t digit = static_cast<size_t>(c - '0');
-                        hasDigit = true;
-                        if (contentLen > (HTTP_MAX_BODY_SIZE - digit) / 10) {
-                            oversized = true;
-                            break;
-                        }
-                        contentLen = contentLen * 10 + digit;
-                    }
-                    if (!hasDigit) invalidLength = true;
-                    if (invalidLength) {
-                        response = MakeHttpResponse(400, "Bad Request",
-                            "{\"error\":\"invalid Content-Length\"}");
-                    } else if (oversized || contentLen > HTTP_MAX_BODY_SIZE) {
+                    const char* first = clValue.data();
+                    const char* last = first + clValue.size();
+                    auto [ptr, ec] = std::from_chars(first, last, contentLen);
+                    if (ec == std::errc::result_out_of_range ||
+                        contentLen > HTTP_MAX_BODY_SIZE) {
                         response = MakeHttpResponse(413, "Payload Too Large",
                             "{\"error\":\"request body too large\"}");
+                    } else if (ec != std::errc{} || ptr != last) {
+                        response = MakeHttpResponse(400, "Bad Request",
+                            "{\"error\":\"invalid Content-Length\"}");
                     } else {
                         size_t hdEnd = buf.find("\r\n\r\n") + 4;
                         while (buf.size() - hdEnd < contentLen) {
                             int m = recv(client, tmp, sizeof(tmp) - 1, 0);
                             if (m <= 0) break;
-                            tmp[m] = '\0';
                             buf.append(tmp, m);
+                        }
+                        if (buf.size() - hdEnd < contentLen) {
+                            response = MakeHttpResponse(400, "Bad Request",
+                                "{\"error\":\"incomplete request body\"}");
                         }
                     }
                 }
@@ -1738,7 +1745,7 @@ static bool HttpServer_Start() {
         return false;
     }
 
-    LogDebug(std::string("HTTP API listening on 127.0.0.1:") +
+    LogDebug(std::string("HTTP API listening on 0.0.0.0:") +
              std::to_string(HTTP_SERVER_PORT));
     return true;
 }
