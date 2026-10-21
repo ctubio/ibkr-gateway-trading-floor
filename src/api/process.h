@@ -184,10 +184,13 @@ bool EnsureGatewayRunning(HWND hWnd) {
     return true;
 }
 
+std::wstring StringToWide(const std::string& str);
+
 // Helper function to send a string as keyboard input
 void SendString(const std::string& text) {
+    const std::wstring wideText = StringToWide(text);
     std::vector<INPUT> inputs;
-    for (unsigned char c : text) {
+    for (wchar_t c : wideText) {
         INPUT input = {0};
         input.type = INPUT_KEYBOARD;
         input.ki.wScan = static_cast<WORD>(c);

@@ -69,6 +69,20 @@ public:
     }
 };
 
+class WinsockRAII {
+public:
+    WinsockRAII() {
+        WSADATA wsa{};
+        const int result = WSAStartup(MAKEWORD(2, 2), &wsa);
+        if (result != 0)
+            throw std::runtime_error("WSAStartup failed: " + std::to_string(result));
+    }
+
+    ~WinsockRAII() {
+        WSACleanup();
+    }
+};
+
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
     SetUnhandledExceptionFilter(WindowsCrashHandler);
 
@@ -82,6 +96,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
         if (!MutexGatewayInstance())
             return 0;
 
+        WinsockRAII winsockRAII;
         RegisterWindowRAII registerWindowRAII(hInst);
         if (!registerWindowRAII.unlocked())
             return 0;

@@ -16,7 +16,8 @@
 //
 //  The server listens on 0.0.0.0:PORT (default 4011) so it is reachable from
 //  the LAN.  Call HttpServer_Start() once after WinMain initialises and
-//  HttpServer_Stop() before the process exits.
+//  HttpServer_Stop() before the process exits. Winsock is initialized by
+//  WinMain for the lifetime of the application.
 //
 //  News content is cached in the Windows Registry under:
 //    HKCU\Software\ibkr-gateway-trading-floor\News
@@ -1686,21 +1687,19 @@ static void HttpClientWorkerLoop() {
             client = httpClientQueue.front();
             httpClientQueue.pop();
         }
-        HandleHttpClient(client);
+        try {
+            HandleHttpClient(client);
+        } catch (...) {
+            closesocket(client);
+        }
     }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 static bool HttpServer_Start() {
-    WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
-
     httpListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (httpListenSocket == INVALID_SOCKET) {
-        WSACleanup();
-        return false;
-    }
+    if (httpListenSocket == INVALID_SOCKET) return false;
 
     BOOL yes = TRUE;
     setsockopt(httpListenSocket, SOL_SOCKET, SO_REUSEADDR,
@@ -1715,14 +1714,12 @@ static bool HttpServer_Start() {
              reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
         closesocket(httpListenSocket);
         httpListenSocket = INVALID_SOCKET;
-        WSACleanup();
         return false;
     }
 
     if (listen(httpListenSocket, SOMAXCONN) == SOCKET_ERROR) {
         closesocket(httpListenSocket);
         httpListenSocket = INVALID_SOCKET;
-        WSACleanup();
         return false;
     }
 
@@ -1741,7 +1738,6 @@ static bool HttpServer_Start() {
             if (worker.joinable()) worker.join();
         }
         httpClientWorkers.clear();
-        WSACleanup();
         return false;
     }
 
@@ -1774,8 +1770,6 @@ static void HttpServer_Stop() {
         if (worker.joinable()) worker.join();
     }
     httpClientWorkers.clear();
-
-    WSACleanup();
 }
 
 class HttpServerRAII {
