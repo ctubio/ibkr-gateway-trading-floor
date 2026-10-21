@@ -45,23 +45,21 @@ static std::vector<TtsVoiceEntry> settingsVoices; // populated once on WM_CREATE
 void FlushDebugBuffer() {
     if (!hDebugEdit || !IsWindow(hDebugEdit)) return;
 
-    // Copy out under lock, debugBuffer can be mutated concurrently by
-    // LogDebug() from other threads (see registry.h).
-    std::vector<std::string> snapshot;
+    std::string text;
     {
         std::lock_guard<std::mutex> lock(debugBufferMutex);
-        snapshot.assign(debugBuffer.begin(), debugBuffer.end());
+        size_t total = 0;
+        for (const auto& msg : debugBuffer) total += msg.size();
+        text.reserve(total);
+        for (const auto& msg : debugBuffer) text += msg;
     }
 
-    SendMessageA(hDebugEdit, WM_SETTEXT, 0, (LPARAM)""); // clear first
-    for (const auto& msg : snapshot) {
-        int len = GetWindowTextLength(hDebugEdit);
-        SendMessage(hDebugEdit, EM_SETSEL, len, len);
-        SendMessageA(hDebugEdit, EM_REPLACESEL, FALSE, (LPARAM)msg.c_str());
-    }
-    // Scroll to bottom
-    SendMessage(hDebugEdit, EM_SETSEL, -1, -1);
+    SendMessageA(hDebugEdit, WM_SETREDRAW, FALSE, 0);
+    SetWindowTextA(hDebugEdit, text.c_str());
+    SendMessage(hDebugEdit, EM_SETSEL, (WPARAM)-1, (LPARAM)-1);
     SendMessage(hDebugEdit, EM_SCROLLCARET, 0, 0);
+    SendMessageA(hDebugEdit, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(hDebugEdit, NULL, TRUE);
 }
 
 LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -71,6 +69,8 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
                 0, 0, 0, 0, hWnd, NULL, GetModuleHandle(NULL), NULL);
+            SendMessage(hDebugEdit, EM_LIMITTEXT, 0, 0);
+            debugAppendPending.store(false);
             RECT rc;
             GetClientRect(hWnd, &rc);
             SetWindowPos(hDebugEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
@@ -79,6 +79,7 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         case WM_DESTROY:
             hDebugEdit = NULL;   // ← avoid a stale handle lingering after the window is destroyed
+            debugAppendPending.store(false);
             break;
         case WM_SIZE: {
             if (hDebugEdit) {
@@ -92,6 +93,7 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         // Runs on this window's own (UI) thread, so it's the only code path
         // that's allowed to touch hDebugEdit directly.
         case WM_DEBUG_LOG_APPEND: {
+            debugAppendPending.store(false, std::memory_order_release);
             FlushDebugBuffer();
             return 0;
         }

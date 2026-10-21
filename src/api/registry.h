@@ -47,6 +47,7 @@ static HWND hDebugEdit = NULL;
 
 static std::mutex debugBufferMutex;                 // guards debugBuffer below
 static std::deque<std::string> debugBuffer;          // stores messages when window is closed
+static std::atomic<bool> debugAppendPending{false};
 
 void LogDebug(const std::string& msg) {
     time_t now = time(0);
@@ -75,7 +76,10 @@ void LogDebug(const std::string& msg) {
     // hDebugEdit.
     HWND hWnd = FindWindowA(DEBUGLOG_CLASS_NAME, NULL);
     if (hWnd && IsWindow(hWnd)) {
-        PostMessageA(hWnd, WM_DEBUG_LOG_APPEND, 0, 0);
+        if (!debugAppendPending.exchange(true, std::memory_order_acq_rel)) {
+            if (!PostMessageA(hWnd, WM_DEBUG_LOG_APPEND, 0, 0))
+                debugAppendPending.store(false, std::memory_order_release);
+        }
     }
 }
 
