@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-static const int windowDiamondsWidth = 1025;
+static const int windowDiamondsWidth = 975;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST    7001
@@ -353,7 +353,7 @@ static int Diamonds_ExtraWidth(bool maximized) {
     if (maximized && (diamondsState.checkedTabs & (1u << 2))) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                       diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_AVGPRICE].width +
-                      diamondCols[DCOL_EXCHANGE].width;
+                      diamondCols[DCOL_SIZE].width + diamondCols[DCOL_EXCHANGE].width;
     }
     if (extraWidth > 0) extraWidth += 10;
     return extraWidth;
@@ -386,6 +386,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
     for (int i = DCOL_CHG13WEEK; i <= DCOL_CHG52WEEK; ++i) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
+    ListView_SetColumnWidth(hList, DCOL_SIZE,     showWeeks ? diamondCols[DCOL_SIZE].width     : 0);
     ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
     ListView_SetColumnWidth(hList, DCOL_EXCHANGE, showWeeks ? diamondCols[DCOL_EXCHANGE].width : 0);
 

@@ -683,6 +683,23 @@ static LRESULT CALLBACK DarkGroupBoxSubclassProc(HWND hCtrl, UINT msg, WPARAM wP
             PaintGroupBox(hCtrl, (HDC)wParam);
             return 0;
 
+        // Messages for which the stock themed BUTTON paints itself directly
+        // (GetDC, no WM_PAINT). Let it do its work, then paint over it.
+        case WM_SETTEXT:
+        case WM_SETFONT:
+        case WM_ENABLE:
+        case WM_THEMECHANGED:
+        case WM_UPDATEUISTATE:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case WM_STYLECHANGED:
+        case BM_SETSTATE: {
+            LRESULT res = DefSubclassProc(hCtrl, msg, wParam, lParam);
+            InvalidateRect(hCtrl, NULL, TRUE);
+            UpdateWindow(hCtrl);
+            return res;
+        }
+
         case WM_NCDESTROY:
             RemoveWindowSubclass(hCtrl, DarkGroupBoxSubclassProc, uIdSubclass);
             break;

@@ -980,7 +980,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
             // ─── Box 1: Net Liq & PnL ──────────────────────────────────────────
-            coinsState.hCoinBox1 = GroupBox(hWnd, "Today:", m, y1, boxW, box1H, 1, WS_CLIPSIBLINGS);
+            coinsState.hCoinBox1 = GroupBox(hWnd, "Coins:", m, y1, boxW, box1H, 1, WS_CLIPSIBLINGS);
 
             coinsState.hCoin_NetLiq = Ctl(hWnd, "STATIC", "--", WS_CHILD | WS_VISIBLE | SS_LEFT,
                 m + 62, y1 - 4, 30, 18, ID_COIN_NETLIQ, hFont14ptbold.get());
