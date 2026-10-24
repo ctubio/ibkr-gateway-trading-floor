@@ -123,7 +123,7 @@ $ make
 # Output: bin/Trading-Floor.exe
 ```
 
-> **Platform Compatibility:** This application currently only runs on Windows 7 or higher. Linux and macOS support are not yet available.
+> **Platform Compatibility:** This application runs on Windows 7 or higher.
 
 ---
 
@@ -131,9 +131,3 @@ $ make
 *   **No Connection?** Check if TWS/Gateway is running and "Allow connections from localhost" is checked.
 *   **Wrong Path?** If the app can't find the gateway, it will prompt you to select the `.exe` path.
 *   **Reset App?** Delete the registry root: `Computer\HKEY_CURRENT_USER\Software\ibkr-gateway-trading-floor`.
-
-## ⚖️ License & Legal
-- Provided as-is for educational and personal use.
-- Interactive Brokers® and IB Gateway® are trademarks of Interactive Brokers.
-- Use at your own risk; verify behavior before trading live.
-
