@@ -1749,14 +1749,13 @@ static void Market_SpeakLast(TsState* state) {
     if (!state->ttsOn) return;
     if (state->l1Info.last <= 0.0) return;
     std::string s = std::format("{:.2f}", state->l1Info.last);
-    std::wstring ws(s.begin(), s.end());
-    size_t dotPos = ws.find(L".00");
-    if (dotPos != std::wstring::npos) {
-        ws.erase(dotPos);
+    size_t dotPos = s.find(".00");
+    if (dotPos != std::string::npos) {
+        s.erase(dotPos);
     }
-    ws.erase(std::remove(ws.begin(), ws.end(), L','), ws.end());
-    std::replace(ws.begin(), ws.end(), L'.', L',');
-    SharedTts().Speak(ws);
+    s.erase(std::remove(s.begin(), s.end(), ','), s.end());
+    std::replace(s.begin(), s.end(), '.', ',');
+    SharedTts().Speak(s);
 }
 
 static void Market_Minimize(HWND hWnd, TsState* state) {

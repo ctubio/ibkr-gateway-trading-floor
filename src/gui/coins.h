@@ -390,16 +390,15 @@ static void Coins_ApplyFocusLayout(HWND hWnd, bool active) {
 static void Coins_SpeakDailyPnL() {
     if (!coinsState.coinsTtsOn || !coinsState.hCoin_BigPnL) return;
     std::string text = EditText(coinsState.hCoin_BigPnL);
-    std::wstring wtext(text.begin(), text.end());
-    size_t dotPos = wtext.find(L'.');
-    if (dotPos != std::wstring::npos) {
-        wtext.erase(dotPos);
+    size_t dotPos = text.find('.');
+    if (dotPos != std::string::npos) {
+        text.erase(dotPos);
     }
-    if (!wtext.empty() && wtext.front() == L'+') {
-        wtext.erase(0, 1);
+    if (!text.empty() && text.front() == '+') {
+        text.erase(0, 1);
     }
-    wtext.erase(std::remove(wtext.begin(), wtext.end(), L','), wtext.end());
-    SharedTts().Speak(wtext);
+    text.erase(std::remove(text.begin(), text.end(), ','), text.end());
+    SharedTts().Speak(text);
 }
 
 static void Coins_ToggleTTS(HWND hWnd) {
@@ -496,7 +495,7 @@ void UpdateTrayIcon(HWND hWnd) {
             tooltip = acc + " | " + coinsState.currencyCoins + " | " + (connected ? "Connected" : "Disconnected");
         }
     }
-    std::wstring wTooltip(tooltip.begin(), tooltip.end());
+    std::wstring wTooltip = StringToWide(tooltip);
     wcsncpy(nid.szTip, wTooltip.c_str(), _countof(nid.szTip) - 1);
     nid.szTip[_countof(nid.szTip) - 1] = L'\0'; // Note the L prefix for wide null terminator
 
@@ -622,13 +621,15 @@ void Coins_UpdateLabels(HWND hWnd) {
     }
     if (coinsState.hCoin_EUR) {
         double eur = tryParse("EUR_CashBalance");
-        std::string formattedNum = FormatWithCommas(eur, coinsState.fullDetails) + (coinsState.fullDetails ? "" : " €");
-        SetSigned(coinsState.hCoin_EUR, eur, coinsState.eurColor, StringToWide(formattedNum));
+        std::wstring formattedNum = StringToWide(FormatWithCommas(eur, coinsState.fullDetails));
+        if (!coinsState.fullDetails) formattedNum += L" \u20AC";
+        SetSigned(coinsState.hCoin_EUR, eur, coinsState.eurColor, formattedNum);
     }
     if (coinsState.hCoin_USD) {
         double usd = tryParse("USD_CashBalance");
-        std::string formattedNum = FormatWithCommas(usd, coinsState.fullDetails) + (coinsState.fullDetails ? "" : " $");
-        SetSigned(coinsState.hCoin_USD, usd, coinsState.usdColor, StringToWide(formattedNum));
+        std::string formattedNum = FormatWithCommas(usd, coinsState.fullDetails);
+        if (!coinsState.fullDetails) formattedNum += " $";
+        SetSigned(coinsState.hCoin_USD, usd, coinsState.usdColor, formattedNum);
     }
     if (valueLabelMoves) EndDeferWindowPos(valueLabelMoves);
 }

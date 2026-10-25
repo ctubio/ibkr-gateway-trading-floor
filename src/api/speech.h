@@ -106,7 +106,7 @@ static void TTS_ApplySavedVoice(ISpVoice* pVoice) {
     if (!pVoice) return;
 
     std::string savedA = Settings_LoadTtsVoice();
-    std::wstring tokenId(savedA.begin(), savedA.end());
+    std::wstring tokenId = StringToWide(savedA);
 
     // 1. Classic SAPI voices
     ISpObjectToken* pFound = TTS_FindVoiceInCategory(SPCAT_VOICES, tokenId);

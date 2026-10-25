@@ -184,8 +184,6 @@ bool EnsureGatewayRunning(HWND hWnd) {
     return true;
 }
 
-std::wstring StringToWide(const std::string& str);
-
 // Helper function to send a string as keyboard input
 void SendString(const std::string& text) {
     const std::wstring wideText = StringToWide(text);

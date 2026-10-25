@@ -20,6 +20,8 @@
 #include <tlhelp32.h>
 
 #include <string>
+#include <limits>
+#include <stdexcept>
 #include <cstring>
 #include <cstdio>
 #include <chrono>
@@ -55,6 +57,43 @@
 
 #include "gdi_raii.h"
 #include "volume.h"
+
+inline std::wstring StringToWide(const std::string& str) {
+    if (str.empty()) return {};
+    if (str.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+        throw std::length_error("UTF-8 string is too large to convert");
+
+    const int length = static_cast<int>(str.size());
+    const int wideLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                                str.data(), length, nullptr, 0);
+    if (wideLength == 0)
+        throw std::runtime_error("Invalid UTF-8 string");
+
+    std::wstring wide(static_cast<size_t>(wideLength), L'\0');
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.data(), length,
+                            wide.data(), wideLength) == 0)
+        throw std::runtime_error("UTF-8 to UTF-16 conversion failed");
+    return wide;
+}
+
+inline std::string WideToString(const std::wstring& wide) {
+    if (wide.empty()) return {};
+    if (wide.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+        throw std::length_error("UTF-16 string is too large to convert");
+
+    const int length = static_cast<int>(wide.size());
+    const int utf8Length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                                wide.data(), length, nullptr, 0,
+                                                nullptr, nullptr);
+    if (utf8Length == 0)
+        throw std::runtime_error("Invalid UTF-16 string");
+
+    std::string utf8(static_cast<size_t>(utf8Length), '\0');
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), length,
+                            utf8.data(), utf8Length, nullptr, nullptr) == 0)
+        throw std::runtime_error("UTF-16 to UTF-8 conversion failed");
+    return utf8;
+}
 
 #define WM_API_UPDATE           (WM_USER +  2)
 #define WM_SYMBOL_RESULTS       (WM_USER +  3)

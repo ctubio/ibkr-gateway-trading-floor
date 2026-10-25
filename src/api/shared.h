@@ -274,14 +274,14 @@ static bool SetWindowTextAIfChanged(HWND hWnd, const std::string& newText) {
 
 static bool SetWindowTextWIfChanged(HWND hWnd, const std::wstring& newText) {
     if (!hWnd) return false;
-    wchar_t buf[256] = {};
-    GetWindowTextW(hWnd, buf, _countof(buf));
-    if (std::wstring(buf) != newText) {
-        SetWindowTextW(hWnd, newText.c_str());
-        InvalidateRect(hWnd, NULL, TRUE);
-        return true;
-    }
-    return false;
+    const int length = GetWindowTextLengthW(hWnd);
+    std::wstring current(static_cast<size_t>(length) + 1, L'\0');
+    const int copied = GetWindowTextW(hWnd, current.data(), length + 1);
+    current.resize(static_cast<size_t>(copied));
+    if (current == newText) return false;
+    SetWindowTextW(hWnd, newText.c_str());
+    InvalidateRect(hWnd, NULL, TRUE);
+    return true;
 }
 
 static std::string FormatFixed(double value, int decimals, bool alwaysSign = false) {
@@ -921,13 +921,6 @@ static bool SetSigned(HWND hWnd, double value, COLORREF& color, const std::wstri
 
 static bool SetSigned(HWND hWnd, double value, COLORREF& color) {
     return SetSigned(hWnd, value, color, FormatWithCommas(value));
-}
-
-std::wstring StringToWide(const std::string& str) {
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), NULL, 0);
-    std::wstring wstrTo(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
-    return wstrTo;
 }
 
 std::string formatVolume(long long volume) {

@@ -116,9 +116,10 @@ public:
     // Speaks `text` async, purging whatever the shared voice was doing
     // before (see class comment for the multi-window implication). No-op
     // if nobody currently holds a reference.
-    void Speak(const std::wstring& text) {
+    void Speak(const std::string& text) {
+        const std::wstring wideText = StringToWide(text);
         std::lock_guard<std::mutex> lk(mutex_);
-        if (voice_) voice_->Speak(text.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
+        if (voice_) voice_->Speak(wideText.c_str(), SVSFlagsAsync | SVSFPurgeBeforeSpeak, NULL);
     }
 
     // Re-applies the (just-changed) saved voice token in place. No-op if

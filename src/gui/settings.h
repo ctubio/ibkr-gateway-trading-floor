@@ -273,7 +273,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Enumerate all system voices and fill the combo
             settingsVoices = TTS_EnumerateVoices();
             std::string savedTokenA = Settings_LoadTtsVoice();
-            std::wstring savedToken(savedTokenA.begin(), savedTokenA.end());
+            std::wstring savedToken = StringToWide(savedTokenA);
 
             int selectIdx = -1;      // index to pre-select
             int herenaIdx = -1;      // fallback: first Herena/Catalan entry
@@ -420,7 +420,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 int idx = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
                 if (idx >= 0 && idx < (int)settingsVoices.size()) {
                     const std::wstring& tid = settingsVoices[idx].tokenId;
-                    std::string tidA(tid.begin(), tid.end());
+                    std::string tidA = WideToString(tid);
                     Settings_SaveTtsVoice(tidA);
                     // Notify all open windows to hot-swap to the new voice immediately
                     EnumWindows([](HWND hw, LPARAM) -> BOOL {
