@@ -880,7 +880,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 bool isBuy = (s_editState.action == "BUY");
                 SetTextColor(hdc, DM_TEXT);
                 SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
-                return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
+                return (LRESULT)(isBuy ? hBrushDarkGreen.get() : hBrushDarkRed.get());
             }
             break;
         }

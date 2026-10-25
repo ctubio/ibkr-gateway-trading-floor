@@ -989,7 +989,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             coinsState.hCoin_Lock = CreateWindowW(L"STATIC", LOCK_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + boxW - 90, y1, 20, 18, hWnd, (HMENU)ID_COIN_LOCK, hInst, NULL);
-            SendMessage(coinsState.hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
+            SendMessage(coinsState.hCoin_Lock, WM_SETFONT, (WPARAM)hFont_Icons.get(), TRUE);
             ShowWindow(coinsState.hCoin_Lock, SW_HIDE);
 
             coinsState.hCoin_Clock = Ctl(hWnd, "STATIC", "--",
@@ -1003,7 +1003,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             coinsState.hCoin_Speaker = CreateWindowW(L"STATIC", SPEAKER_GLYPH,
                 WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOTIFY,
                 m + 42, y1 + 24, 20, 20, hWnd, (HMENU)ID_COIN_SPEAKER, hInst, NULL);
-            SendMessage(coinsState.hCoin_Speaker, WM_SETFONT, (WPARAM)hFont_Icons, TRUE);
+            SendMessage(coinsState.hCoin_Speaker, WM_SETFONT, (WPARAM)hFont_Icons.get(), TRUE);
 
             coinsState.hCoin_BigPnL = Ctl(hWnd, "STATIC", "--",
                 WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOTIFY,

@@ -333,7 +333,7 @@ void FlashScreen(bool isGreen, int durationMs = 800) {
 
     SetWindowPos(hScreenFlashOverlay, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
 
-    SetWindowLongPtr(hScreenFlashOverlay, GWLP_USERDATA, (LONG_PTR)(isGreen ? hBrushGreen : hBrushRed));
+    SetWindowLongPtr(hScreenFlashOverlay, GWLP_USERDATA, (LONG_PTR)(isGreen ? hBrushGreen.get() : hBrushRed.get()));
     InvalidateRect(hScreenFlashOverlay, NULL, TRUE);
 
     s_flashStartTime  = GetTickCount64();

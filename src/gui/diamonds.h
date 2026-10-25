@@ -420,11 +420,10 @@ static void Diamonds_SetRowHeight(HWND hList, int rowHeight) {
     if (!diamondsState.rowHeightImageList) return;
 
     // Add one fully-transparent 1x1 bitmap so the image list is non-empty.
-    HBITMAP hbmImage = CreateBitmap(1, rowHeight, 1, 1, NULL);
-    HBITMAP hbmMask  = CreateBitmap(1, rowHeight, 1, 1, NULL);
-    ImageList_Add(diamondsState.rowHeightImageList, hbmImage, hbmMask);
-    DeleteObject(hbmImage);
-    DeleteObject(hbmMask);
+    unique_hbitmap hbmImage(CreateBitmap(1, rowHeight, 1, 1, NULL));
+    unique_hbitmap hbmMask(CreateBitmap(1, rowHeight, 1, 1, NULL));
+    if (hbmImage && hbmMask)
+        ImageList_Add(diamondsState.rowHeightImageList, hbmImage.get(), hbmMask.get());
 
     ListView_SetImageList(hList, diamondsState.rowHeightImageList, LVSIL_SMALL);
 }

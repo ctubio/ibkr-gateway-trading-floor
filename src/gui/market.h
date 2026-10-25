@@ -1478,12 +1478,20 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 
     // Width is fixed for the life of this window (non-resizable), so the
     // memory DC/bitmap only need to be created once and reused every paint.
-    if (!state->hdcHeaderMem) {
-        state->hdcHeaderMem = CreateCompatibleDC(hdcOrig);
-        state->hbmHeader    = CreateCompatibleBitmap(hdcOrig, rc.right, HEADER_H);
+    if (!state->hdcHeaderMem)
+        state->hdcHeaderMem.reset(CreateCompatibleDC(hdcOrig));
+    if (!state->hbmHeader)
+        state->hbmHeader.reset(CreateCompatibleBitmap(hdcOrig, rc.right, HEADER_H));
+    HDC hdcMem = state->hdcHeaderMem.get();
+    if (!hdcMem || !state->hbmHeader) {
+        EndPaint(hWnd, &ps);
+        return;
     }
-    HDC hdcMem = state->hdcHeaderMem;
-    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, state->hbmHeader);
+    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, state->hbmHeader.get());
+    if (!hbmOld || hbmOld == HGDI_ERROR) {
+        EndPaint(hWnd, &ps);
+        return;
+    }
     hdc = hdcMem; // redirect all subsequent drawing to the memory DC
 
     const COLORREF textColor  = darkMode ? DM_TEXT : GetSysColor(COLOR_WINDOWTEXT);
@@ -2238,19 +2246,19 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (hCtrl == state->hOrderPrice) {
                 SetTextColor(hdc, DM_TEXT);
                 SetBkColor(hdc, isBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
-                return (LRESULT)(isBuy ? hBrushDarkGreen : hBrushDarkRed);
+                return (LRESULT)(isBuy ? hBrushDarkGreen.get() : hBrushDarkRed.get());
             }
             if (hCtrl == state->hOrderStopPrice || hCtrl == state->hOrderProfitPrice) {
                 SetTextColor(hdc, DM_TEXT);
                 SetBkColor(hdc, isBuy ? COINS_BG_DARK_RED : COINS_BG_DARK_GREEN);
-                return (LRESULT)(isBuy ? hBrushDarkRed : hBrushDarkGreen);
+                return (LRESULT)(isBuy ? hBrushDarkRed.get() : hBrushDarkGreen.get());
             }
             for (auto& row : state->orderRows) {
                 if (hCtrl == row.hPriceEdit) {
                     bool rowIsBuy = (row.action == "BUY");
                     SetTextColor(hdc, DM_TEXT);
                     SetBkColor(hdc, rowIsBuy ? COINS_BG_DARK_GREEN : COINS_BG_DARK_RED);
-                    return (LRESULT)(rowIsBuy ? hBrushDarkGreen : hBrushDarkRed);
+                    return (LRESULT)(rowIsBuy ? hBrushDarkGreen.get() : hBrushDarkRed.get());
                 }
             }
         }
@@ -2597,8 +2605,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 SharedTts().Release();
                 state->ttsOn = false;
             }
-            if (state->hbmHeader)    DeleteObject(state->hbmHeader);
-            if (state->hdcHeaderMem) DeleteDC(state->hdcHeaderMem);
+            state->hdcHeaderMem.reset();
+            state->hbmHeader.reset();
             state->caption.Free(true);
             // Row controls are children of hWnd, DestroyWindow(hWnd) tears them
             // down (and unsubclasses them via their own WM_NCDESTROY) automatically.

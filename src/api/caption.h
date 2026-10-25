@@ -1,22 +1,20 @@
 #pragma once
 
 struct CaptionCache {
-    HDC dc{};
-    HBITMAP bmp{}, old{};
+    unique_hbitmap bmp;
+    unique_hdc dc;
+    HBITMAP old{};
     void* bits{};
     int w{}, h{};
     HTHEME theme{};
 
     void Free(bool alsoTheme) {
         if (dc) {
-            if (old) SelectObject(dc, old);
-            if (bmp) DeleteObject(bmp);
-            DeleteDC(dc);
-        } else if (bmp) {
-            DeleteObject(bmp);
+            if (old) SelectObject(dc.get(), old);
         }
-        dc = nullptr;
-        bmp = old = nullptr;
+        old = nullptr;
+        dc.reset();
+        bmp.reset();
         bits = nullptr;
         w = h = 0;
         if (alsoTheme && theme) {
@@ -30,7 +28,7 @@ struct CaptionCache {
         if (dc && bmp && bits && w == width && h == height) return true;
 
         Free(false);
-        dc = CreateCompatibleDC(ref);
+        dc.reset(CreateCompatibleDC(ref));
         if (!dc) return false;
 
         BITMAPINFO bi = {};
@@ -40,12 +38,12 @@ struct CaptionCache {
         bi.bmiHeader.biPlanes = 1;
         bi.bmiHeader.biBitCount = 32;
         bi.bmiHeader.biCompression = BI_RGB;
-        bmp = CreateDIBSection(ref, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        bmp.reset(CreateDIBSection(ref, &bi, DIB_RGB_COLORS, &bits, nullptr, 0));
         if (!bmp || !bits) {
             Free(false);
             return false;
         }
-        HGDIOBJ previous = SelectObject(dc, bmp);
+        HGDIOBJ previous = SelectObject(dc.get(), bmp.get());
         if (!previous || previous == HGDI_ERROR) {
             Free(false);
             return false;

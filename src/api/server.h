@@ -1489,7 +1489,7 @@ static std::string RouteRequest(const std::string& rawRequest) {
 
     LogDebug(std::string("HTTP request: ") + method + " " + path);
 
-    // ── POST /trade ───────────────────────────────────────────────────────────
+    // ── POST /trade, created Unsent orders, not real orders, so is harmless ───────────────────────────────────────────────────────────
     if (path == "/trade" || path == "/trade/") {
         if (method != "POST") return MakeMethodNotAllowed();
         std::string origin;

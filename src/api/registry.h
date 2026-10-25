@@ -28,20 +28,20 @@ static double profitGateway    = 0.0;
 static double riskGateway      = 0.0;
 static double safetyGateway    = 0.0;
 
-static HBRUSH hDarkBrush = NULL;
+static unique_hbrush hDarkBrush;
 static HBRUSH hLightBrush = NULL;
-static HBRUSH hDarkBrush2 = NULL;
-static HBRUSH hBrushDarkGreen = NULL; // dark green background for BUY-side price inputs
-static HBRUSH hBrushDarkRed = NULL;   // dark red background for SELL-side price inputs
-static HBRUSH hBrushGreen = NULL;     // bright green background for BUY-side price inputs
-static HBRUSH hBrushRed = NULL;       // bright red background for SELL-side price inputs
-static HBRUSH hGrayBrush = NULL;      // gray background for scrollbars and other UI elements
+static unique_hbrush hDarkBrush2;
+static unique_hbrush hBrushDarkGreen; // dark green background for BUY-side price inputs
+static unique_hbrush hBrushDarkRed;   // dark red background for SELL-side price inputs
+static unique_hbrush hBrushGreen;     // bright green background for BUY-side price inputs
+static unique_hbrush hBrushRed;      // bright red background for SELL-side price inputs
+static unique_hbrush hGrayBrush;     // gray background for scrollbars and other UI elements
 static HBRUSH hLightBrushBg = NULL;
-static HBRUSH hLightBrushBg2 = NULL;
-static HBRUSH hBorderBrush = NULL;
+static unique_hbrush hLightBrushBg2;
+static unique_hbrush hBorderBrush;
 
-static HPEN hBorderPenLight = NULL;
-static HPEN hBorderPen = NULL;
+static unique_hpen hBorderPenLight;
+static unique_hpen hBorderPen;
 
 static HWND hDebugEdit = NULL;
 

@@ -53,6 +53,7 @@
 #include <optional>
 #include <string_view>
 
+#include "gdi_raii.h"
 #include "volume.h"
 
 #define WM_API_UPDATE           (WM_USER +  2)

@@ -255,8 +255,8 @@ struct TsState {
     Sparkline sparkline;
     
     // ── Cached header double-buffer (avoids CreateCompatibleDC/Bitmap every paint) ──
-    HDC     hdcHeaderMem = NULL;
-    HBITMAP hbmHeader    = NULL;
+    unique_hbitmap hbmHeader;
+    unique_hdc hdcHeaderMem;
 
     CaptionCache caption;
 };
@@ -294,24 +294,22 @@ static std::string FormatFixed(double value, int decimals, bool alwaysSign = fal
 
 void InitDarkBrushes() {
     if (hDarkBrush) return;
-    hDarkBrush      = CreateSolidBrush(DM_BG);
+    hDarkBrush.reset(CreateSolidBrush(DM_BG));
     hLightBrush     = GetSysColorBrush(COLOR_BTNFACE);
-    hDarkBrush2     = CreateSolidBrush(DM_BG2);
-    hBrushDarkGreen = CreateSolidBrush(COINS_BG_DARK_GREEN);
-    hBrushDarkRed   = CreateSolidBrush(COINS_BG_DARK_RED);
-    hBrushGreen     = CreateSolidBrush(COINS_CLR_GREEN);
-    hBrushRed       = CreateSolidBrush(COINS_CLR_RED);
-    hGrayBrush      = CreateSolidBrush(RGB(45, 45, 45));
+    hDarkBrush2.reset(CreateSolidBrush(DM_BG2));
+    hBrushDarkGreen.reset(CreateSolidBrush(COINS_BG_DARK_GREEN));
+    hBrushDarkRed.reset(CreateSolidBrush(COINS_BG_DARK_RED));
+    hBrushGreen.reset(CreateSolidBrush(COINS_CLR_GREEN));
+    hBrushRed.reset(CreateSolidBrush(COINS_CLR_RED));
+    hGrayBrush.reset(CreateSolidBrush(RGB(45, 45, 45)));
     hLightBrushBg   = GetSysColorBrush(COLOR_WINDOW);
-    hLightBrushBg2  = CreateSolidBrush(RGB(245,245,245));
-    hBorderBrush    = CreateSolidBrush(DM_BORDER);
+    hLightBrushBg2.reset(CreateSolidBrush(RGB(245,245,245)));
+    hBorderBrush.reset(CreateSolidBrush(DM_BORDER));
     
-    hBorderPenLight = CreatePen(PS_SOLID, 1, RGB(200,200,200));
-    hBorderPen      = CreatePen(PS_SOLID, 1, DM_BORDER);
+    hBorderPenLight.reset(CreatePen(PS_SOLID, 1, RGB(200,200,200)));
+    hBorderPen.reset(CreatePen(PS_SOLID, 1, DM_BORDER));
 
-    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
-    ULONG_PTR gdiplusToken;
-    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+    static GdiplusLifetime gdiplusLifetime;
 
     sparkColors[0] = Gdiplus::Color(178, 1, 166, 1);   // Green
     sparkColors[1] = Gdiplus::Color(178, 255, 165, 0); // Orange
@@ -416,19 +414,30 @@ HWND StartGenericWindow(const char* className, const char* title, const wchar_t*
 }
 
 HICON CreateGrayIcon(HICON hOriginal) {
-    ICONINFO ii;
-    GetIconInfo(hOriginal, &ii);
+    ICONINFO ii{};
+    if (!hOriginal || !GetIconInfo(hOriginal, &ii)) return nullptr;
+    unique_hbitmap sourceColor(ii.hbmColor);
+    unique_hbitmap sourceMask(ii.hbmMask);
 
-    HDC hdcScreen = GetDC(NULL);
-    HDC hdcMem    = CreateCompatibleDC(hdcScreen);
+    struct ScreenDC {
+        HDC hdc = GetDC(nullptr);
+        ~ScreenDC() { if (hdc) ReleaseDC(nullptr, hdc); }
+    } screen;
+    if (!screen.hdc) return nullptr;
+    unique_hbitmap hbmGray;
+    unique_hdc hdcMem(CreateCompatibleDC(screen.hdc));
+    if (!hdcMem) return nullptr;
 
     BITMAP bm;
-    GetObject(ii.hbmColor, sizeof(bm), &bm);
+    if (!ii.hbmColor || GetObject(ii.hbmColor, sizeof(bm), &bm) != sizeof(bm)) return nullptr;
 
-    HBITMAP hbmGray = CreateCompatibleBitmap(hdcScreen, bm.bmWidth, bm.bmHeight);
-    HGDIOBJ hbmOld = SelectObject(hdcMem, hbmGray);
+    hbmGray.reset(CreateCompatibleBitmap(screen.hdc, bm.bmWidth, bm.bmHeight));
+    if (!hbmGray) return nullptr;
+    HGDIOBJ hbmOld = SelectObject(hdcMem.get(), hbmGray.get());
+    if (!hbmOld || hbmOld == HGDI_ERROR) return nullptr;
 
-    DrawIconEx(hdcMem, 0, 0, hOriginal, bm.bmWidth, bm.bmHeight, 0, NULL, DI_NORMAL);
+    DrawIconEx(hdcMem.get(), 0, 0, hOriginal, bm.bmWidth, bm.bmHeight, 0, NULL, DI_NORMAL);
+    SelectObject(hdcMem.get(), hbmOld);
 
     BITMAPINFO bmi = {};
     bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
@@ -439,7 +448,7 @@ HICON CreateGrayIcon(HICON hOriginal) {
     bmi.bmiHeader.biCompression = BI_RGB;
 
     std::vector<DWORD> pixels(bm.bmWidth * bm.bmHeight);
-    GetDIBits(hdcMem, hbmGray, 0, bm.bmHeight, pixels.data(), &bmi, DIB_RGB_COLORS);
+    GetDIBits(hdcMem.get(), hbmGray.get(), 0, bm.bmHeight, pixels.data(), &bmi, DIB_RGB_COLORS);
 
     for (auto& px : pixels) {
         BYTE r = (px >> 16) & 0xFF;
@@ -450,22 +459,16 @@ HICON CreateGrayIcon(HICON hOriginal) {
         px = ((a / 2) << 24) | (gray << 16) | (gray << 8) | gray;
     }
 
-    SetDIBits(hdcMem, hbmGray, 0, bm.bmHeight, pixels.data(), &bmi, DIB_RGB_COLORS);
+    SetDIBits(hdcMem.get(), hbmGray.get(), 0, bm.bmHeight, pixels.data(), &bmi, DIB_RGB_COLORS);
 
-    ICONINFO iiGray = { TRUE, ii.xHotspot, ii.yHotspot, ii.hbmMask, hbmGray };
+    ICONINFO iiGray = { TRUE, ii.xHotspot, ii.yHotspot, ii.hbmMask, hbmGray.get() };
     HICON hGray = CreateIconIndirect(&iiGray);
-
-    DeleteObject(ii.hbmColor);
-    DeleteObject(ii.hbmMask);
-    SelectObject(hdcMem, hbmOld);
-    DeleteObject(hbmGray);
-    DeleteDC(hdcMem);
-    ReleaseDC(NULL, hdcScreen);
 
     return hGray;
 }
 static HFONT Coins_MakeMDL2Font(int ptSize) {
     HDC hdc = GetDC(NULL);
+    if (!hdc) return nullptr;
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
     ReleaseDC(NULL, hdc);
     return CreateFontW(h, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
@@ -473,57 +476,29 @@ static HFONT Coins_MakeMDL2Font(int ptSize) {
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
 }
 
-static HFONT hFont_Icons = Coins_MakeMDL2Font(11);   // Segoe MDL2 Assets for speaker/moon/lock glyphs
+static unique_hfont hFont_Icons{Coins_MakeMDL2Font(11)};
 
 class ScopedFont {
-    HFONT hFont = NULL;
+    unique_hfont hFont;
 
 public:
-    // Constructor handles the DPI-aware height calculation and font creation directly
     ScopedFont(int ptSize, bool bold, const char* family = "Proxima Nova") {
         HDC hdc = GetDC(NULL);
+        if (!hdc) return;
         int h = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
         ReleaseDC(NULL, hdc);
-        
-        hFont = CreateFontA(
+
+        hFont.reset(CreateFontA(
             h, 0, 0, 0,
             bold ? FW_BOLD : FW_NORMAL,
             FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, family
-        );
+        ));
     }
 
-    // Destructor automatically cleans up the GDI resource
-    ~ScopedFont() {
-        if (hFont) {
-            DeleteObject(hFont);
-        }
-    }
-
-    // Prevent copying to avoid double-deletion crashes
-    ScopedFont(const ScopedFont&) = delete;
-    ScopedFont& operator=(const ScopedFont&) = delete;
-
-    // Allow moving
-    ScopedFont(ScopedFont&& other) noexcept : hFont(other.hFont) {
-        other.hFont = NULL;
-    }
-    
-    ScopedFont& operator=(ScopedFont&& other) noexcept {
-        if (this != &other) {
-            if (hFont) DeleteObject(hFont);
-            hFont = other.hFont;
-            other.hFont = NULL;
-        }
-        return *this;
-    }
-
-    // Implicit conversion to HFONT
-    operator HFONT() const { return hFont; }
-    
-    // Explicit getter 
-    HFONT get() const { return hFont; }
+    HFONT get() const { return hFont.get(); }
+    operator HFONT() const { return get(); }
 };
 
 static ScopedFont hFont11pt(11, false);
@@ -729,14 +704,14 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (!darkMode) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG);
-            return (LRESULT)hDarkBrush;
+            return (LRESULT)hDarkBrush.get();
         }
         case WM_CTLCOLOREDIT:
         case WM_CTLCOLORLISTBOX: {
             if (!darkMode) return 0;
             SetTextColor((HDC)wParam, DM_TEXT);
             SetBkColor((HDC)wParam, DM_BG2);
-            return (LRESULT)hDarkBrush2;
+            return (LRESULT)hDarkBrush2.get();
         }
         case WM_DRAWITEM: {
             DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)lParam;
@@ -761,17 +736,18 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                 : (darkMode ? DM_TEXT : LM_TEXT);
 
             // --- Fill Background ---
-            HBRUSH hBg = CreateSolidBrush(bgColor);
-            FillRect(dis->hDC, &dis->rcItem, hBg);
-            DeleteObject(hBg);
+            unique_hbrush hBg(CreateSolidBrush(bgColor));
+            if (hBg) FillRect(dis->hDC, &dis->rcItem, hBg.get());
 
             // --- Draw Subtle Border ---
-            HPEN hPen = CreatePen(PS_SOLID, 1, borderColor);
-            HPEN hOld = (HPEN)SelectObject(dis->hDC, hPen);
-            SelectObject(dis->hDC, GetStockObject(NULL_BRUSH)); // Transparent inside
-            Rectangle(dis->hDC, dis->rcItem.left, dis->rcItem.top, dis->rcItem.right, dis->rcItem.bottom);
-            SelectObject(dis->hDC, hOld);
-            DeleteObject(hPen);
+            unique_hpen hPen(CreatePen(PS_SOLID, 1, borderColor));
+            HPEN hOld = hPen ? (HPEN)SelectObject(dis->hDC, hPen.get()) : nullptr;
+            HGDIOBJ hOldBrush = SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
+            if (hPen && hOld && hOld != HGDI_ERROR) {
+                Rectangle(dis->hDC, dis->rcItem.left, dis->rcItem.top, dis->rcItem.right, dis->rcItem.bottom);
+                SelectObject(dis->hDC, hOld);
+            }
+            if (hOldBrush && hOldBrush != HGDI_ERROR) SelectObject(dis->hDC, hOldBrush);
 
             // --- Draw Icon or Text ---
             // Icon buttons store their handle via SetProp; text buttons return NULL.
@@ -796,11 +772,17 @@ LRESULT HandleDarkModeMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (focused && !pressed) {
                 RECT rcFocus = dis->rcItem;
                 InflateRect(&rcFocus, -2, -2); // shrink by 2 pixels
-                HPEN hFocusPen = CreatePen(PS_DOT, 1, darkMode ? RGB(100, 100, 100) : RGB(170, 170, 170));
-                HPEN hOldFocus = (HPEN)SelectObject(dis->hDC, hFocusPen);
-                Rectangle(dis->hDC, rcFocus.left, rcFocus.top, rcFocus.right, rcFocus.bottom);
-                SelectObject(dis->hDC, hOldFocus);
-                DeleteObject(hFocusPen);
+                unique_hpen hFocusPen(CreatePen(PS_DOT, 1, darkMode ? RGB(100, 100, 100) : RGB(170, 170, 170)));
+                HPEN hOldFocus = hFocusPen ? (HPEN)SelectObject(dis->hDC, hFocusPen.get()) : nullptr;
+                HGDIOBJ hOldFocusBrush = SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
+                if (hFocusPen && hOldFocus && hOldFocus != HGDI_ERROR &&
+                    hOldFocusBrush && hOldFocusBrush != HGDI_ERROR) {
+                    Rectangle(dis->hDC, rcFocus.left, rcFocus.top, rcFocus.right, rcFocus.bottom);
+                }
+                if (hOldFocusBrush && hOldFocusBrush != HGDI_ERROR)
+                    SelectObject(dis->hDC, hOldFocusBrush);
+                if (hFocusPen && hOldFocus && hOldFocus != HGDI_ERROR)
+                    SelectObject(dis->hDC, hOldFocus);
             }
 
             return TRUE;
