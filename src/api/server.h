@@ -24,7 +24,7 @@
 //  One REG_SZ value per day (key = YYYY-MM-DD). Values older than 7 days are
 //  purged automatically at the end of every /today or /week request.
 //
-//  JSON is hand-built (no external library required).
+//  JSON handling is powered by nlohmann/json.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -44,36 +44,7 @@ static std::mutex        httpClientQueueMutex;
 static std::condition_variable httpClientQueueCv;
 static std::atomic<bool> httpRunning{ false };
 
-// ── JSON helpers ──────────────────────────────────────────────────────────────
-
-static std::string JsonEscapeString(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() + 4);
-    for (unsigned char c : s) {
-        switch (c) {
-            case '"':  out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n";  break;
-            case '\r': out += "\\r";  break;
-            case '\t': out += "\\t";  break;
-            default:
-                if (c < 0x20) {
-                    char buf[8];
-                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned)c);
-                    out += buf;
-                } else {
-                    out += (char)c;
-                }
-        }
-    }
-    return out;
-}
-
-static std::string JsonDouble(double v) {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%.2f", v);
-    return buf;
-}
+// ── JSON helpers (using nlohmann/json) ────────────────────────────────────────
 
 // Serialise one PositionInfo to a JSON object string.
 static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
@@ -93,32 +64,29 @@ static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
     double week26Pct = weekChangePct(p.closeAgo26Week);
     double week52Pct = weekChangePct(p.closeAgo52Week);
 
-    std::string j;
-    j.reserve(512);
-    j += "{";
-    j += "\"conId\":"              + std::to_string(p.conId)                 + ",";
-    j += "\"symbol\":\""           + JsonEscapeString(p.symbol)              + "\",";
-    j += "\"exchange\":\""         + JsonEscapeString(p.exchange)            + "\",";
-    j += "\"shares\":"             + std::format("{:.0f}", p.shares)         + ",";
-    j += "\"avgCost\":"            + JsonDouble(p.avgCost)                   + ",";
-    j += "\"last\":"               + JsonDouble(l1.last)                     + ",";
-    j += "\"vwap\":"               + JsonDouble(l1.vwap)                     + ",";
-    j += "\"marketValue\":"        + JsonDouble(p.shares * l1.last)          + ",";
-    j += "\"week13_low\":"         + JsonDouble(l1.low13)                    + ",";
-    j += "\"week26_low\":"         + JsonDouble(l1.low26)                    + ",";
-    j += "\"week52_low\":"         + JsonDouble(l1.low52)                    + ",";
-    j += "\"week13_high\":"        + JsonDouble(l1.high13)                   + ",";
-    j += "\"week26_high\":"        + JsonDouble(l1.high26)                   + ",";
-    j += "\"week52_high\":"        + JsonDouble(l1.high52)                   + ",";
-    j += "\"week13Change_pct\":\""       + std::format("{:+.2f}%", week13Pct) + "\",";
-    j += "\"week26Change_pct\":\""       + std::format("{:+.2f}%", week26Pct) + "\",";
-    j += "\"week52Change_pct\":\""       + std::format("{:+.2f}%", week52Pct) + "\",";
-    j += "\"dailyChange_pct\":\""  + std::format("{:+.2f}%", l1.changePct()) + "\",";
-    j += "\"dailyPnL\":"           + JsonDouble(p.pnlSingle.dailyPnL)        + ",";
-    j += "\"unrealizedPnL\":"      + JsonDouble(p.pnlSingle.unrealizedPnL)   + ",";
-    j += "\"unrealizedPnL_pct\":\"" + std::format("{:+.2f}%", unrealizedPct) + "\"";
-    j += "}";
-    return j;
+    json j;
+    j["conId"] = p.conId;
+    j["symbol"] = p.symbol;
+    j["exchange"] = p.exchange;
+    j["shares"] = p.shares;
+    j["avgCost"] = p.avgCost;
+    j["last"] = l1.last;
+    j["vwap"] = l1.vwap;
+    j["marketValue"] = p.shares * l1.last;
+    j["week13_low"] = l1.low13;
+    j["week26_low"] = l1.low26;
+    j["week52_low"] = l1.low52;
+    j["week13_high"] = l1.high13;
+    j["week26_high"] = l1.high26;
+    j["week52_high"] = l1.high52;
+    j["week13Change_pct"] = std::format("{:+.2f}%", week13Pct);
+    j["week26Change_pct"] = std::format("{:+.2f}%", week26Pct);
+    j["week52Change_pct"] = std::format("{:+.2f}%", week52Pct);
+    j["dailyChange_pct"] = std::format("{:+.2f}%", l1.changePct());
+    j["dailyPnL"] = p.pnlSingle.dailyPnL;
+    j["unrealizedPnL"] = p.pnlSingle.unrealizedPnL;
+    j["unrealizedPnL_pct"] = std::format("{:+.2f}%", unrealizedPct);
+    return j.dump();
 }
 
 // ── HTTP framing helpers ──────────────────────────────────────────────────────
@@ -218,30 +186,25 @@ static std::string HandleGetBalance() {
     if (summary["USD_CashBalance"].empty()) summary["USD_CashBalance"] = "0.00";
     if (summary["BASE_CashBalance"].empty()) summary["BASE_CashBalance"] = "0.00";
     
-    std::string j;
-    j.reserve(512);
-    j += "{";
-    j += "\"accountNumber\":\"" + JsonEscapeString(acc) + "\",";
-    j += "\"NetLiquidation\":"   + summary["NetLiquidation"]   + ",";
-    j += "\"pnl\":{";
-    j += "\"dailyPnL\":"        + JsonDouble(daily)      + ",";
-    j += "\"unrealizedPnL\":"   + JsonDouble(unrealized) + ",";
-    j += "\"realizedPnL\":"     + JsonDouble(realized)   + ",";
-    j += "\"AccruedDividend\":"  + summary["AccruedDividend"];
-    j += "},";
-    j += "\"margin\":{";
-    j += "\"GrossPositionValue\":" + summary["GrossPositionValue"] + ",";
-    j += "\"BuyingPower\":"       + summary["BuyingPower"]   + ",";
-    j += "\"MaintMarginReq\":"    + summary["MaintMarginReq"]   + ",";
-    j += "\"AccruedCash\":"      + summary["AccruedCash"];
-    j += "},";
-    j += "\"cash\":{";
-    j += "\"EUR_CashBalance\":"  + summary["EUR_CashBalance"]  + ",";
-    j += "\"USD_CashBalance\":"  + summary["USD_CashBalance"]  + ",";
-    j += "\"TOTAL_CashBalance\":" + summary["BASE_CashBalance"];
-    j += "}";
-    j += "}";
-    return j;
+    json j;
+    j["accountNumber"] = acc;
+    j["NetLiquidation"] = std::stod(summary["NetLiquidation"]);
+    
+    j["pnl"]["dailyPnL"] = daily;
+    j["pnl"]["unrealizedPnL"] = unrealized;
+    j["pnl"]["realizedPnL"] = realized;
+    j["pnl"]["AccruedDividend"] = std::stod(summary["AccruedDividend"]);
+
+    j["margin"]["GrossPositionValue"] = std::stod(summary["GrossPositionValue"]);
+    j["margin"]["BuyingPower"] = std::stod(summary["BuyingPower"]);
+    j["margin"]["MaintMarginReq"] = std::stod(summary["MaintMarginReq"]);
+    j["margin"]["AccruedCash"] = std::stod(summary["AccruedCash"]);
+
+    j["cash"]["EUR_CashBalance"] = std::stod(summary["EUR_CashBalance"]);
+    j["cash"]["USD_CashBalance"] = std::stod(summary["USD_CashBalance"]);
+    j["cash"]["TOTAL_CashBalance"] = std::stod(summary["BASE_CashBalance"]);
+
+    return j.dump();
 }
 
 // GET /portfolio  →  JSON array of all positions
@@ -263,15 +226,46 @@ static std::string HandleGetPositions() {
         }
     }
 
-    std::string body = "[";
-    bool first = true;
+    json arr = json::array();
     for (const auto& pos : positions) {
-        if (!first) body += ",";
-        body += PositionToJson(pos);
-        first = false;
+        TradingAPI::L1Book l1;
+        api().getMarketData(pos.conId, l1);
+
+        double unrealizedPct = 0;
+        double costBasis = pos.avgCost * std::fabs(pos.shares);
+        if (costBasis > 0.0) {
+            unrealizedPct = pos.pnlSingle.unrealizedPnL / costBasis * 100.0;
+        }
+
+        auto weekChangePct = [&](double closeAgo) -> double {
+            return (closeAgo > 0.0 && l1.last > 0.0) ? (l1.last - closeAgo) / closeAgo * 100.0 : 0.0;
+        };
+
+        json j;
+        j["conId"] = pos.conId;
+        j["symbol"] = pos.symbol;
+        j["exchange"] = pos.exchange;
+        j["shares"] = pos.shares;
+        j["avgCost"] = pos.avgCost;
+        j["last"] = l1.last;
+        j["vwap"] = l1.vwap;
+        j["marketValue"] = pos.shares * l1.last;
+        j["week13_low"] = l1.low13;
+        j["week26_low"] = l1.low26;
+        j["week52_low"] = l1.low52;
+        j["week13_high"] = l1.high13;
+        j["week26_high"] = l1.high26;
+        j["week52_high"] = l1.high52;
+        j["week13Change_pct"] = std::format("{:+.2f}%", weekChangePct(pos.closeAgo13Week));
+        j["week26Change_pct"] = std::format("{:+.2f}%", weekChangePct(pos.closeAgo26Week));
+        j["week52Change_pct"] = std::format("{:+.2f}%", weekChangePct(pos.closeAgo52Week));
+        j["dailyChange_pct"] = std::format("{:+.2f}%", l1.changePct());
+        j["dailyPnL"] = pos.pnlSingle.dailyPnL;
+        j["unrealizedPnL"] = pos.pnlSingle.unrealizedPnL;
+        j["unrealizedPnL_pct"] = std::format("{:+.2f}%", unrealizedPct);
+        arr.push_back(j);
     }
-    body += "]";
-    return body;
+    return arr.dump();
 }
 
 // GET /portfolio/{SYMBOL}  →  JSON object for a single position (or empty on miss)
@@ -1183,74 +1177,34 @@ static std::string HandleGetNews(int numDays) {
                 if (numDays != 1) body += std::string(60, '=') + "\n\n";
                 continue;
             }
-            // Guard against permanently caching a fetch that still carries
-    // site chrome the trim markers didn't catch (e.g. yet another
-    // template change), better to re-fetch next call than freeze
-    // bad content in the registry for up to 7 days.
-    bool looksClean = content.find("Powered by beehiiv") == std::string::npos &&
-                      content.find("TraderTV Live Morning Research Note") == std::string::npos;
-    if (looksClean) News_SaveCache(dateKey, content);
-        } else {
-            // body += "\n[Using cached data for " + News_FormatHeader(st) + "]\n";
+            bool looksClean = content.find("Powered by beehiiv") == std::string::npos &&
+                              content.find("TraderTV Live Morning Research Note") == std::string::npos;
+            if (looksClean) News_SaveCache(dateKey, content);
         }
 
         body += News_DayHeader(st);
         body += content;
     }
 
-    // Cleanup old registry entries (mirrors Python cleanup_old_cache)
-    /*int deleted = */News_CleanupCache(7);
-    //if (deleted > 0) body += "\n\n[Cleaned up " + std::to_string(deleted) + " expired cache entry(ies)]\n";
-
+    News_CleanupCache(7);
     return body;
 }
 
-// ── Simple JSON field extractor ──────────────────────────────────────────────
-// Extracts the value of a JSON string field: "key":"value" → value
-// Returns empty string if not found.
-static std::string JsonExtractString(const std::string& json, const std::string& key) {
-    std::string needle = "\"" + key + "\"";
-    size_t pos = json.find(needle);
-    if (pos == std::string::npos) return "";
-    pos += needle.size();
-    // skip whitespace and colon
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':' || json[pos] == '\t')) ++pos;
-    if (pos >= json.size()) return "";
-    if (json[pos] == '"') {
-        ++pos;
-        std::string val;
-        while (pos < json.size() && json[pos] != '"') val += json[pos++];
-        return val;
-    }
-    return "";
-}
-
-// Extracts the value of a JSON number field: "key":123.45 → "123.45" (as string)
-// Returns empty string if not found.
-static std::string JsonExtractNumber(const std::string& json, const std::string& key) {
-    std::string needle = "\"" + key + "\"";
-    size_t pos = json.find(needle);
-    if (pos == std::string::npos) return "";
-    pos += needle.size();
-    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':' || json[pos] == '\t')) ++pos;
-    if (pos >= json.size()) return "";
-    std::string val;
-    while (pos < json.size() && (std::isdigit((unsigned char)json[pos]) || json[pos] == '.' || json[pos] == '-' || json[pos] == '+' || json[pos] == 'e' || json[pos] == 'E'))
-        val += json[pos++];
-    return val;
-}
-
-// ── POST /trade handler ───────────────────────────────────────────────────────
+// ── POST /trade handler (using nlohmann/json) ──────────────────────────────────
 
 // Forward the trade to the external paper-trading coins.
 // Uses WinInet (already linked for news fetching) so no new dependencies.
 static void ForwardTradeToCoins(const std::string& symbol, const std::string& side, double quantity, double price, double stopPrice, double profitPrice) {
-    std::string profitPriceStr;
+    json payloadObj;
+    payloadObj["symbol"] = symbol;
+    payloadObj["side"] = side;
+    payloadObj["quantity"] = quantity;
+    payloadObj["price"] = price;
+    payloadObj["stopPrice"] = stopPrice;
     if (profitPrice > 0.0) {
-        profitPriceStr = ",\"profitPrice\":" + std::format("{:.2f}", profitPrice);
+        payloadObj["profitPrice"] = profitPrice;
     }
-    // Build JSON payload
-    std::string payload = std::format(R"({{"symbol":"{}", "side":"{}", "quantity":{:.0f}, "price":{:.2f}, "stopPrice":{:.2f}{}}})", JsonEscapeString(symbol), side, quantity, price, stopPrice, profitPriceStr);
+    std::string payload = payloadObj.dump();
 
     // Build the raw HTTP POST request
     // Host: 192.168.1.105:2025  Path: /paper?action=place_trade
@@ -1330,15 +1284,29 @@ static void ForwardTradeToCoins(const std::string& symbol, const std::string& si
 // POST /trade
 // Body: {"symbol":"AAPL","side":"BUY","quantity":10,"price":175.50}
 static std::string HandlePostTrade(const std::string& body) {
-    // ── Parse JSON fields ─────────────────────────────────────────────────────
-    std::string symbol = JsonExtractString(body, "symbol");
-    std::string side   = JsonExtractString(body, "side");
-    std::string qtyStr = JsonExtractNumber(body, "quantity");
-    std::string prxStr = JsonExtractNumber(body, "price");
-    std::string stpStr = JsonExtractNumber(body, "stopPrice");
-    std::string proStr = JsonExtractNumber(body, "profitPrice");
+    json j;
+    try {
+        j = json::parse(body);
+    } catch (...) {
+        return MakeHttpResponse(400, "Bad Request", "{\"error\":\"invalid json payload\"}");
+    }
 
-    if (symbol.empty() || side.empty() || qtyStr.empty() || prxStr.empty()) {
+    std::string symbol = j.contains("symbol") && j["symbol"].is_string() ? j["symbol"].get<std::string>() : "";
+    std::string side = j.contains("side") && j["side"].is_string() ? j["side"].get<std::string>() : "";
+    
+    double quantity = 0.0;
+    if (j.contains("quantity") && j["quantity"].is_number()) quantity = j["quantity"].get<double>();
+    
+    double price = 0.0;
+    if (j.contains("price") && j["price"].is_number()) price = j["price"].get<double>();
+    
+    double stopPrice = 0.0;
+    if (j.contains("stopPrice") && j["stopPrice"].is_number()) stopPrice = j["stopPrice"].get<double>();
+
+    double profitPrice = 0.0;
+    if (j.contains("profitPrice") && j["profitPrice"].is_number()) profitPrice = j["profitPrice"].get<double>();
+
+    if (symbol.empty() || side.empty() || quantity <= 0.0 || price <= 0.0) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"missing required fields: symbol, side, quantity, price\"}");
     }
@@ -1364,28 +1332,6 @@ static std::string HandlePostTrade(const std::string& body) {
             "{\"error\":\"side must be BUY or SELL\"}");
     }
 
-    double quantity = 0.0;
-    double price    = 0.0;
-    double stopPrice = 0.0;
-    
-    try {
-        quantity = std::stod(qtyStr);
-        price    = std::stod(prxStr);
-    } catch (...) {
-        return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"quantity and price and stopPrice must be numeric\"}");
-    }
-
-    try {
-        stopPrice = std::max(0.0, std::stod(stpStr));
-    } catch (...) {
-        stopPrice = 0.0;
-    }
-    
-    if (quantity <= 0.0 || price <= 0.0) {
-        return MakeHttpResponse(400, "Bad Request",
-            "{\"error\":\"quantity and price must be positive\"}");
-    }
     if (quantity > 10.0) {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"quantity can't be greater than 10\"}");
@@ -1393,13 +1339,6 @@ static std::string HandlePostTrade(const std::string& body) {
     if (stopPrice <= 0.0 && side == "BUY") {
         return MakeHttpResponse(400, "Bad Request",
             "{\"error\":\"stopPrice must be positive for BUY orders\"}");
-    }
-
-    double profitPrice = 0.0;
-    try {
-        profitPrice = std::max(0.0, std::stod(proStr));
-    } catch (...) {
-        profitPrice = 0.0;
     }
 
     // BUY: stop-loss must sit below entry price
@@ -1446,25 +1385,16 @@ static std::string HandlePostTrade(const std::string& body) {
     SubmitUnsentOrderAsync(conId, symbol, side, false, quantity, price,
                            stopPrice, price, profitPrice);
 
-    /*LogDebug("POST /trade: " + side + " " + std::to_string((int)quantity) +
-             " " + symbol + " @ " + std::to_string(price) +
-             " stop=" + std::format("{:.2f}", stopPrice) +
-             " profit=" + std::format("{:.2f}", profitPrice) +
-             " conId=" + std::to_string(conId));*/
-
-    // ── Build success response ────────────────────────────────────────────────
-    std::string resp;
-    resp += "{";
-    resp += "\"status\":\"submitted\",";
-    resp += "\"symbol\":\""   + JsonEscapeString(symbol)       + "\",";
-    resp += "\"side\":\""     + JsonEscapeString(side)         + "\",";
-    resp += "\"quantity\":"   + JsonDouble(quantity)           + ",";
-    resp += "\"price\":"      + JsonDouble(price)              + ",";
-    resp += "\"stopPrice\":"      + JsonDouble(stopPrice)      + ",";
-    resp += "\"profitPrice\":"      + JsonDouble(profitPrice)  + ",";
-    resp += "\"conId\":"      + std::to_string(conId);
-    resp += "}";
-    return MakeOk(resp);
+    json respObj;
+    respObj["status"] = "submitted";
+    respObj["symbol"] = symbol;
+    respObj["side"] = side;
+    respObj["quantity"] = quantity;
+    respObj["price"] = price;
+    respObj["stopPrice"] = stopPrice;
+    respObj["profitPrice"] = profitPrice;
+    respObj["conId"] = conId;
+    return MakeOk(respObj.dump());
 }
 
 // ── Request routing ───────────────────────────────────────────────────────────
@@ -1708,7 +1638,7 @@ static bool HttpServer_Start() {
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_port        = htons(HTTP_SERVER_PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY); // 0.0.0.0, all interfaces (LAN accessible)
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (bind(httpListenSocket,
              reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 static std::string EditText(HWND hWnd) {
     if (!hWnd) return {};
     int length = GetWindowTextLengthA(hWnd);

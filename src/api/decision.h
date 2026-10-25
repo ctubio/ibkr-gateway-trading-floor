@@ -6,8 +6,7 @@
 // `state`, a fixed set of typed trading questions is scored, and the result is
 // shown in a MessageBox. The HTTP call runs on a worker thread so the UI and
 // market-data feed never block.
-// Relies on JsonEscapeString() from server.h (already included before the gui/*.h
-// headers in main.cpp) and on WinInet (already used by server.h).
+// Relies on WinInet (already used by server.h) and nlohmann/json.
 // ═════════════════════════════════════════════════════════════════════════════
 static const char*         DECISION_HOST  = "192.168.1.21";
 static const INTERNET_PORT DECISION_PORT  = 11434;
@@ -260,107 +259,58 @@ static bool Decision_HttpPost(const std::string& body, std::string& response, DW
     return ok;
 }
 
-// ── Response parsing / formatting ────────────────────────────────────────────
-// Finds `"key"` followed by ':' and returns the index of the value, or npos.
-static size_t Decision_KeyValuePos(const std::string& s, const std::string& key) {
-    const std::string needle = "\"" + key + "\"";
-    size_t pos = 0;
-    while ((pos = s.find(needle, pos)) != std::string::npos) {
-        size_t p = pos + needle.size();
-        while (p < s.size() && isspace((unsigned char)s[p])) ++p;
-        if (p < s.size() && s[p] == ':') {
-            ++p;
-            while (p < s.size() && isspace((unsigned char)s[p])) ++p;
-            return p;
-        }
-        pos += needle.size();
-    }
-    return std::string::npos;
-}
-
-static std::string Decision_Block(const std::string& json, const std::string& id) {
-    size_t p = Decision_KeyValuePos(json, id);
-    if (p == std::string::npos || p >= json.size() || json[p] != '{') return "";
-    int depth = 0;
-    for (size_t i = p; i < json.size(); ++i) {
-        if (json[i] == '{') ++depth;
-        else if (json[i] == '}' && --depth == 0) return json.substr(p, i - p + 1);
-    }
-    return "";
-}
-
-static bool Decision_GetString(const std::string& b, const std::string& key, std::string& out) {
-    size_t p = Decision_KeyValuePos(b, key);
-    if (p == std::string::npos || p >= b.size() || b[p] != '"') return false;
-    size_t e = b.find('"', p + 1);
-    if (e == std::string::npos) return false;
-    out = b.substr(p + 1, e - p - 1);
-    return true;
-}
-
-static bool Decision_GetNumber(const std::string& b, const std::string& key, double& out) {
-    size_t p = Decision_KeyValuePos(b, key);
-    if (p == std::string::npos) return false;
-    char* end = nullptr;
-    out = std::strtod(b.c_str() + p, &end);
-    return end != b.c_str() + p;
-}
-
-static std::vector<std::pair<std::string, double>> Decision_GetProbs(const std::string& b) {
-    std::vector<std::pair<std::string, double>> v;
-    size_t p = Decision_KeyValuePos(b, "probabilities");
-    if (p == std::string::npos || p >= b.size() || b[p] != '{') return v;
-    ++p;
-    while (p < b.size()) {
-        while (p < b.size() && (isspace((unsigned char)b[p]) || b[p] == ',')) ++p;
-        if (p >= b.size() || b[p] != '"') break;
-        size_t e = b.find('"', p + 1);
-        if (e == std::string::npos) break;
-        std::string k = b.substr(p + 1, e - p - 1);
-        p = e + 1;
-        while (p < b.size() && (isspace((unsigned char)b[p]) || b[p] == ':')) ++p;
-        char* end = nullptr;
-        double val = std::strtod(b.c_str() + p, &end);
-        if (end == b.c_str() + p) break;
-        p = (size_t)(end - b.c_str());
-        v.emplace_back(k, val);
-    }
-    std::sort(v.begin(), v.end(), [](const auto& a, const auto& c) { return a.second > c.second; });
-    return v;
-}
-
+// ── Response parsing / formatting (using nlohmann/json) ──────────────────────
 static std::string Decision_Format(const std::string& resp) {
+    json j;
+    try {
+        j = json::parse(resp);
+    } catch (...) {
+        return "Unexpected response from the decision model:\n\n" + resp.substr(0, 600);
+    }
+
     std::string out;
     bool any = false;
 
     auto choiceLine = [&](const char* id, const char* title) {
-        std::string b = Decision_Block(resp, id), c;
-        if (b.empty() || !Decision_GetString(b, "choice", c)) return;
-        double conf = 0.0; Decision_GetNumber(b, "confidence", conf);
+        if (!j.contains(id) || !j[id].is_object()) return;
+        const auto& obj = j[id];
+        if (!obj.contains("choice") || !obj["choice"].is_string()) return;
+        std::string c = obj["choice"].get<std::string>();
+        double conf = obj.contains("confidence") && obj["confidence"].is_number() ? obj["confidence"].get<double>() : 0.0;
+        
         std::string up = c;
         std::transform(up.begin(), up.end(), up.begin(), [](unsigned char ch) { return (char)toupper(ch); });
         out += std::format("{}: {}  (confidence {:.2f})\n    ", title, up, conf);
-        for (const auto& [k, v] : Decision_GetProbs(b)) out += std::format("{} {:.0f}%   ", k, v * 100.0);
-        out += "\n";
+        
+        if (obj.contains("probabilities") && obj["probabilities"].is_object()) {
+            std::vector<std::pair<std::string, double>> probs;
+            for (auto& [k, v] : obj["probabilities"].items()) {
+                if (v.is_number()) probs.emplace_back(k, v.get<double>());
+            }
+            std::sort(probs.begin(), probs.end(), [](const auto& a, const auto& c) { return a.second > c.second; });
+            for (const auto& [k, v] : probs) out += std::format("{} {:.0f}%   ", k, v * 100.0);
+        }
+        out += "\n\n";
         any = true;
-        out += "\n";
     };
+
     auto scoreLine = [&](const char* id, const char* title, std::vector<const char*> labels) {
-        std::string b = Decision_Block(resp, id);
-        double sc = 0.0;
-        if (b.empty() || !Decision_GetNumber(b, "score", sc)) return;
+        if (!j.contains(id) || !j[id].is_object()) return;
+        const auto& obj = j[id];
+        if (!obj.contains("score") || !obj["score"].is_number()) return;
+        double sc = obj["score"].get<double>();
         int idx = std::max(0, std::min((int)labels.size() - 1, (int)std::lround(sc)));
-        out += std::format("{}: {:.1f} / {}  -  {}\n", title, sc, labels.size() - 1, labels[idx]);
+        out += std::format("{}: {:.1f} / {}  -  {}\n\n", title, sc, labels.size() - 1, labels[idx]);
         any = true;
-        out += "\n";
     };
+
     auto noulLine = [&](const char* id, const char* title) {
-        std::string b = Decision_Block(resp, id);
-        double v = 0.0;
-        if (b.empty() || !Decision_GetNumber(b, "noul", v)) return;
-        out += std::format("{}: {}  ({:.0f}%)\n", title, v >= 0.5 ? "YES" : "NO", v * 100.0);
+        if (!j.contains(id) || !j[id].is_object()) return;
+        const auto& obj = j[id];
+        if (!obj.contains("noul") || !obj["noul"].is_number()) return;
+        double v = obj["noul"].get<double>();
+        out += std::format("{}: {}  ({:.0f}%)\n\n", title, v >= 0.5 ? "YES" : "NO", v * 100.0);
         any = true;
-        out += "\n";
     };
 
     choiceLine("q_bias",     "Bias");
@@ -387,12 +337,20 @@ static void Market_RequestDecision(HWND hWnd, TsState* st) {
     if (!s_decisionBusy.compare_exchange_strong(expected, true)) return;   // request/dialog already active
 
     std::string stateText = Market_BuildDecisionState(st);
-    std::string questions = std::string("{") + DECISION_QUESTIONS_BASE;
-    if (st->position != 0.0) questions += std::string(",") + DECISION_QUESTION_POSITION;
-    questions += "}";
+    std::string questionsStr = std::string("{") + DECISION_QUESTIONS_BASE;
+    if (st->position != 0.0) questionsStr += std::string(",") + DECISION_QUESTION_POSITION;
+    questionsStr += "}";
 
-    std::string body = std::string("{\"model\":\"") + DECISION_MODEL + "\",\"state\":\"" +
-                       JsonEscapeString(stateText) + "\",\"questions\":" + questions + "}";
+    json reqObj;
+    reqObj["model"] = DECISION_MODEL;
+    reqObj["state"] = stateText;
+    try {
+        reqObj["questions"] = json::parse(questionsStr);
+    } catch (...) {
+        reqObj["questions"] = json::object();
+    }
+
+    std::string body = reqObj.dump();
 
     std::string symbol = st->symbol;
     double last = st->l1Info.last;
