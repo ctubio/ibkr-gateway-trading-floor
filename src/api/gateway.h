@@ -54,6 +54,7 @@
 #include <charconv>
 #include <optional>
 #include <string_view>
+#include <variant>
 
 #include "gdi_raii.h"
 #include "volume.h"

@@ -97,6 +97,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
             return 0;
 
         WinsockRAII winsockRAII;
+
+        InitFonts();
+        
         RegisterWindowRAII registerWindowRAII(hInst);
         if (!registerWindowRAII.unlocked())
             return 0;

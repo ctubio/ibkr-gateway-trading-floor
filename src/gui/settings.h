@@ -108,57 +108,120 @@ static void Settings_SaveCredentialsFromUI(HWND hWnd) {
     Credentials_Save(username, password);
 }
 
-static void SaveCheck(HWND hWnd, int id, const char* key, bool& value) {
-    value = SendDlgItemMessage(hWnd, id, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    RegSetDword(SETTINGS_CLASS_NAME, key, value);
+enum class SettingType {
+    Boolean,
+    Integer,
+    Decimal,
+    String,
+};
+
+enum class SettingsArea {
+    Gateway,
+    Audio,
+    Trading,
+    Display,
+};
+
+using SettingDefault = std::variant<bool, int, double, std::string>;
+using SettingValue = std::variant<bool*, int*, double*, std::string*>;
+
+struct SettingDescriptor {
+    const char* key;
+    SettingType type;
+    SettingDefault defaultValue;
+    const char* label;
+    int id;
+    SettingValue value;
+    SettingsArea area;
+    int row;
+    int editWidth;
+    DWORD extraStyle;
+};
+
+static const SettingDescriptor settings[] = {
+    {"Gateway_AutoStart",  SettingType::Boolean, false,                   "Auto-start IBKR Gateway", ID_SETTINGS_AUTO_GATEWAY, &autoGateway, SettingsArea::Gateway, 18, 0, 0},
+    {"Gateway_KillOnExit", SettingType::Boolean, false,                   "Kill IBKR Gateway on exit", ID_SETTINGS_KILL_GATEWAY, &killGatewayOnExit, SettingsArea::Gateway, 44, 0, 0},
+    {"PlaySounds",         SettingType::Boolean, false,                   "Play notification sounds", ID_SETTINGS_PLAY_SOUNDS, &playSounds, SettingsArea::Audio, 18, 0, 0},
+    {"DarkMode",           SettingType::Boolean, false,                   "Dark mode", ID_SETTINGS_DARK_MODE, &darkMode, SettingsArea::Display, 18, 0, 0},
+    {"FullScreenAlerts",   SettingType::Boolean, false,                   "Full screen alerts", ID_SETTINGS_FULL_SCREEN_ALERTS, &fullScreenAlerts, SettingsArea::Display, 44, 0, 0},
+    {"ClientId",           SettingType::Integer, 0,                       "Client ID:", ID_SETTINGS_CLIENT_ID, &clientIdGateway, SettingsArea::Gateway, 218, 80, 0},
+    {"GroupId",            SettingType::Integer, 4,                       "Group ID:", ID_SETTINGS_GROUP_ID, &groupIdGateway, SettingsArea::Gateway, 248, 80, 0},
+    {"OrderQty",           SettingType::Integer, 20,                      "Quantity:", ID_SETTINGS_QTY_VALUE, &qtyGateway, SettingsArea::Trading, 20, 80, 0},
+    {"StopPrice",          SettingType::Decimal, 1.0,                     "Stop:", ID_SETTINGS_STOP_VALUE, &stopGateway, SettingsArea::Trading, 53, 80, 0},
+    {"ProfitPrice",        SettingType::Decimal, 2.0,                     "Profit:", ID_SETTINGS_PROFIT_VALUE, &profitGateway, SettingsArea::Trading, 86, 80, 0},
+    {"RiskPct",            SettingType::Decimal, 1.0,                     "Risk %:", ID_SETTINGS_RISK_VALUE, &riskGateway, SettingsArea::Trading, 119, 80, 0},
+    {"Safety",             SettingType::Decimal, 2.0,                     "Safety:", ID_SETTINGS_SAFETY_VALUE, &safetyGateway, SettingsArea::Trading, 152, 80, 0},
+    {"IPAddress",          SettingType::String, std::string("127.0.0.1"), "Address:", ID_SETTINGS_ADDRESS, &addressGateway, SettingsArea::Gateway, 128, 147, 0},
+    {"Lock",               SettingType::String, std::string(),            "Lock:", ID_SETTINGS_LOCK, &lockScreen, SettingsArea::Display, 70, 147, ES_PASSWORD},
+};
+
+static const SettingDescriptor* FindSetting(int id) {
+    for (const auto& setting : settings)
+        if (setting.id == id) return &setting;
+    return nullptr;
 }
 
-static const struct {
-    int id;
-    const char* key;
-    bool* value;
-} settingsChecks[] = {
-    {ID_SETTINGS_AUTO_GATEWAY, "Gateway_AutoStart", &autoGateway},
-    {ID_SETTINGS_KILL_GATEWAY, "Gateway_KillOnExit", &killGatewayOnExit},
-    {ID_SETTINGS_PLAY_SOUNDS, "PlaySounds", &playSounds},
-    {ID_SETTINGS_FULL_SCREEN_ALERTS, "FullScreenAlerts", &fullScreenAlerts},
-};
-
-enum class NumericSettingKind {
-    Integer,
-    Float,
-};
-
-struct SettingsNumericEdit {
-    int id;
-    const char* key;
-    NumericSettingKind kind;
-    void* value;
-};
-
-static const SettingsNumericEdit settingsNumericEdits[] = {
-    {ID_SETTINGS_GROUP_ID, "GroupId", NumericSettingKind::Integer, &groupIdGateway},
-    {ID_SETTINGS_CLIENT_ID, "ClientId", NumericSettingKind::Integer, &clientIdGateway},
-    {ID_SETTINGS_QTY_VALUE, "OrderQty", NumericSettingKind::Integer, &qtyGateway},
-    {ID_SETTINGS_STOP_VALUE, "StopPrice", NumericSettingKind::Float, &stopGateway},
-    {ID_SETTINGS_PROFIT_VALUE, "ProfitPrice", NumericSettingKind::Float, &profitGateway},
-    {ID_SETTINGS_RISK_VALUE, "RiskPct", NumericSettingKind::Float, &riskGateway},
-    {ID_SETTINGS_SAFETY_VALUE, "Safety", NumericSettingKind::Float, &safetyGateway},
-};
-
-static void SaveNumericEdit(HWND hWnd, const SettingsNumericEdit& setting) {
-    HWND hEdit = GetDlgItem(hWnd, setting.id);
-    if (setting.kind == NumericSettingKind::Integer) {
-        int& value = *static_cast<int*>(setting.value);
-        std::string text = EditText(hEdit);
-        if (!text.empty()) value = std::atoi(text.c_str());
-        RegSetDword(SETTINGS_CLASS_NAME, setting.key, value);
-    } else {
-        double& value = *static_cast<double*>(setting.value);
-        if (GetWindowTextLengthA(hEdit) > 0)
-            value = EditNum(hEdit);
-        Settings_SaveFloat(setting.key, value);
+static void LoadRegistrySettings() {
+    for (const auto& setting : settings) {
+        switch (setting.type) {
+            case SettingType::Boolean:
+                *std::get<bool*>(setting.value) =
+                    RegGetDword(SETTINGS_CLASS_NAME, setting.key, std::get<bool>(setting.defaultValue)) != 0;
+                break;
+            case SettingType::Integer:
+                *std::get<int*>(setting.value) =
+                    static_cast<int>(RegGetDword(SETTINGS_CLASS_NAME, setting.key,
+                                                 static_cast<DWORD>(std::get<int>(setting.defaultValue))));
+                break;
+            case SettingType::Decimal:
+                *std::get<double*>(setting.value) =
+                    Settings_LoadFloat(setting.key, std::get<double>(setting.defaultValue));
+                break;
+            case SettingType::String:
+                *std::get<std::string*>(setting.value) =
+                    RegGetString(SETTINGS_CLASS_NAME, setting.key, std::get<std::string>(setting.defaultValue));
+                break;
+        }
     }
+    
+    pathGateway = GetGatewayPath();
+}
+
+static void SaveSetting(HWND hWnd, const SettingDescriptor& setting) {
+    HWND control = GetDlgItem(hWnd, setting.id);
+    switch (setting.type) {
+        case SettingType::Boolean: {
+            bool& value = *std::get<bool*>(setting.value);
+            value = SendMessage(control, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            RegSetDword(SETTINGS_CLASS_NAME, setting.key, value);
+            break;
+        }
+        case SettingType::Integer: {
+            int& value = *std::get<int*>(setting.value);
+            const std::string text = EditText(control);
+            if (!text.empty()) value = std::atoi(text.c_str());
+            RegSetDword(SETTINGS_CLASS_NAME, setting.key, static_cast<DWORD>(value));
+            break;
+        }
+        case SettingType::Decimal: {
+            double& value = *std::get<double*>(setting.value);
+            if (GetWindowTextLengthA(control) > 0) value = EditNum(control);
+            Settings_SaveFloat(setting.key, value);
+            break;
+        }
+        case SettingType::String: {
+            std::string& value = *std::get<std::string*>(setting.value);
+            value = EditText(control);
+            if (value.empty()) value = std::get<std::string>(setting.defaultValue);
+            RegSetString(SETTINGS_CLASS_NAME, setting.key, value);
+            break;
+        }
+    }
+}
+
+static void SaveSettingsFromUI(HWND hWnd) {
+    for (const auto& setting : settings)
+        SaveSetting(hWnd, setting);
 }
 
 static bool RunRegExe(const std::string& args) {
@@ -204,19 +267,43 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     xOrigin + gm + 76, rowBaseY + rowY - 3, editWidth, 26,
                     id, nullptr, WS_EX_CLIENTEDGE);
             };
+            auto CreateSettingsControls = [&](SettingsArea area, int xOrigin, int rowBaseY) {
+                for (const auto& setting : settings) {
+                    if (setting.area != area) continue;
+                    if (setting.type == SettingType::Boolean) {
+                        HWND checkbox = Ctl(hWnd, "BUTTON", setting.label,
+                            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                            xOrigin + gm, rowBaseY + setting.row, gw, 22, setting.id);
+                        const bool checked = *std::get<bool*>(setting.value);
+                        SendMessage(checkbox, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+                        continue;
+                    }
+
+                    HWND edit = MakeRow(setting.label, setting.id, xOrigin, rowBaseY,
+                        setting.row, setting.editWidth, setting.type == SettingType::Integer,
+                        setting.extraStyle);
+                    switch (setting.type) {
+                        case SettingType::Integer:
+                            SetWindowTextA(edit, std::format("{}",
+                                *std::get<int*>(setting.value)).c_str());
+                            break;
+                        case SettingType::Decimal:
+                            SetWindowTextA(edit, std::format("{:.2f}",
+                                *std::get<double*>(setting.value)).c_str());
+                            break;
+                        case SettingType::String:
+                            SetWindowTextA(edit, std::get<std::string*>(setting.value)->c_str());
+                            break;
+                        case SettingType::Boolean:
+                            break;
+                    }
+                }
+            };
 
             // ── Gateway ──────────────────────────────────────────────────────
             GroupBox(hWnd, "Gateway:", m, y, w, 280);
 
-            HWND hChkAutoGtw = Ctl(hWnd, "BUTTON", "Auto-start IBKR Gateway",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 18, gw, 22,
-                ID_SETTINGS_AUTO_GATEWAY);
-            SendMessage(hChkAutoGtw, BM_SETCHECK, autoGateway ? BST_CHECKED : BST_UNCHECKED, 0);
-
-            HWND hChkKill = Ctl(hWnd, "BUTTON", "Kill IBKR Gateway on exit",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 44, gw, 22,
-                ID_SETTINGS_KILL_GATEWAY);
-            SendMessage(hChkKill, BM_SETCHECK, killGatewayOnExit ? BST_CHECKED : BST_UNCHECKED, 0);
+            CreateSettingsControls(SettingsArea::Gateway, m, y);
 
             Ctl(hWnd, "BUTTON", "Change executable path",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
@@ -226,9 +313,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_LEFT | ES_READONLY,
                 m + gm, y + 98, gw, 20, ID_SETTINGS_GATEWAY_PATH_EDIT, nullptr, WS_EX_CLIENTEDGE);
             SetWindowTextA(hGatewayEdit, pathGateway.c_str());
-
-            HWND hAddressEdit = MakeRow("Address:", ID_SETTINGS_ADDRESS, m, y, 128, 147, false);
-            SetWindowTextA(hAddressEdit, addressGateway.c_str());
 
             HWND hUsernameEdit = MakeRow("Username:", ID_SETTINGS_USERNAME, m, y, 158, 147, false);
             
@@ -243,24 +327,12 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 }
             }
 
-            // Client ID, passed as the second parameter to api().connect().
-            HWND hClientIdEdit = MakeRow("Client ID:", ID_SETTINGS_CLIENT_ID, m, y, 218, 80, true);
-            SetWindowTextA(hClientIdEdit, std::format("{}", clientIdGateway).c_str());
-
-            // Group ID, TWS "linked window" group color id, used for
-            // subscribeToGroupEvents()/updateDisplayGroup().
-            HWND hGroupIdEdit = MakeRow("Group ID:", ID_SETTINGS_GROUP_ID, m, y, 248, 80, true);
-            SetWindowTextA(hGroupIdEdit, std::format("{}", groupIdGateway).c_str());
-
             y += 288;
 
             // ── Audio ────────────────────────────────────────────────────────
             GroupBox(hWnd, "Audio:", m, y, w, 14 + (30 * 2));
 
-            HWND hChkSounds = Ctl(hWnd, "BUTTON", "Play notification sounds",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, m + gm, y + 18, gw, 22,
-                ID_SETTINGS_PLAY_SOUNDS);
-            SendMessage(hChkSounds, BM_SETCHECK, playSounds ? BST_CHECKED : BST_UNCHECKED, 0);
+            CreateSettingsControls(SettingsArea::Audio, m, y);
 
             // ── TTS Voice selector ───────────────────────────────────────────
             Ctl(hWnd, "STATIC", "Voice:", WS_CHILD | WS_VISIBLE,
@@ -301,38 +373,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // ── Trading ────────────────────────────────────────────────────── (column 2)
             GroupBox(hWnd, "Trading:", col2_x, y, w, 37 * 5);
 
-            HWND hQtyEdit    = MakeRow("Quantity:", ID_SETTINGS_QTY_VALUE, col2_x, y, 20, 80, true);
-            HWND hStopEdit   = MakeRow("Stop:",     ID_SETTINGS_STOP_VALUE, col2_x, y, 53, 80, false);
-            HWND hProfitEdit = MakeRow("Profit:",   ID_SETTINGS_PROFIT_VALUE, col2_x, y, 86, 80, false);
-            HWND hRiskEdit   = MakeRow("Risk %:",   ID_SETTINGS_RISK_VALUE, col2_x, y, 119, 80, false);
-            HWND hSafetyEdit = MakeRow("Safety:",   ID_SETTINGS_SAFETY_VALUE, col2_x, y, 152, 80, false);
+            CreateSettingsControls(SettingsArea::Trading, col2_x, y);
             y += 152 + 40;
-
-            SetWindowTextA(hQtyEdit,    std::format("{}",     qtyGateway).c_str());
-            SetWindowTextA(hStopEdit,   std::format("{:.2f}", stopGateway).c_str());
-            SetWindowTextA(hProfitEdit, std::format("{:.2f}", profitGateway).c_str());
-            SetWindowTextA(hRiskEdit,   std::format("{:.2f}", riskGateway).c_str());
-            SetWindowTextA(hSafetyEdit, std::format("{:.2f}", safetyGateway).c_str());
             
             // ── Display ──────────────────────────────────────────────────────
             GroupBox(hWnd, "Display:", col2_x, y, w, 14 + (30 * 3));
 
-            HWND hChkDark = Ctl(hWnd, "BUTTON", "Dark mode",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                col2_x + gm, y + 18, gw, 22, ID_SETTINGS_DARK_MODE);
-            SendMessage(hChkDark, BM_SETCHECK, darkMode ? BST_CHECKED : BST_UNCHECKED, 0);
-
-            HWND hChkAlerts = Ctl(hWnd, "BUTTON", "Full screen alerts",
-                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                col2_x + gm, y + 44, gw, 22, ID_SETTINGS_FULL_SCREEN_ALERTS);
-            SendMessage(hChkAlerts, BM_SETCHECK, fullScreenAlerts ? BST_CHECKED : BST_UNCHECKED, 0);
-                
-            Ctl(hWnd, "STATIC", "Lock:", WS_CHILD | WS_VISIBLE,
-                col2_x + gm, y + 70, 72, 20);
-            HWND hLockEdit = Ctl(hWnd, "EDIT", "",
-                WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER | ES_PASSWORD,
-                col2_x + gm + 76, y + 67, 147, 26, ID_SETTINGS_LOCK, nullptr, WS_EX_CLIENTEDGE);
-            SetWindowTextA(hLockEdit, lockScreen.c_str());
+            CreateSettingsControls(SettingsArea::Display, col2_x, y);
 
             y += 114;
 
@@ -361,10 +408,13 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case WM_COMMAND:
-            for (const auto& setting : settingsChecks) {
-                if (LOWORD(wParam) == setting.id) {
-                    SaveCheck(hWnd, setting.id, setting.key, *setting.value);
-                    break;
+            if (const SettingDescriptor* setting = FindSetting(LOWORD(wParam));
+                setting && setting->type == SettingType::Boolean) {
+                SaveSetting(hWnd, *setting);
+                if (setting->id == ID_SETTINGS_DARK_MODE) {
+                    ApplyDarkModeToAllWindows();
+                    InvalidateRect(hWnd, NULL, TRUE);
+                    RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
                 }
             }
             if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
@@ -377,14 +427,6 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                 }
             }
-            if (LOWORD(wParam) == ID_SETTINGS_ADDRESS && HIWORD(wParam) == EN_CHANGE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_ADDRESS);
-                addressGateway = EditText(hEdit);
-                if (addressGateway.empty()) {
-                    addressGateway = std::string("127.0.0.1");
-                }
-                RegSetString(SETTINGS_CLASS_NAME, "IPAddress", addressGateway);
-            }
             if (LOWORD(wParam) == ID_SETTINGS_DEBUG_LOG) {
                 StartDebugLog();
                 FlushDebugBuffer();
@@ -392,27 +434,10 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if ((LOWORD(wParam) == ID_SETTINGS_PASSWORD || LOWORD(wParam) == ID_SETTINGS_USERNAME) && HIWORD(wParam) == EN_CHANGE) {
                 Settings_SaveCredentialsFromUI(hWnd);
             }
-            if (LOWORD(wParam) == ID_SETTINGS_LOCK && HIWORD(wParam) == EN_CHANGE) {
-                HWND hEdit = GetDlgItem(hWnd, ID_SETTINGS_LOCK);
-                lockScreen = EditText(hEdit);
-                RegSetString(SETTINGS_CLASS_NAME, "Lock", lockScreen);
-            }
-            if (LOWORD(wParam) == ID_SETTINGS_DARK_MODE) {
-                HWND hChk = GetDlgItem(hWnd, ID_SETTINGS_DARK_MODE);
-                DWORD checked = (SendMessage(hChk, BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
-                RegSetDword(SETTINGS_CLASS_NAME, "DarkMode", checked);
-                darkMode = (checked == 1);
-                ApplyDarkModeToAllWindows();
-                // Force full repaint of this window and all children
-                InvalidateRect(hWnd, NULL, TRUE);
-                RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
-            }
             if (HIWORD(wParam) == EN_CHANGE) {
-                for (const auto& setting : settingsNumericEdits) {
-                    if (LOWORD(wParam) == setting.id) {
-                        SaveNumericEdit(hWnd, setting);
-                        break;
-                    }
+                if (const SettingDescriptor* setting = FindSetting(LOWORD(wParam));
+                    setting && setting->type != SettingType::Boolean) {
+                    SaveSetting(hWnd, *setting);
                 }
             }
             if (LOWORD(wParam) == ID_SETTINGS_VOICE_COMBO && HIWORD(wParam) == CBN_SELCHANGE) {
@@ -445,6 +470,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
                 if (GetSaveFileNameA(&ofn)) {
+                    SaveSettingsFromUI(hWnd);
                     // /y suppresses overwrite confirmation since the file picker already handles it.
                     std::string args = std::format("export \"HKCU\\{}\" \"{}\" /y", APP_REG_ROOT, szFile);
                     if (RunRegExe(args)) {

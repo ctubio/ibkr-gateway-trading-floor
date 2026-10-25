@@ -466,25 +466,27 @@ HICON CreateGrayIcon(HICON hOriginal) {
 
     return hGray;
 }
-static HFONT Coins_MakeMDL2Font(int ptSize) {
+static unique_hfont Coins_MakeMDL2Font(int ptSize) {
     HDC hdc = GetDC(NULL);
-    if (!hdc) return nullptr;
+    if (!hdc) throw std::runtime_error("Failed to acquire a device context for the icon font");
     int h   = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
     ReleaseDC(NULL, hdc);
-    return CreateFontW(h, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+    unique_hfont font(CreateFontW(h, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe MDL2 Assets"));
+    if (!font) throw std::runtime_error("Failed to create the icon font");
+    return font;
 }
 
-static unique_hfont hFont_Icons{Coins_MakeMDL2Font(11)};
+static unique_hfont hFont_Icons;
 
 class ScopedFont {
     unique_hfont hFont;
 
 public:
-    ScopedFont(int ptSize, bool bold, const char* family = "Proxima Nova") {
+    bool Init(int ptSize, bool bold, const char* family = "Proxima Nova") {
         HDC hdc = GetDC(NULL);
-        if (!hdc) return;
+        if (!hdc) return false;
         int h = -MulDiv(ptSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
         ReleaseDC(NULL, hdc);
 
@@ -495,21 +497,37 @@ public:
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, family
         ));
+        return static_cast<bool>(hFont);
     }
 
     HFONT get() const { return hFont.get(); }
     operator HFONT() const { return get(); }
 };
 
-static ScopedFont hFont11pt(11, false);
-static ScopedFont hFont11ptbold(11, true);
-static ScopedFont hFont12pt(12, false);
-static ScopedFont hFont12ptbold(12, true);
-static ScopedFont hFont14pt(14, false);
-static ScopedFont hFont14ptbold(14, true);
-static ScopedFont hFont16pt(16, false);
-static ScopedFont hFont16ptbold(16, true);
-static ScopedFont hFont21ptbold(21, true);
+static ScopedFont hFont11pt;
+static ScopedFont hFont11ptbold;
+static ScopedFont hFont12pt;
+static ScopedFont hFont12ptbold;
+static ScopedFont hFont14pt;
+static ScopedFont hFont14ptbold;
+static ScopedFont hFont16pt;
+static ScopedFont hFont16ptbold;
+static ScopedFont hFont21ptbold;
+
+void InitFonts() {
+    if (!hFont_Icons) hFont_Icons = Coins_MakeMDL2Font(11);
+    const bool created =
+        hFont11pt.Init(11, false) &&
+        hFont11ptbold.Init(11, true) &&
+        hFont12pt.Init(12, false) &&
+        hFont12ptbold.Init(12, true) &&
+        hFont14pt.Init(14, false) &&
+        hFont14ptbold.Init(14, true) &&
+        hFont16pt.Init(16, false) &&
+        hFont16ptbold.Init(16, true) &&
+        hFont21ptbold.Init(21, true);
+    if (!created) throw std::runtime_error("Failed to create application fonts");
+}
 
 static HWND Ctl(HWND parent, const char* cls, const char* text, DWORD style,
                 int x, int y, int w, int h, UINT_PTR id = 0,
@@ -969,22 +987,4 @@ void CenterEditText(HWND hEdit) {
     int pad = std::max(0, (int)((erc.bottom - erc.top) - tm.tmHeight) / 2 - 2);
     RECT rect = { 0, pad, erc.right, erc.bottom - pad };
     SendMessageA(hEdit, EM_SETRECTNP, 0, (LPARAM)&rect);
-}
-
-static void LoadRegistrySettings() {
-    darkMode          = RegGetDword(SETTINGS_CLASS_NAME, "DarkMode",           0) != 0;
-    playSounds        = RegGetDword(SETTINGS_CLASS_NAME, "PlaySounds",         0) != 0;
-    killGatewayOnExit = RegGetDword(SETTINGS_CLASS_NAME, "Gateway_KillOnExit", 0) != 0;
-    autoGateway       = RegGetDword(SETTINGS_CLASS_NAME, "Gateway_AutoStart",  0) != 0;
-    fullScreenAlerts  = RegGetDword(SETTINGS_CLASS_NAME, "FullScreenAlerts",   0) != 0;
-    pathGateway       = GetGatewayPath();
-    lockScreen        = RegGetString(SETTINGS_CLASS_NAME, "Lock",        "");
-    clientIdGateway   = (int)RegGetDword(SETTINGS_CLASS_NAME, "ClientId",      0);
-    addressGateway    = RegGetString(SETTINGS_CLASS_NAME, "IPAddress", "127.0.0.1");
-    groupIdGateway    = (int)RegGetDword(SETTINGS_CLASS_NAME, "GroupId",        4);
-    qtyGateway        = (int)RegGetDword(SETTINGS_CLASS_NAME, "OrderQty",      20);
-    stopGateway       = Settings_LoadFloat("StopPrice",   1.0f);
-    profitGateway     = Settings_LoadFloat("ProfitPrice", 2.0f);
-    riskGateway       = Settings_LoadFloat("RiskPct",     1.0f);
-    safetyGateway     = Settings_LoadFloat("Safety",      2.0f);
 }
