@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <cassert>
+#include <deque>
 #include <functional>
 #include <map>
 #include <mutex>
@@ -248,7 +249,7 @@ private:
     using TickSubscribers = std::map<std::size_t, std::function<void(std::span<const Tick>)>>;
 
     struct TickBuffer {
-        std::vector<Tick> ticks;
+        std::deque<Tick> ticks;
         bool flushPending = false;
         bool overflowLogged = false;
     };
@@ -478,7 +479,9 @@ private:
             std::lock_guard<std::mutex> lock(tickMutex_);
             auto bufferIt = tickBuffers_.find(conId);
             if (bufferIt == tickBuffers_.end()) return;
-            ticks = std::move(bufferIt->second.ticks);
+            ticks.reserve(bufferIt->second.ticks.size());
+            for (auto& tick : bufferIt->second.ticks)
+                ticks.push_back(std::move(tick));
             bufferIt->second.ticks.clear();
             bufferIt->second.flushPending = false;
             bufferIt->second.overflowLogged = false;

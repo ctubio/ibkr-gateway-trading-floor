@@ -946,8 +946,6 @@ LRESULT CALLBACK WndProcLock(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             break;
 
         case WM_DESTROY:
-            if (lockState.startupMode)
-                PostQuitMessage(0);
             break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);

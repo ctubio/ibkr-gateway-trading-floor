@@ -21,6 +21,12 @@ void Orders_AddUnsentFromGateway(HWND hWnd, const TradingAPI::OrderInfo& info) {
     Orders_AddUnsent(hWnd, info);
 }
 
+static BOOL CALLBACK DestroyApplicationWindow(HWND hWnd, LPARAM) {
+    if (hWnd != hScreenFlashOverlay)
+        DestroyWindow(hWnd);
+    return TRUE;
+}
+
 static const struct WindowClassInfo {
     WNDPROC proc;
     const char* name;
@@ -69,11 +75,14 @@ public:
 
         Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartDebugLog);
     } catch (...) {
+        EnumThreadWindows(GetCurrentThreadId(), DestroyApplicationWindow, 0);
         UiDispatcher::instance().shutdown();
+        DestroyScreenFlashOverlay();
         throw;
     }
     bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
+        EnumThreadWindows(GetCurrentThreadId(), DestroyApplicationWindow, 0);
         UiDispatcher::instance().shutdown();
         DestroyScreenFlashOverlay();
         for (const auto& windowClass : windowClasses)

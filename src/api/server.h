@@ -126,6 +126,10 @@ static std::string MakeMethodNotAllowed() {
     return MakeHttpResponse(405, "Method Not Allowed", "{\"error\":\"method not allowed\"}");
 }
 
+static std::string MakeBadGateway(const std::string& body) {
+    return MakeHttpResponse(502, "Bad Gateway", body);
+}
+
 static bool HttpGetHeader(const std::string& raw, const char* name, std::string& value) {
     const size_t headEnd = raw.find("\r\n\r\n");
     const std::string_view head(raw.data(), headEnd == std::string::npos ? raw.size() : headEnd);
@@ -177,35 +181,61 @@ static std::string HandleGetBalance() {
     double realized = account->realized;
     std::map<std::string, std::string> summary = account->summary;
 
-    if (summary["NetLiquidation"].empty()) summary["NetLiquidation"] = "0.00";
-    if (summary["AccruedDividend"].empty()) summary["AccruedDividend"] = "0.00";
-    if (summary["GrossPositionValue"].empty()) summary["GrossPositionValue"] = "0.00";
-    if (summary["BuyingPower"].empty()) summary["BuyingPower"] = "0.00";
-    if (summary["MaintMarginReq"].empty()) summary["MaintMarginReq"] = "0.00";
-    if (summary["AccruedCash"].empty()) summary["AccruedCash"] = "0.00";
-    if (summary["EUR_CashBalance"].empty()) summary["EUR_CashBalance"] = "0.00";
-    if (summary["USD_CashBalance"].empty()) summary["USD_CashBalance"] = "0.00";
-    if (summary["BASE_CashBalance"].empty()) summary["BASE_CashBalance"] = "0.00";
+    const char* summaryFields[] = {
+        "NetLiquidation", "AccruedDividend", "GrossPositionValue", "BuyingPower",
+        "MaintMarginReq", "AccruedCash", "EUR_CashBalance", "USD_CashBalance",
+        "BASE_CashBalance"
+    };
+    std::map<std::string, double> numericSummary;
+    for (const char* field : summaryFields) {
+        auto it = summary.find(field);
+        if (it == summary.end() || it->second.empty()) {
+            numericSummary.emplace(field, 0.0);
+            continue;
+        }
+        size_t parsed = 0;
+        double value = 0.0;
+        try {
+            value = std::stod(it->second, &parsed);
+        } catch (const std::invalid_argument&) {
+            return MakeBadGateway(json{
+                {"error", "invalid account summary value"},
+                {"field", field}
+            }.dump());
+        } catch (const std::out_of_range&) {
+            return MakeBadGateway(json{
+                {"error", "invalid account summary value"},
+                {"field", field}
+            }.dump());
+        }
+        if (parsed != it->second.size() || !std::isfinite(value)) {
+            return MakeBadGateway(json{
+                {"error", "invalid account summary value"},
+                {"field", field}
+            }.dump());
+        }
+        numericSummary.emplace(field, value);
+    }
     
     json j;
     j["accountNumber"] = acc;
-    j["NetLiquidation"] = std::stod(summary["NetLiquidation"]);
+    j["NetLiquidation"] = numericSummary.at("NetLiquidation");
     
     j["pnl"]["dailyPnL"] = daily;
     j["pnl"]["unrealizedPnL"] = unrealized;
     j["pnl"]["realizedPnL"] = realized;
-    j["pnl"]["AccruedDividend"] = std::stod(summary["AccruedDividend"]);
+    j["pnl"]["AccruedDividend"] = numericSummary.at("AccruedDividend");
 
-    j["margin"]["GrossPositionValue"] = std::stod(summary["GrossPositionValue"]);
-    j["margin"]["BuyingPower"] = std::stod(summary["BuyingPower"]);
-    j["margin"]["MaintMarginReq"] = std::stod(summary["MaintMarginReq"]);
-    j["margin"]["AccruedCash"] = std::stod(summary["AccruedCash"]);
+    j["margin"]["GrossPositionValue"] = numericSummary.at("GrossPositionValue");
+    j["margin"]["BuyingPower"] = numericSummary.at("BuyingPower");
+    j["margin"]["MaintMarginReq"] = numericSummary.at("MaintMarginReq");
+    j["margin"]["AccruedCash"] = numericSummary.at("AccruedCash");
 
-    j["cash"]["EUR_CashBalance"] = std::stod(summary["EUR_CashBalance"]);
-    j["cash"]["USD_CashBalance"] = std::stod(summary["USD_CashBalance"]);
-    j["cash"]["TOTAL_CashBalance"] = std::stod(summary["BASE_CashBalance"]);
+    j["cash"]["EUR_CashBalance"] = numericSummary.at("EUR_CashBalance");
+    j["cash"]["USD_CashBalance"] = numericSummary.at("USD_CashBalance");
+    j["cash"]["TOTAL_CashBalance"] = numericSummary.at("BASE_CashBalance");
 
-    return j.dump();
+    return MakeOk(j.dump());
 }
 
 // GET /portfolio  →  JSON array of all positions
@@ -1414,7 +1444,7 @@ static std::string RouteRequest(const std::string& rawRequest) {
     
         // Route: GET /balance
     if (path == "/balance" || path == "/balance/") {
-        return MakeOk(HandleGetBalance());
+            return HandleGetBalance();
     }
 
     // Route: GET /positions

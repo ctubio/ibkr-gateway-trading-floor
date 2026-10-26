@@ -79,6 +79,9 @@ struct CoreState {
     double realizedPnL = 0.0;
     std::string accountId;
     bool pnlRequested = false;
+    bool positionsSnapshotDirty = false;
+    bool positionsSnapshotTimerArmed = false;
+    std::set<int> pnlSnapshotDirtyConIds;
 
     std::unordered_map<int, ContractMeta> contractCache;
     std::unordered_map<int, double> priceEvents;

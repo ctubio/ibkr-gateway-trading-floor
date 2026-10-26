@@ -173,6 +173,7 @@ struct DiamondsState {
     // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
     std::vector<int> displayOrder;
     std::unordered_set<int> displayConIds;
+    std::unordered_set<int> trackedConIds;
     // Full visible-range redraw (sort order changed).
     bool dirty = false;
     // Per-row dirty tracking (UI thread only).
@@ -968,18 +969,22 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     diamondsState.displayOrder.clear(); // Clear the virtual list viewport
     diamondsState.displayConIds.clear();
+    diamondsState.trackedConIds.clear();
 
     std::vector<TradingAPI::PositionInfo> rows;
     std::unordered_set<int> portfolioConIds;
     auto positions = api().positions();
     for (auto const& [conId, info] : *positions) {
         if (info.isWatchOnly) continue; // watch-only rows are added explicitly below, Quarantine-only
+        diamondsState.trackedConIds.insert(conId);
         auto it = diamondsState.tabMap.find(info.conId);
         int  assignedTab = (it != diamondsState.tabMap.end()) ? it->second : DTAB_ALL;
         if ((diamondsState.checkedTabs >> assignedTab) & 1) rows.push_back(info);
 
         portfolioConIds.insert(info.conId);
     }
+    for (const auto& [conId, alert] : diamondsState.alertCache)
+        diamondsState.trackedConIds.insert(conId);
 
     // ── Alert-only symbols: have an Alert Up/Down set but aren't a current
     // held position. Shown only under the Quarantine tab (forced there regardless
@@ -1065,20 +1070,22 @@ static void Diamonds_FlushDirty(HWND hWnd) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
 
-    // 1) Rebuild cache rows for every symbol that ticked (visible or not):
-    //    the sparkline history depends on this running for all of them.
+    // 1) Update history for all Diamonds symbols, including those in unchecked
+    //    tabs. Only currently displayed symbols have row cache data to refresh.
     if (!diamondsState.dirtyMarket.empty()) {
         std::unordered_set<int> pending;
         pending.swap(diamondsState.dirtyMarket);
         for (int conId : pending) {
-            if (!diamondsState.displayConIds.contains(conId)) continue;
+            if (!diamondsState.trackedConIds.contains(conId)) continue;
             auto quote = api().quote(conId);
             if (!quote) continue;
             TradingAPI::L1Book fresh = *quote;
-            Diamonds_UpdateMarketCols(conId, fresh);
             if (fresh.last > 0.0)
                 diamondsState.sparklines[conId].AddPrice(fresh.last);
-            diamondsState.dirtyRedraw.insert(conId);
+            if (diamondsState.displayConIds.contains(conId)) {
+                Diamonds_UpdateMarketCols(conId, fresh);
+                diamondsState.dirtyRedraw.insert(conId);
+            }
         }
     }
 
@@ -1227,7 +1234,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         });
         diamondsState.quoteToken = api().model().onAnyQuote([hWnd](int conId) {
             if (diamondsState.window != hWnd ||
-                !diamondsState.displayConIds.contains(conId))
+                !diamondsState.trackedConIds.contains(conId))
                 return;
             diamondsState.dirtyMarket.insert(conId);
         });
@@ -1910,6 +1917,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         diamondsState.dataCache.clear();
         diamondsState.dirtyMarket.clear();
         diamondsState.dirtyRedraw.clear();
+        diamondsState.trackedConIds.clear();
         diamondsState.dirty = false;
         diamondsState.paintGraphics.reset();
         diamondsState.sparklines.clear();
