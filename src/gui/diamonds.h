@@ -963,9 +963,17 @@ static void Diamonds_UpdateAlertCols(int conId) {
 }
 
 // ── Repopulate ────────────────────────────────────────────────────────────────
-static void Diamonds_Repopulate(HWND hWnd) {
+static void Diamonds_Repopulate(HWND hWnd, bool resort = true) {
     HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
     if (!hList) return;
+
+    // Remember the current visual order so a non-resorting repopulate keeps it.
+    std::unordered_map<int, size_t> oldIndex;
+    if (!resort) {
+        oldIndex.reserve(diamondsState.displayOrder.size());
+        for (size_t i = 0; i < diamondsState.displayOrder.size(); ++i)
+            oldIndex.emplace(diamondsState.displayOrder[i], i);
+    }
 
     diamondsState.displayOrder.clear(); // Clear the virtual list viewport
     diamondsState.displayConIds.clear();
@@ -1055,9 +1063,23 @@ static void Diamonds_Repopulate(HWND hWnd) {
     }
 
     // VIRTUAL LIST MAGIC: Tell the UI exactly how many items exist. It will ask for text later.
+    if (!resort) {
+        // Keep existing rows where they were; brand-new rows go to the end
+        // until the next scheduled sort (TIMER_DIAMONDS_SORT).
+        const size_t npos = (std::numeric_limits<size_t>::max)();
+        std::stable_sort(diamondsState.displayOrder.begin(), diamondsState.displayOrder.end(),
+            [&](int a, int b) {
+                auto ia = oldIndex.find(a);
+                auto ib = oldIndex.find(b);
+                size_t va = ia != oldIndex.end() ? ia->second : npos;
+                size_t vb = ib != oldIndex.end() ? ib->second : npos;
+                return va < vb;
+            });
+    }
+
     ListView_SetItemCountEx(hList, diamondsState.displayOrder.size(), LVSICF_NOINVALIDATEALL | LVSICF_NOSCROLL);
     InvalidateRect(hList, NULL, FALSE);
-    Diamonds_ApplySort(hList);
+    if (resort) Diamonds_ApplySort(hList);
 
     Diamonds_UpdateAnyButton(hWnd);
 }
@@ -1230,7 +1252,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             Diamonds_OnConnectionChanged(hWnd);
         });
         diamondsState.positionsToken = api().model().onTopic(Topic::Positions, [hWnd] {
-            Diamonds_Repopulate(hWnd);
+            Diamonds_Repopulate(hWnd, false);
         });
         diamondsState.quoteToken = api().model().onAnyQuote([hWnd](int conId) {
             if (diamondsState.window != hWnd ||
@@ -1245,7 +1267,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         diamondsState.alertsToken = api().model().onTopic(Topic::Alerts, [hWnd] {
             if (diamondsState.window != hWnd) return;
             Diamonds_RefreshAlertCache();
-            Diamonds_Repopulate(hWnd);
+            Diamonds_Repopulate(hWnd, false);
             InvalidateRect(hWnd, NULL, TRUE);
         });
 
