@@ -867,7 +867,7 @@ LRESULT HandleCommonMessages(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             KillTimer(hWnd, TIMER_SAVE_WINPOS);
             std::string className = SaveWinPosition(hWnd);
 
-            if (className != COINS_CLASS_NAME) {
+            if (className != COINS_CLASS_NAME && !appShuttingDown) {
                 Session_RemoveWindow(hWnd);
             }
             if (className == MARKET_CLASS_NAME) {

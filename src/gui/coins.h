@@ -1511,6 +1511,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             break;
         }
         case WM_DESTROY:
+            appShuttingDown = true;
             api().disconnect();
             api().shutdown();
             KillGateway();

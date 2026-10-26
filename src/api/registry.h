@@ -13,6 +13,7 @@ constexpr const char* APP_REG_ROOT = "Software\\ibkr-gateway-trading-floor";
 #define LM_TEXT      GetSysColor(COLOR_WINDOWTEXT)
 
 static bool darkMode           = false;
+static bool appShuttingDown    = false;
 static bool playSounds         = false;
 static bool autoGateway        = false;
 static bool killGatewayOnExit  = false;

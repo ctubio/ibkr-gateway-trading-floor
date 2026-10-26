@@ -2599,12 +2599,13 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             state->orderRows.clear();
             // This slot is now free -- point OpenedLast at it so the next
             // market window opened reuses this position (see StartMarket).
-            if (!state->symbol.empty())
+            if (!appShuttingDown && !state->symbol.empty())
                 Settings_Market_SetOpenedLast(std::string(MARKET_CLASS_NAME) + "_" + state->symbol);
             delete state;
             marketStates.erase(hWnd);
         }
-        UpdateMarketRegistry();
+        if (!appShuttingDown)
+            UpdateMarketRegistry();
         break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);   
