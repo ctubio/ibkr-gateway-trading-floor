@@ -5,7 +5,7 @@
 //  Serves endpoints over a background thread using raw Winsock (no extra libs):
 //
 //    GET  /balance            → JSON object with account number, PnL, and summary map
-//    GET  /positions          → JSON array of all positions from api().getPortfolioMap()
+//    GET  /positions          → JSON array of all positions from api().positions()
 //    GET  /position/{SYMBOL}  → JSON object for the single position matching SYMBOL
 //    GET  /today              → Plain-text market news for today (TraderTV watchlist)
 //    GET  /week               → Plain-text market news for today + 4 previous trading days
@@ -48,8 +48,8 @@ static std::atomic<bool> httpRunning{ false };
 
 // Serialise one PositionInfo to a JSON object string.
 static std::string PositionToJson(const TradingAPI::PositionInfo& p) {
-    TradingAPI::L1Book l1;
-    api().getMarketData(p.conId, l1);
+    const auto quote = api().quote(p.conId);
+    const TradingAPI::L1Book l1 = quote ? *quote : TradingAPI::L1Book{};
 
     double unrealizedPct = 0;
     double costBasis = p.avgCost * std::fabs(p.shares);
@@ -170,11 +170,12 @@ static std::string HandleGetHistory(const std::string& symbol, const std::string
 
 // GET /account  →  JSON object with account number, PnL, and full summary map
 static std::string HandleGetBalance() {
-    std::string acc   = api().getAccountNumber();
-    double daily      = api().getDailyPnL();
-    double unrealized = api().getUnrealizedPnL();
-    double realized   = api().getRealizedPnL();
-    std::map<std::string, std::string> summary = api().getAccountSummary();
+    const auto account = api().account();
+    std::string acc = account->accountId;
+    double daily = account->daily;
+    double unrealized = account->unrealized;
+    double realized = account->realized;
+    std::map<std::string, std::string> summary = account->summary;
 
     if (summary["NetLiquidation"].empty()) summary["NetLiquidation"] = "0.00";
     if (summary["AccruedDividend"].empty()) summary["AccruedDividend"] = "0.00";
@@ -209,27 +210,12 @@ static std::string HandleGetBalance() {
 
 // GET /portfolio  →  JSON array of all positions
 static std::string HandleGetPositions() {
-    // Copy the snapshot out under a short lock, then release before doing any
-    // string formatting or calling PositionToJson(), which itself acquires
-    // watchlistMutex via getMarketData(). Previously portfolioMutex was held
-    // for the whole loop, nesting watchlistMutex inside it and blocking the
-    // API thread's pnlSingle()/position() callbacks (which also need
-    // portfolioMutex) for the entire JSON build, not just the map copy.
-    std::vector<TradingAPI::PositionInfo> positions;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        const auto& map = api().getPortfolioMap();
-        positions.reserve(map.size());
-        for (const auto& [conId, pos] : map) {
-            //if (pos.isWatchOnly) continue;
-            positions.push_back(pos);
-        }
-    }
+    const auto positions = api().positions();
 
     json arr = json::array();
-    for (const auto& pos : positions) {
-        TradingAPI::L1Book l1;
-        api().getMarketData(pos.conId, l1);
+    for (const auto& [conId, pos] : *positions) {
+        const auto quote = api().quote(pos.conId);
+        const TradingAPI::L1Book l1 = quote ? *quote : TradingAPI::L1Book{};
 
         double unrealizedPct = 0;
         double costBasis = pos.avgCost * std::fabs(pos.shares);
@@ -273,26 +259,15 @@ static std::string HandleGetPositionBySymbol(const std::string& symbol) {
     std::string upper = symbol;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
 
-    // Same pattern as HandleGetPositions(): find and copy the one matching
-    // position under portfolioMutex, then release it before ever touching
-    // watchlistMutex (inside PositionToJson -> getMarketData) or formatting.
-    TradingAPI::PositionInfo match;
-    bool found = false;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        const auto& map = api().getPortfolioMap();
-        for (const auto& [conId, pos] : map) {
-            std::string posSymbol = pos.symbol;
-            std::transform(posSymbol.begin(), posSymbol.end(), posSymbol.begin(), ::toupper);
-            if (posSymbol == upper) {
-                match = pos;
-                found = true;
-                break;
-            }
+    const auto positions = api().positions();
+    for (const auto& [conId, pos] : *positions) {
+        std::string posSymbol = pos.symbol;
+        std::transform(posSymbol.begin(), posSymbol.end(), posSymbol.begin(), ::toupper);
+        if (posSymbol == upper) {
+            return PositionToJson(pos);
         }
     }
-    if (!found) return "";
-    return PositionToJson(match);
+    return "";
 }
 
 // ── News fetch helpers (mirrors fetch_news.py logic) ─────────────────────────
@@ -1368,14 +1343,11 @@ static std::string HandlePostTrade(const std::string& body) {
 
     // ── Look up conId from live portfolio ─────────────────────────────────────
     int conId = 0;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        const auto& map = api().getPortfolioMap();
-        for (const auto& [id, pos] : map) {
-            std::string sym = pos.symbol;
-            std::transform(sym.begin(), sym.end(), sym.begin(), ::toupper);
-            if (sym == symbol) { conId = id; break; }
-        }
+    const auto positions = api().positions();
+    for (const auto& [id, pos] : *positions) {
+        std::string sym = pos.symbol;
+        std::transform(sym.begin(), sym.end(), sym.begin(), ::toupper);
+        if (sym == symbol) { conId = id; break; }
     }
 
     // ── Forward to external coins first ───────────────────────────────────

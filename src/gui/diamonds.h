@@ -139,6 +139,11 @@ struct DiamondsTitleEvent {
 };
 
 struct DiamondsState {
+    Model::Token connectionToken;
+    Model::Token positionsToken;
+    Model::Token quoteToken;
+    Model::Token pnlToken;
+
     // Bitmask: bit N set means group N is currently visible.  Default = all visible.
     UINT checkedTabs = 0x7;
     // Maps conId → assigned group (DTAB_ALL = untagged = shown when bit 0 is set).
@@ -168,7 +173,7 @@ struct DiamondsState {
     // Full visible-range redraw (sort order changed).
     bool dirty = false;
     // Per-row dirty tracking (UI thread only).
-    // dirtyMarket: L1 tick arrived, row cache must be rebuilt from getMarketData().
+    // dirtyMarket: L1 tick arrived, row cache must be rebuilt from the latest quote snapshot.
     // dirtyRedraw: row's cache is current (or only PnL changed), row just needs repainting.
     std::unordered_set<int> dirtyMarket;
     std::unordered_set<int> dirtyRedraw;
@@ -266,7 +271,7 @@ static void Diamonds_UpdateEventTitle(HWND hWnd) {
     Diamonds_InvalidateCaption(hWnd);
 }
 
-static void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORREF color, const std::string& price) {
+void Diamonds_AddTitleEvent(const std::string& symbol, int conId, COLORREF color, const std::string& price) {
     std::string displayPrice = price;
     if (displayPrice.size() >= 3 && displayPrice.compare(displayPrice.size() - 3, 3, ".00") == 0)
         displayPrice.erase(displayPrice.size() - 3);
@@ -294,10 +299,9 @@ static DiamondsWeeklyCloseCache Diamonds_GetWeeklyCloseCache(int conId) {
     if (now - cached.lastAttemptMs < 7000) return cached;
     cached.lastAttemptMs = now;
 
-    std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-    auto& portfolio = api().getPortfolioMap();
-    auto it = portfolio.find(conId);
-    if (it != portfolio.end()) {
+    auto portfolio = api().positions();
+    auto it = portfolio->find(conId);
+    if (it != portfolio->end()) {
         if (it->second.closeAgo13Week > 0.0) cached.closeAgo13Week = it->second.closeAgo13Week;
         if (it->second.closeAgo26Week > 0.0) cached.closeAgo26Week = it->second.closeAgo26Week;
         if (it->second.closeAgo52Week > 0.0) cached.closeAgo52Week = it->second.closeAgo52Week;
@@ -504,11 +508,9 @@ static void Diamonds_LoadSymbolColors() {
 // even while not held.
 static void Diamonds_CleanupStaleTabAssignments() {
     std::unordered_set<int> liveConIds;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        for (auto const& [conId, info] : api().getPortfolioMap())
-            liveConIds.insert(conId);
-    }
+    auto positions = api().positions();
+    for (auto const& [conId, info] : *positions)
+        liveConIds.insert(conId);
     if (liveConIds.empty() || !api().isConnected()) return;
 
     if (!diamondsState.tabMap.empty()) {
@@ -543,11 +545,9 @@ static void Diamonds_CleanupStaleTabAssignments() {
 // at a different registry subkey (Dividends instead of Tab_*/SymbolColors).
 static void Diamonds_CleanupStaleDividends() {
     std::unordered_set<int> liveConIds;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        for (auto const& [conId, info] : api().getPortfolioMap())
-            liveConIds.insert(conId);
-    }
+    auto positions = api().positions();
+    for (auto const& [conId, info] : *positions)
+        liveConIds.insert(conId);
     if (liveConIds.empty() || !api().isConnected()) return;
 
     HKEY hKey;
@@ -732,18 +732,15 @@ static void Diamonds_UpdatePnLCols(HWND hWnd, int conId) {
     auto& row = diamondsState.dataCache[conId];
     row.conId = conId; 
     
+    auto positions = api().positions();
     TradingAPI::PnlSinglePayload pnlSingle;
     double avgCost = 0.0;
     std::string exchange;
-    {
-        std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
-        auto& pm = api().getPortfolioMap();
-        auto it = pm.find(conId);
-        if (it != pm.end()) {
-            pnlSingle = it->second.pnlSingle;
-            avgCost = it->second.avgCost;
-            exchange = it->second.exchange;
-        }
+    auto it = positions->find(conId);
+    if (it != positions->end()) {
+        pnlSingle = it->second.pnlSingle;
+        avgCost = it->second.avgCost;
+        exchange = it->second.exchange;
     }
 
     if (pnlSingle.conId > 0) {
@@ -819,7 +816,7 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
 static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // Ensure a cache row exists even if this tick arrived before
     // Diamonds_Repopulate had a chance to create one for it, e.g. right after
-    // the window is closed and reopened, a WM_MARKET_L1 posted just before the
+    // the window is closed and reopened, a quote notification just before the
     // repopulate finishes used to hit this function while the cache was still
     // empty/rebuilding and the early-return below silently dropped the tick
     // for good (nothing ever re-requested it). That could look exactly like
@@ -977,16 +974,14 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     std::vector<TradingAPI::PositionInfo> rows;
     std::unordered_set<int> portfolioConIds;
-    {
-        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-        for (auto const& [conId, info] : api().getPortfolioMap()) {
-            if (info.isWatchOnly) continue; // watch-only rows are added explicitly below, Quarantine-only
-            auto it = diamondsState.tabMap.find(info.conId);
-            int  assignedTab = (it != diamondsState.tabMap.end()) ? it->second : DTAB_ALL;
-            if ((diamondsState.checkedTabs >> assignedTab) & 1) rows.push_back(info);
+    auto positions = api().positions();
+    for (auto const& [conId, info] : *positions) {
+        if (info.isWatchOnly) continue; // watch-only rows are added explicitly below, Quarantine-only
+        auto it = diamondsState.tabMap.find(info.conId);
+        int  assignedTab = (it != diamondsState.tabMap.end()) ? it->second : DTAB_ALL;
+        if ((diamondsState.checkedTabs >> assignedTab) & 1) rows.push_back(info);
 
-            portfolioConIds.insert(info.conId);
-        }
+        portfolioConIds.insert(info.conId);
     }
 
     // ── Alert-only symbols: have an Alert Up/Down set but aren't a current
@@ -1011,9 +1006,8 @@ static void Diamonds_Repopulate(HWND hWnd) {
 
     // Build/refresh the cache rows.
     // Rule: only write the fields we own here (identity, position, avgCost, market
-    // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL
-    //, those are owned by WM_PNL_SINGLE and must survive a repopulate so they
-    // remain visible when the window is closed and reopened.
+    // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL,
+    // which must survive a repopulate so they remain visible when reopened.
     for (const auto& pos : rows) {
         bool isHeldPosition = (portfolioConIds.count(pos.conId) > 0);
 
@@ -1034,11 +1028,17 @@ static void Diamonds_Repopulate(HWND hWnd) {
         Diamonds_UpdateAlertCols(pos.conId);
 
         // Pre-fill market data if already cached, this also seeds the estimated
-        // PnL columns for the first open (before WM_PNL_SINGLE arrives).
+        // PnL columns for the first open (before PnL notifications arrive).
         // This runs for both held positions AND watch-only (quarantine) symbols.
-        TradingAPI::L1Book tickInfo;
-        if (api().getMarketData(pos.conId, tickInfo, TradingAPI::L1Consumer::Diamonds)) {
-            Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+        auto quote = api().quote(pos.conId);
+        if (quote) {
+            auto volumeRate = api().getVolumeRate(pos.conId);
+            if (volumeRate) {
+                TradingAPI::L1Book tickInfo = *quote;
+                tickInfo.rtVolSum5min = volumeRate->sum5min;
+                tickInfo.rtVolRatio5min = volumeRate->ratio5min;
+                Diamonds_UpdateMarketCols(pos.conId, tickInfo);
+            }
         }
 
         if (isHeldPosition) {
@@ -1077,8 +1077,13 @@ static void Diamonds_FlushDirty(HWND hWnd) {
         std::unordered_set<int> pending;
         pending.swap(diamondsState.dirtyMarket);
         for (int conId : pending) {
-            TradingAPI::L1Book fresh;
-            if (!api().getMarketData(conId, fresh, TradingAPI::L1Consumer::Diamonds)) continue;
+            auto quote = api().quote(conId);
+            if (!quote) continue;
+            auto volumeRate = api().getVolumeRate(conId);
+            if (!volumeRate) continue;
+            TradingAPI::L1Book fresh = *quote;
+            fresh.rtVolSum5min = volumeRate->sum5min;
+            fresh.rtVolRatio5min = volumeRate->ratio5min;
             Diamonds_UpdateMarketCols(conId, fresh);
             if (fresh.last > 0.0)
                 diamondsState.sparklines[conId].AddPrice(fresh.last);
@@ -1119,6 +1124,28 @@ static void Diamonds_FlushDirty(HWND hWnd) {
     }
     diamondsState.dirtyRedraw.clear();
     // No UpdateWindow(): let the repaint go through the normal message loop.
+}
+
+static void Diamonds_OnConnectionChanged(HWND hWnd) {
+    HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
+    if (!hList) return;
+    if (api().isMarketDataConnected() && api().isTradingConnected()) {
+        // Re-request positions (market data re-subscribed in positionEnd()).
+        Diamonds_Repopulate(hWnd);
+    } else {
+        diamondsState.displayOrder.clear();
+        diamondsState.dataCache.clear();
+        diamondsState.dirtyMarket.clear();
+        diamondsState.dirtyRedraw.clear();
+        diamondsState.dirty = false;
+        ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
+        InvalidateRect(hList, NULL, FALSE);
+        Diamonds_UpdateAnyButton(hWnd);
+    }
+    RECT rc;
+    GetClientRect(hWnd, &rc);
+    rc.bottom = Caption_H(hWnd);
+    InvalidateRect(hWnd, &rc, FALSE);
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
@@ -1199,7 +1226,18 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessage(tab, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
         }
         
-        api().addApiUpdateWindow(hWnd);
+        diamondsState.connectionToken = api().model().onTopic(Topic::Connection, [hWnd] {
+            Diamonds_OnConnectionChanged(hWnd);
+        });
+        diamondsState.positionsToken = api().model().onTopic(Topic::Positions, [hWnd] {
+            Diamonds_Repopulate(hWnd);
+        });
+        diamondsState.quoteToken = api().model().onAnyQuote([](int conId) {
+            diamondsState.dirtyMarket.insert(conId);
+        });
+        diamondsState.pnlToken = api().model().onAnyPnl([hWnd](int conId) {
+            Diamonds_UpdatePnLCols(hWnd, conId);
+        });
 
         Diamonds_UpdateDivColumnsVisibility(hWnd);
         Diamonds_Repopulate(hWnd);
@@ -1415,12 +1453,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         break;
     }
 
-    case WM_DIAMONDS_UPDATE: {
-        api().ackDiamondsUpdate();
-        Diamonds_Repopulate(hWnd);
-        break;
-    }
-
     case WM_ALERTS_CHANGED: {
         int conId = (int)lParam;
         if (!conId) break;
@@ -1428,52 +1460,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         Diamonds_RefreshAlertCache();
         Diamonds_Repopulate(hWnd);
         InvalidateRect(hWnd, NULL, TRUE);
-        break;
-    }
-
-    // ── Live market data update for one symbol ────────────────────────────────
-    // Posted by Impl::tickPrice / tickSize / tickString / tickGeneric
-    case WM_MARKET_L1: {
-        int conId = (int)lParam;
-        if (!conId) break;
-        diamondsState.dirtyMarket.insert(conId);
-        break;
-    }
-    
-    // ── Live per-position PnL update (reqPnLSingle stream) ───────────────────
-    // Posted by Impl::pnlSingle() on the API thread via PostMessage.
-    //   wParam = conId (fast row-lookup key, no pointer deref needed)
-    //   lParam = heap-allocated TradingAPI::PnlSinglePayload*, we own it, must delete.
-    case WM_PNL_SINGLE: {
-        int conId = (int)lParam;
-        if (!conId) break;
-        api().ackPnl(conId, TradingAPI::L1Consumer::Diamonds);
-        Diamonds_UpdatePnLCols(hWnd, conId);
-        // ZERO-FLICKER FIX: Stop auto-sorting the entire grid on every single PnL tick!
-        break;
-    }
-
-    // ── Connection state changed ──────────────────────────────────────────────
-    case WM_API_UPDATE: {
-        HWND hList = GetDlgItem(hWnd, ID_DIAMONDS_RESULTS_LIST);
-        if (!hList) break;
-        if (api().isMarketDataConnected() && api().isTradingConnected()) {
-            // Re-request positions (market data re-subscribed in positionEnd()).
-            Diamonds_Repopulate(hWnd);
-        } else {
-            diamondsState.displayOrder.clear();
-            diamondsState.dataCache.clear();
-            diamondsState.dirtyMarket.clear();
-            diamondsState.dirtyRedraw.clear();
-            diamondsState.dirty = false;
-            ListView_SetItemCountEx(hList, 0, LVSICF_NOINVALIDATEALL);
-            InvalidateRect(hList, NULL, FALSE);
-            Diamonds_UpdateAnyButton(hWnd);
-        }
-        RECT rc;
-        GetClientRect(hWnd, &rc);
-        rc.bottom = Caption_H(hWnd);
-        InvalidateRect(hWnd, &rc, FALSE);
         break;
     }
 
@@ -1565,12 +1551,9 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                     // Determine if this is a currently held portfolio position
                     bool isHeldPosition = false;
-                    {
-                        std::lock_guard<std::mutex> lock(api().getPortfolioMutex());
-                        auto& pm = api().getPortfolioMap();
-                        auto pit = pm.find(conId);
-                        isHeldPosition = (pit != pm.end()) && !pit->second.isWatchOnly;
-                    }
+                    auto positions = api().positions();
+                    auto pit = positions->find(conId);
+                    isHeldPosition = (pit != positions->end()) && !pit->second.isWatchOnly;
 
                     // ── Build context menu ────────────────────────────────────────
                     // IDs 1-3:   group assignment
@@ -1579,10 +1562,8 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                     // ── Quick placeholder orders ───────────────────────────────────
                     double quickLastPrice = 0.0;
-                    {
-                        TradingAPI::L1Book quickInfo;
-                        if (conId > 0 && api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds)) quickLastPrice = quickInfo.last;
-                    }
+                    auto quickQuote = conId > 0 ? api().quote(conId) : Snap<TradingAPI::L1Book>{};
+                    if (quickQuote) quickLastPrice = (*quickQuote).last;
                     std::string sellLabel = sym + (
                         (quickLastPrice > 0.0)
                             ? std::format(" SELL 1 @ {:.2f}", quickLastPrice)
@@ -1653,22 +1634,22 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         Diamonds_CleanupStaleDividends();
                     } else if (cmd == 300 && conId > 0) {
                         // Quick BUY placeholder: 1 share @ $1.00.
-                        TradingAPI::L1Book quickInfo;
-                        if (api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds) && quickInfo.last > 0.0) {
-                            double buyPrice = quickInfo.last;
+                        auto quickQuote = api().quote(conId);
+                        if (quickQuote && (*quickQuote).last > 0.0) {
+                            double buyPrice = (*quickQuote).last;
                             SubmitUnsentOrderAsync(conId, sym, "BUY", false, 1.0, buyPrice, 0.0, 0.0, 0.0);
                         }
                     } else if (cmd == 301 && conId > 0) {
                         // Quick SELL placeholder: 1 share @ 2x last price.
-                        TradingAPI::L1Book quickInfo;
-                        if (api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds) && quickInfo.last > 0.0) {
-                            double sellPrice = quickInfo.last;
+                        auto quickQuote = api().quote(conId);
+                        if (quickQuote && (*quickQuote).last > 0.0) {
+                            double sellPrice = (*quickQuote).last;
                             SubmitUnsentOrderAsync(conId, sym, "SELL", false, 1.0, sellPrice, 0.0, 0.0, 0.0);
                         }
                     } else if (cmd == 302) {
-                        TradingAPI::L1Book quickInfo;
-                        api().getMarketData(conId, quickInfo, TradingAPI::L1Consumer::Diamonds);
-                        StartAlertEditor(sym, conId, quickInfo.last); // quickInfo.last is fine as zero here
+                        auto quickQuote = api().quote(conId);
+                        double alertPrice = quickQuote ? (*quickQuote).last : 0.0;
+                        StartAlertEditor(sym, conId, alertPrice); // zero when no quote exists
                     }
                 }
             }
@@ -1925,7 +1906,10 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
         KillTimer(hWnd, TIMER_DIAMONDS_CAPTION);
-        api().removeApiUpdateWindow(hWnd);
+        diamondsState.connectionToken.reset();
+        diamondsState.positionsToken.reset();
+        diamondsState.quoteToken.reset();
+        diamondsState.pnlToken.reset();
         diamondsState.checkboxesVisible = false;
         diamondsState.viewSelectionEnabled = 0;
         diamondsState.dataCache.clear();

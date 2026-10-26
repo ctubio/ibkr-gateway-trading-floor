@@ -1,4 +1,5 @@
 #include "api/gateway.h"
+#include "api/dispatcher.h"
 #include "api/registry.h"
 #include "api/speech.h"
 #include "api/sound.h"
@@ -15,6 +16,10 @@
 #include "gui/diamonds.h"
 #include "gui/orders.h"
 #include "gui/coins.h"
+
+void Orders_AddUnsentFromGateway(HWND hWnd, const TradingAPI::OrderInfo& info) {
+    Orders_AddUnsent(hWnd, info);
+}
 
 static const struct WindowClassInfo {
     WNDPROC proc;
@@ -40,7 +45,10 @@ class RegisterWindowRAII {
     HINSTANCE hInst_;
     bool allowed = true;
 public:
-    explicit RegisterWindowRAII(HINSTANCE hInst) : hInst_(hInst) {
+    explicit RegisterWindowRAII(HINSTANCE hInst) try : hInst_(hInst) {
+        if (!UiDispatcher::instance().init(hInst_))
+            throw std::runtime_error("UiDispatcher initialization failed");
+
         for (const auto& windowClass : windowClasses)
             RegisterWindowClass(hInst_, windowClass.proc, windowClass.name, windowClass.icon, windowClass.popup);
 
@@ -60,9 +68,13 @@ public:
         StartCoins(hInst_);
 
         Session_RestoreWindows(StartDiamonds, StartSettings, StartMarket, StartOrders, StartDebugLog);
+    } catch (...) {
+        UiDispatcher::instance().shutdown();
+        throw;
     }
     bool unlocked() const { return allowed; }
     ~RegisterWindowRAII() {
+        UiDispatcher::instance().shutdown();
         DestroyScreenFlashOverlay();
         for (const auto& windowClass : windowClasses)
             UnregisterClass(windowClass.name, hInst_);

@@ -110,26 +110,17 @@ TradingAPI& api() {
     return *TWS_API;
 }
 
+void StartOrders();
+
 static void SubmitUnsentOrderAsync(int conId, std::string symbol, std::string side,
                                    bool isOvernight, double quantity, double price,
                                    double stopPrice, double stopPriceAwayFrom, double profitPrice) {
-    std::thread([conId, symbol = std::move(symbol), side = std::move(side),
-                 isOvernight, quantity, price, stopPrice, stopPriceAwayFrom, profitPrice]() {
-        HWND hCoins = FindWindowA(COINS_CLASS_NAME, NULL);
-        if (hCoins && IsWindow(hCoins))
-            PostMessageA(hCoins, WM_OPEN_ORDERS_WINDOW, 0, 0);
-
-        HWND hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-        int max = 10;
-        while (!hOrders || !IsWindow(hOrders)) {
-            if (!max--) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(121));
-            hOrders = FindWindowA(ORDERS_CLASS_NAME, NULL);
-        }
-        if (hOrders && IsWindow(hOrders))
-            api().submitOrder(conId, symbol, side, isOvernight, quantity, price,
-                              stopPrice, stopPriceAwayFrom, profitPrice, false);
-    }).detach();
+    UiDispatcher::instance().post([conId, symbol = std::move(symbol), side = std::move(side),
+                                   isOvernight, quantity, price, stopPrice, stopPriceAwayFrom, profitPrice]() {
+        StartOrders();
+        api().submitOrder(conId, symbol, side, isOvernight, quantity, price,
+                          stopPrice, stopPriceAwayFrom, profitPrice, false);
+    });
 }
 
 // ── Global Account Summary ───────────────────────────────────────────────────────────
@@ -164,6 +155,15 @@ struct MarketOpenOrderSummary {
 };
 
 struct TsState {
+    Model::Token connectionToken;
+    Model::Token executionsToken;
+    Model::Token quoteToken;
+    Model::Token pnlToken;
+    Model::Token ordersToken;
+    Model::Token ticksToken;
+    Model::Token bookToken;
+
+    HWND hWnd = nullptr;
     HWND hTsList = NULL;
     HWND hTsListF100 = NULL;
     HWND hTsListF1000 = NULL;
@@ -171,8 +171,6 @@ struct TsState {
     HWND hExecList = NULL;   // Executions list (far left, beside L2)
 
     // ── Level 2 visual data (mirrors the 12 list rows) ───────────────────────
-    std::vector<TradingAPI::Level2Entry> l2Asks;
-    std::vector<TradingAPI::Level2Entry> l2Bids;
     double    l2Price[12]     = {};
     double    l2Size[12]      = {};
     ULONGLONG l2TickAt[12] = {};      // GetTickCount64() of last trade at this row's price

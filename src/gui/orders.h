@@ -16,6 +16,9 @@ void StartOrders() { StartGenericWindow(ORDERS_CLASS_NAME, "Orders", L"TWSAPICli
 #define EDIT_PANEL_H  44   // height reserved at the bottom when the panel is visible
 
 struct OrdersEditState {
+    Model::Token connectionToken;
+    Model::Token ordersToken;
+
     int    orderId      = -1;
     bool   partialFill  = false;
     double originalQty  = 0.0;
@@ -219,7 +222,7 @@ static void Orders_Repopulate(HWND hWnd) {
     if (!hList) return;
     SendMessage(hList, WM_SETREDRAW, FALSE, 0);
 
-    auto orders = api().getOrdersSorted();
+    auto orders = orderSort(*api().orders());
 
     // A placeholder whose orderId now has a real ordersMap entry has been
     // superseded (the user resubmitted it via the inline panel), drop it so
@@ -331,7 +334,7 @@ static void Orders_MoveSelection(HWND hWnd, int dir) {
     }
 
     int orderId = (int)lvi.lParam;
-    auto orders = api().getOrdersSorted();
+    auto orders = orderSort(*api().orders());
     for (const auto& o : orders) {
         if (o.orderId == orderId) {
             if (api().orderIsEditable(o.status))
@@ -382,7 +385,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                     auto uit = unsentOrders.find(s_editState.orderId);
                     if (uit != unsentOrders.end())
                         unsentOrders.erase(s_editState.orderId);
-                    SetOrdersTitle(hParent, api().getOrdersSorted());
+                    SetOrdersTitle(hParent, orderSort(*api().orders()));
                 } else {
                     api().cancelOrder(s_editState.orderId, true);
                 }
@@ -430,7 +433,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
                         if (sel >= 0) ListView_DeleteItem(hList, sel);
                         unsentOrders.erase(s_editState.orderId);
                         Orders_HideInlinePanel(hParent);
-                        SetOrdersTitle(hParent, api().getOrdersSorted());
+                        SetOrdersTitle(hParent, orderSort(*api().orders()));
                     } else {
                         api().modifyOrder(s_editState.orderId, price, qty);
                     }
@@ -561,7 +564,44 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     }
 }
 
+static void Orders_AddUnsent(HWND hWnd, const TradingAPI::OrderInfo& info) {
+    unsentOrders[info.orderId] = info;
+    HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+    if (hList) {
+        int idx = ListView_GetItemCount(hList);
+        LVITEMA lvi = {};
+        lvi.mask     = LVIF_TEXT | LVIF_PARAM;
+        lvi.iItem    = idx;
+        lvi.iSubItem = 0;
+        lvi.lParam   = (LPARAM)info.orderId;
+        lvi.pszText  = (LPSTR)info.action.c_str();
+        ListView_InsertItem(hList, &lvi);
+        ListView_SetItemText(hList, idx, OCOL_SYMBOL, (LPSTR)info.symbol.c_str());
+        std::string quoteStr = std::format("{:.0f} @ {:.2f}", info.totalQty, info.price);
+        ListView_SetItemText(hList, idx, OCOL_QUOTE, (LPSTR)quoteStr.c_str());
+        std::string fullTypeStr;
+        if (info.fullStopPrice > 0 || info.fullProfitPrice > 0)
+            fullTypeStr = std::format("{:.2f} | {:.2f} ", info.fullStopPrice, info.fullProfitPrice);
+        fullTypeStr += /*info.tif + " " + info.orderType + " " + */info.status;
+        ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
+        Orders_Repopulate(hWnd);
+    }
+}
+
 // ── Window procedure ──────────────────────────────────────────────────────────
+
+static void Orders_OnConnectionChanged(HWND hWnd) {
+    if (api().isMarketDataConnected() && api().isTradingConnected()) {
+        Orders_Repopulate(hWnd);
+    } else {
+        HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
+        if (hList) {
+            ListView_DeleteAllItems(hList);
+            SendMessage(hList, WM_SETREDRAW, TRUE, 0);
+            RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        }
+    }
+}
 
 LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
@@ -638,7 +678,12 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             SendMessage(hQtyTifLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
             SendMessage(hQtyTypeLabel, WM_SETFONT, (WPARAM)hFont11ptbold.get(), TRUE);
 
-            api().addApiUpdateWindow(hWnd);  
+            s_editState.connectionToken = api().model().onTopic(Topic::Connection, [hWnd] {
+                Orders_OnConnectionChanged(hWnd);
+            });
+            s_editState.ordersToken = api().model().onTopic(Topic::Orders, [hWnd] {
+                Orders_OnConnectionChanged(hWnd);
+            });
             Orders_Repopulate(hWnd);
             break;
         }
@@ -708,7 +753,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                             auto uit = unsentOrders.find(s_editState.orderId);
                             if (uit != unsentOrders.end())
                                 unsentOrders.erase(s_editState.orderId);
-                            SetOrdersTitle(hWnd, api().getOrdersSorted());
+                            SetOrdersTitle(hWnd, orderSort(*api().orders()));
                         } else {
                             api().cancelOrder(s_editState.orderId, true);
                         }
@@ -741,7 +786,7 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     break;
                 }
                 int orderId = (int)lvi.lParam;
-                auto orders = api().getOrdersSorted();
+                auto orders = orderSort(*api().orders());
                 bool found = false;
                 for (const auto& o : orders) {
                     if (o.orderId == orderId) {
@@ -820,49 +865,6 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             break;
         }
         
-        case WM_API_UNSENT_ORDER: {
-            auto* info = reinterpret_cast<TradingAPI::OrderInfo*>(lParam);
-            if (info) {
-                unsentOrders[info->orderId] = *info;
-                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                if (hList) {
-                    int idx = ListView_GetItemCount(hList);
-                    LVITEMA lvi = {};
-                    lvi.mask     = LVIF_TEXT | LVIF_PARAM;
-                    lvi.iItem    = idx;
-                    lvi.iSubItem = 0;
-                    lvi.lParam   = (LPARAM)info->orderId;
-                    lvi.pszText  = (LPSTR)info->action.c_str();
-                    ListView_InsertItem(hList, &lvi);
-                    ListView_SetItemText(hList, idx, OCOL_SYMBOL, (LPSTR)info->symbol.c_str());
-                    std::string quoteStr = std::format("{:.0f} @ {:.2f}", info->totalQty, info->price);
-                    ListView_SetItemText(hList, idx, OCOL_QUOTE, (LPSTR)quoteStr.c_str());
-                    std::string fullTypeStr;
-                    if (info->fullStopPrice > 0 || info->fullProfitPrice > 0) 
-                        fullTypeStr = std::format("{:.2f} | {:.2f} ", info->fullStopPrice, info->fullProfitPrice);
-                    fullTypeStr += /*info->tif + " " + info->orderType + " " + */info->status;
-                    ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
-                    Orders_Repopulate(hWnd);
-                }
-                delete info;
-            }
-            break;
-        }
-
-        case WM_API_UPDATE: {
-            if (api().isMarketDataConnected() && api().isTradingConnected()) {
-                Orders_Repopulate(hWnd);
-            } else {
-                HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
-                if (hList) {
-                    ListView_DeleteAllItems(hList);
-                    SendMessage(hList, WM_SETREDRAW, TRUE, 0);
-                    RedrawWindow(hWnd, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-                }
-            }
-            break;
-        }
-        
         case WM_COMMAND: {
             if (s_editState.panelVisible && (LOWORD(wParam) == ID_ORDERS_PRICE_EDIT || LOWORD(wParam) == ID_ORDERS_QTY_EDIT) && HIWORD(wParam) == EN_CHANGE) {
                 UpdatePriceLabel(hWnd);
@@ -908,7 +910,8 @@ LRESULT CALLBACK WndProcOrders(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
 
         case WM_DESTROY:
-            api().removeApiUpdateWindow(hWnd);
+            s_editState.connectionToken.reset();
+            s_editState.ordersToken.reset();
             if (s_editState.panelVisible)
                 Orders_HideInlinePanel(hWnd);
             break;

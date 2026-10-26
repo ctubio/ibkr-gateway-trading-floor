@@ -1086,12 +1086,17 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
 }
 
 // ── Search Popup ──────────────────────────────────────────────────────────────
-static std::vector<std::string> tsSearchResults;
+struct TsSearchState {
+    Model::Token symbolResultsToken;
+    std::vector<std::string> results;
+};
 
 // Shared helper: parse selected result and launch market, then close search dialog
 static void TsSearch_SelectAndLaunch(HWND hWnd, int sel) {
-    if (sel != LB_ERR && sel < (int)tsSearchResults.size()) {
-        std::string r = tsSearchResults[sel];
+    HWND hParent = GetParent(hWnd);
+    auto* state = reinterpret_cast<TsSearchState*>(GetWindowLongPtr(hParent, GWLP_USERDATA));
+    if (state && sel != LB_ERR && sel < (int)state->results.size()) {
+        std::string r = state->results[sel];
         auto dot = r.find('.');
         if (dot != std::string::npos) {
             try {
@@ -1145,11 +1150,25 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+            auto* state = new TsSearchState();
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
             HWND hTsSearchEdit = CreateWindowA("EDIT", "", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_UPPERCASE | ES_AUTOHSCROLL, 10, 10, 240, 24, hWnd, (HMENU)ID_MARKET_SEARCH_INPUT, hInst, NULL);
             SetWindowSubclass(hTsSearchEdit, TsSearchEditSubclass, 1, 0);
             HWND hTsSearchList = CreateWindowA("LISTBOX", "", WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOTIFY, 10, 40, 240, 180, hWnd, (HMENU)ID_MARKET_SEARCH_LIST, hInst, NULL);
             SetWindowSubclass(hTsSearchList, TsSearchListSubclass, 2, 0);
             SendMessage(hTsSearchList, WM_SETFONT, (WPARAM)hFont14pt.get(), TRUE);
+            state->symbolResultsToken = api().model().onTopic(Topic::SymbolResults, [hWnd] {
+                auto* state = reinterpret_cast<TsSearchState*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+                if (!state) return;
+                state->results = *api().symbolsSnap();
+                HWND hTsSearchList = GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST);
+                SendMessage(hTsSearchList, LB_RESETCONTENT, 0, 0);
+                for (const auto& r : state->results) {
+                    auto d = r.find('.');
+                    std::string disp = (d != std::string::npos) ? r.substr(d + 1) : r;
+                    SendMessageA(hTsSearchList, LB_ADDSTRING, 0, (LPARAM)disp.c_str());
+                }
+            });
             SetFocus(hTsSearchEdit);
             break;
         }
@@ -1157,17 +1176,19 @@ LRESULT CALLBACK WndProcTsSearch(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (LOWORD(wParam) == ID_MARKET_SEARCH_INPUT && HIWORD(wParam) == EN_CHANGE) {
                 std::string text = EditText(GetDlgItem(hWnd, ID_MARKET_SEARCH_INPUT));
                 if (!text.empty()) { api().searchSymbols(hWnd, text.c_str()); }
-                else { SendMessage(GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST), LB_RESETCONTENT, 0, 0); tsSearchResults.clear(); }
+                else {
+                    SendMessage(GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST), LB_RESETCONTENT, 0, 0);
+                    auto* state = reinterpret_cast<TsSearchState*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+                    if (state) state->results.clear();
+                }
             }
             break;
-        case WM_SYMBOL_RESULTS: {
-            tsSearchResults = api().getSymbolResults();
-            HWND hTsSearchList = GetDlgItem(hWnd, ID_MARKET_SEARCH_LIST);
-            SendMessage(hTsSearchList, LB_RESETCONTENT, 0, 0);
-            for (const auto& r : tsSearchResults) {
-                auto d = r.find('.');
-                std::string disp = (d != std::string::npos) ? r.substr(d + 1) : r;
-                SendMessageA(hTsSearchList, LB_ADDSTRING, 0, (LPARAM)disp.c_str());
+        case WM_DESTROY: {
+            auto* state = reinterpret_cast<TsSearchState*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+            if (state) {
+                state->symbolResultsToken.reset();
+                delete state;
+                SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
             }
             break;
         }
@@ -1230,38 +1251,18 @@ static int HitTestSplitter(HWND hWnd, TsState* state, int x, int y) {
 // ── L2 list refresh ───────────────────────────────────────────────────────────
 // Renders asks (red) on top, bids (blue) below in a single Price/Size list.
 // lParam: 1 = ask row, 2 = bid row  (used by NM_CUSTOMDRAW for colouring).
-static void Market_ApplyL2Update(TsState* state, TradingAPI::Level2Update* update) {
-    if (!state || !state->hL2List || !update) return;
-    if (update->position < 0 || update->position >= 6 ||
-        (update->side != 0 && update->side != 1) ||
-        (update->operation != 0 && update->operation != 1 && update->operation != 2)) return;
-
-    auto& book = update->side == 0 ? state->l2Asks : state->l2Bids;
-    const size_t position = static_cast<size_t>(update->position);
-    if (update->operation == 0) {
-        if (position > book.size()) return;
-        book.insert(book.begin() + position, update->entry);
-        if (book.size() > 6) book.pop_back();
-    } else if (update->operation == 1) {
-        if (position >= book.size()) return;
-        book[position] = update->entry;
-    } else {
-        if (position >= book.size()) return;
-        book.erase(book.begin() + position);
-    }
-
-    for (int depth = 0; depth < 6; ++depth) {
-        const int row = update->side == 0 ? 5 - depth : 6 + depth;
-        const bool populated = static_cast<size_t>(depth) < book.size();
-        const double newPrice = populated ? book[depth].price : 0.0;
-        const double newSize = populated ? book[depth].size : 0.0;
-
+static void Market_OnBook(TsState* state, const L2Book& book) {
+    if (!state || !state->hL2List) return;
+    for (int row = 0; row < 12; ++row) {
+        const auto& snapshotRow = book.rows[static_cast<size_t>(row)];
+        const double newPrice = snapshotRow.price;
+        const double newSize = snapshotRow.size;
         if (state->l2Price[row] != newPrice)
             state->l2TickAt[row] = 0;
         state->l2Size[row] = newSize;
         state->l2Price[row] = newPrice;
 
-        if (populated) {
+        if (snapshotRow.populated) {
             std::string price = Market_Fmt(newPrice);
             std::string size = Market_FmtQty(newSize);
             ListView_SetItemText(state->hL2List, row, 0, (LPSTR)size.c_str());
@@ -1288,14 +1289,14 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
 
     HWND hList = state->hExecList;
     // ── Executions (as before) ───────────────────────────────────────────────
-    auto orders = api().getExecutions();
+    auto executions = api().executions();
     struct ExecRow {
         int side;
         std::string action;
         std::string quote;
     };
     std::vector<ExecRow> rows;
-    rows.reserve(state->openOrdersSummary.size() + orders.size());
+    rows.reserve(state->openOrdersSummary.size() + executions->size());
     std::string signature;
     auto addRow = [&](int side, std::string action, std::string quote) {
         signature += std::format("{}:{}:{}:{}:{};", side, action.size(), action, quote.size(), quote);
@@ -1315,7 +1316,7 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
         addRow(o.action == "BUY" ? 3 : 4, o.action, std::move(quoteStr));
     }
 
-    for (const auto& o : orders) {
+    for (const auto& o : *executions) {
         if (o.symbol != state->symbol) continue;
 
         // Normalise side: execDetails stores "BOT"/"SLD", openOrder stores "BUY"/"SELL"
@@ -1353,7 +1354,7 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
     InvalidateRect(hList, NULL, FALSE);
 }
 
-// Rebuilds state->orderRows from api().getOrdersSorted(), keeping it limited
+// Rebuilds state->orderRows from orderSort(*api().orders()), keeping it limited
 // to editable orders (api().orderIsEditable()) belonging to this window's
 // conId (falling back to a symbol match for the rare case an order hasn't
 // had its conId populated yet, mirrors Market_RefreshExec's symbol match).
@@ -1369,7 +1370,7 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
     const size_t originalRowCount = state->orderRows.size();
     bool layoutNeeded = false;
 
-    auto orders = api().getOrdersSorted();
+    auto orders = orderSort(*api().orders());
     std::vector<TradingAPI::OrderInfo> matched;
     for (auto& o : orders) {
         if (!api().orderIsEditable(o.status)) continue;
@@ -1379,7 +1380,7 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
     }
 
     // ── Feed hExecList's bold "open orders" rows from the same `matched` ────
-    // list above, no extra API call. getOrdersSorted() already orders by
+    // list above, no extra API call. orderSort() already orders by
     // priority (submitted/partial first) then orderId desc, so the bold rows
     // land in that order at the top of the exec list.
     state->openOrdersSummary.clear();
@@ -1906,6 +1907,117 @@ static void Market_PaintL2Pressure(TsState* st, HDC hdc) {
 }
 
 // ── Window procedure ──────────────────────────────────────────────────────────
+static void Market_OnConnectionChanged(HWND hWnd, TsState* state) {
+    if (api().isMarketDataConnected() && api().isTradingConnected()) {
+        api().setMarketWindow(hWnd, state->conId, state->symbol);
+        Market_SyncOrderRows(hWnd, state);
+    } else {
+        if (state->hTsList)     ListView_DeleteAllItems(state->hTsList);
+        if (state->hTsListF100) ListView_DeleteAllItems(state->hTsListF100);
+        if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
+        if (state->hL2List) {
+            for (int row = 0; row < 12; ++row) {
+                ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
+                ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
+            }
+            std::fill(std::begin(state->l2Size), std::end(state->l2Size), 0.0);
+            std::fill(std::begin(state->l2Price), std::end(state->l2Price), 0.0);
+            std::fill(std::begin(state->l2TickAt), std::end(state->l2TickAt), 0);
+            InvalidateRect(state->hL2List, NULL, FALSE);
+        }
+        if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
+        // Editable-orders panel is stale without a live connection, drop it.
+        for (auto& row : state->orderRows) Market_DestroyOrderRow(row);
+        state->orderRows.clear();
+        state->openOrdersSummary.clear();
+        state->execSignature.clear();
+        Market_Layout(hWnd, state);
+        state->l1Info = TradingAPI::L1Book{};
+        state->volRate.clear();      // stale on disconnect, avoid a phantom ratio off a frozen history
+        RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Caption_H(hWnd) + HEADER_H;
+        InvalidateRect(hWnd, &hdrRc, FALSE);
+    }
+}
+
+static void Market_OnQuote(TsState* state) {
+    if (!state || !state->conId) return;
+    auto quote = api().quote(state->conId);
+    if (!quote) return;
+
+    const auto& fresh = *quote;
+    if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
+    if (fresh.last      > 0.0) state->sparkline.AddPrice(state->l1Info.last);
+    if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
+    if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
+    if (fresh.high      > 0.0) state->l1Info.high      = fresh.high;
+    if (fresh.low       > 0.0) state->l1Info.low       = fresh.low;
+    state->l1Info.bid     = fresh.bid;
+    state->l1Info.ask     = fresh.ask;
+    state->l1Info.bidSize = fresh.bidSize;
+    state->l1Info.askSize = fresh.askSize;
+    if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
+    state->marketHdrDirty = true;
+}
+
+static void Market_OnPnl(TsState* state) {
+    if (!state || !state->conId) return;
+    auto pos = api().positions();
+    auto it = pos->find(state->conId);
+    if (it != pos->end()) {
+        state->position      = it->second.shares;
+        state->avgPrice      = it->second.avgCost;
+        state->exchange      = it->second.exchange;
+        state->dailyPnL      = it->second.pnlSingle.dailyPnL;
+        state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
+    }
+
+    std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice);
+    if (state->titlebar != titlebar) {
+        state->titlebar = titlebar;
+        SetWindowTextA(state->hWnd, state->titlebar.c_str());
+    }
+    state->marketHdrDirty = true;
+}
+
+static void Market_OnTicks(TsState* state, std::span<const Tick> ticks) {
+    if (!state) return;
+    for (const Tick& tick : ticks) {
+        bool matchedL2Price = false;
+        if (tick.price > 0.0 && state->hL2List) {
+            const ULONGLONG now = GetTickCount64();
+            for (int i = 0; i < 12; ++i) {
+                if (state->l2Price[i] == tick.price) {
+                    state->l2TickAt[i] = now;
+                    matchedL2Price = true;
+                }
+            }
+            if (matchedL2Price)
+                InvalidateRect(state->hL2List, NULL, FALSE);
+        }
+
+        COLORREF side = ThemeText();
+        if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0) {
+            if      (tick.price == state->l1Info.bid)  side = COINS_CLR_RED;
+            else if (tick.price == state->l1Info.ask)  side = COINS_CLR_GREEN;
+            else if (tick.price <  state->l1Info.bid)  side = COINS_CLR_RED_DARK;
+            else if (tick.price >  state->l1Info.ask)  side = COINS_CLR_GREEN_DARK;
+            else if (tick.price <  state->l1Info.last) side = COINS_CLR_RED_DARK2;
+            else if (tick.price >  state->l1Info.last) side = COINS_CLR_GREEN_DARK2;
+        }
+        state->lastTimeSec = TimeToSeconds(tick.time);
+        std::string timeStr = tick.time.substr(0, 5);
+        std::string priceStr = FormatFixed(tick.price, 2);
+        std::string sizeStr = FormatFixed(tick.size, 0);
+        if (tick.size >= 1.0)    TimeSales_InsertTick(state->hTsList, "", side, priceStr, sizeStr, state->lastTimeSec);
+        if (tick.size >= 100.0)  TimeSales_InsertTick(state->hTsListF100, timeStr, side, priceStr, sizeStr, state->lastTimeSec);
+        if (tick.size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, timeStr, side, priceStr, sizeStr, state->lastTimeSec);
+        Market_TrimTimeSalesLists(state);
+
+        state->volRate.add(GetTickCount64(), tick.size);
+        state->marketHdrDirty = true;
+    }
+}
+
 LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     TsState* state = nullptr;
     if (message != WM_CREATE) {
@@ -1919,6 +2031,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         TradingAPI::MarketInitData* data = (TradingAPI::MarketInitData*)(((LPCREATESTRUCT)lParam)->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)data);
         state = new TsState();
+        state->hWnd = hWnd;
         if (data) {
             state->symbol = data->symbol;
             state->conId  = data->conId;
@@ -2015,13 +2128,48 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             }
         }
 
-        api().addApiUpdateWindow(hWnd);
+        state->connectionToken = api().model().onTopic(Topic::Connection, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it != marketStates.end())
+                Market_OnConnectionChanged(hWnd, it->second);
+        });
+        state->executionsToken = api().model().onTopic(Topic::Executions, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it != marketStates.end())
+                Market_RefreshExec(hWnd, it->second);
+        });
+        state->quoteToken = api().model().onQuote(state->conId, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it != marketStates.end())
+                Market_OnQuote(it->second);
+        });
+        state->pnlToken = api().model().onPnl(state->conId, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it != marketStates.end())
+                Market_OnPnl(it->second);
+        });
+        state->ordersToken = api().model().onOrdersFor(state->conId, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it != marketStates.end())
+                Market_SyncOrderRows(hWnd, it->second);
+        });
+        state->ticksToken = api().model().onTicks(state->conId, [hWnd](std::span<const Tick> ticks) {
+            auto it = marketStates.find(hWnd);
+            if (it != marketStates.end())
+                Market_OnTicks(it->second, ticks);
+        });
+        state->bookToken = api().model().onBook(state->conId, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it == marketStates.end()) return;
+            const auto book = api().book(it->second->conId);
+            if (book)
+                Market_OnBook(it->second, *book);
+        });
         api().setMarketWindow(hWnd, state->conId, state->symbol);
         SetTimer(hWnd, TIMER_MARKET_PAINT, MARKET_PAINT_TIMER_MS, NULL);
         SetTimer(hWnd, TIMER_MARKET_VOLDECAY, 1000, NULL);
-        // Seed immediately
-        PostMessage(hWnd, WM_MARKET_L1, 0, (LPARAM)state->conId);
-        PostMessage(hWnd, WM_PNL_SINGLE, 0, (LPARAM)state->conId);
+        Market_OnQuote(state);
+        Market_OnPnl(state);
         // Seed the editable-orders panel
         Market_SyncOrderRows(hWnd, state);
         UpdateMarketRegistry();
@@ -2111,106 +2259,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             bool isRight = (lParam & (1 << 24)) != 0;
             Market_HandleCtrlOrderBar(hWnd, state, isRight);
         }
-        break;
-    }
-
-    case WM_MARKET_L1: {
-        int conId = (int)lParam;
-        if (!conId || !state || state->conId != conId) break;
-        TradingAPI::L1Book fresh;
-        if (api().getMarketData(state->conId, fresh, TradingAPI::L1Consumer::Market)) {
-            if (fresh.last      > 0.0) state->l1Info.last      = fresh.last;
-            if (fresh.last      > 0.0) state->sparkline.AddPrice(state->l1Info.last);
-            if (fresh.open      > 0.0) state->l1Info.open      = fresh.open;
-            if (fresh.prevClose > 0.0) state->l1Info.prevClose = fresh.prevClose;
-            if (fresh.high      > 0.0) state->l1Info.high      = fresh.high;
-            if (fresh.low       > 0.0) state->l1Info.low       = fresh.low;
-            state->l1Info.bid     = fresh.bid;
-            state->l1Info.ask     = fresh.ask;
-            state->l1Info.bidSize = fresh.bidSize;
-            state->l1Info.askSize = fresh.askSize;
-            if (fresh.vwap      > 0.0) state->l1Info.vwap      = fresh.vwap;
-            state->marketHdrDirty = true;
-        }
-        break;
-    }
-
-    case WM_MARKET_L2: {
-        auto* update = reinterpret_cast<TradingAPI::Level2Update*>(lParam);
-        if (state) Market_ApplyL2Update(state, update);
-        delete update;
-        break;
-    }
-
-    case WM_MARKET_TICK: {
-        auto* tick = reinterpret_cast<TradingAPI::TsTickEntry*>(lParam);
-        if (state) {
-            bool matchedL2Price = false;
-            if (tick->price > 0.0 && state->hL2List) {
-                const ULONGLONG now = GetTickCount64();
-                for (int i = 0; i < 12; ++i) {
-                    if (state->l2Price[i] == tick->price) {
-                        state->l2TickAt[i] = now;
-                        matchedL2Price = true;
-                    }
-                }
-                if (matchedL2Price)
-                    InvalidateRect(state->hL2List, NULL, FALSE);
-            }
-
-            tick->side = ThemeText();
-            if (state->l1Info.ask > 0 && state->l1Info.bid > 0 && state->l1Info.last > 0) {
-                if      (tick->price == state->l1Info.bid)  tick->side = COINS_CLR_RED;
-                else if (tick->price == state->l1Info.ask)  tick->side = COINS_CLR_GREEN;
-                else if (tick->price <  state->l1Info.bid)  tick->side = COINS_CLR_RED_DARK;
-                else if (tick->price >  state->l1Info.ask)  tick->side = COINS_CLR_GREEN_DARK;
-                else if (tick->price <  state->l1Info.last) tick->side = COINS_CLR_RED_DARK2;
-                else if (tick->price >  state->l1Info.last) tick->side = COINS_CLR_GREEN_DARK2;
-            }
-            state->lastTimeSec   = TimeToSeconds(tick->time);
-            std::string timeStr = tick->time.substr(0, 5);
-            std::string priceStr = FormatFixed(tick->price, 2);
-            std::string sizeStr  = FormatFixed(tick->size, 0);
-            if (tick->size >= 1.0)    TimeSales_InsertTick(state->hTsList,      "", tick->side, priceStr, sizeStr, state->lastTimeSec );
-            if (tick->size >= 100.0)  TimeSales_InsertTick(state->hTsListF100,  timeStr, tick->side, priceStr, sizeStr, state->lastTimeSec);
-            if (tick->size >= 1000.0) TimeSales_InsertTick(state->hTsListF1000, timeStr, tick->side, priceStr, sizeStr, state->lastTimeSec);
-            Market_TrimTimeSalesLists(state);
-
-            // ── Volume rate / print-frequency rate: feed the rolling tick history ──
-            // Every individual print (non-conflated, unlike RT_VOLUME) is recorded
-            // here with its arrival time so Market_ComputeVolRates can derive a
-            // recent-vs-baseline ratio for both share volume and trade frequency.
-            state->volRate.add(GetTickCount64(), tick->size);
-
-            state->marketHdrDirty = true;
-        }
-        delete tick;
-        break;
-    }
-
-    case WM_PNL_SINGLE: {
-        int conId = (int)lParam;
-        if (!conId || !state || state->conId != conId) break;
-        api().ackPnl(state->conId, TradingAPI::L1Consumer::Market);
-        {
-            std::lock_guard<std::mutex> lk(api().getPortfolioMutex());
-            auto& pm = api().getPortfolioMap();
-            auto it = pm.find(state->conId);
-            if (it != pm.end()) {
-                state->position      = it->second.shares;
-                state->avgPrice      = it->second.avgCost;
-                state->exchange      = it->second.exchange;
-                state->dailyPnL      = it->second.pnlSingle.dailyPnL;
-                state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
-            }
-        }
-
-        std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice);
-        if (state->titlebar != titlebar) {
-            state->titlebar = titlebar;
-            SetWindowTextA(hWnd, state->titlebar.c_str());
-        }
-        state->marketHdrDirty = true;
         break;
     }
 
@@ -2447,54 +2495,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         break;
     }
 
-    case WM_API_EXECUTION:
-        if (state) Market_RefreshExec(hWnd, state);
-        break;
-
-    case WM_MARKET_ORDERS_UPDATE:
-        if (state) {
-            api().ackOrdersChanged(state->conId);
-            Market_SyncOrderRows(hWnd, state);
-        }
-        break;
-
-    case WM_API_UPDATE: {
-        if (state) {
-            if (api().isMarketDataConnected() && api().isTradingConnected()) {
-                api().setMarketWindow(hWnd, state->conId, state->symbol);
-                Market_SyncOrderRows(hWnd, state);
-            } else {
-                if (state->hTsList)     ListView_DeleteAllItems(state->hTsList);
-                if (state->hTsListF100) ListView_DeleteAllItems(state->hTsListF100);
-                if (state->hTsListF1000) ListView_DeleteAllItems(state->hTsListF1000);
-                if (state->hL2List) {
-                    for (int row = 0; row < 12; ++row) {
-                        ListView_SetItemText(state->hL2List, row, 0, (LPSTR)"");
-                        ListView_SetItemText(state->hL2List, row, 1, (LPSTR)"");
-                    }
-                    std::fill(std::begin(state->l2Size), std::end(state->l2Size), 0.0);
-                    std::fill(std::begin(state->l2Price), std::end(state->l2Price), 0.0);
-                    std::fill(std::begin(state->l2TickAt), std::end(state->l2TickAt), 0);
-                    state->l2Asks.clear();
-                    state->l2Bids.clear();
-                    InvalidateRect(state->hL2List, NULL, FALSE);
-                }
-                if (state->hExecList)    ListView_DeleteAllItems(state->hExecList);
-                // Editable-orders panel is stale without a live connection, drop it.
-                for (auto& row : state->orderRows) Market_DestroyOrderRow(row);
-                state->orderRows.clear();
-                state->openOrdersSummary.clear();
-                state->execSignature.clear();
-                Market_Layout(hWnd, state);
-                state->l1Info = TradingAPI::L1Book{};
-                state->volRate.clear();      // stale on disconnect, avoid a phantom ratio off a frozen history
-                RECT hdrRc; GetClientRect(hWnd, &hdrRc); hdrRc.bottom = Caption_H(hWnd) + HEADER_H;
-                InvalidateRect(hWnd, &hdrRc, FALSE);
-            }
-        }
-        break;
-    }
-
     case WM_THEMECHANGED:
         if (state && state->caption.theme) {
             CloseThemeData(state->caption.theme);
@@ -2534,22 +2534,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
                     Market_Minimize(hWnd, state);
                 } else if (PtInRect(&state->moonRect, pt)) {
                     Market_ToggleOVN(hWnd, state);
-                    // uncomment to test
-                    /*
-                    auto* tick     = new TradingAPI::TsTickEntry();
-                    tick->price    = 1234;
-                    tick->size     = 1233;
-                    tick->exchange = "";
-                    std::time_t t = std::time(nullptr);
-                    struct tm localTime;
-                    localtime_s(&localTime, &t);
-                    char buf[32] = {};
-                    strftime(buf, sizeof(buf), "%H:%M:%S", &localTime);
-                    tick->time = buf;
-
-                    if (!PostMessage(hWnd, WM_MARKET_TICK, 0, (LPARAM)tick)) {
-                        delete tick;
-                    }*/
                 }
             }
         }
@@ -2596,8 +2580,16 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
     case WM_DESTROY:
         KillTimer(hWnd, TIMER_MARKET_PAINT);
         KillTimer(hWnd, TIMER_MARKET_VOLDECAY);
+        if (state) {
+            state->connectionToken.reset();
+            state->executionsToken.reset();
+            state->quoteToken.reset();
+            state->pnlToken.reset();
+            state->ordersToken.reset();
+            state->ticksToken.reset();
+            state->bookToken.reset();
+        }
         api().unsetMarketWindow(hWnd);
-        api().removeApiUpdateWindow(hWnd);
         if (state) {
             if (state->ttsOn) {
                 KillTimer(hWnd, TIMER_MARKET_SPEAKER);

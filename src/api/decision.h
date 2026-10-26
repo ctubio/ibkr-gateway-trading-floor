@@ -49,7 +49,7 @@ static std::string Decision_ListText(HWND h, int row, int col) {
     return buf;
 }
 
-// Time & Sales colours are assigned in WM_MARKET_TICK: red family = traded at/below
+// Time & Sales colours are assigned in Market_OnTicks: red family = traded at/below
 // bid (seller aggressive), green family = at/above ask (buyer aggressive).
 static const char* Decision_SideFromColor(COLORREF c) {
     if (c == COINS_CLR_RED   || c == COINS_CLR_RED_DARK   || c == COINS_CLR_RED_DARK2)   return "S";
@@ -96,8 +96,9 @@ static std::string Decision_BookText(HWND hL2, double& askTotal, double& bidTota
 
 static std::string Market_BuildDecisionState(TsState* st) {
     const TradingAPI::L1Book& L = st->l1Info;
-    TradingAPI::L1Book full;
-    bool haveFull = api().getMarketData(st->conId, full);
+    auto fullQ = api().quote(st->conId);
+    TradingAPI::L1Book full = fullQ ? *fullQ : TradingAPI::L1Book{};
+    bool haveFull = (bool)fullQ;
     ULONGLONG now = GetTickCount64();
     VolRateResult vr;
     vr.vol5min  = st->volRate.total(now);

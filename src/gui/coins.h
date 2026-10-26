@@ -62,6 +62,9 @@ static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "T
 // Encapsulates all coins-specific HWNDs and state variables
 
 struct CoinsState {
+    Model::Token connectionToken;
+    Model::Token accountToken;
+
     // Window state
     bool fullDetails = true;
     bool shouldBeConnected = true;
@@ -487,7 +490,7 @@ void UpdateTrayIcon(HWND hWnd) {
     if (!api().isConnected()) {
         tooltip += "Disconnected";
     } else {
-        std::string acc = api().getAccountNumber();
+        std::string acc = api().account()->accountId;
         if (acc.empty()) {
             tooltip += "Connecting..";
         } else {
@@ -511,11 +514,16 @@ void UpdateTrayIcon(HWND hWnd) {
 // ─── Labels update ─────────────────────────────────────────────────────────────
 
 void Coins_UpdateLabels(HWND hWnd) {
-    auto   summary      = api().getAccountSummary();
-    double daily        = api().getDailyPnL();
-    double unrealized   = api().getUnrealizedPnL();
-    double realized     = api().getRealizedPnL();
-    int openOrdersCount = api().getOpenOrdersCount();
+    const auto account = api().account();
+    const auto& summary = account->summary;
+    double daily = account->daily;
+    double unrealized = account->unrealized;
+    double realized = account->realized;
+    const auto orders = api().orders();
+    int openOrdersCount = static_cast<int>(std::count_if(
+        orders->begin(), orders->end(), [](const auto& entry) {
+            return api().orderIsEditable(entry.second.status);
+        }));
 
     std::string prevCurrency = coinsState.currencyCoins;
     coinsState.currencyCoins = "--";
@@ -681,14 +689,13 @@ void addButtons(HWND hWnd, HINSTANCE hInst, LPCSTR buttonText, int x, int y, HME
 // right of the last account-summary row.
 
 static void CoinsFx_UpdateTitle(HWND hWnd) {
-    TradingAPI::L1Book fx;
-    api().getFxRate(fx);
+    const auto fx = api().fxSnap();
 
     double rate = 0.0;
-    if      (fx.bid > 0.0 && fx.ask > 0.0) rate = (fx.bid + fx.ask) / 2.0;
-    else if (fx.last > 0.0)                rate = fx.last;
-    else if (fx.bid > 0.0)                 rate = fx.bid;
-    else if (fx.ask > 0.0)                 rate = fx.ask;
+    if      (fx->bid > 0.0 && fx->ask > 0.0) rate = (fx->bid + fx->ask) / 2.0;
+    else if (fx->last > 0.0)                 rate = fx->last;
+    else if (fx->bid > 0.0)                  rate = fx->bid;
+    else if (fx->ask > 0.0)                  rate = fx->ask;
 
     HWND hCombo = GetDlgItem(hWnd, ID_DASHFX_ACTION_COMBO);
     HWND hEdit  = GetDlgItem(hWnd, ID_DASHFX_AMOUNT_EDIT);
@@ -731,13 +738,12 @@ static void CoinsFx_SubmitAndClose(HWND hWnd) {
     double amount = EditNum(hEdit);
 
     if (amount > 2.0) {
-        TradingAPI::L1Book fx;
-        api().getFxRate(fx);
+        const auto fx = api().fxSnap();
         double rate = 0.0;
-        if      (fx.bid > 0.0 && fx.ask > 0.0) rate = (fx.bid + fx.ask) / 2.0;
-        else if (fx.last > 0.0)                rate = fx.last;
-        else if (fx.bid > 0.0)                 rate = fx.bid;
-        else if (fx.ask > 0.0)                 rate = fx.ask;
+        if      (fx->bid > 0.0 && fx->ask > 0.0) rate = (fx->bid + fx->ask) / 2.0;
+        else if (fx->last > 0.0)                 rate = fx->last;
+        else if (fx->bid > 0.0)                  rate = fx->bid;
+        else if (fx->ask > 0.0)                  rate = fx->ask;
 
         if (rate > 0.0) {
             double quantityEUR = isBuy ? (amount / rate) : amount;
@@ -746,6 +752,10 @@ static void CoinsFx_SubmitAndClose(HWND hWnd) {
     }
     DestroyWindow(hWnd);
 }
+
+struct CoinsFxState {
+    Model::Token fxRateToken;
+};
 
 // Subclass shared by the action combo and the amount edit: ESC closes without
 // submitting, ENTER submits and closes.
@@ -775,6 +785,8 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
         case WM_CREATE: {
             HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+            auto* state = new CoinsFxState();
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
 
             HWND hCombo = CreateWindowA("COMBOBOX", "",
                 WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
@@ -795,6 +807,9 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetWindowSubclass(hEdit,  CoinsFx_KeySubclassProc, 2, 0);
 
             api().reqFxRate(hWnd);
+            state->fxRateToken = api().model().onTopic(Topic::FxRate, [hWnd] {
+                CoinsFx_UpdateTitle(hWnd);
+            });
             CoinsFx_UpdateTitle(hWnd);
 
             SetFocus(hEdit);
@@ -802,10 +817,6 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SendMessageA(hEdit, EM_SETSEL, 0, len);
             break;
         }
-
-        case WM_FX_RATE_UPDATE:
-            CoinsFx_UpdateTitle(hWnd);
-            break;
 
         case WM_COMMAND:
             if ((LOWORD(wParam) == ID_DASHFX_ACTION_COMBO && HIWORD(wParam) == CBN_SELCHANGE) ||
@@ -822,6 +833,11 @@ LRESULT CALLBACK WndProcExchange(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             break;
         }
         case WM_DESTROY:
+            if (auto* state = reinterpret_cast<CoinsFxState*>(GetWindowLongPtr(hWnd, GWLP_USERDATA))) {
+                state->fxRateToken.reset();
+                delete state;
+                SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
+            }
             api().cancelFxRate(hWnd);
             break;
     }
@@ -968,6 +984,50 @@ static bool PromptLockAtStartup() {
     return lockState.success;
 }
 
+void ShowAlertPopup(const AlertPopupData& a) {
+    auto* data = new AlertPopupData(a);
+    HWND hwnd = StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
+    if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
+        delete data;
+    } else {
+        FlashScreen(data->isUp, 1000);
+        std::string price = FormatFixed(data->price, 2);
+        COLORREF color = data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK;
+        Diamonds_AddTitleEvent(data->symbol, data->conId, color, price);
+        PlaySound_Async(209);
+    }
+}
+
+static void Coins_OnConnectionChanged(HWND hWnd) {
+    if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
+        const HWND labels[] = {
+            coinsState.hCoin_NetLiq, coinsState.hCoin_BigPnL, coinsState.hCoin_Pct,
+            coinsState.hCoin_Realized, coinsState.hCoin_Positions, coinsState.hCoin_Unrealized,
+            coinsState.hCoin_Dividends, coinsState.hCoin_Accruals, coinsState.hCoin_BuyingPower,
+            coinsState.hCoin_MaintMargin, coinsState.hCoin_Cash, coinsState.hCoin_EUR,
+            coinsState.hCoin_USD,
+        };
+        for (HWND label : labels) {
+            if (label) SetWindowTextA(label, "--");
+        }
+        if (coinsState.hCoin_NetLiq) {
+            SetWindowPos(coinsState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+            InvalidateRect(coinsState.hCoin_NetLiq, NULL, TRUE);
+        }
+        if (coinsState.hCoin_Positions) {
+            SetWindowPos(coinsState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+            InvalidateRect(coinsState.hCoin_Positions, NULL, TRUE);
+        }
+        if (coinsState.hCoin_Cash) {
+            SetWindowPos(coinsState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
+            InvalidateRect(coinsState.hCoin_Cash, NULL, TRUE);
+        }
+        coinsState.currencyCoins = "--";
+        Coins_UpdateTaskbarOrders(hWnd, 0);
+    }
+    UpdateTrayIcon(hWnd);
+}
+
 LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     if (message == taskbarCreatedMessage) {
         Shell_NotifyIconW(NIM_ADD, &nid);
@@ -1104,7 +1164,12 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
             addButtons(hWnd, hInst, "Settings", 24 + 18 + (9 * steps++) + (26 * stepz++) + m, yBtn, (HMENU)ID_MB_SETTINGS,  107);
 
-            api().addApiUpdateWindow(hWnd);
+            coinsState.connectionToken = api().model().onTopic(Topic::Connection, [hWnd] {
+                Coins_OnConnectionChanged(hWnd);
+            });
+            coinsState.accountToken = api().model().onTopic(Topic::Account, [hWnd] {
+                Coins_UpdateLabels(hWnd);
+            });
 
             if (SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED)))
                 coinsState.taskbarComInitialized = true;
@@ -1142,48 +1207,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             break;
         }
 
-        case WM_API_UPDATE: // only called when the api connects or disconnects
-            if (!api().isMarketDataConnected() || !api().isTradingConnected()) {
-                const HWND labels[] = {
-                    coinsState.hCoin_NetLiq, coinsState.hCoin_BigPnL, coinsState.hCoin_Pct,
-                    coinsState.hCoin_Realized, coinsState.hCoin_Positions, coinsState.hCoin_Unrealized,
-                    coinsState.hCoin_Dividends, coinsState.hCoin_Accruals, coinsState.hCoin_BuyingPower,
-                    coinsState.hCoin_MaintMargin, coinsState.hCoin_Cash, coinsState.hCoin_EUR,
-                    coinsState.hCoin_USD,
-                };
-                for (HWND label : labels) {
-                    if (label) SetWindowTextA(label, "--");
-                }
-                if (coinsState.hCoin_NetLiq) {
-                    SetWindowPos(coinsState.hCoin_NetLiq, NULL, m + 67, y1 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                    InvalidateRect(coinsState.hCoin_NetLiq, NULL, TRUE);
-                }
-                if (coinsState.hCoin_Positions) {
-                    SetWindowPos(coinsState.hCoin_Positions, NULL, m + 77, y2 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                    InvalidateRect(coinsState.hCoin_Positions, NULL, TRUE);
-                }
-                if (coinsState.hCoin_Cash) {
-                    SetWindowPos(coinsState.hCoin_Cash, NULL, m + 53, y3 - 4, 30, 18, SWP_NOZORDER | SWP_NOACTIVATE);
-                    InvalidateRect(coinsState.hCoin_Cash, NULL, TRUE);
-                }
-                coinsState.currencyCoins = "--";
-                Coins_UpdateTaskbarOrders(hWnd, 0);
-            }
-            UpdateTrayIcon(hWnd);
-            break;
-            
-        case WM_API_LOG: {
-            std::string* msg = (std::string*)lParam;
-            LogDebug(msg->c_str());
-            delete msg;
-            break;
-        }
-
-        case WM_ACCOUNT_SUMMARY:
-            api().ackAccountSummary();
-            Coins_UpdateLabels(hWnd);
-            break;
-
         case WM_SETCURSOR: {
             int id = GetDlgCtrlID((HWND)wParam);
             if  (id == ID_COIN_SPEAKER || id == ID_COIN_BIGPNL) {
@@ -1213,43 +1236,12 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             }
             break;
 
-        case WM_OPEN_ORDERS_WINDOW:
-            StartOrders();
-            break;
-
         case WM_TTS_VOICE_CHANGED: {
             // The shared engine holds one voice for every window now, just
             // re-apply the (now-changed) saved voice token to it in place.
             SharedTts().ReapplySavedVoice();
             if (coinsState.coinsTtsOn) Coins_SpeakDailyPnL(); // speak immediately with the new voice
             break;
-        }
-
-        case WM_SHOW_ALERT: {
-            AlertPopupData* data = (AlertPopupData*)lParam;
-            if (data) {
-                HWND hwnd = StartGenericWindow(ALERT_NOTIFY_CLASS_NAME, data->title.c_str(), L"Alert Notification", 300, 127, NULL, "", data);
-                if (!hwnd || (AlertPopupData*)GetWindowLongPtr(hwnd, GWLP_USERDATA) != data) {
-                    delete data;
-                } else {
-                    FlashScreen(data->isUp, 1000);
-                    std::string price = FormatFixed(data->price, 2);
-                    COLORREF color = data->isUp ? COINS_CLR_GREEN_DARK : COINS_CLR_RED_DARK;
-                    Diamonds_AddTitleEvent(data->symbol, data->conId, color, price);
-                    PlaySound_Async(209);
-                }
-            }
-            return 0;
-        }
-
-        case WM_ADD_EVENT: {
-            TradingAPI::EventData* data = (TradingAPI::EventData*)lParam;
-            if (data) {
-                Diamonds_AddTitleEvent(data->symbol, data->conId, data->color, data->text);
-                if (data->color != COINS_CLR_BLUE) PlaySound_Async(210, false);
-                delete data;
-            }
-            return 0;
         }
 
         case WM_RBUTTONUP: {
@@ -1303,7 +1295,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                     
                     // Determine flags based on current API state
                     if (api().isConnected()) {
-                        std::wstring accText = std::wstring(L"Account: ") + StringToWide(api().getAccountNumber()); 
+                        std::wstring accText = std::wstring(L"Account: ") + StringToWide(api().account()->accountId); 
                         AppendMenuW(hMenu, (MF_STRING | MF_GRAYED), 0, accText.c_str());
                         AppendMenuW(hMenu, MF_STRING, ID_M_DISCONNECT, L"Disconnect");
                     } else {
@@ -1523,8 +1515,10 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         }
         case WM_DESTROY:
             api().disconnect();
+            api().shutdown();
             KillGateway();
-            api().removeApiUpdateWindow(hWnd);
+            coinsState.connectionToken.reset();
+            coinsState.accountToken.reset();
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
             if (coinsState.coinsTtsOn) {
