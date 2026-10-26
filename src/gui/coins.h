@@ -64,6 +64,7 @@ static const char* day_names[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "T
 struct CoinsState {
     Model::Token connectionToken;
     Model::Token accountToken;
+    Model::Token ttsVoiceToken;
 
     // Window state
     bool fullDetails = true;
@@ -945,6 +946,8 @@ LRESULT CALLBACK WndProcLock(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             break;
 
         case WM_DESTROY:
+            if (lockState.startupMode)
+                PostQuitMessage(0);
             break;
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
@@ -1170,6 +1173,10 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             coinsState.accountToken = api().model().onTopic(Topic::Account, [hWnd] {
                 Coins_UpdateLabels(hWnd);
             });
+            coinsState.ttsVoiceToken = api().model().onTopic(Topic::TtsVoice, [hWnd] {
+                SharedTts().ReapplySavedVoice();
+                if (coinsState.coinsTtsOn) Coins_SpeakDailyPnL();
+            });
 
             if (SUCCEEDED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED)))
                 coinsState.taskbarComInitialized = true;
@@ -1235,14 +1242,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                 }
             }
             break;
-
-        case WM_TTS_VOICE_CHANGED: {
-            // The shared engine holds one voice for every window now, just
-            // re-apply the (now-changed) saved voice token to it in place.
-            SharedTts().ReapplySavedVoice();
-            if (coinsState.coinsTtsOn) Coins_SpeakDailyPnL(); // speak immediately with the new voice
-            break;
-        }
 
         case WM_RBUTTONUP: {
             if (lockHotkeys) break;
@@ -1519,6 +1518,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             KillGateway();
             coinsState.connectionToken.reset();
             coinsState.accountToken.reset();
+            coinsState.ttsVoiceToken.reset();
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
             if (coinsState.coinsTtsOn) {

@@ -156,6 +156,8 @@ struct MarketOpenOrderSummary {
 
 struct TsState {
     Model::Token connectionToken;
+    Model::Token alertsToken;
+    Model::Token ttsVoiceToken;
     Model::Token executionsToken;
     Model::Token quoteToken;
     Model::Token pnlToken;

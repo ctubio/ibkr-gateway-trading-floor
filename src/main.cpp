@@ -111,6 +111,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmd, int nShow) {
         WinsockRAII winsockRAII;
 
         InitFonts();
+        api().model().initializeUiThread();
         
         RegisterWindowRAII registerWindowRAII(hInst);
         if (!registerWindowRAII.unlocked())

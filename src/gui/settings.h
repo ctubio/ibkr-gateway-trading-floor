@@ -70,7 +70,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
                 0, 0, 0, 0, hWnd, NULL, GetModuleHandle(NULL), NULL);
             SendMessage(hDebugEdit, EM_LIMITTEXT, 0, 0);
-            debugAppendPending.store(false);
             RECT rc;
             GetClientRect(hWnd, &rc);
             SetWindowPos(hDebugEdit, NULL, 0, 0, rc.right, rc.bottom, SWP_NOZORDER);
@@ -79,7 +78,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         case WM_DESTROY:
             hDebugEdit = NULL;   // ← avoid a stale handle lingering after the window is destroyed
-            debugAppendPending.store(false);
             break;
         case WM_SIZE: {
             if (hDebugEdit) {
@@ -88,14 +86,6 @@ LRESULT CALLBACK WndProcDebugLog(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 SetWindowPos(hDebugEdit, NULL, 0, 0, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
             }
             break;
-        }
-        // ── Cross-thread append (see LogDebug in registry.h) ───────────────────
-        // Runs on this window's own (UI) thread, so it's the only code path
-        // that's allowed to touch hDebugEdit directly.
-        case WM_DEBUG_LOG_APPEND: {
-            debugAppendPending.store(false, std::memory_order_release);
-            FlushDebugBuffer();
-            return 0;
         }
     }
     return HandleCommonMessages(hWnd, message, wParam, lParam);
@@ -447,14 +437,7 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     const std::wstring& tid = settingsVoices[idx].tokenId;
                     std::string tidA = WideToString(tid);
                     Settings_SaveTtsVoice(tidA);
-                    // Notify all open windows to hot-swap to the new voice immediately
-                    EnumWindows([](HWND hw, LPARAM) -> BOOL {
-                        DWORD wpid;
-                        GetWindowThreadProcessId(hw, &wpid);
-                        if (wpid == GetCurrentProcessId())
-                            PostMessage(hw, WM_TTS_VOICE_CHANGED, 0, 0);
-                        return TRUE;
-                    }, 0);
+                    api().model().markDirty(Topic::TtsVoice);
                 }
             }
             if (LOWORD(wParam) == ID_SETTINGS_BACKUP_DOWNLOAD) {

@@ -1,29 +1,6 @@
 #pragma once
 
-#include <cassert>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstdint>
-#include <deque>
-#include <exception>
-#include <functional>
-#include <future>
-#include <map>
-#include <mutex>
-#include <queue>
-#include <stdexcept>
-#include <string>
-#include <thread>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <vector>
-
-#include <windows.h>
-
-#include "../api/volume.h"
-#include "../domain/snapshots.h"
+void LogDebug(const std::string& msg);
 
 struct CoreState {
     struct PacedJobs {
@@ -54,6 +31,7 @@ struct CoreState {
         int reqIdMarketDataL2 = 0;
         int l2Retries = 0;
         int reqIdPnLSingle = 0;
+        // SMART and OVERNIGHT tick-by-tick subscriptions for open Market windows.
         int reqIdTicksOvernight = 0;
         int reqIdTicksSmart = 0;
         int l1Holders = 0;
@@ -65,8 +43,6 @@ struct CoreState {
         struct VolRateState {
             double lastTotalVolume = -1.0;
             RollingRateTracker tracker;
-            bool spikeFired1_5 = false;
-            bool spikeFired3 = false;
         } volRate;
     };
 
@@ -94,6 +70,7 @@ struct CoreState {
     bool completedOrdersSnapshotInProgress = false;
     int nextExecId = 0;
     std::map<int, OrderInfo> executionMap;
+    // Streaming EUR.USD quote for the currency-conversion popup, separate from instruments.
     L1Book fxRateBook;
     SymbolList symbolResults;
     std::map<std::string, std::string> summaryData;
@@ -182,7 +159,8 @@ public:
     }
 
     void postAndWait(Task task) {
-        assert(!onCoreThread());
+        if (onCoreThread())
+            throw std::logic_error("postAndWait cannot be called from the Core thread");
         auto completion = std::make_shared<std::promise<void>>();
         auto result = completion->get_future();
         const bool accepted = enqueue([task = std::move(task), completion](CoreState& state) mutable {
@@ -257,7 +235,10 @@ private:
 
             try {
                 task(state);
+            } catch (const std::exception& e) {
+                LogDebug("Core task exception: " + std::string(e.what()));
             } catch (...) {
+                LogDebug("Core task threw an unknown exception");
             }
         }
     }

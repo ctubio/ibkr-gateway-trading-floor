@@ -34,15 +34,6 @@ struct AlertsEditState {
 };
 static AlertsEditState alertsEditState;
 
-void Market_NotifyAlertsChanged(int conId) {
-    for (const auto& [hWnd, st] : marketStates) {
-        if (st && st->conId == conId) {
-            PostMessage(hWnd, WM_ALERTS_CHANGED, 0, (LPARAM)conId);
-            break;
-        }
-    }
-}
-
 static void Alerts_Reload(int resetConId = 0) {
     std::vector<TradingAPI::PriceAlert> alerts;
     for (const auto& entry : Settings_Alerts_LoadAll()) {
@@ -56,16 +47,9 @@ static void Alerts_Reload(int resetConId = 0) {
     api().setPriceAlerts(alerts, resetConId);
 }
 
-// Posts WM_ALERTS_CHANGED directly to the two window classes that actually
-// handle it (WndProcMarket / WndProcDiamonds) instead of enumerating every
-// top-level window in the process.
 static void Alerts_NotifyChanged(int conId) {
     Alerts_Reload(conId);
-    HWND hDiamonds = FindWindowA(DIAMONDS_CLASS_NAME, NULL);
-    if (hDiamonds && IsWindow(hDiamonds))
-        PostMessage(hDiamonds, WM_ALERTS_CHANGED, 0,  (LPARAM)conId);
-    
-    Market_NotifyAlertsChanged(conId);
+    api().model().markDirty(Topic::Alerts);
 }
 
 // (Re)loads the popup for `symbol` and `conId`: updates the title and both edit fields

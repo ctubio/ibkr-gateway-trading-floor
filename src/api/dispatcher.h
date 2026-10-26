@@ -7,8 +7,13 @@
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <exception>
 #include <functional>
 #include <mutex>
+#include <string>
+#include <vector>
+
+void LogDebug(const std::string& msg);
 
 class UiDispatcher {
 public:
@@ -52,6 +57,7 @@ public:
     void shutdown() {
         HWND hwnd;
         HINSTANCE hInstance;
+        std::deque<PostedTask> dropped;
         {
             std::lock_guard<std::mutex> lock(m_);
             acceptingPosts_ = false;
@@ -59,8 +65,10 @@ public:
             hwnd_ = nullptr;
             hInstance = hInstance_;
             hInstance_ = nullptr;
-            q_.clear();
+            dropped.swap(q_);
         }
+        for (auto& task : dropped)
+            if (task.onDrop) task.onDrop();
 
         {
             std::unique_lock<std::mutex> lock(m_);
@@ -74,28 +82,59 @@ public:
         if (hInstance) UnregisterClassW(windowClassName_, hInstance);
     }
 
-    void post(std::function<void()> fn) {
+    bool post(std::function<void()> fn, std::function<void()> onDrop = {}) {
         HWND hwnd;
+        bool rejected = false;
         {
             std::lock_guard<std::mutex> lock(m_);
-            if (!acceptingPosts_ || !hwnd_) return;
-            q_.push_back(std::move(fn));
-            postsInFlight_.fetch_add(1, std::memory_order_acq_rel);
-            hwnd = hwnd_;
+            if (!acceptingPosts_ || !hwnd_) {
+                rejected = true;
+                hwnd = nullptr;
+            } else {
+                q_.push_back(PostedTask{std::move(fn), std::move(onDrop)});
+                postsInFlight_.fetch_add(1, std::memory_order_acq_rel);
+                hwnd = hwnd_;
+            }
+        }
+        if (rejected) {
+            if (onDrop) onDrop();
+            return false;
         }
 
         if (!wakePending_.exchange(true, std::memory_order_acq_rel)) {
-            if (!PostMessageW(hwnd, WM_UI_DISPATCH, 0, 0))
+            if (!PostMessageW(hwnd, WM_UI_DISPATCH, 0, 0)) {
                 wakePending_.store(false, std::memory_order_release);
+                std::deque<PostedTask> dropped;
+                {
+                    std::lock_guard<std::mutex> lock(m_);
+                    dropped.swap(q_);
+                }
+                for (auto& task : dropped)
+                    if (task.onDrop) task.onDrop();
+                finishPost();
+                return false;
+            }
         }
 
-        if (postsInFlight_.fetch_sub(1, std::memory_order_acq_rel) == 1)
-            inFlightPosts_.notify_all();
+        finishPost();
+        return true;
     }
 
 private:
+    struct PostedTask {
+        std::function<void()> fn;
+        std::function<void()> onDrop;
+    };
+
+    void finishPost() {
+        if (postsInFlight_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            std::lock_guard<std::mutex> lock(m_);
+            inFlightPosts_.notify_all();
+        }
+    }
+
     std::mutex m_;
-    std::deque<std::function<void()>> q_;
+    std::deque<PostedTask> q_;
     std::atomic<bool> wakePending_{false};
     HWND hwnd_ = nullptr;
     HINSTANCE hInstance_ = nullptr;
@@ -131,17 +170,20 @@ private:
         std::size_t itemsRun = 0;
 
         while (itemsRun < maxItems && std::chrono::steady_clock::now() < deadline) {
-            std::function<void()> fn;
+            PostedTask task;
             {
                 std::lock_guard<std::mutex> lock(m_);
                 if (q_.empty()) return;
-                fn = std::move(q_.front());
+                task = std::move(q_.front());
                 q_.pop_front();
             }
 
             try {
-                fn();
+                task.fn();
+            } catch (const std::exception& e) {
+                LogDebug("UI dispatcher callback exception: " + std::string(e.what()));
             } catch (...) {
+                LogDebug("UI dispatcher callback threw an unknown exception");
             }
             ++itemsRun;
         }

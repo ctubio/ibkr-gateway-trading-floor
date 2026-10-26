@@ -47,7 +47,7 @@ static HWND hDebugEdit = NULL;
 
 static std::mutex debugBufferMutex;                 // guards debugBuffer below
 static std::deque<std::string> debugBuffer;          // stores messages when window is closed
-static std::atomic<bool> debugAppendPending{false};
+void FlushDebugBuffer();
 
 void LogDebug(const std::string& msg) {
     time_t now = time(0);
@@ -66,21 +66,7 @@ void LogDebug(const std::string& msg) {
         }
     }
 
-    // LogDebug can be called from any thread, most visibly the HTTP
-    // server's connection thread in server.h, which logs once per request.
-    // hDebugEdit is created/destroyed only on the UI thread, inside
-    // WndProcDebugLog's WM_CREATE/WM_DESTROY, so reading or SendMessage-ing
-    // it directly from here would race with that. FindWindowA is safe to
-    // call from any thread; PostMessage hands the actual append off to
-    // whichever thread owns the window, so only that thread ever touches
-    // hDebugEdit.
-    HWND hWnd = FindWindowA(DEBUGLOG_CLASS_NAME, NULL);
-    if (hWnd && IsWindow(hWnd)) {
-        if (!debugAppendPending.exchange(true, std::memory_order_acq_rel)) {
-            if (!PostMessageA(hWnd, WM_DEBUG_LOG_APPEND, 0, 0))
-                debugAppendPending.store(false, std::memory_order_release);
-        }
-    }
+    UiDispatcher::instance().post([] { FlushDebugBuffer(); });
 }
 
 // Generic registry helpers to reduce duplication

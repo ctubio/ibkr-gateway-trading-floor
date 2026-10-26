@@ -139,10 +139,12 @@ struct DiamondsTitleEvent {
 };
 
 struct DiamondsState {
+    HWND window = nullptr;
     Model::Token connectionToken;
     Model::Token positionsToken;
     Model::Token quoteToken;
     Model::Token pnlToken;
+    Model::Token alertsToken;
 
     // Bitmask: bit N set means group N is currently visible.  Default = all visible.
     UINT checkedTabs = 0x7;
@@ -170,6 +172,7 @@ struct DiamondsState {
     std::unique_ptr<Gdiplus::Graphics> paintGraphics;
     // UI Viewport: Holds conIds in sorted order. The ListView only knows about this vector's size.
     std::vector<int> displayOrder;
+    std::unordered_set<int> displayConIds;
     // Full visible-range redraw (sort order changed).
     bool dirty = false;
     // Per-row dirty tracking (UI thread only).
@@ -814,18 +817,10 @@ static void Diamonds_ApplyCachedDividends(DiamondRowCache& cacheRow, int conId, 
 }
 
 static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
-    // Ensure a cache row exists even if this tick arrived before
-    // Diamonds_Repopulate had a chance to create one for it, e.g. right after
-    // the window is closed and reopened, a quote notification just before the
-    // repopulate finishes used to hit this function while the cache was still
-    // empty/rebuilding and the early-return below silently dropped the tick
-    // for good (nothing ever re-requested it). That could look exactly like
-    // "some columns stop updating" after a close/reopen cycle. Auto-creating
-    // the row (mirroring what Diamonds_UpdatePnLCols already does) means the
-    // tick is never lost; if the row isn't in diamondsState.displayOrder yet it
-    // simply becomes visible on the next repopulate/sort instead of vanishing.
-    auto& row = diamondsState.dataCache[conId];
-    row.conId = conId;
+    if (!diamondsState.displayConIds.contains(conId)) return;
+    auto rowIt = diamondsState.dataCache.find(conId);
+    if (rowIt == diamondsState.dataCache.end()) return;
+    auto& row = rowIt->second;
     // Helper to write both sortable raw data and display string
     auto setCol = [&](int col, double val, int decimals, bool alwaysShow = false, bool alwaysSign = false) {
         row.sortValues[col] = val;
@@ -930,8 +925,9 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     // for this symbol (same "appears once ready" behavior as those dots).
     {
         double price5MinAgo = 0.0;
-        auto& spark = diamondsState.sparklines[conId];
-        if (spark.GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
+        auto sparkIt = diamondsState.sparklines.find(conId);
+        if (sparkIt != diamondsState.sparklines.end() &&
+            sparkIt->second.GetPriceMinutesAgo(5, price5MinAgo) && price5MinAgo > 0.0) {
             double priceDiff5min = t.last - price5MinAgo;
             //setCol(DCOL_CHG5MIN, priceDiff5min, 2, true);
             row.textCols[DCOL_CHG5MIN] = FormatFixed(priceDiff5min, 2, false);
@@ -971,6 +967,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
     if (!hList) return;
 
     diamondsState.displayOrder.clear(); // Clear the virtual list viewport
+    diamondsState.displayConIds.clear();
 
     std::vector<TradingAPI::PositionInfo> rows;
     std::unordered_set<int> portfolioConIds;
@@ -1004,6 +1001,9 @@ static void Diamonds_Repopulate(HWND hWnd) {
         }
     }
 
+    for (const auto& pos : rows)
+        diamondsState.displayConIds.insert(pos.conId);
+
     // Build/refresh the cache rows.
     // Rule: only write the fields we own here (identity, position, avgCost, market
     // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL,
@@ -1032,13 +1032,7 @@ static void Diamonds_Repopulate(HWND hWnd) {
         // This runs for both held positions AND watch-only (quarantine) symbols.
         auto quote = api().quote(pos.conId);
         if (quote) {
-            auto volumeRate = api().getVolumeRate(pos.conId);
-            if (volumeRate) {
-                TradingAPI::L1Book tickInfo = *quote;
-                tickInfo.rtVolSum5min = volumeRate->sum5min;
-                tickInfo.rtVolRatio5min = volumeRate->ratio5min;
-                Diamonds_UpdateMarketCols(pos.conId, tickInfo);
-            }
+            Diamonds_UpdateMarketCols(pos.conId, *quote);
         }
 
         if (isHeldPosition) {
@@ -1077,13 +1071,10 @@ static void Diamonds_FlushDirty(HWND hWnd) {
         std::unordered_set<int> pending;
         pending.swap(diamondsState.dirtyMarket);
         for (int conId : pending) {
+            if (!diamondsState.displayConIds.contains(conId)) continue;
             auto quote = api().quote(conId);
             if (!quote) continue;
-            auto volumeRate = api().getVolumeRate(conId);
-            if (!volumeRate) continue;
             TradingAPI::L1Book fresh = *quote;
-            fresh.rtVolSum5min = volumeRate->sum5min;
-            fresh.rtVolRatio5min = volumeRate->ratio5min;
             Diamonds_UpdateMarketCols(conId, fresh);
             if (fresh.last > 0.0)
                 diamondsState.sparklines[conId].AddPrice(fresh.last);
@@ -1134,6 +1125,7 @@ static void Diamonds_OnConnectionChanged(HWND hWnd) {
         Diamonds_Repopulate(hWnd);
     } else {
         diamondsState.displayOrder.clear();
+        diamondsState.displayConIds.clear();
         diamondsState.dataCache.clear();
         diamondsState.dirtyMarket.clear();
         diamondsState.dirtyRedraw.clear();
@@ -1153,6 +1145,7 @@ static void Diamonds_OnConnectionChanged(HWND hWnd) {
 LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
+        diamondsState.window = hWnd;
         HINSTANCE hInst = ((LPCREATESTRUCT)lParam)->hInstance;
 
         HWND hList = CreateWindowExA(
@@ -1232,11 +1225,21 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         diamondsState.positionsToken = api().model().onTopic(Topic::Positions, [hWnd] {
             Diamonds_Repopulate(hWnd);
         });
-        diamondsState.quoteToken = api().model().onAnyQuote([](int conId) {
+        diamondsState.quoteToken = api().model().onAnyQuote([hWnd](int conId) {
+            if (diamondsState.window != hWnd ||
+                !diamondsState.displayConIds.contains(conId))
+                return;
             diamondsState.dirtyMarket.insert(conId);
         });
         diamondsState.pnlToken = api().model().onAnyPnl([hWnd](int conId) {
+            if (diamondsState.window != hWnd) return;
             Diamonds_UpdatePnLCols(hWnd, conId);
+        });
+        diamondsState.alertsToken = api().model().onTopic(Topic::Alerts, [hWnd] {
+            if (diamondsState.window != hWnd) return;
+            Diamonds_RefreshAlertCache();
+            Diamonds_Repopulate(hWnd);
+            InvalidateRect(hWnd, NULL, TRUE);
         });
 
         Diamonds_UpdateDivColumnsVisibility(hWnd);
@@ -1450,16 +1453,6 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
             }
         }
-        break;
-    }
-
-    case WM_ALERTS_CHANGED: {
-        int conId = (int)lParam;
-        if (!conId) break;
-        
-        Diamonds_RefreshAlertCache();
-        Diamonds_Repopulate(hWnd);
-        InvalidateRect(hWnd, NULL, TRUE);
         break;
     }
 
@@ -1902,6 +1895,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     }
 
     case WM_DESTROY:
+        diamondsState.window = nullptr;
         KillTimer(hWnd, TIMER_DIAMONDS_SORT);
         KillTimer(hWnd, TIMER_DIAMONDS_VIEW);
         KillTimer(hWnd, TIMER_DIAMONDS_PAINT);
@@ -1910,6 +1904,7 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         diamondsState.positionsToken.reset();
         diamondsState.quoteToken.reset();
         diamondsState.pnlToken.reset();
+        diamondsState.alertsToken.reset();
         diamondsState.checkboxesVisible = false;
         diamondsState.viewSelectionEnabled = 0;
         diamondsState.dataCache.clear();

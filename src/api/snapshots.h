@@ -42,7 +42,7 @@ struct PnlSinglePayload {
 };
 
 struct PositionInfo {
-    int conId;
+    int conId = 0;
     std::string symbol;
     std::string exchange;
     double shares = 0.0;

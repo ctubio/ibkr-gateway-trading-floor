@@ -2133,6 +2133,20 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             if (it != marketStates.end())
                 Market_OnConnectionChanged(hWnd, it->second);
         });
+        state->alertsToken = api().model().onTopic(Topic::Alerts, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it == marketStates.end() || !it->second || it->second->symbol.empty()) return;
+            std::string alertUp, alertDown;
+            it->second->hasAlert = Settings_Alerts_Load(
+                it->second->symbol, it->second->conId, alertUp, alertDown);
+            it->second->marketHdrDirty = true;
+        });
+        state->ttsVoiceToken = api().model().onTopic(Topic::TtsVoice, [hWnd] {
+            auto it = marketStates.find(hWnd);
+            if (it == marketStates.end() || !it->second) return;
+            SharedTts().ReapplySavedVoice();
+            if (it->second->ttsOn) Market_SpeakLast(it->second);
+        });
         state->executionsToken = api().model().onTopic(Topic::Executions, [hWnd] {
             auto it = marketStates.find(hWnd);
             if (it != marketStates.end())
@@ -2388,27 +2402,6 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             state->marketHdrDirty = true;
         break;
 
-    case WM_TTS_VOICE_CHANGED: {
-        if (!state) break;
-        // The shared engine holds one voice for every window now, just
-        // re-apply the (now-changed) saved voice token to it in place. No
-        // per-window release/recreate needed anymore.
-        SharedTts().ReapplySavedVoice();
-        if (state->ttsOn) Market_SpeakLast(state); // speak immediately with the new voice
-        break;
-    }
-
-    case WM_ALERTS_CHANGED: {
-        int conId = (int)lParam;
-        if (!state || !conId || conId != state->conId) break;
-        if (!state->symbol.empty()) {
-            std::string alertUp, alertDown;
-            state->hasAlert = Settings_Alerts_Load(state->symbol, state->conId, alertUp, alertDown);
-            state->marketHdrDirty = true;
-        }
-        break;
-    }
-    
     case WM_NOTIFY: {
         NMHDR* hdr = (NMHDR*)lParam;
         
@@ -2582,6 +2575,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         KillTimer(hWnd, TIMER_MARKET_VOLDECAY);
         if (state) {
             state->connectionToken.reset();
+            state->alertsToken.reset();
+            state->ttsVoiceToken.reset();
             state->executionsToken.reset();
             state->quoteToken.reset();
             state->pnlToken.reset();

@@ -8,6 +8,7 @@
 #include <mutex>
 #include <span>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -23,7 +24,7 @@ struct Tick {
     std::string exchange;
 };
 
-enum class Topic { Connection, Account, Positions, Orders, Executions, FxRate, SymbolResults };
+enum class Topic { Connection, Account, Positions, Orders, Executions, FxRate, SymbolResults, Alerts, TtsVoice };
 
 class Model {
     enum class SubscriptionKind { Topic, Quote, AnyQuote, Pnl, AnyPnl, OrdersFor, Ticks, Book };
@@ -74,7 +75,14 @@ public:
         std::size_t id_ = 0;
     };
 
-    Model() : uiThreadId_(GetCurrentThreadId()) {}
+    Model() = default;
+
+    void initializeUiThread() {
+        const DWORD currentThreadId = GetCurrentThreadId();
+        if (uiThreadId_ != 0 && uiThreadId_ != currentThreadId)
+            throw std::logic_error("Model UI thread is already initialized");
+        uiThreadId_ = currentThreadId;
+    }
 
     Token onTopic(Topic topic, std::function<void()> callback) {
         assertUiThread();
@@ -145,7 +153,7 @@ public:
             flushPending_ = true;
         }
         if (needWake)
-            UiDispatcher::instance().post([this] { flush(); });
+            postFlush();
     }
 
     void markQuoteDirty(int conId) {
@@ -157,7 +165,7 @@ public:
             flushPending_ = true;
         }
         if (needWake)
-            UiDispatcher::instance().post([this] { flush(); });
+            postFlush();
     }
 
     void markBookDirty(int conId) {
@@ -169,7 +177,7 @@ public:
             flushPending_ = true;
         }
         if (needWake)
-            UiDispatcher::instance().post([this] { flush(); });
+            postFlush();
     }
 
     void markPnlDirty(int conId) {
@@ -181,7 +189,7 @@ public:
             flushPending_ = true;
         }
         if (needWake)
-            UiDispatcher::instance().post([this] { flush(); });
+            postFlush();
     }
 
     void markOrdersDirty(int conId) {
@@ -193,7 +201,7 @@ public:
             flushPending_ = true;
         }
         if (needWake)
-            UiDispatcher::instance().post([this] { flush(); });
+            postFlush();
     }
 
     void pushTick(int conId, Tick tick) {
@@ -222,7 +230,16 @@ public:
                 LogDebug("Model tick buffer overflow; oldest ticks are being dropped");
             });
         if (needWake)
-            UiDispatcher::instance().post([this, conId] { flushTicks(conId); });
+            UiDispatcher::instance().post(
+                [this, conId] { flushTicks(conId); },
+                [this, conId] {
+                    std::lock_guard<std::mutex> lock(tickMutex_);
+                    auto buffer = tickBuffers_.find(conId);
+                    if (buffer == tickBuffers_.end()) return;
+                    buffer->second.flushPending = false;
+                    if (!tickSubscriberCounts_.contains(conId))
+                        tickBuffers_.erase(buffer);
+                });
     }
 
 private:
@@ -236,7 +253,7 @@ private:
         bool overflowLogged = false;
     };
 
-    const DWORD uiThreadId_;
+    DWORD uiThreadId_ = 0;
     std::mutex mutex_;
     std::set<Topic> dirty_;
     std::set<int> dirtyQuotes_;
@@ -258,7 +275,16 @@ private:
     std::map<int, TickBuffer> tickBuffers_;
 
     void assertUiThread() const {
-        assert(GetCurrentThreadId() == uiThreadId_);
+        assert(uiThreadId_ != 0 && GetCurrentThreadId() == uiThreadId_);
+    }
+
+    void postFlush() {
+        UiDispatcher::instance().post(
+            [this] { flush(); },
+            [this] {
+                std::lock_guard<std::mutex> lock(mutex_);
+                flushPending_ = false;
+            });
     }
 
     void unsubscribe(SubscriptionKind kind, Topic topic, int conId, std::size_t id) {

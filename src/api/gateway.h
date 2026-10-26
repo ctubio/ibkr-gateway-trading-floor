@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <windowsx.h>
@@ -24,11 +25,13 @@
 #include <stdexcept>
 #include <cstring>
 #include <cstdio>
+#include <cstdint>
 #include <chrono>
 #include <ctime>
 #include <cstddef>
 #include <cctype>
 #include <cmath>
+#include <utility>
 #include <random>
 #include <regex>
 #include <fstream>
@@ -40,6 +43,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <future>
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -59,8 +63,8 @@
 #include "gdi_raii.h"
 #include "volume.h"
 #include "model.h"
-#include "../broker/core.h"
-#include "../domain/snapshots.h"
+#include "snapshots.h"
+#include "core.h"
 
 inline std::wstring StringToWide(const std::string& str) {
     if (str.empty()) return {};
@@ -99,10 +103,7 @@ inline std::string WideToString(const std::wstring& wide) {
     return utf8;
 }
 
-#define WM_TTS_VOICE_CHANGED    (WM_USER + 18)
-#define WM_ALERTS_CHANGED       (WM_USER + 19)
 #define WM_TRAYICON             (WM_USER + 20)
-#define WM_DEBUG_LOG_APPEND     (WM_USER + 21)
 #define WM_ACTIVATE_ORDER_ROW   (WM_USER + 22)
 
 struct AlertPopupData {
@@ -168,13 +169,6 @@ public:
         double ratio5min = 0.0;
     };
 
-    struct EventData {
-        std::string text;
-        COLORREF    color = 0;   // 0 = default theme text color
-        bool        bold  = false;
-        int         conId = 0;   // 0 = no associated symbol (double-click no-ops)
-        std::string symbol;
-    };
     struct PriceAlert {
         std::string symbol;
         int conId = 0;
@@ -262,12 +256,9 @@ public:
     void submitCurrencyOrder(std::string action, double totalQuantity);
 
     // ── Display Group Linking (TWS "linked" window groups) ───────────────────
-    // Subscribes this client to TWS's display-group event stream for the given
-    // group id (the color-coded "linked windows" feature in TWS/Gateway).
-    void subscribeToGroupEvents(int groupId);
     // Pushes contract `conId` (on `exchange`) to every other TWS window/app
     // currently linked to the same group, so they switch their symbol to match.
-    // Must be called after subscribeToGroupEvents() has been issued.
+    // The client subscribes to display-group events during connection setup.
     void updateDisplayGroup(int conId, std::string exchange = "SMART");
 
     // ── Historical Data (on-demand) ──────────────────────────────────────────
