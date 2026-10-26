@@ -60,7 +60,7 @@
 #include <string_view>
 #include <variant>
 
-#include "gdi_raii.h"
+#include "images.h"
 #include "volume.h"
 #include "model.h"
 #include "snapshots.h"
