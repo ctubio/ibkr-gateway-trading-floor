@@ -1,18 +1,5 @@
 #pragma once
 
-#include <windows.h>
-
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <cstddef>
-#include <deque>
-#include <exception>
-#include <functional>
-#include <mutex>
-#include <string>
-#include <vector>
-
 void LogDebug(const std::string& msg);
 
 class UiDispatcher {

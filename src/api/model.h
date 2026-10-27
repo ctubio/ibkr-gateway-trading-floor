@@ -1,19 +1,5 @@
 #pragma once
 
-#include <windows.h>
-
-#include <cassert>
-#include <deque>
-#include <functional>
-#include <map>
-#include <mutex>
-#include <span>
-#include <set>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "dispatcher.h"
 
 void LogDebug(const std::string& msg);

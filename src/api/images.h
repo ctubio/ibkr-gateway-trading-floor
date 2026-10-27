@@ -1,9 +1,5 @@
 #pragma once
 
-#include <memory>
-#include <stdexcept>
-#include <string>
-
 template <typename Handle>
 struct GdiObjectDeleter {
     using pointer = Handle;
