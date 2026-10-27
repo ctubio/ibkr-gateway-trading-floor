@@ -1,5 +1,4 @@
 #include "api/gateway.h"
-#include "api/dispatcher.h"
 #include "api/registry.h"
 #include "api/speech.h"
 #include "api/sound.h"

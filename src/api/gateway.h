@@ -67,6 +67,7 @@
 
 #include "images.h"
 #include "volume.h"
+#include "dispatcher.h"
 #include "model.h"
 #include "snapshots.h"
 #include "core.h"
