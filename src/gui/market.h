@@ -247,7 +247,7 @@ static const TsCol tsCols[] = {
 };
 static const int TS_COL_COUNT = (int)(sizeof(tsCols) / sizeof(tsCols[0]));
 
-// ── L2 column definitions (2-column: Price | Size, asks top / bids bottom) ────
+// L2 column definitions: Size | Price, asks top / bids bottom.
 struct L2Col { const char* header; int width; int fmt; };
 static const L2Col l2Cols[] = {
     { "Size",  54, LVCFMT_RIGHT  },

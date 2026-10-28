@@ -49,26 +49,46 @@ static std::string Decision_ListText(HWND h, int row, int col) {
     return buf;
 }
 
-// Time & Sales colours are assigned in Market_OnTicks: red family = traded at/below
-// bid (seller aggressive), green family = at/above ask (buyer aggressive).
+// DARK2 shades are between bid and ask, so they do not indicate an aggressor.
 static const char* Decision_SideFromColor(COLORREF c) {
-    if (c == COINS_CLR_RED   || c == COINS_CLR_RED_DARK   || c == COINS_CLR_RED_DARK2)   return "S";
-    if (c == COINS_CLR_GREEN || c == COINS_CLR_GREEN_DARK || c == COINS_CLR_GREEN_DARK2) return "B";
+    if (c == COINS_CLR_RED   || c == COINS_CLR_RED_DARK)   return "S";
+    if (c == COINS_CLR_GREEN || c == COINS_CLR_GREEN_DARK) return "B";
     return "-";
+}
+
+// Difference (Eastern - local PC time) in seconds, so print times stored in
+// local time can be shown in the same US Eastern clock the state header uses.
+static int Decision_LocalToEasternOffsetSec() {
+    try {
+        const auto now = std::chrono::system_clock::now();
+        const auto ny  = std::chrono::locate_zone("America/New_York")->get_info(now).offset;
+        const auto loc = std::chrono::current_zone()->get_info(now).offset;
+        return (int)(ny - loc).count();
+    } catch (...) {
+        return 0;
+    }
 }
 
 static std::string Decision_RecentPrints(HWND hList, int maxRows, double& buyVol, double& sellVol) {
     std::string out;
     if (!hList) return out;
+    const int tzOffset = Decision_LocalToEasternOffsetSec();
     int n = std::min(ListView_GetItemCount(hList), maxRows);
     for (int i = 0; i < n; ++i) {
         LVITEMA lvi = {};
         lvi.mask = LVIF_PARAM; lvi.iItem = i;
         if (!ListView_GetItem(hList, &lvi)) continue;
-        COLORREF c = (COLORREF)(lvi.lParam & 0xFFFFFFFF);
+
+        // lParam = (timeSec << 32) | color (see TimeSales_InsertTick)
+        const uint64_t packed = (uint64_t)lvi.lParam;
+        COLORREF c = (COLORREF)(packed & 0xFFFFFFFFu);
+        int timeSec = (int)(uint32_t)(packed >> 32);
+        timeSec = (((timeSec + tzOffset) % 86400) + 86400) % 86400;
+        std::string time = std::format("{:02}:{:02}:{:02}",
+                                       timeSec / 3600, (timeSec / 60) % 60, timeSec % 60);
+
         std::string price = Decision_ListText(hList, i, 0);
         std::string size  = Decision_ListText(hList, i, 1);
-        std::string time  = Decision_ListText(hList, i, 2);
         const char* side  = Decision_SideFromColor(c);
         double sz = std::atof(size.c_str());
         if (side[0] == 'B') buyVol += sz; else if (side[0] == 'S') sellVol += sz;
@@ -81,7 +101,8 @@ static std::string Decision_BookText(HWND hL2, double& askTotal, double& bidTota
     std::string asks, bids;
     if (!hL2) return "";
     auto add = [&](int r, std::string& dst, double& total) {
-        std::string p = Decision_ListText(hL2, r, 0), s = Decision_ListText(hL2, r, 1);
+        std::string s = Decision_ListText(hL2, r, 0);
+        std::string p = Decision_ListText(hL2, r, 1);
         if (p.empty() || p == "--") return;
         total += std::atof(s.c_str());
         dst += p + " x " + s + ", ";
@@ -112,7 +133,8 @@ static std::string Market_BuildDecisionState(TsState* st) {
         auto lt  = zt.get_local_time();
         auto dp  = std::chrono::floor<std::chrono::days>(lt);
         auto tod = std::chrono::hh_mm_ss{ lt - dp };
-        s += std::format("US Eastern time: {:02}:{:02}\n", tod.hours().count(), tod.minutes().count());
+        s += std::format("US Eastern time: {:02}:{:02}:{:02}\n",
+                         tod.hours().count(), tod.minutes().count(), tod.seconds().count());
     } catch (...) {}
     if (st->isOvernight) s += "Session: overnight trading mode.\n";
     if (haveFull && full.halted) s += "WARNING: trading is HALTED.\n";
@@ -166,14 +188,14 @@ static std::string Market_BuildDecisionState(TsState* st) {
     double buyVol = 0, sellVol = 0, dummyB = 0, dummyS = 0;
     std::string prints = Decision_RecentPrints(st->hTsList, 24, buyVol, sellVol);
     if (!prints.empty()) {
-        s += "\n[Recent prints, newest first (B = at/above ask, S = at/below bid, - = between)]\n" + prints;
+        s += "\n[Recent prints, newest first, US Eastern time (B = at/above ask, S = at/below bid, - = between)]\n" + prints;
         double tot = buyVol + sellVol;
         if (tot > 0.0)
             s += std::format("Aggressor volume in those prints: buy {:.0f} vs sell {:.0f} ({:.0f}% buy)\n",
                              buyVol, sellVol, buyVol / tot * 100.0);
     }
     std::string big = Decision_RecentPrints(st->hTsListF100, 8, dummyB, dummyS);
-    if (!big.empty()) s += "\n[Recent large prints (>= 100 shares), newest first]\n" + big;
+    if (!big.empty()) s += "\n[Recent large prints (>= 100 shares), newest first, US Eastern time]\n" + big;
 
     double askTot = 0, bidTot = 0;
     std::string book = Decision_BookText(st->hL2List, askTot, bidTot);
@@ -233,8 +255,9 @@ static const char* DECISION_QUESTION_POSITION = R"JSON(
 static bool Decision_HttpPost(const std::string& body, std::string& response, DWORD& status) {
     HINTERNET hInet = InternetOpenA("TradingFloor/1.0", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
     if (!hInet) return false;
+    DWORD connectTimeout = 5000;
     DWORD timeout = 120000;   // allow for a cold model load
-    InternetSetOptionA(hInet, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOptionA(hInet, INTERNET_OPTION_CONNECT_TIMEOUT, &connectTimeout, sizeof(connectTimeout));
     InternetSetOptionA(hInet, INTERNET_OPTION_SEND_TIMEOUT,    &timeout, sizeof(timeout));
     InternetSetOptionA(hInet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
 
@@ -345,43 +368,67 @@ static void Market_RequestDecision(HWND hWnd, TsState* st) {
     bool expected = false;
     if (!s_decisionBusy.compare_exchange_strong(expected, true)) return;   // request/dialog already active
 
-    std::string stateText = Market_BuildDecisionState(st);
-    std::string questionsStr = std::string("{") + DECISION_QUESTIONS_BASE;
-    if (st->position != 0.0) questionsStr += std::string(",") + DECISION_QUESTION_POSITION;
-    questionsStr += "}";
-
-    json reqObj;
-    reqObj["model"] = DECISION_MODEL;
-    reqObj["state"] = stateText;
+    std::string body;
+    std::string symbol;
+    double last = 0.0;
     try {
+        std::string stateText = Market_BuildDecisionState(st);
+        std::string questionsStr = std::string("{") + DECISION_QUESTIONS_BASE;
+        if (st->position != 0.0) questionsStr += std::string(",") + DECISION_QUESTION_POSITION;
+        questionsStr += "}";
+
+        json reqObj;
+        reqObj["model"] = DECISION_MODEL;
+        reqObj["state"] = stateText;
         reqObj["questions"] = json::parse(questionsStr);
+        body = reqObj.dump(-1, ' ', false, json::error_handler_t::replace);
+        symbol = st->symbol;
+        last = st->l1Info.last;
+    } catch (const std::exception& e) {
+        s_decisionBusy.store(false);
+        MessageBoxA(hWnd, (std::string("Could not build decision request: ") + e.what()).c_str(),
+                    "Decision", MB_ICONERROR);
+        return;
     } catch (...) {
-        reqObj["questions"] = json::object();
+        s_decisionBusy.store(false);
+        MessageBoxA(hWnd, "Could not build decision request (unknown error).",
+                    "Decision", MB_ICONERROR);
+        return;
     }
 
-    std::string body = reqObj.dump();
+    try {
+        std::thread([symbol, last, body]() {
+            struct BusyReset {
+                ~BusyReset() { s_decisionBusy.store(false); }
+            } busyReset;
 
-    std::string symbol = st->symbol;
-    double last = st->l1Info.last;
-
-    std::thread([symbol, last, body]() {
-        std::string text;
-        try {
-            std::string resp; DWORD status = 0;
-            if (!Decision_HttpPost(body, resp, status))
-                text = std::format("Could not reach the decision model at {}:{}.\nIs Ollama running and listening on the LAN?",
-                                   DECISION_HOST, DECISION_PORT);
-            else if (status != 200)
-                text = std::format("Decision model returned HTTP {}:\n\n{}", status, resp.substr(0, 500));
-            else
-                text = Decision_Format(resp);
-        } catch (const std::exception& e) {
-            text = std::string("Decision request failed: ") + e.what();
-        } catch (...) {
-            text = "Decision request failed (unknown error).";
-        }
-        // Own thread => own modal loop, so the rest of the app keeps running live.
-        MessageBoxA(NULL, text.c_str(), std::format("Decision: {} @ {}", symbol, FormatFixed(last, 2)).c_str(), MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND);
+            std::string text;
+            std::string title = "Decision";
+            try {
+                std::string resp; DWORD status = 0;
+                if (!Decision_HttpPost(body, resp, status))
+                    text = std::format("Could not reach the decision model at {}:{}.\nIs Ollama running and listening on the LAN?",
+                                       DECISION_HOST, DECISION_PORT);
+                else if (status != 200)
+                    text = std::format("Decision model returned HTTP {}:\n\n{}", status, resp.substr(0, 500));
+                else
+                    text = Decision_Format(resp);
+                title = std::format("Decision: {} @ {}", symbol, FormatFixed(last, 2));
+            } catch (const std::exception& e) {
+                text = std::string("Decision request failed: ") + e.what();
+            } catch (...) {
+                text = "Decision request failed (unknown error).";
+            }
+            // Own thread => own modal loop, so the rest of the app keeps running live.
+            MessageBoxA(NULL, text.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND);
+        }).detach();
+    } catch (const std::exception& e) {
         s_decisionBusy.store(false);
-    }).detach();
+        MessageBoxA(hWnd, (std::string("Could not start decision request: ") + e.what()).c_str(),
+                    "Decision", MB_ICONERROR);
+    } catch (...) {
+        s_decisionBusy.store(false);
+        MessageBoxA(hWnd, "Could not start decision request (unknown error).",
+                    "Decision", MB_ICONERROR);
+    }
 }
