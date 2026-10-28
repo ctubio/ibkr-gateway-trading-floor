@@ -269,12 +269,20 @@ static std::string Decision_Format(const std::string& resp) {
         return "Unexpected response from the decision model:\n\n" + resp.substr(0, 600);
     }
 
+    // The endpoint wraps results as {"model":..., "answers":{...}, "usage":...}.
+    // Fall back to the root object in case a build returns them unwrapped.
+    const json* root = &j;
+    if (j.is_object() && j.contains("answers") && j["answers"].is_object())
+        root = &j["answers"];
+    else if (j.is_object() && j.contains("error"))
+        return "Decision model error:\n\n" + j["error"].dump().substr(0, 600);
+
     std::string out;
     bool any = false;
 
     auto choiceLine = [&](const char* id, const char* title) {
-        if (!j.contains(id) || !j[id].is_object()) return;
-        const auto& obj = j[id];
+        if (!root->contains(id) || !(*root)[id].is_object()) return;
+        const auto& obj = (*root)[id];
         if (!obj.contains("choice") || !obj["choice"].is_string()) return;
         std::string c = obj["choice"].get<std::string>();
         double conf = obj.contains("confidence") && obj["confidence"].is_number() ? obj["confidence"].get<double>() : 0.0;
@@ -288,7 +296,7 @@ static std::string Decision_Format(const std::string& resp) {
             for (auto& [k, v] : obj["probabilities"].items()) {
                 if (v.is_number()) probs.emplace_back(k, v.get<double>());
             }
-            std::sort(probs.begin(), probs.end(), [](const auto& a, const auto& c) { return a.second > c.second; });
+            std::sort(probs.begin(), probs.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
             for (const auto& [k, v] : probs) out += std::format("{} {:.0f}%   ", k, v * 100.0);
         }
         out += "\n\n";
@@ -296,8 +304,8 @@ static std::string Decision_Format(const std::string& resp) {
     };
 
     auto scoreLine = [&](const char* id, const char* title, std::vector<const char*> labels) {
-        if (!j.contains(id) || !j[id].is_object()) return;
-        const auto& obj = j[id];
+        if (!root->contains(id) || !(*root)[id].is_object()) return;
+        const auto& obj = (*root)[id];
         if (!obj.contains("score") || !obj["score"].is_number()) return;
         double sc = obj["score"].get<double>();
         int idx = std::max(0, std::min((int)labels.size() - 1, (int)std::lround(sc)));
@@ -306,8 +314,8 @@ static std::string Decision_Format(const std::string& resp) {
     };
 
     auto noulLine = [&](const char* id, const char* title) {
-        if (!j.contains(id) || !j[id].is_object()) return;
-        const auto& obj = j[id];
+        if (!root->contains(id) || !(*root)[id].is_object()) return;
+        const auto& obj = (*root)[id];
         if (!obj.contains("noul") || !obj["noul"].is_number()) return;
         double v = obj["noul"].get<double>();
         out += std::format("{}: {}  ({:.0f}%)\n\n", title, v >= 0.5 ? "YES" : "NO", v * 100.0);
