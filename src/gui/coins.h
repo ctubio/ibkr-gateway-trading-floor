@@ -307,22 +307,38 @@ static void UpdateMarketClock(HWND hWnd) {
         }
     }
 
-    SetWindowTextA(hWnd, phase.c_str());
-    
+    // Phase text: only touch the window when it actually changed
+    static std::string s_lastPhase;
+    if (phase != s_lastPhase) {
+        s_lastPhase = phase;
+        SetWindowTextA(hWnd, phase.c_str());
+    }
+
     std::string day_str = day_names[wd.c_encoding()];
     std::string time_str = std::format("{:02}:{:02}", time_of_day.hours().count(), time_of_day.minutes().count()) + " " + day_str;
-    Diamonds_SetTime(time_str.c_str());    
+    Diamonds_SetTime(time_str.c_str());
 
-    // Calculate time left
-    int secs_left = target_secs - total_secs;
-    int h_left = secs_left / 3600;
-    int m_left = (secs_left % 3600) / 60;
+    // DST-safe countdown: build the target as a real New York time (target_secs
+    // is relative to today's NY midnight and may exceed 86400), then diff in UTC.
+    long long secs_left = 0;
+    try {
+        std::chrono::local_time<std::chrono::seconds> targetLocal =
+            std::chrono::local_time<std::chrono::seconds>(dp) + std::chrono::seconds(target_secs);
+        std::chrono::zoned_time<std::chrono::seconds> targetZt{nyZone, targetLocal};
+        auto nowSec = std::chrono::floor<std::chrono::seconds>(now);
+        secs_left = (targetZt.get_sys_time() - nowSec).count();
+    } catch (...) {
+        secs_left = target_secs - total_secs; // fallback to the old math
+    }
+    if (secs_left < 0) secs_left = 0;
 
-    // Format output string (HH:MM)
-    std::string time_left_str = std::format("{:02}:{:02}", h_left, m_left);
+    // Round UP to the next minute so 59s left shows 00:01, not 00:00
+    long long mins_left = (secs_left + 59) / 60;
+    std::string time_left_str = std::format("{:02}:{:02}", mins_left / 60, mins_left % 60);
 
-    SetWindowTextA(coinsState.hCoin_Clock, time_left_str.c_str());
-    InvalidateRect(coinsState.hCoin_Clock, NULL, TRUE);
+    if (SetWindowTextAIfChanged(coinsState.hCoin_Clock, time_left_str)) {
+        // SetWindowTextAIfChanged already invalidates
+    }
 }
 
 static void Coins_ApplyFocusLayout(HWND hWnd, bool active) {
@@ -1190,7 +1206,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                 Coins_ToggleTTS(hWnd);
             }
             
-            SetTimer(hWnd, TIMER_MARKET_CLOCK, 21000, NULL); // live market clock, intentionaly delayed 21 seconds
+            SetTimer(hWnd, TIMER_MARKET_CLOCK, 1000, NULL);
             SendMessage(hWnd, WM_TIMER, TIMER_MARKET_CLOCK, 0);
 
             SetTimer(hWnd, TIMER_WATCHDOG, 10000, NULL);
