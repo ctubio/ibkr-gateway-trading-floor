@@ -1451,6 +1451,14 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
         }
     }
 
+    // Newest order (highest orderId) first, so the top row is the last order placed.
+    // Layout, TAB order (Market_BuildTabOrder) and initial focus (Market_Focus_OrderRow)
+    // all iterate orderRows in vector order, so they follow automatically.
+    std::stable_sort(state->orderRows.begin(), state->orderRows.end(),
+        [](const MarketOrderRow& a, const MarketOrderRow& b) {
+            return a.orderId > b.orderId;
+        });
+
     if (state->orderRows.size() != originalRowCount) layoutNeeded = true;
     if (layoutNeeded) Market_Layout(hWnd, state);
 }
