@@ -729,7 +729,8 @@ void Market_Focus_OrderRow(TsState* state) {
         int len = GetWindowTextLengthA(state->hOrderPrice);
         SendMessageA(state->hOrderPrice, EM_SETSEL, len, len);
     } else {
-        for (auto& row : state->orderRows) {
+        for (auto it = state->orderRows.rbegin(); it != state->orderRows.rend(); ++it) {
+            auto& row = *it;
             if (row.hPriceEdit) {
                 SetFocus(row.hPriceEdit);
                 int len = GetWindowTextLengthA(row.hPriceEdit);
@@ -1451,13 +1452,13 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
         }
     }
 
-    // Newest order (highest orderId) first, so the top row is the last order placed.
+    /*/ Newest order (highest orderId) first, so the top row is the last order placed.
     // Layout, TAB order (Market_BuildTabOrder) and initial focus (Market_Focus_OrderRow)
     // all iterate orderRows in vector order, so they follow automatically.
     std::stable_sort(state->orderRows.begin(), state->orderRows.end(),
         [](const MarketOrderRow& a, const MarketOrderRow& b) {
             return a.orderId > b.orderId;
-        });
+        });*/
 
     if (state->orderRows.size() != originalRowCount) layoutNeeded = true;
     if (layoutNeeded) Market_Layout(hWnd, state);
