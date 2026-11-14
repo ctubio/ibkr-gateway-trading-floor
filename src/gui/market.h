@@ -919,6 +919,7 @@ static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
             }
         }
         api().submitOrder(st->conId, st->symbol, st->orderSide, st->isOvernight, qty, price, stopPrice, stopPriceAwayFrom, profitPrice);
+        st->focusNewOrderUntil = GetTickCount64() + 5000;
     }
     Market_Layout_HideBar(hMarket, st);
 }
@@ -1370,6 +1371,7 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
     HINSTANCE hInst = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
     const size_t originalRowCount = state->orderRows.size();
     bool layoutNeeded = false;
+    bool focusNewRow = false;
 
     auto orders = orderSort(*api().orders());
     std::vector<TradingAPI::OrderInfo> matched;
@@ -1449,6 +1451,10 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
         } else {
             state->orderRows.push_back(Market_CreateOrderRow(hWnd, hInst, o));
             layoutNeeded = true;
+            if (state->focusNewOrderUntil) {
+                focusNewRow = GetTickCount64() <= state->focusNewOrderUntil;
+                state->focusNewOrderUntil = 0;
+            }
         }
     }
 
@@ -1462,6 +1468,15 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
 
     if (state->orderRows.size() != originalRowCount) layoutNeeded = true;
     if (layoutNeeded) Market_Layout(hWnd, state);
+
+    if (focusNewRow && !state->orderRows.empty() && !state->orderBarVisible) {
+        HWND hEdit = state->orderRows.back().hPriceEdit;
+        if (hEdit) {
+            SetFocus(hEdit);
+            int len = GetWindowTextLengthA(hEdit);
+            SendMessageA(hEdit, EM_SETSEL, len, len);
+        }
+    }
 }
 
 // ── Header paint ──────────────────────────────────────────────────────────────

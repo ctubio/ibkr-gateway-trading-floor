@@ -247,6 +247,7 @@ struct TsState {
     COLORREF optStopColor   = COINS_CLR_GRAY;
     bool  orderBarVisible   = false;
     std::string orderSide;   // "BUY" or "SELL"
+    ULONGLONG focusNewOrderUntil = 0;
 
     // ── Editable orders panel (bottom of hTsList column) ──────────────────────
     std::vector<MarketOrderRow> orderRows;
