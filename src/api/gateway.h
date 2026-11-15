@@ -280,5 +280,3 @@ private:
     struct Impl;
     std::unique_ptr<Impl> pImpl;
 };
-
-void Orders_AddUnsentFromGateway(HWND hWnd, const TradingAPI::OrderInfo& info);

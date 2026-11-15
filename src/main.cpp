@@ -16,10 +16,6 @@
 #include "gui/orders.h"
 #include "gui/coins.h"
 
-void Orders_AddUnsentFromGateway(HWND hWnd, const TradingAPI::OrderInfo& info) {
-    Orders_AddUnsent(hWnd, info);
-}
-
 static BOOL CALLBACK DestroyApplicationWindow(HWND hWnd, LPARAM) {
     if (hWnd != hScreenFlashOverlay)
         DestroyWindow(hWnd);

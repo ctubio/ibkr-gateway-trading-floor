@@ -564,7 +564,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     }
 }
 
-static void Orders_AddUnsent(HWND hWnd, const TradingAPI::OrderInfo& info) {
+void Orders_AddUnsent(HWND hWnd, const TradingAPI::OrderInfo& info) {
     unsentOrders[info.orderId] = info;
     HWND hList = GetDlgItem(hWnd, ID_ORDERS_LIST);
     if (hList) {
