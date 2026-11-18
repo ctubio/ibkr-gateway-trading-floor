@@ -8,6 +8,7 @@ struct SparkPoint {
 static Gdiplus::Color sparkColors[3];
 static Gdiplus::Color sparkColorsMini[3];
 static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
+constexpr size_t kMaxPoints = 41; // ~20 minutes at the 30s coalescing spacing each point)
 
 // ── Shared sparkline engine ─────────────────────────────────────────────────
 // Sparkline (large, Market window header chart) and MiniSparkline (small,
@@ -165,8 +166,7 @@ protected:
         if (minTime == maxTime) maxTime++;
         if (minPrice == maxPrice) { minPrice -= flatPriceEpsilon; maxPrice += flatPriceEpsilon; }
 
-        // AddPrice() caps `data` at 21 entries, so no heap allocation is needed.
-        constexpr size_t kMaxPoints = 21;
+        // AddPrice() caps `data` at kMaxPoints entries, so no heap allocation is needed.
         Gdiplus::PointF points[kMaxPoints];
         const size_t n = std::min(data.size(), kMaxPoints);
         for (size_t i = 0; i < n; ++i) {
@@ -204,25 +204,21 @@ protected:
 
 public:
     // Identical in both originals: dedup unchanged prices, coalesce a point
-    // added <30s after the previous one, cap `data` at 21 points, and
+    // added <30s after the previous one, cap `data` at kMaxPoints points, and
     // separately maintain the long-lived `priceHistory` (deduped by price,
     // pruned past ~65 minutes) used only for the reference dots.
     void AddPrice(double price) {
         ULONGLONG now = GetTickCount64();
 
-        // 1. If price hasn't changed, ignore.
         if (!data.empty() && data.back().price == price) return;
 
-        // 2. If 2nd-to-last point is newer than 30s ago, pop the last point.
         if (data.size() > 1 && data[data.size() - 2].date > now - 30000) {
             data.pop_back();
         }
 
-        // 3. Add new data.
         data.push_back({now, price});
 
-        // 4. Max array size of 21.
-        if (data.size() > 21) {
+        if (data.size() > kMaxPoints) {
             data.erase(data.begin());
         }
 
