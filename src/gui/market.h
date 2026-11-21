@@ -617,7 +617,7 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
 
 // Recomputes and redraws the risk readout beside hOrderLabel from the current
 // price / qty / stop-distance edit fields plus account NetLiquidation.
-// hOrderStopPrice holds a $ distance from entry (not an absolute stop price),
+// hOrderStopPrice holds a price distance from entry (not an absolute stop price),
 // matching how it is already fed into api().submitOrder() as stopPrice.
 static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (!state || !state->hTotalLabel || !state->hTotalQtyLabel || state->l1Info.last <= 0.0) return;
@@ -633,8 +633,8 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
         stopDist = state->orderSide == "BUY" ? state->l1Info.last - stopDist : stopDist - state->l1Info.last;
         profitDist = state->orderSide == "BUY" ? profitDist - state->l1Info.last : state->l1Info.last - profitDist;
     } else {
-        stopTargetValueStr = std::format("{:.2f}", state->orderSide == "BUY" ? price - stopDist : price + stopDist);
-        profitTargetValueStr = std::format("{:.2f}", state->orderSide == "BUY" ? price + profitDist : price - profitDist);
+        stopTargetValueStr = std::format("{:.{}f}", state->orderSide == "BUY" ? price - stopDist : price + stopDist, state->priceDec);
+        profitTargetValueStr = std::format("{:.{}f}", state->orderSide == "BUY" ? price + profitDist : price - profitDist, state->priceDec);
     }
 
     // ── hTotalLabel: Notional value only ─────────────────────────────────────
@@ -646,7 +646,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (SetWindowTextAIfChanged(state->hTotalQtyLabel, labelStr))
         InvalidateRect(state->hTotalQtyLabel, NULL, TRUE);
 
-    if (state->compactBar()) return; // stop/profit-dependent hints don't apply overnight or FX
+    if (state->compactBar()) return; // stop/profit-dependent hints don't apply overnight
 
     // Loss @ stop distance, bottom-left of Price input
     std::string lossPctStr = "--", lossValueStr = "!!";
@@ -703,7 +703,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
             if (price <= 0.0) {
                 optStop = state->orderSide == "BUY" ? state->l1Info.last - optStop : state->l1Info.last + optStop;
             }
-            optStopText = std::format("{:.2f}", optStop);
+            optStopText = std::format("{:.{}f}", optStop, state->priceDec);
             optStopColor = (price > 0 ? stopDistOriginal > optStop : (state->orderSide == "BUY" ? optStop > stopDistOriginal : stopDistOriginal > optStop)) ? COINS_CLR_RED : COINS_CLR_GRAY;
         }
     }
@@ -783,8 +783,10 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hOptStopTarget,   state->compactBar() ? SW_HIDE : SW_SHOW);
     ShowWindow(state->hOptProfitTarget, state->compactBar() ? SW_HIDE : SW_SHOW);
     
-    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.{}f}", state->compactBar() ? 0.0 : stopGateway, state->priceDec).c_str());
-    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.{}f}", state->compactBar() ? 0.0 : profitGateway, state->priceDec).c_str());
+    const double defStop = state->isForex ? FX_DEFAULT_STOP : stopGateway;
+    const double defProfit = state->isForex ? FX_DEFAULT_PROFIT : profitGateway;
+    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.{}f}", state->compactBar() ? 0.0 : defStop, state->priceDec).c_str());
+    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.{}f}", state->compactBar() ? 0.0 : defProfit, state->priceDec).c_str());
     Market_UpdateOrderRiskLabel(state);
 
     Market_Layout(hWnd, state);
@@ -877,11 +879,12 @@ static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
             MessageBoxA(hMarket, msg.c_str(), title, MB_ICONERROR);
         };
 
-        if (stopPrice > 0.0 && stopPrice < 0.1) {
-            fail("Stop price must be greater than 0.1.", "Invalid Stop Price"); return;
+        const double minDist = st->isForex ? FX_TICK : 0.1;
+        if (stopPrice > 0.0 && stopPrice < minDist) {
+            fail(std::format("Stop must be at least {:.{}f}.", minDist, st->priceDec), "Invalid Stop Price"); return;
         }
-        if (profitPrice > 0.0 && profitPrice < 0.1) {
-            fail("Profit price must be greater than 0.1.", "Invalid Profit Price"); return;
+        if (profitPrice > 0.0 && profitPrice < minDist) {
+            fail(std::format("Profit must be at least {:.{}f}.", minDist, st->priceDec), "Invalid Profit Price"); return;
         }
         double stopPriceAwayFrom = price > 0 ? price : st->l1Info.last;
         if (price > 0 && stopPrice > 0)   stopPrice   = st->orderSide == "BUY" ? price - stopPrice   : price + stopPrice;
@@ -1696,7 +1699,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                     state->speakerRect = ir;
                     SetTextColor(hdc, state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY);
                 } else if (isMoonIcon) {
-                    if (!state->isForex) state->moonRect = ir;
+                    state->moonRect = ir;
                     SetTextColor(hdc, state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY);
                 } else {
                     SetTextColor(hdc, labelColor);
@@ -1834,7 +1837,6 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
 }
 
 static void Market_ToggleOVN(HWND hWnd, TsState* state) {
-    if (state->isForex) return;
     state->isOvernight = !state->isOvernight;
     
     if (!state->symbol.empty()) {
@@ -2165,7 +2167,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Restore filter
         if (!state->symbol.empty()) {
             std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
-            if (!state->isForex && RegGetDword(windowKey.c_str(), "OVERNIGHT", 0)) {
+            if (RegGetDword(windowKey.c_str(), "OVERNIGHT", 0)) {
                 state->isOvernight = false;
                 Market_ToggleOVN(hWnd, state);
             }
@@ -2295,7 +2297,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             return 0;
         }
         if (wParam == 'N') {
-            if (!state->isForex) Market_ToggleOVN(hWnd, state);
+            Market_ToggleOVN(hWnd, state);
             return 0;
         }
         if (wParam == 'M') {

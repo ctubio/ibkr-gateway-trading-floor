@@ -161,6 +161,8 @@ static constexpr int         FX_CONID       = 12087792;
 static constexpr const char* FX_SYMBOL      = "EUR.USD";
 static constexpr double      FX_TICK        = 0.00005;
 static constexpr double      FX_SAFETY      = 0.005;
+static constexpr double      FX_DEFAULT_STOP   = 0.0020;
+static constexpr double      FX_DEFAULT_PROFIT = 0.0040;
 static constexpr int         FX_DEFAULT_QTY = 1000;
 
 inline constexpr bool IsForexConId(int conId) { return conId == FX_CONID; }
