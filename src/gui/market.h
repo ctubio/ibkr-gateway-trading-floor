@@ -5,6 +5,11 @@ static const int windowMarketHeight = 505;
 
 static const size_t MAX_MARKET_WINDOWS = 3;
 
+static std::string Market_FmtSz(const TsState* st, double v) {
+    if (st && st->isForex) return v == 0.0 ? "--" : formatVolume((long long)v);
+    return Market_FmtQty(v);
+}
+
 void StartMarketSearch() {
     CreateWindowExA(WS_EX_DLGMODALFRAME | WS_EX_TOPMOST, MARKET_SEARCH_CLASS_NAME, "Market: Search Symbol",
         WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
@@ -70,6 +75,8 @@ void StartMarket(const std::string& symbol = "", int conId = 0) {
         delete data;
     }
 }
+
+void StartForexMarket() { StartMarket(FX_SYMBOL, FX_CONID); }
 
 #define ID_MARKET_TIMESALES_LIST_F0001 6004
 #define ID_MARKET_TIMESALES_LIST_F0100 6005
@@ -167,9 +174,9 @@ static void Market_PaintCaption(HWND hWnd, HDC hdcWin, TsState* state) {
 
         struct Seg { std::wstring text; COLORREF color; int w; int x; };
         Seg segs[2] = {
-            { StringToWide(FormatFixed(chg, 2) + "  " + FormatFixed(chgPct, 2) + "%"),
+            { StringToWide(FormatFixed(chg, state->priceDec) + "  " + FormatFixed(chgPct, 2) + "%"),
               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, 0, maxX - 80 },
-            { StringToWide(formatVolume((long long)vr.vol5min)), volColor, 0, maxX },
+            { StringToWide(state->isForex ? "" : formatVolume((long long)vr.vol5min)), volColor, 0, maxX },
         };
 
         for (int i = 0; i < 2; ++i) {
@@ -219,7 +226,7 @@ static std::vector<HWND> Market_BuildTabOrder(TsState* state) {
     }
     if (state->orderBarVisible) {
         std::vector<HWND> barOrder = { state->hOrderPrice, state->hOrderStopPrice, state->hOrderProfitPrice, state->hOrderQty };
-        if (state->isOvernight) {
+        if (state->compactBar()) {
             barOrder.erase(barOrder.begin() + 2);
             barOrder.erase(barOrder.begin() + 1);
         }
@@ -364,8 +371,8 @@ static void TimeSales_InsertTick(HWND hList, const std::string& time, COLORREF c
 static void Market_TrimTimeSalesLists(TsState* state) {
     if (!state) return;
 
-    int limitLong  = state->orderBarVisible ? (state->isOvernight ? 20 : 18) : 23;
-    int limitShort = state->orderBarVisible ? (state->isOvernight ?  9 :  8) : 11;
+    int limitLong  = state->orderBarVisible ? (state->compactBar() ? 20 : 18) : 23;
+    int limitShort = state->orderBarVisible ? (state->compactBar() ?  9 :  8) : 11;
     auto trim = [&](HWND hList, int maxRows) {
         if (!hList) return;
         int count = ListView_GetItemCount(hList);
@@ -473,7 +480,7 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
 
     const int hdrH  = Caption_H(hWnd) + HEADER_H;
     const int bodyY = hdrH;
-    const int barH  = (state->orderBarVisible) ? ORDER_BAR_H / (state->isOvernight ? 2 : 1) : 0;
+    const int barH  = (state->orderBarVisible) ? ORDER_BAR_H / (state->compactBar() ? 2 : 1) : 0;
     const int bodyH = rc.bottom - hdrH - barH;
     const int bodyW = rc.right;
 
@@ -550,9 +557,9 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
     // ── Order entry bar ───────────────────────────────────────────────────────
     if (state->hOrderLabel && state->hOrderPrice && state->hOrderStopPrice && state->hOrderProfitPrice && state->hOrderQty) {
         const int m    = 8;
-        int BAR_H = (state->isOvernight ? ORDER_BAR_H / 2 : ORDER_BAR_H);
-        const int editH = (BAR_H - 6) / (state->isOvernight ? 1 : 2);
-        const int editY = rc.bottom - 1 - BAR_H + (BAR_H - editH * (state->isOvernight ? 1 : 2)) / 2;
+        int BAR_H = (state->compactBar() ? ORDER_BAR_H / 2 : ORDER_BAR_H);
+        const int editH = (BAR_H - 6) / (state->compactBar() ? 1 : 2);
+        const int editY = rc.bottom - 1 - BAR_H + (BAR_H - editH * (state->compactBar() ? 1 : 2)) / 2;
         const int lblY  = rc.bottom - BAR_H + (BAR_H - 18) / 2;
         const int lblW = 25;
         const int priceW = 180;
@@ -574,7 +581,7 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
         SetWindowPos(state->hTotalLabel, NULL, startX + priceW + m + priceW - hintW - hintMargin, editY + editH - hint1H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
         SetWindowPos(state->hTotalQtyLabel, NULL, startX + priceW + m + priceW - hintW - hintMargin, editY + editH - hint2H - 2, hintW, hint1H, SWP_NOZORDER | SWP_NOACTIVATE);
 
-        if (!state->isOvernight) {
+        if (!state->compactBar()) {
             const int stopY = editY + editH + 4;
             SetWindowPos(state->hOrderStopPrice,   NULL, startX,              stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
             SetWindowPos(state->hOrderProfitPrice, NULL, startX + priceW + m, stopY, priceW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -601,7 +608,7 @@ static void Market_Layout(HWND hWnd, TsState* state, bool layoutOrderControls = 
 
         CenterEditText(state->hOrderPrice);
         CenterEditText(state->hOrderQty);
-        if (!state->isOvernight) {
+        if (!state->compactBar()) {
             CenterEditText(state->hOrderStopPrice);
             CenterEditText(state->hOrderProfitPrice);
         }
@@ -639,7 +646,7 @@ static void Market_UpdateOrderRiskLabel(TsState* state) {
     if (SetWindowTextAIfChanged(state->hTotalQtyLabel, labelStr))
         InvalidateRect(state->hTotalQtyLabel, NULL, TRUE);
 
-    if (state->isOvernight) return; // stop/profit-dependent hints don't apply overnight
+    if (state->compactBar()) return; // stop/profit-dependent hints don't apply overnight or FX
 
     // Loss @ stop distance, bottom-left of Price input
     std::string lossPctStr = "--", lossValueStr = "!!";
@@ -753,8 +760,8 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     else if (side == "SELL" && state->l1Info.bid > 0.0) suggestedPrice = state->l1Info.bid;
     else if (state->l1Info.last > 0.0) suggestedPrice = state->l1Info.last;
     
-    SetWindowTextA(state->hOrderPrice, std::format("{:.2f}", suggestedPrice).c_str());
-    int qty = qtyGateway * (side == "BUY" ? 1 : -1);
+    SetWindowTextA(state->hOrderPrice, std::format("{:.{}f}", suggestedPrice, state->priceDec).c_str());
+    int qty = (state->isForex ? FX_DEFAULT_QTY : qtyGateway) * (side == "BUY" ? 1 : -1);
     SetWindowTextA(state->hOrderQty, std::format("{:+}", qty).c_str());
     
     SetWindowTextA(state->hOrderLabel, side.substr(0, 1).c_str());
@@ -766,18 +773,18 @@ static void OrderBar_Show(HWND hWnd, TsState* state, const std::string& side) {
     ShowWindow(state->hOrderPrice,    SW_SHOW);
     ShowWindow(state->hOrderQty,      SW_SHOW);
 
-    ShowWindow(state->hOrderStopPrice,   state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOrderProfitPrice, state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hProfitLossPercentLabel,      state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hProfitLossValueLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hRRLabel,         state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOptQtyLabel,     state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOptStopLabel,    state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOptStopTarget,   state->isOvernight ? SW_HIDE : SW_SHOW);
-    ShowWindow(state->hOptProfitTarget, state->isOvernight ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOrderStopPrice,   state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOrderProfitPrice, state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hProfitLossPercentLabel, state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hProfitLossValueLabel, state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hRRLabel,         state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptQtyLabel,     state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptStopLabel,    state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptStopTarget,   state->compactBar() ? SW_HIDE : SW_SHOW);
+    ShowWindow(state->hOptProfitTarget, state->compactBar() ? SW_HIDE : SW_SHOW);
     
-    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.2f}", state->isOvernight ? 0.0 : stopGateway).c_str());
-    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.2f}", state->isOvernight ? 0.0 : profitGateway).c_str());
+    SetWindowTextA(state->hOrderStopPrice,   std::format("{:.{}f}", state->compactBar() ? 0.0 : stopGateway, state->priceDec).c_str());
+    SetWindowTextA(state->hOrderProfitPrice, std::format("{:.{}f}", state->compactBar() ? 0.0 : profitGateway, state->priceDec).c_str());
     Market_UpdateOrderRiskLabel(state);
 
     Market_Layout(hWnd, state);
@@ -858,6 +865,7 @@ static void Market_RedrawEditHints(TsState* st, MarketOrderRow* row, HWND hEdit)
 // ENTER on an order-bar field: validate, submit a new order, hide the bar.
 static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
     if (!st || st->l1Info.last <= 0.0) return;
+    const double safety = st->isForex ? FX_SAFETY : safetyGateway;
 
     double price       = EditNum(st->hOrderPrice);
     double qty         = std::abs(EditNum(st->hOrderQty));
@@ -881,8 +889,8 @@ static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
 
         if (price > 0) {
             if (st->orderSide == "BUY") {
-                if (price > st->l1Info.last + safetyGateway) {
-                    fail(std::format("Entry price is more than {:.2f} above the last price.\nPlease check the price.", safetyGateway), "Invalid Entry Price"); return;
+                if (price > st->l1Info.last + safety) {
+                    fail(std::format("Entry price is more than {:.{}f} above the last price.\nPlease check the price.", safety, st->priceDec), "Invalid Entry Price"); return;
                 }
                 if (stopPrice > 0 && stopPrice >= price) {
                     fail("Stop price must be below the entry price for a BUY order.", "Invalid Stop Price"); return;
@@ -891,8 +899,8 @@ static void Market_SubmitOrderBar(HWND hMarket, TsState* st) {
                     fail("Profit price must be above the entry price for a BUY order.", "Invalid Profit Price"); return;
                 }
             } else if (st->orderSide == "SELL") {
-                if (price < st->l1Info.last - safetyGateway) {
-                    fail(std::format("Entry price is more than {:.2f} below the last price.\nPlease check the price.", safetyGateway), "Invalid Entry Price"); return;
+                if (price < st->l1Info.last - safety) {
+                    fail(std::format("Entry price is more than {:.{}f} below the last price.\nPlease check the price.", safety, st->priceDec), "Invalid Entry Price"); return;
                 }
                 if (stopPrice > 0 && stopPrice <= price) {
                     fail("Stop price must be above the entry price for a SELL order.", "Invalid Stop Price"); return;
@@ -1004,11 +1012,12 @@ static LRESULT CALLBACK Market_EditSubclassProc(
             if (!isPrice) val = std::abs(val);
 
             bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-            double step = isPrice ? (shift ? 1.0 : 0.01) : (shift ? 10.0 : 1.0);
+            double step = isPrice ? (st->isForex ? (shift ? 0.0005 : FX_TICK) : (shift ? 1.0 : 0.01))
+                                  : (st->isForex ? (shift ? 10000.0 : 1000.0) : (shift ? 10.0 : 1.0));
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
 
-            std::string s = isPrice ? std::format("{:.2f}", val)
+            std::string s = isPrice ? std::format("{:.{}f}", val, st->priceDec)
                                     : std::format("{:+}", val * (action == "BUY" ? 1 : -1));
             SetWindowTextA(hEdit, s.c_str());
             int len = GetWindowTextLengthA(hEdit);
@@ -1082,7 +1091,7 @@ static MarketOrderRow Market_CreateOrderRow(HWND hWnd, HINSTANCE hInst, const Tr
     SetWindowSubclass(row.hPriceEdit, Market_EditSubclassProc, MEDIT_PRICE, 0);
     SetWindowSubclass(row.hQtyEdit,   Market_EditSubclassProc, MEDIT_QTY,   0);
 
-    std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
+    std::string priceStr = (o.price > 0) ? std::format("{:.{}f}", o.price, PriceDecimals(o.conId)) : std::format("{:.{}f}", 0.0, PriceDecimals(o.conId));
     SetWindowTextA(row.hPriceEdit, priceStr.c_str());
     std::string qtyStr = std::format("{:+}", o.totalQty * (o.action == "BUY" ? 1 : -1));
     SetWindowTextA(row.hQtyEdit, qtyStr.c_str());
@@ -1211,7 +1220,7 @@ static int Market_BodyH(HWND hWnd, const TsState* state) {
     RECT rc; GetClientRect(hWnd, &rc);
     const int hdrH = Caption_H(hWnd) + HEADER_H;
     const int barH = (state && state->orderBarVisible)
-                   ? ORDER_BAR_H / (state->isOvernight ? 2 : 1)
+                   ? ORDER_BAR_H / (state->compactBar() ? 2 : 1)
                    : 0;
     return rc.bottom - hdrH - barH;
 }
@@ -1271,8 +1280,8 @@ static void Market_OnBook(TsState* state, const L2Book& book) {
         state->l2Price[row] = newPrice;
 
         if (snapshotRow.populated) {
-            std::string price = Market_Fmt(newPrice);
-            std::string size = Market_FmtQty(newSize);
+            std::string price = Market_Fmt(newPrice, state->priceDec);
+            std::string size = Market_FmtSz(state, newSize);
             ListView_SetItemText(state->hL2List, row, 0, (LPSTR)size.c_str());
             ListView_SetItemText(state->hL2List, row, 1, (LPSTR)price.c_str());
         } else {
@@ -1294,6 +1303,7 @@ static void Market_OnBook(TsState* state, const L2Book& book) {
 // (bold), 4 = SELL open order (bold), see NM_CUSTOMDRAW below.
 static void Market_RefreshExec(HWND hWnd, TsState* state) {
     if (!state || !state->hExecList) return;
+    const int dec = state->priceDec;
 
     HWND hList = state->hExecList;
     // ── Executions (as before) ───────────────────────────────────────────────
@@ -1314,9 +1324,9 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
     for (const auto& o : state->openOrdersSummary) {
         std::string quoteStr;
         if (o.trailStopPrice > 0.0)
-            quoteStr = std::format("{:.2f} | {:.2f}", o.trailStopPrice, o.price);
+            quoteStr = std::format("{} | {}", FormatFixed(o.trailStopPrice, dec), FormatFixed(o.price, dec));
         else if (o.price > 0)
-            quoteStr = std::format("{:.2f}", o.price);
+            quoteStr = FormatFixed(o.price, dec);
         else
             quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
         if (o.status != "Submitted" && o.orderType == "LMT")
@@ -1325,7 +1335,7 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
     }
 
     for (const auto& o : *executions) {
-        if (o.symbol != state->symbol) continue;
+        if (state->isForex ? (o.conId != state->conId) : (o.symbol != state->symbol)) continue;
 
         // Normalise side: execDetails stores "BOT"/"SLD", openOrder stores "BUY"/"SELL"
         std::string side = o.action;
@@ -1334,9 +1344,9 @@ static void Market_RefreshExec(HWND hWnd, TsState* state) {
 
         std::string quoteStr;
         if (o.price > 0)
-            quoteStr = std::format("{:.0f} @ {:.2f}", o.filledQty > 0 ? o.filledQty : o.totalQty, o.price);
+            quoteStr = std::format("{:.0f} @ {}", o.filledQty > 0 ? o.filledQty : o.totalQty, FormatFixed(o.price, dec));
         else if (o.avgFillPx > 0)
-            quoteStr = std::format("{:.0f} @ {:.2f}", o.filledQty > 0 ? o.filledQty : o.totalQty, o.avgFillPx);
+            quoteStr = std::format("{:.0f} @ {}", o.filledQty > 0 ? o.filledQty : o.totalQty, FormatFixed(o.avgFillPx, dec));
         else
             quoteStr = std::format("{:.0f} @ --", o.filledQty > 0 ? o.filledQty : o.totalQty);
         int rowSide = side == "BUY" ? 1 : 2;
@@ -1435,7 +1445,9 @@ static void Market_SyncOrderRows(HWND hWnd, TsState* state) {
             // Refresh price/qty from the live order, but never while the user is
             // actively typing in that field.
             if (existing->hPriceEdit && GetFocus() != existing->hPriceEdit) {
-                std::string priceStr = (o.price > 0) ? std::format("{:.2f}", o.price) : "0.00";
+                std::string priceStr = (o.price > 0)
+                    ? std::format("{:.{}f}", o.price, PriceDecimals(o.conId))
+                    : std::format("{:.{}f}", 0.0, PriceDecimals(o.conId));
                 if (SetWindowTextAIfChanged(existing->hPriceEdit, priceStr))
                     CenterEditText(existing->hPriceEdit);
             }
@@ -1547,7 +1559,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     std::string bufD = FormatFixed(dPnL, 2, true);
     std::string bufU = FormatFixed(uPnL, 2, true);
 
-    std::string lastStr = Market_Fmt(L1.last);
+    std::string lastStr = Market_Fmt(L1.last, state->priceDec);
     SIZE lastSz = {}, bufDSz = {}, bufUSz = {};
     SelectObject(hdc, hFont21ptbold.get());
     GetTextExtentPoint32A(hdc, lastStr.c_str(), (int)lastStr.size(), &lastSz);
@@ -1585,12 +1597,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         SetTextColor(hdc, COINS_CLR_RED);
 
         SelectObject(hdc, hFont16ptbold.get());
-        std::string askStr = Market_Fmt(L1.ask);
+        std::string askStr = Market_Fmt(L1.ask, state->priceDec);
         RECT pr = { RB_X, 1, RB_X + RB_PRICE_W, rowH };
         DrawTextA(hdc, askStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont11ptbold.get());
-        std::string askSzStr = " x " + Market_FmtQty(L1.askSize);
+        std::string askSzStr = " x " + Market_FmtSz(state, L1.askSize);
         RECT sr = { RB_X + RB_PRICE_W, 1, RB_X + RB_TOTAL, rowH };
         DrawTextA(hdc, askSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -1600,12 +1612,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         SetTextColor(hdc, COINS_CLR_BLUE);
 
         SelectObject(hdc, hFont16ptbold.get());
-        std::string bidStr = Market_Fmt(L1.bid);
+        std::string bidStr = Market_Fmt(L1.bid, state->priceDec);
         RECT pr = { RB_X, rowH, RB_X + RB_PRICE_W, HEADER_H - 1 };
         DrawTextA(hdc, bidStr.c_str(), -1, &pr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
         SelectObject(hdc, hFont11ptbold.get());
-        std::string bidSzStr = " x " + Market_FmtQty(L1.bidSize);
+        std::string bidSzStr = " x " + Market_FmtSz(state, L1.bidSize);
         RECT sr = { RB_X + RB_PRICE_W, rowH, RB_X + RB_TOTAL, HEADER_H - 1 };
         DrawTextA(hdc, bidSzStr.c_str(), -1, &sr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
@@ -1631,7 +1643,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
         chgPct = L1.changePct();
     }
     // Measure change text (smaller font)
-    std::string chgStr = " " + FormatFixed(chg, 2) + "  " + FormatFixed(chgPct, 2) + "%";
+    std::string chgStr = " " + FormatFixed(chg, state->priceDec) + "  " + FormatFixed(chgPct, 2) + "%";
 
     auto rateColor = [&](double ratio) -> COLORREF {
         if (ratio >= 3.0) return COINS_CLR_PINK;      // hot: 3x+ normal pace
@@ -1643,7 +1655,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     struct StatItem { const char* label; std::string value; COLORREF color; const wchar_t* wIcon = nullptr; };
     StatItem row1[] = {
         //{ "", Market_Fmt(L1.prevClose), closeColor  },
-        { "", " " + Market_Fmt(L1.high),      highColor,SPEAKER_GLYPH  },
+        { "", " " + Market_Fmt(L1.high, state->priceDec),      highColor,SPEAKER_GLYPH  },
         //{ " P:", Market_FmtQty(state->position),      textColor  },
         
         { "", "",    highColor, LOCATE_GLYPH  },
@@ -1654,7 +1666,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
     // Row 2: Pos  Avg  Vol-rate  Freq-rate
     StatItem row2[] = {
         //{ "", Market_Fmt(L1.open),  openColor},
-        { "", " " + Market_Fmt(L1.low),   lowColor, MOON_GLYPH   },
+        { "", " " + Market_Fmt(L1.low, state->priceDec),   lowColor, MOON_GLYPH   },
         { "", "",               lowColor, FLAG_GLYPH  },
         //{ "", chgStr,               (chg >= 0.0) ? COINS_CLR_GREEN : COINS_CLR_RED, FLAG_GLYPH  },
     };
@@ -1675,7 +1687,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                 bool isMoonIcon = (wcscmp(items[i].wIcon, MOON_GLYPH) == 0);
                 RECT ir = { cx, y0, cx + iconSz.cx, y1 };
                 if (isFlagIcon) {
-                    state->flagRect = ir;
+                    if (!state->isForex) state->flagRect = ir;
                     SetTextColor(hdc, state->hasAlert ? COINS_CLR_YELLOW : labelColor);
                 } else if (isLocateIcon) {
                     state->locateRect = ir;
@@ -1684,7 +1696,7 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
                     state->speakerRect = ir;
                     SetTextColor(hdc, state->ttsOn ? (darkMode ? COINS_CLR_WHITE : COINS_CLR_BLACK) : COINS_CLR_GRAY);
                 } else if (isMoonIcon) {
-                    state->moonRect = ir;
+                    if (!state->isForex) state->moonRect = ir;
                     SetTextColor(hdc, state->isOvernight ? COINS_CLR_YELLOW : COINS_CLR_GRAY);
                 } else {
                     SetTextColor(hdc, labelColor);
@@ -1779,10 +1791,12 @@ static void Market_PaintHeader(HWND hWnd, TsState* state) {
 static void Market_SpeakLast(TsState* state) {
     if (!state->ttsOn) return;
     if (state->l1Info.last <= 0.0) return;
-    std::string s = std::format("{:.2f}", state->l1Info.last);
+    std::string s = std::format("{:.{}f}", state->l1Info.last, state->priceDec);
+    if (!state->isForex) {
     size_t dotPos = s.find(".00");
     if (dotPos != std::string::npos) {
         s.erase(dotPos);
+    }
     }
     s.erase(std::remove(s.begin(), s.end(), ','), s.end());
     std::replace(s.begin(), s.end(), '.', ',');
@@ -1820,6 +1834,7 @@ static void Market_ToggleTTS(HWND hWnd, TsState* state) {
 }
 
 static void Market_ToggleOVN(HWND hWnd, TsState* state) {
+    if (state->isForex) return;
     state->isOvernight = !state->isOvernight;
     
     if (!state->symbol.empty()) {
@@ -1898,7 +1913,7 @@ static void Market_PaintL2Row(TsState* st, NMLVCUSTOMDRAW* cd) {
     //SelectObject(hdc, best ? hFont12ptbold.get() : hFont11ptbold.get());
     SelectObject(hdc, hFont11pt.get());
 
-    std::string sz = Market_FmtQty(size), px = Market_Fmt(st->l2Price[row]);
+    std::string sz = Market_FmtSz(st, size), px = Market_Fmt(st->l2Price[row], st->priceDec);
     RECT tl = rc; tl.right -= 80;
     RECT tr = rc; tr.right -= 10;
     DrawTextA(hdc, sz.c_str(), -1, &tl, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -2001,7 +2016,7 @@ static void Market_OnPnl(TsState* state) {
         state->unrealizedPnL = it->second.pnlSingle.unrealizedPnL;
     }
 
-    std::string titlebar = state->symbol + " " + Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice);
+    std::string titlebar = state->symbol + " " + (state->conId == FX_CONID ? "" : Market_FmtQty(state->position) + " @ " + Market_Fmt(state->avgPrice, state->priceDec));
     if (state->titlebar != titlebar) {
         state->titlebar = titlebar;
         SetWindowTextA(state->hWnd, state->titlebar.c_str());
@@ -2065,6 +2080,8 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         if (data) {
             state->symbol = data->symbol;
             state->conId  = data->conId;
+            state->isForex  = IsForexConId(state->conId);
+            state->priceDec = PriceDecimals(state->conId);
             Settings_Market_SaveOpenDate(data->winKey);
             Settings_Market_SetOpenedLast(data->winKey);
 
@@ -2148,7 +2165,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         // Restore filter
         if (!state->symbol.empty()) {
             std::string windowKey = std::format("{}_{}", MARKET_CLASS_NAME, state->symbol);
-            if (RegGetDword(windowKey.c_str(), "OVERNIGHT", 0)) {
+            if (!state->isForex && RegGetDword(windowKey.c_str(), "OVERNIGHT", 0)) {
                 state->isOvernight = false;
                 Market_ToggleOVN(hWnd, state);
             }
@@ -2264,7 +2281,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         if (lockHotkeys || !state || state->minimized) break;
         if (wParam == 'X') {
-            Market_RequestDecision(hWnd, state);
+            if (!state->isForex) Market_RequestDecision(hWnd, state);
             return 0;
         }
         if (wParam == 'E') {
@@ -2274,11 +2291,11 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
             return 0;
         }
         if (wParam == 'A') {
-            StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
+            if (!state->isForex) StartAlertEditor(state->symbol, state->conId, state->l1Info.last);
             return 0;
         }
         if (wParam == 'N') {
-            Market_ToggleOVN(hWnd, state);
+            if (!state->isForex) Market_ToggleOVN(hWnd, state);
             return 0;
         }
         if (wParam == 'M') {

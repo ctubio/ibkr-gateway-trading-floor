@@ -155,6 +155,9 @@ struct MarketOpenOrderSummary {
 };
 
 struct TsState {
+    bool isForex = false;
+    int priceDec = 2;
+    bool compactBar() const { return isOvernight || isForex; }
     Model::Token connectionToken;
     Model::Token alertsToken;
     Model::Token ttsVoiceToken;

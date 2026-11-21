@@ -1479,7 +1479,8 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                     StartDiamonds();
                     break;
                 case ID_MB_EXCHANGE:
-                    StartGenericWindow(COINS_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
+                    StartForexMarket();
+                    // StartGenericWindow(COINS_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
                 case ID_MB_MARKET:
                     StartMarket();

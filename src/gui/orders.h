@@ -256,16 +256,16 @@ static void Orders_Repopulate(HWND hWnd) {
 
         std::string quoteStr;
         if (o.trailStopPrice > 0.0)
-            quoteStr += std::format("{:.0f} @ {:.2f} | {:.2f}", o.totalQty, o.trailStopPrice, o.price);
+            quoteStr += std::format("{:.0f} @ {} | {}", o.totalQty, FormatFixed(o.trailStopPrice, PriceDecimals(o.conId)), FormatFixed(o.price, PriceDecimals(o.conId)));
         else if (o.price > 0)
-            quoteStr = std::format("{:.0f} @ {:.2f}", o.totalQty, o.price);
+            quoteStr = std::format("{:.0f} @ {}", o.totalQty, FormatFixed(o.price, PriceDecimals(o.conId)));
         else
             quoteStr = std::format("{:.0f} @ MKT", o.totalQty);
         ListView_SetItemText(hList, row, col++, (LPSTR)quoteStr.c_str());
 
         std::string fullTypeStr;
         if (o.filledQty > 0)
-            fullTypeStr = std::format("{:.0f} @ {:.2f} ", o.filledQty, o.avgFillPx);
+            fullTypeStr = std::format("{:.0f} @ {}", o.filledQty, FormatFixed(o.avgFillPx, PriceDecimals(o.conId)));
         if (o.status == "Filled")
             fullTypeStr += o.status;
         else fullTypeStr += o.tif + " " + o.orderType + " " + (o.status == "PreSubmitted" ? "PreSub" : o.status);
@@ -469,15 +469,16 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
         if (wParam == VK_UP || wParam == VK_DOWN) {
             double val  = EditNum(hWnd);
             if (uIdSubclass == 2) val = std::abs(val);
-            double step = 0.0;
-            if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
-                step = uIdSubclass == 1 ? 1.0 : 10.0;
-            } else {
-                step = uIdSubclass == 1 ? 0.01 : 1.0;
-            }
+            const bool fx = IsForexConId(s_editState.conId);
+            const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            double step = (uIdSubclass == 1)
+                ? (fx ? (shift ? 0.0005 : FX_TICK) : (shift ? 1.0 : 0.01))
+                : (fx ? (shift ? 10000.0 : 1000.0) : (shift ? 10.0 : 1.0));
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
-            std::string s = (uIdSubclass == 1) ? std::format("{:.2f}", val) : std::format("{:+}", val * (s_editState.action == "BUY" ? 1 : -1));
+            std::string s = (uIdSubclass == 1)
+                ? std::format("{:.{}f}", val, PriceDecimals(s_editState.conId))
+                : std::format("{:+}", val * (s_editState.action == "BUY" ? 1 : -1));
             SetWindowTextA(hWnd, s.c_str());
             UpdatePriceLabel(GetParent(hWnd));
             int len = GetWindowTextLengthA(hWnd);
@@ -530,7 +531,7 @@ static void Orders_ShowInlinePanel(HWND hWnd, const TradingAPI::OrderInfo& order
     HWND hOrderQty  = GetDlgItem(hWnd, ID_ORDERS_QTY_EDIT);
 
     std::string priceStr;
-    if (order.price > 0) priceStr = std::format("{:.2f}", order.price);
+    if (order.price > 0) priceStr = std::format("{:.{}f}", order.price, PriceDecimals(order.conId));
     else                 priceStr = "0.00";
     if (hPriceEdit) SetWindowTextA(hPriceEdit, priceStr.c_str());
 
@@ -577,11 +578,11 @@ void Orders_AddUnsent(HWND hWnd, const TradingAPI::OrderInfo& info) {
         lvi.pszText  = (LPSTR)info.action.c_str();
         ListView_InsertItem(hList, &lvi);
         ListView_SetItemText(hList, idx, OCOL_SYMBOL, (LPSTR)info.symbol.c_str());
-        std::string quoteStr = std::format("{:.0f} @ {:.2f}", info.totalQty, info.price);
+        std::string quoteStr = std::format("{:.0f} @ {}", info.totalQty, FormatFixed(info.price, PriceDecimals(info.conId)));
         ListView_SetItemText(hList, idx, OCOL_QUOTE, (LPSTR)quoteStr.c_str());
         std::string fullTypeStr;
         if (info.fullStopPrice > 0 || info.fullProfitPrice > 0)
-            fullTypeStr = std::format("{:.2f} | {:.2f} ", info.fullStopPrice, info.fullProfitPrice);
+            fullTypeStr = std::format("{} | {} ", FormatFixed(info.fullStopPrice, PriceDecimals(info.conId)), FormatFixed(info.fullProfitPrice, PriceDecimals(info.conId)));
         fullTypeStr += /*info.tif + " " + info.orderType + " " + */info.status;
         ListView_SetItemText(hList, idx, OCOL_STATUS, (LPSTR)fullTypeStr.c_str());
         Orders_Repopulate(hWnd);
