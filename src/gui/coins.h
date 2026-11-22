@@ -665,6 +665,10 @@ static LRESULT CALLBACK CoinsButton_CursorSubclassProc(HWND hButton, UINT msg, W
         SetCursor(LoadCursor(NULL, IDC_HAND));
         return TRUE;
     }
+    if (msg == WM_RBUTTONUP && GetDlgCtrlID(hButton) == ID_MB_EXCHANGE) {
+        StartGenericWindow(COINS_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
+        return 0;
+    }
     if (msg == WM_NCDESTROY)
         RemoveWindowSubclass(hButton, CoinsButton_CursorSubclassProc, uIdSubclass);
     return DefSubclassProc(hButton, msg, wParam, lParam);
@@ -1480,7 +1484,6 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
                     break;
                 case ID_MB_EXCHANGE:
                     StartForexMarket();
-                    // StartGenericWindow(COINS_EXCHANGE_CLASS_NAME, "Exchange", L"TWSAPIClientTradingFloor.ExchangeCurrency", 320, 70);
                     break;
                 case ID_MB_MARKET:
                     StartMarket();
