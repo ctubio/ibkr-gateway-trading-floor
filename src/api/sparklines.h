@@ -10,6 +10,65 @@ static Gdiplus::Color sparkColorsMini[3];
 static const float sparkStops[] = { 0.0f, 0.50f, 1.0f };
 constexpr size_t kMaxPoints = 41; // ~20 minutes at the 30s coalescing spacing each point)
 
+// Pure price data for one symbol. Shared between all windows showing that conId.
+struct SparkHistory {
+    std::deque<SparkPoint> data;
+    std::deque<SparkPoint> priceHistory;
+
+    void AddPrice(double price) {
+        ULONGLONG now = GetTickCount64();
+        if (!data.empty() && data.back().price == price) return;
+        if (data.size() > 1 && data[data.size() - 2].date > now - 30000) data.pop_back();
+        data.push_back({ now, price });
+        if (data.size() > kMaxPoints) data.erase(data.begin());
+
+        if (priceHistory.empty() || priceHistory.back().price != price)
+            priceHistory.push_back({ now, price });
+        const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL;
+        const ULONGLONG cutoff = (now > maxAge) ? now - maxAge : 0;
+        while (priceHistory.size() >= 2 && priceHistory[1].date <= cutoff)
+            priceHistory.pop_front();
+    }
+
+    bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice, bool strict = true) const {
+        if (priceHistory.empty()) return false;
+
+        ULONGLONG minMs = minutesAgo * 60000ULL;
+        ULONGLONG target = (now > minMs) ? (now - minMs) : 0;
+        if (strict && (now < minMs || priceHistory.front().date > target)) return false;
+
+        auto it = std::upper_bound(priceHistory.begin(), priceHistory.end(), target,
+            [](ULONGLONG t, const SparkPoint& p) { return t < p.date; });
+        if (it == priceHistory.begin()) {
+            if (strict) return false;
+            outPrice = priceHistory.front().price;
+            return true;
+        }
+
+        outPrice = std::prev(it)->price;
+        return true;
+    }
+};
+
+// conId -> shared history. UI thread only. Entries die when the last window releases them.
+class SparkHistoryStore {
+    static std::unordered_map<int, std::weak_ptr<SparkHistory>>& Map() {
+        static std::unordered_map<int, std::weak_ptr<SparkHistory>> m;
+        return m;
+    }
+public:
+    static std::shared_ptr<SparkHistory> Acquire(int conId) {
+        auto& m = Map();
+        if (m.size() > 256)
+            for (auto it = m.begin(); it != m.end();)
+                it = it->second.expired() ? m.erase(it) : std::next(it);
+        auto& slot = m[conId];
+        auto sp = slot.lock();
+        if (!sp) { sp = std::make_shared<SparkHistory>(); slot = sp; }
+        return sp;
+    }
+};
+
 // ── Shared sparkline engine ─────────────────────────────────────────────────
 // Sparkline (large, Market window header chart) and MiniSparkline (small,
 // per-row Diamonds chart) are the same chart at two sizes: a gradient price
@@ -27,12 +86,7 @@ constexpr size_t kMaxPoints = 41; // ~20 minutes at the 30s coalescing spacing e
 // runtime dispatch.
 class SparklineEngine {
 protected:
-    std::deque<SparkPoint> data;
-
-    // Long-lived history (~65 min) used only for the reference dots. Kept
-    // completely separate from `data` so the short-window line-drawing logic
-    // is untouched by how far back the dots need to look.
-    std::deque<SparkPoint> priceHistory;
+    std::shared_ptr<SparkHistory> hist;
 
     // Graphics is tied to the paint HDC, and the gradient coordinates are in
     // that HDC's screen space, so refresh the resources when the row/area
@@ -113,23 +167,7 @@ protected:
     // on the unthrottled tick-ingest path), use upper_bound to find that
     // step-function value in O(log n).
     bool GetPriceAgo(ULONGLONG now, ULONGLONG minutesAgo, double& outPrice, bool strict = true) const {
-        if (priceHistory.empty()) return false;
-
-        ULONGLONG minMs = minutesAgo * 60000ULL;
-        ULONGLONG target = (now > minMs) ? (now - minMs) : 0;
-
-        if (strict && (now < minMs || priceHistory.front().date > target)) return false;
-
-        auto it = std::upper_bound(priceHistory.begin(), priceHistory.end(), target,
-            [](ULONGLONG t, const SparkPoint& p) { return t < p.date; });
-        if (it == priceHistory.begin()) {
-            if (strict) return false;
-            outPrice = priceHistory.front().price;
-            return true;
-        }
-
-        outPrice = std::prev(it)->price;
-        return true;
+        return hist && hist->GetPriceAgo(now, minutesAgo, outPrice, strict);
     }
 
     // Shared line + reference-dot rendering. `originX/originY` is the drawing
@@ -144,7 +182,8 @@ protected:
                           double flatPriceEpsilon,
                           const Gdiplus::Color* paletteColors, const float* paletteStops, int paletteCount,
                           Gdiplus::Color endpointColor, float endpointPad) const {
-        if (data.size() < 2) return;
+        if (!hist || hist->data.size() < 2) return;
+        const auto& data = hist->data;
 
         Gdiplus::GraphicsState graphicsState = graphics.Save();
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -203,42 +242,10 @@ protected:
     }
 
 public:
-    // Identical in both originals: dedup unchanged prices, coalesce a point
-    // added <30s after the previous one, cap `data` at kMaxPoints points, and
-    // separately maintain the long-lived `priceHistory` (deduped by price,
-    // pruned past ~65 minutes) used only for the reference dots.
-    void AddPrice(double price) {
-        ULONGLONG now = GetTickCount64();
-
-        if (!data.empty() && data.back().price == price) return;
-
-        if (data.size() > 1 && data[data.size() - 2].date > now - 30000) {
-            data.pop_back();
-        }
-
-        data.push_back({now, price});
-
-        if (data.size() > kMaxPoints) {
-            data.erase(data.begin());
-        }
-
-        // Maintain the separate long-term history used for the reference dots.
-        if (priceHistory.empty() || priceHistory.back().price != price) {
-            priceHistory.push_back({ now, price });
-        }
-        const ULONGLONG maxAge = 65ULL * 60ULL * 1000ULL; // keep ~65 minutes
-        const ULONGLONG cutoff = (now > maxAge) ? now - maxAge : 0;
-        // Keep the last sample at or before the cutoff: it is the price that
-        // remained in effect at the cutoff time during a long flat stretch.
-        // PERF: pop_front() on a deque is O(1); erase(begin()) on a vector
-        // would be O(n) per call (shifts every remaining element down), and
-        // this loop can run it repeatedly in a single AddPrice().
-        while (priceHistory.size() >= 2 && priceHistory[1].date <= cutoff) {
-            priceHistory.pop_front();
-        }
-    }
-
-    bool HasData() const { return data.size() >= 2; }
+    void Attach(std::shared_ptr<SparkHistory> h) { hist = std::move(h); }
+    bool Attached() const { return (bool)hist; }
+    void AddPrice(double price) { if (hist) hist->AddPrice(price); }
+    bool HasData() const { return hist && hist->data.size() >= 2; }
 };
 
 // ── Large sparkline: Market window header ───────────────────────────────────
@@ -260,7 +267,7 @@ public:
     // Draws into the sub-item bounding rect. Leaves a small left margin so
     // the text (position number) is still visible.
     void Draw(Gdiplus::Graphics& graphics, const RECT& cellRect) const {
-        if (data.size() < 2) return;
+        if (!hist || hist->data.size() < 2) return;
 
         // Reserve the right portion for the numeric text; the sparkline
         // fills the rest, including a small part of the previous cell to the left.

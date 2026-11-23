@@ -2233,6 +2233,7 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         api().setMarketWindow(hWnd, state->conId, state->symbol);
         SetTimer(hWnd, TIMER_MARKET_PAINT, MARKET_PAINT_TIMER_MS, NULL);
         SetTimer(hWnd, TIMER_MARKET_VOLDECAY, 1000, NULL);
+        state->sparkline.Attach(SparkHistoryStore::Acquire(state->conId));
         Market_OnQuote(state);
         Market_OnPnl(state);
         // Seed the editable-orders panel

@@ -1022,6 +1022,8 @@ static void Diamonds_Repopulate(HWND hWnd, bool resort = true) {
     // data). Never touch DCOL_DAILYPNL / DCOL_UNREALIZED_PL,
     // which must survive a repopulate so they remain visible when reopened.
     for (const auto& pos : rows) {
+        auto& spark = diamondsState.sparklines[pos.conId];
+        if (!spark.Attached()) spark.Attach(SparkHistoryStore::Acquire(pos.conId));
         bool isHeldPosition = (portfolioConIds.count(pos.conId) > 0);
 
         // operator[] creates a default row only when the conId is new.
@@ -1102,8 +1104,11 @@ static void Diamonds_FlushDirty(HWND hWnd) {
             auto quote = api().quote(conId);
             if (!quote) continue;
             TradingAPI::L1Book fresh = *quote;
-            if (fresh.last > 0.0)
-                diamondsState.sparklines[conId].AddPrice(fresh.last);
+            if (fresh.last > 0.0) {
+                auto& spark = diamondsState.sparklines[conId];
+                if (!spark.Attached()) spark.Attach(SparkHistoryStore::Acquire(conId));
+                spark.AddPrice(fresh.last);
+            }
             if (diamondsState.displayConIds.contains(conId)) {
                 Diamonds_UpdateMarketCols(conId, fresh);
                 diamondsState.dirtyRedraw.insert(conId);
