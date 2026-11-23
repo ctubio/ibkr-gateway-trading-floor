@@ -159,7 +159,7 @@ static const char* NEWS_CACHE_SUBKEY               = "News";
 // EUR.USD spot FX contract on IDEALPRO.
 static constexpr int         FX_CONID       = 12087792;
 static constexpr const char* FX_SYMBOL      = "EUR.USD";
-static constexpr double      FX_TICK        = 0.00005;
+static constexpr double      FX_TICK        = 0.00001;
 static constexpr double      FX_SAFETY      = 0.005;
 static constexpr double      FX_DEFAULT_STOP   = 0.0020;
 static constexpr double      FX_DEFAULT_PROFIT = 0.0040;

@@ -472,7 +472,7 @@ static LRESULT CALLBACK EditField_SubclassProc(HWND hWnd, UINT message, WPARAM w
             const bool fx = IsForexConId(s_editState.conId);
             const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
             double step = (uIdSubclass == 1)
-                ? (fx ? (shift ? 0.0005 : FX_TICK) : (shift ? 1.0 : 0.01))
+                ? (fx ? (shift ? 0.0001 : FX_TICK) : (shift ? 1.0 : 0.01))
                 : (fx ? (shift ? 10000.0 : 1000.0) : (shift ? 10.0 : 1.0));
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;

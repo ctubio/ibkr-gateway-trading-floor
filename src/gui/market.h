@@ -1017,7 +1017,7 @@ static LRESULT CALLBACK Market_EditSubclassProc(
             if (!isPrice) val = std::abs(val);
 
             bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-            double step = isPrice ? (st->isForex ? (shift ? 0.0005 : FX_TICK) : (shift ? 1.0 : 0.01))
+            double step = isPrice ? (st->isForex ? (shift ? 0.0001 : FX_TICK) : (shift ? 1.0 : 0.01))
                                   : (st->isForex ? (shift ? 10000.0 : 1000.0) : (shift ? 10.0 : 1.0));
             val += (wParam == VK_UP) ? step : -step;
             if (val < 0.0) val = 0.0;
