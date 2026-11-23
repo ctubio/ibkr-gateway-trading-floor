@@ -967,13 +967,15 @@ static LRESULT CALLBACK Market_EditSubclassProc(
     MarketOrderRow* row = Market_FindOrderRow(st, hEdit);
 
     if (msg == WM_KEYDOWN && st) {
-        if (wParam == VK_ESCAPE && row && (GetKeyState(VK_SHIFT) & 0x8000)) {
+        // ESC on an editable-order row cancels just that order.
+        // Shift+ESC falls through to the parent (cancel all orders for the symbol).
+        if (wParam == VK_ESCAPE && row && !(GetKeyState(VK_SHIFT) & 0x8000)) {
             api().cancelOrder(row->orderId, true);
             PostMessage(hMarket, WM_ACTIVATE_ORDER_ROW, 0, 0);
             return 0;
         }
 
-        // ── ESC: cancel every order for this symbol ──────────────────────────
+        // ── Shift+ESC: cancel every order for this symbol ────────────────────
         // ── CTRL: toggle BUY/SELL order bar (falls through to default) ───────
         if (wParam == VK_ESCAPE || wParam == VK_CONTROL || wParam == 'X' || wParam == 'E' || wParam == 'A' || wParam == 'N' || wParam == 'M' || wParam == 'S') { // intentionally intercepting on edit controls
             SendMessage(hMarket, WM_KEYDOWN, wParam, lParam);
@@ -2314,9 +2316,10 @@ LRESULT CALLBACK WndProcMarket(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
         }
         if (wParam == VK_ESCAPE) {
             if (state) {
+                // Only Shift+ESC cancels all orders for this symbol.
+                // Plain ESC only acts on an order row via Market_EditSubclassProc.
                 if (GetKeyState(VK_SHIFT) & 0x8000)
-                    return 0;
-                api().cancelOrders(state->conId);
+                    api().cancelOrders(state->conId);
             }
             return 0;
         }
