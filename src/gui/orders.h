@@ -267,7 +267,7 @@ static void Orders_Repopulate(HWND hWnd) {
         if (o.filledQty > 0)
             fullTypeStr = std::format("{:.0f} @ {}", o.filledQty, FormatFixed(o.avgFillPx, PriceDecimals(o.conId)));
         if (o.status == "Filled")
-            fullTypeStr += o.status;
+            fullTypeStr += " " + o.status;
         else fullTypeStr += o.tif + " " + o.orderType + " " + (o.status == "PreSubmitted" ? "PreSub" : o.status);
         ListView_SetItemText(hList, row, col++, (LPSTR)fullTypeStr.c_str());
     }
