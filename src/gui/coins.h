@@ -43,11 +43,12 @@ void StartCoins(HINSTANCE hInst) { StartGenericWindow(COINS_CLASS_NAME, "Trading
 struct QuickLink { const char* label; const char* url; };
 static const QuickLink quickLinks[] = {
     { "Today",  "https://www.investing.com/dividends-calendar" },
-    { "WSB",    "https://www.reddit.com/r/wallstreetbets"      },
-    { "Scan",   "https://stockscan.io/all-stocks"              },
     { "List",   "https://stockanalysis.com/list/"              },
-    { "Map",    "https://finviz.com/map.ashx?t=sec"            },
+    { "Scan",   "https://stockscan.io/all-stocks"              },
     { "Data",   "https://www.benzinga.com/quote"               },
+    { "WSB",    "https://www.reddit.com/r/wallstreetbets"      },
+    { "Map",    "https://finviz.com/map.ashx?t=sec"            },
+    { "Gamma",  "https://gammatide.com/"                       },
     { "Notes",  "https://x.com/tradertvshawn"                  },
     { "Month",  "http://192.168.1.105:2025/ibkr"               },
     { "Chat",   "http://192.168.1.105:2025/chat"               },
@@ -1269,7 +1270,7 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
             HMENU hMenu = CreatePopupMenu();
             for (int i = 0; i < LINKS_COUNT; ++i) {
-                if (strcmp(quickLinks[i].label, "Month") == 0 || strcmp(quickLinks[i].label, "Portal") == 0)
+                if (strcmp(quickLinks[i].label, "Month") == 0 || strcmp(quickLinks[i].label, "Portal") == 0 || strcmp(quickLinks[i].label, "WSB") == 0)
                     AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
                 AppendMenuA(hMenu, MF_STRING, ID_M_LINKS_BASE + i, quickLinks[i].label);   
             }
