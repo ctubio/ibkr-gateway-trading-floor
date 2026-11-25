@@ -59,7 +59,14 @@ static void Alerts_NotifyChanged(int conId) {
 static void AlertEditor_Populate(HWND hWnd, const std::string& symbol, int conId, double price) {
     alertsEditState.symbol = symbol;
     alertsEditState.conId  = conId;
-    SetWindowTextA(hWnd, std::format("{} at {:.2f}", symbol, price).c_str());
+
+    double shares = 0.0;
+    const auto positions = api().positions();
+    auto pos = positions->find(conId);
+    if (pos != positions->end() && !pos->second.isWatchOnly)
+        shares = pos->second.shares;
+
+    SetWindowTextA(hWnd, std::format("{} {:.4g} @ {:.2f}", symbol, shares, price).c_str());
 
     std::string upStr, downStr;
     Settings_Alerts_Load(symbol, conId, upStr, downStr);
