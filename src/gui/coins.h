@@ -48,6 +48,7 @@ static const QuickLink quickLinks[] = {
     { "Data",   "https://www.benzinga.com/quote"               },
     { "WSB",    "https://www.reddit.com/r/wallstreetbets"      },
     { "Map",    "https://finviz.com/map.ashx?t=sec"            },
+    { "Sector", "https://www.bloomberg.com/markets/sectors"    },
     { "Gamma",  "https://gammatide.com/"                       },
     { "Notes",  "https://x.com/tradertvshawn"                  },
     { "Month",  "http://192.168.1.105:2025/ibkr"               },
