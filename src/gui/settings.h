@@ -1,7 +1,7 @@
 #pragma once
 
 static const int WindowSettingsWidth = 543;
-static const int WindowSettingsHeight = 430;
+static const int WindowSettingsHeight = 460;
 
 void StartSettings() { StartGenericWindow(SETTINGS_CLASS_NAME, "Settings", L"TWSAPIClientTradingFloor.Settings", WindowSettingsWidth, WindowSettingsHeight); }
 
@@ -29,6 +29,7 @@ void StartDebugLog() { StartGenericWindow(DEBUGLOG_CLASS_NAME, "Debug Log", L"TW
 #define ID_SETTINGS_PASSWORD           4020
 #define ID_SETTINGS_LOCK               4021
 #define ID_SETTINGS_ADDRESS            4022
+#define ID_SETTINGS_CALC_NETLIQ        4023
 
 static void UpdateDarkModeSettingCheckbox(bool checked) {
     HWND hSettings = FindWindowA(SETTINGS_CLASS_NAME, NULL);
@@ -134,6 +135,7 @@ static const SettingDescriptor settings[] = {
     {"PlaySounds",         SettingType::Boolean, false,                   "Play notification sounds", ID_SETTINGS_PLAY_SOUNDS, &playSounds, SettingsArea::Audio, 18, 0, 0},
     {"DarkMode",           SettingType::Boolean, false,                   "Dark mode", ID_SETTINGS_DARK_MODE, &darkMode, SettingsArea::Display, 18, 0, 0},
     {"FullScreenAlerts",   SettingType::Boolean, false,                   "Full screen alerts", ID_SETTINGS_FULL_SCREEN_ALERTS, &fullScreenAlerts, SettingsArea::Display, 44, 0, 0},
+    {"CalcNetLiquidation", SettingType::Boolean, false,                   "Calculate net liquidation", ID_SETTINGS_CALC_NETLIQ, &calcNetLiquidation, SettingsArea::Display, 70, 0, 0},
     {"ClientId",           SettingType::Integer, 0,                       "Client ID:", ID_SETTINGS_CLIENT_ID, &clientIdGateway, SettingsArea::Gateway, 218, 80, 0},
     {"GroupId",            SettingType::Integer, 4,                       "Group ID:", ID_SETTINGS_GROUP_ID, &groupIdGateway, SettingsArea::Gateway, 248, 80, 0},
     {"OrderQty",           SettingType::Integer, 20,                      "Quantity:", ID_SETTINGS_QTY_VALUE, &qtyGateway, SettingsArea::Trading, 20, 80, 0},
@@ -142,7 +144,7 @@ static const SettingDescriptor settings[] = {
     {"RiskPct",            SettingType::Decimal, 1.0,                     "Risk %:", ID_SETTINGS_RISK_VALUE, &riskGateway, SettingsArea::Trading, 119, 80, 0},
     {"Safety",             SettingType::Decimal, 2.0,                     "Safety:", ID_SETTINGS_SAFETY_VALUE, &safetyGateway, SettingsArea::Trading, 152, 80, 0},
     {"IPAddress",          SettingType::String, std::string("127.0.0.1"), "Address:", ID_SETTINGS_ADDRESS, &addressGateway, SettingsArea::Gateway, 128, 147, 0},
-    {"Lock",               SettingType::String, std::string(),            "Lock:", ID_SETTINGS_LOCK, &lockScreen, SettingsArea::Display, 70, 147, ES_PASSWORD},
+    {"Lock",               SettingType::String, std::string(),            "Lock:", ID_SETTINGS_LOCK, &lockScreen, SettingsArea::Display, 100, 147, ES_PASSWORD},
 };
 
 static const SettingDescriptor* FindSetting(int id) {
@@ -367,11 +369,11 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             y += 152 + 40;
             
             // ── Display ──────────────────────────────────────────────────────
-            GroupBox(hWnd, "Display:", col2_x, y, w, 14 + (30 * 3));
+            GroupBox(hWnd, "Display:", col2_x, y, w, 14 + (30 * 4));
 
             CreateSettingsControls(SettingsArea::Display, col2_x, y);
 
-            y += 114;
+            y += 144;
 
             // ── System Tools ─────────────────────────────────────────── (column 2)
             GroupBox(hWnd, "Configuration:", col2_x, y, w, 78);
@@ -406,6 +408,8 @@ LRESULT CALLBACK WndProcSettings(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     InvalidateRect(hWnd, NULL, TRUE);
                     RedrawWindow(hWnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
                 }
+                if (setting->id == ID_SETTINGS_CALC_NETLIQ)
+                    api().model().markDirty(Topic::Account);
             }
             if (LOWORD(wParam) == ID_SETTINGS_GATEWAY_PATH) {
                 HWND hPathEdit = GetDlgItem(hWnd, ID_SETTINGS_GATEWAY_PATH_EDIT);

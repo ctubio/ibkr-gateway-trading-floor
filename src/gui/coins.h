@@ -39,6 +39,7 @@ void StartCoins(HINSTANCE hInst) { StartGenericWindow(COINS_CLASS_NAME, "Trading
 #define TIMER_WATCHDOG               1800
 #define TIMER_WATCHDOG_DELAYED_START 1801
 #define TIMER_MARKET_CLOCK           1802
+#define TIMER_COINS_NETLIQ           1803
 
 struct QuickLink { const char* label; const char* url; };
 static const QuickLink quickLinks[] = {
@@ -67,6 +68,18 @@ struct CoinsState {
     Model::Token connectionToken;
     Model::Token accountToken;
     Model::Token ttsVoiceToken;
+    Model::Token quoteToken;
+    Model::Token positionsToken;
+
+    struct NetLiqBaseline {
+        struct Item { double shares = 0.0; double price = 0.0; };
+        bool valid = false;
+        double apiValue = 0.0;
+        std::string currency;
+        double accum = 0.0;
+        std::unordered_map<int, Item> items;
+    } netLiqBase;
+    bool netLiqRefreshPending = false;
 
     // Window state
     bool fullDetails = true;
@@ -133,6 +146,85 @@ struct CoinsState {
 
 // Global coins state instance
 static CoinsState coinsState;
+
+// ─── Calculated net liquidation ──────────────────────────────────────────────
+
+static double Coins_SummaryNumber(const std::map<std::string, std::string>& summary, const std::string& key) {
+    auto it = summary.find(key);
+    if (it == summary.end()) return 0.0;
+    try { return std::stod(it->second); } catch (...) { return 0.0; }
+}
+
+static double Coins_PositionPrice(int conId) {
+    const auto quote = api().quote(conId);
+    if (!quote) return 0.0;
+    return quote->last > 0.0 ? quote->last : quote->prevClose;
+}
+
+static double Coins_CalcNetLiquidation(const std::map<std::string, std::string>& summary, double apiValue) {
+    if (apiValue <= 0.0) return apiValue;
+
+    auto& base = coinsState.netLiqBase;
+    const std::string& currency = coinsState.currencyCoins;
+
+    double rate = 1.0;
+    if (currency != "USD") {
+        rate = Coins_SummaryNumber(summary, "USD_ExchangeRate");
+        if (!(rate > 0.0)) {
+            static bool logged = false;
+            if (!logged) {
+                logged = true;
+                LogDebug("Net liquidation calc: no USD_ExchangeRate in account summary, using the API value.");
+            }
+            return apiValue;
+        }
+    }
+
+    if (!base.valid || base.apiValue != apiValue || base.currency != currency) {
+        base = CoinsState::NetLiqBaseline{};
+        base.valid = true;
+        base.apiValue = apiValue;
+        base.currency = currency;
+    }
+
+    const auto positions = api().positions();
+
+    for (const auto& [conId, pos] : *positions) {
+        if (pos.isWatchOnly || IsForexConId(conId) || pos.shares == 0.0) continue;
+        const double now = Coins_PositionPrice(conId);
+        if (now <= 0.0) continue;
+
+        auto it = base.items.find(conId);
+        if (it == base.items.end()) {
+            base.items[conId] = CoinsState::NetLiqBaseline::Item{ pos.shares, now };
+        } else if (it->second.shares != pos.shares) {
+            base.accum += it->second.shares * (now - it->second.price);
+            it->second = CoinsState::NetLiqBaseline::Item{ pos.shares, now };
+        }
+    }
+
+    for (auto it = base.items.begin(); it != base.items.end();) {
+        auto p = positions->find(it->first);
+        const bool held = p != positions->end() && !p->second.isWatchOnly && p->second.shares != 0.0;
+        if (held) { ++it; continue; }
+        const double now = Coins_PositionPrice(it->first);
+        if (now > 0.0) base.accum += it->second.shares * (now - it->second.price);
+        it = base.items.erase(it);
+    }
+
+    double delta = base.accum;
+    for (const auto& [conId, item] : base.items) {
+        const double now = Coins_PositionPrice(conId);
+        if (now > 0.0) delta += item.shares * (now - item.price);
+    }
+    return apiValue + delta * rate;
+}
+
+static void Coins_ScheduleNetLiqRefresh(HWND hWnd) {
+    if (coinsState.netLiqRefreshPending) return;
+    coinsState.netLiqRefreshPending = true;
+    SetTimer(hWnd, TIMER_COINS_NETLIQ, 50, NULL);
+}
 
 static void Coins_UpdateTaskbarOrders(HWND hWnd, int openOrdersCount) {
     if (!coinsState.taskbar) return;
@@ -551,16 +643,19 @@ void Coins_UpdateLabels(HWND hWnd) {
         if (it == summary.end()) return 0.0;
         try { return std::stod(it->second); } catch (...) { return 0.0; }
     };
+    bool haveApiNetLiq = false;
     if (summary.count("EUR_NetLiquidation")) {
-        coinsState.currencyCoins = "EUR"; NetLiquidation = tryParse("EUR_NetLiquidation");
+        coinsState.currencyCoins = "EUR"; NetLiquidation = tryParse("EUR_NetLiquidation"); haveApiNetLiq = true;
     } else if (summary.count("USD_NetLiquidation")) {
-        coinsState.currencyCoins = "USD"; NetLiquidation = tryParse("USD_NetLiquidation");
+        coinsState.currencyCoins = "USD"; NetLiquidation = tryParse("USD_NetLiquidation"); haveApiNetLiq = true;
     } else if (summary.count("NetLiquidation")) {
-        NetLiquidation = tryParse("NetLiquidation");
+        NetLiquidation = tryParse("NetLiquidation"); haveApiNetLiq = true;
         for (auto const& [k, v] : summary)
             if (k.find("_NetLiquidation") != std::string::npos)
                 { coinsState.currencyCoins = k.substr(0, k.find('_')); break; }
     }
+    if (calcNetLiquidation && haveApiNetLiq)
+        NetLiquidation = Coins_CalcNetLiquidation(summary, NetLiquidation);
 
     if (coinsState.currencyCoins != prevCurrency)
         UpdateTrayIcon(hWnd);
@@ -1193,6 +1288,16 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             coinsState.accountToken = api().model().onTopic(Topic::Account, [hWnd] {
                 Coins_UpdateLabels(hWnd);
             });
+            coinsState.quoteToken = api().model().onAnyQuote([hWnd](int conId) {
+                if (!calcNetLiquidation) return;
+                const auto positions = api().positions();
+                auto it = positions->find(conId);
+                if (it == positions->end() || it->second.isWatchOnly) return;
+                Coins_ScheduleNetLiqRefresh(hWnd);
+            });
+            coinsState.positionsToken = api().model().onTopic(Topic::Positions, [hWnd] {
+                if (calcNetLiquidation) Coins_ScheduleNetLiqRefresh(hWnd);
+            });
             coinsState.ttsVoiceToken = api().model().onTopic(Topic::TtsVoice, [hWnd] {
                 SharedTts().ReapplySavedVoice();
                 if (coinsState.coinsTtsOn) Coins_SpeakDailyPnL();
@@ -1243,6 +1348,12 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             break; 
         }
         case WM_TIMER:
+            if (wParam == TIMER_COINS_NETLIQ) {
+                KillTimer(hWnd, TIMER_COINS_NETLIQ);
+                coinsState.netLiqRefreshPending = false;
+                if (calcNetLiquidation && api().isMarketDataConnected() && api().isTradingConnected())
+                    Coins_UpdateLabels(hWnd);
+            }
             if (wParam == TIMER_MARKET_CLOCK) {
                 UpdateMarketClock(hWnd);
             }
@@ -1540,6 +1651,8 @@ LRESULT CALLBACK WndProcCoins(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             coinsState.connectionToken.reset();
             coinsState.accountToken.reset();
             coinsState.ttsVoiceToken.reset();
+            coinsState.quoteToken.reset();
+            coinsState.positionsToken.reset();
             Shell_NotifyIconW(NIM_DELETE, &nid);
             // Stop TTS
             if (coinsState.coinsTtsOn) {
