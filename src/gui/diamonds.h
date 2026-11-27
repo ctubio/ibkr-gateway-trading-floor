@@ -1,6 +1,6 @@
 #pragma once
 // "Proxima Nova", Verdana, Arial, sans-serif
-static const int windowDiamondsWidth = 975;
+static const int windowDiamondsWidth = 910;
 void StartDiamonds() { StartGenericWindow(DIAMONDS_CLASS_NAME, "Diamonds", L"TWSAPIClientTradingFloor.Diamonds", windowDiamondsWidth, 420); }
 
 #define ID_DIAMONDS_RESULTS_LIST    7001
@@ -92,16 +92,13 @@ struct DiamondRowCache {
 
     // Day high/low, used only to color DCOL_LAST based on where `last` sits
     // within today's range (see WM_NOTIFY / NM_CUSTOMDRAW).
-    double dayHigh = 0.0;
-    double dayLow = 0.0;
+    double vwap = 0.0;
     double prevClose = 0.0;
     bool halted = false;
     double bidSize = 0.0;  // for DCOL_SIZE multi-line display
     double askSize = 0.0;  // for DCOL_SIZE multi-line display
     std::string bidSizeStr = "";
     std::string askSizeStr = "";
-    double bid = 0.0;
-    double ask = 0.0;
     std::string bidStr = "";
     std::string askStr = "";
     std::string pctNetLiq = "";  // for DCOL_MKTVAL multi-line display
@@ -330,7 +327,7 @@ static const DiamondCol diamondCols[] = {
     { "5m",                70, LVCFMT_RIGHT },
     { "Vol",               60, LVCFMT_RIGHT },
     { "Daily",             90, LVCFMT_RIGHT },  // {"fix_tag":7681,"name":"Price/EMA(20)","description":"Price to Exponential moving average (N = 20) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA20"}
-    { "Change %",          95, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
+    { "Change %",         100, LVCFMT_RIGHT },  // {"fix_tag":7679,"name":"Price/EMA(100)","description":"Price to Exponential moving average (N = 100) ratio - 1, displayed in percents","groups":["G40"],"id":"PRICE_VS_EMA100"}
     { "13w",              115, LVCFMT_RIGHT },
     { "26w",              115, LVCFMT_RIGHT },
     { "52w",              115, LVCFMT_RIGHT },
@@ -361,7 +358,7 @@ static int Diamonds_ExtraWidth(bool maximized) {
     if (maximized && (diamondsState.checkedTabs & (1u << 2))) {
         extraWidth += diamondCols[DCOL_CHG13WEEK].width + diamondCols[DCOL_CHG26WEEK].width +
                       diamondCols[DCOL_CHG52WEEK].width + diamondCols[DCOL_AVGPRICE].width +
-                      diamondCols[DCOL_SIZE].width + diamondCols[DCOL_EXCHANGE].width;
+                      diamondCols[DCOL_SIZE].width + diamondCols[DCOL_VWAP].width + diamondCols[DCOL_EXCHANGE].width;
     }
     if (extraWidth > 0) extraWidth += 10;
     return extraWidth;
@@ -395,6 +392,7 @@ static void Diamonds_UpdateDivColumnsVisibility(HWND hWnd) {
         ListView_SetColumnWidth(hList, i, showWeeks ? diamondCols[i].width : 0);
     }
     ListView_SetColumnWidth(hList, DCOL_SIZE,     showWeeks ? diamondCols[DCOL_SIZE].width     : 0);
+    ListView_SetColumnWidth(hList, DCOL_VWAP,     showWeeks ? diamondCols[DCOL_VWAP].width     : 0);
     ListView_SetColumnWidth(hList, DCOL_AVGPRICE, showWeeks ? diamondCols[DCOL_AVGPRICE].width : 0);
     ListView_SetColumnWidth(hList, DCOL_EXCHANGE, showWeeks ? diamondCols[DCOL_EXCHANGE].width : 0);
 
@@ -844,8 +842,6 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     row.sortValues[DCOL_SIZE] = t.askSize + t.bidSize;
     row.textCols[DCOL_SIZE]   = row.askSizeStr + "\n" + row.bidSizeStr;
 
-    row.bid = t.bid;
-    row.ask = t.ask;
     row.bidStr = FormatFixed(t.bid, 2);
     row.askStr = FormatFixed(t.ask, 2);
     row.sortValues[DCOL_BIDASK] = (t.ask + t.bid) / 2;
@@ -886,8 +882,7 @@ static void Diamonds_UpdateMarketCols(int conId, const TradingAPI::L1Book& t) {
     setWeekChangePct(DCOL_CHG52WEEK, weeklyCloses.closeAgo52Week);
 
     // Day high/low, used by the Last column's custom-draw color (see WM_NOTIFY/NM_CUSTOMDRAW).
-    row.dayHigh = t.high;
-    row.dayLow = t.low;
+    row.vwap = t.vwap;
     row.prevClose = t.prevClose;
     row.halted = t.halted;
 
@@ -1787,18 +1782,11 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_LAST) {
                         double last = cacheRow.sortValues[DCOL_LAST];
-                        double high = cacheRow.dayHigh;
-                        double low = cacheRow.dayLow;
-                        double prevClose = cacheRow.prevClose;
+                        double vwap = cacheRow.vwap;
 
-                        if (last > 0.0 && high > 0.0 && low > 0.0 && high > low) {
-                            double pct = (last - low) / (high - low) * 100.0; // 0% at low, 100% at high
-                            if (pct <= 25.0) cd->clrText = COINS_CLR_RED;
-                            else if (pct >= 75.0) cd->clrText = COINS_CLR_GREEN;
-                            else cd->clrText = ThemeText();
-                        } else if (last > 0.0 && prevClose > 0.0) {
-                            if (last > prevClose) cd->clrText = COINS_CLR_GREEN;
-                            else if (last < prevClose) cd->clrText = COINS_CLR_RED;
+                        if (last > 0.0 && vwap > 0.0) {
+                            if (last >= vwap) cd->clrText = COINS_CLR_GREEN;
+                            else if (last < vwap) cd->clrText = COINS_CLR_RED;
                             else cd->clrText = ThemeText();
                         } else {
                             cd->clrText = ThemeText();
@@ -1809,14 +1797,14 @@ LRESULT CALLBACK WndProcDiamonds(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                     if (cd->iSubItem == DCOL_BIDASK) {
                         double last = cacheRow.sortValues[DCOL_LAST];
+                        double prevClose = cacheRow.prevClose;
                         COLORREF quoteColor = COINS_CLR_WHITE;
-                        if (cacheRow.halted || last <= 0.0 || cacheRow.ask <= 0.0 || cacheRow.bid <= 0.0) {
+                        if (cacheRow.halted || last <= 0.0 || prevClose <= 0.0) {
                             quoteColor = COINS_CLR_GRAY;
                         } else {
-                            double distAsk = std::fabs(cacheRow.ask - last);
-                            double distBid = std::fabs(last - cacheRow.bid);
-                            if (distAsk < distBid) quoteColor = COINS_CLR_GREEN;
-                            else if (distBid < distAsk) quoteColor = COINS_CLR_RED;
+                            if (last > prevClose) cd->clrText = COINS_CLR_GREEN;
+                            else if (last < prevClose) cd->clrText = COINS_CLR_RED;
+                            else cd->clrText = ThemeText();
                         }
                         return TwoLine(cd, cacheRow.askStr.c_str(), quoteColor,
                                        cacheRow.bidStr.c_str(), quoteColor);
