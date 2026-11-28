@@ -1,9 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <cstddef>
-#include <deque>
-
 // Rolling "recent vs. baseline" rate tracker.
 //
 // Records (time, amount) samples and maintains, incrementally (O(1) amortized
